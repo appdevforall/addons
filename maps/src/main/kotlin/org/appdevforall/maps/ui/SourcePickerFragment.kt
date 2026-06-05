@@ -301,7 +301,11 @@ class SourcePickerFragment : Fragment() {
 
     private fun persistLanHost() {
         runCatching {
-            requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            // Use applicationContext (same as the off-main read in onViewCreated) so
+            // both share the one process-wide SharedPreferencesImpl — no first-access
+            // disk read can land on Main here. The write itself is async via apply().
+            requireContext().applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putString(KEY_LAN_HOST, lanHost)
                 .apply()
