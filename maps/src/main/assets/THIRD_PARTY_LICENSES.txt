@@ -1,0 +1,149 @@
+THIRD-PARTY LICENSES — maps-plugin (ADFA-2436 Maps)
+====================================================
+
+This plugin is licensed GPL-3.0 (inherited from plugin-examples). It uses
+the following third-party software + reference implementations. All
+licenses below are compatible with GPL-3.
+
+----------------------------------------------------------------------
+ADAPTED REFERENCE IMPLEMENTATION
+----------------------------------------------------------------------
+
+protomaps/PMTiles — Python reference implementation
+  Used in: src/main/kotlin/org/appdevforall/maps/slicer/Hilbert.kt
+  Source:  https://github.com/protomaps/PMTiles
+  License: BSD-3-Clause
+
+    Copyright 2021 Protomaps LLC
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in
+       the documentation and/or other materials provided with the
+       distribution.
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+    FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+    BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+    ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+The Hilbert curve algorithm itself is textbook mathematics
+(https://en.wikipedia.org/wiki/Hilbert_curve), not subject to copyright.
+The PMTiles v3 specification (https://github.com/protomaps/PMTiles/blob/
+main/spec/v3/spec.md) is published as public-domain / CC0.
+
+----------------------------------------------------------------------
+RUNTIME DEPENDENCIES
+----------------------------------------------------------------------
+
+org.maplibre.gl:android-sdk-opengl:13.1.0
+  Vector map renderer (OpenGL ES variant). Native PMTiles support.
+  License: BSD-2-Clause
+  https://github.com/maplibre/maplibre-native/blob/main/LICENSE.md
+
+com.squareup.okhttp3:okhttp:4.12.0
+  HTTP client for tile range-fetches.
+  License: Apache-2.0
+  https://github.com/square/okhttp/blob/master/LICENSE.txt
+
+org.jetbrains.kotlin:kotlin-stdlib:2.3.0
+org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1
+  Kotlin standard library + coroutines.
+  License: Apache-2.0
+  https://github.com/JetBrains/kotlin/blob/master/license/README.md
+
+androidx.appcompat:appcompat:1.6.1
+androidx.fragment:fragment:1.8.8
+androidx.fragment:fragment-ktx:1.8.8
+androidx.recyclerview:recyclerview:1.3.2
+  AndroidX UI / lifecycle libraries.
+  License: Apache-2.0
+  https://developer.android.com/jetpack/androidx
+
+com.google.android.material:material:1.10.0
+  Material Components for Android.
+  License: Apache-2.0
+  https://github.com/material-components/material-components-android/blob/master/LICENSE
+
+com.google.android.gms:play-services-location:21.3.0
+  FusedLocationProviderClient for GPS centering.
+  License: Android Software Development Kit License (proprietary, free use).
+  https://developer.android.com/studio/terms
+
+----------------------------------------------------------------------
+BUNDLED FONTS
+----------------------------------------------------------------------
+
+Noto Sans (Regular + Italic) — MapLibre glyph .pbf ranges
+  Bundled in: src/main/assets/fonts/Noto Sans {Regular,Italic}/*.pbf
+  Copyright: The Noto Project Authors (https://github.com/notofonts/noto-fonts)
+  License: SIL Open Font License 1.1
+  https://openfontlicense.org/
+
+  OFL-1.1 is GPL-compatible. The license requires the copyright + license
+  notice be distributed with the font; this entry satisfies that for the
+  bundled glyph ranges.
+
+  A Latin subset of these ranges is ALSO emitted into apps generated from
+  the "Offline OSM Map" project template (under the emitted app's
+  assets/maps/fonts/notosans/). To satisfy OFL §2 in those downstream apps,
+  the template emits the full OFL-1.1 text alongside the .pbf glyphs at
+  assets/maps/fonts/notosans/OFL.txt, and the emitted README credits Noto
+  Sans + OFL. Non-Latin scripts are not covered by the bundled ranges.
+
+----------------------------------------------------------------------
+DATA LICENSES (USER-FACING)
+----------------------------------------------------------------------
+
+Tile data downloaded into a generated app's APK by this plugin is
+licensed by its respective providers:
+
+OpenStreetMap vector tiles (OpenMapTiles processed; via iiab.switnet.org)
+  License: Open Database License (ODbL) v1.0
+  https://www.openstreetmap.org/copyright
+
+Natural Earth raster basemap
+  License: Public domain (CC0)
+  https://www.naturalearthdata.com/about/terms-of-use/
+
+Plugin icon — globe (icon_day.png / icon_night.png)
+  Source: OpenClipart #236045 "Simple globe showing Africa, Asia and Europe
+  in black and white detailed" by brylie (2016); recolored for the day/night
+  themes. License: Public domain (CC0 1.0) — OpenClipart releases all content
+  CC0, so no attribution is required (recorded here for provenance).
+  https://openclipart.org/detail/236045/
+
+Generated apps using this plugin's templates must surface these
+attributions. The emitted app ships them as: MapLibre's on-map
+attribution control (OSM/ODbL, from style.json's source attribution),
+the emitted README's
+"Credits & licenses" section, and the bundled OFL.txt next to the fonts.
+(Region content is applied as a pure data copy — no code injection — so
+attributions live in these shipped surfaces, not in patched source.)
+
+----------------------------------------------------------------------
+PLUGIN OWN LICENSE
+----------------------------------------------------------------------
+
+This plugin's own source code is licensed GPL-3.0, inherited from the
+parent plugin-examples repository.
+https://github.com/appdevforall/plugin-examples/blob/main/LICENSE
+
+GPL-3 is one-way compatible with BSD/Apache/MIT — third-party code under
+those licenses can be included here; the combined distribution is GPL-3.
