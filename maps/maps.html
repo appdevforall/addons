@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maps Plugin for Code on the Go</title>
+  <style>
+    html, body {
+      background: #ffffff;
+      color: #000000;
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, "Roboto", "Segoe UI", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      max-width: 820px;
+    }
+    h1, h2, h3 { color: #000000; line-height: 1.25; }
+    h1 { font-size: 1.7em; margin: 0 0 0.5em; }
+    h2 { font-size: 1.3em; margin: 1.5em 0 0.5em; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2em; }
+    h3 { font-size: 1.1em; margin: 1.2em 0 0.4em; }
+    a { color: #1565c0; }
+    code {
+      font-family: "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+      background: #f0f0f0;
+      color: #000000;
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+    th, td { border: 1px solid #cccccc; padding: 6px 10px; text-align: left; vertical-align: top; }
+    th { background: #f4f4f4; }
+    ul, ol { padding-left: 1.4em; }
+    li { margin: 0.3em 0; }
+    .lead { font-size: 1.08em; }
+  </style>
+</head>
+<body>
+
+<h1>Maps Plugin</h1>
+<p class="lead">Offline OpenStreetMap tools for Code on the Go &mdash; download a
+map region once, then ship an app that renders it with no internet.</p>
+
+<h2>Executive overview</h2>
+
+<p>The <strong>Maps plugin</strong> adds offline mapping to
+<strong>Code on the Go</strong> (CoGo), the offline-capable Android IDE built for
+low-end phones in low-bandwidth regions. It lets a developer save an
+<strong>OpenStreetMap</strong> region for offline use &mdash; downloaded from an
+<strong>Internet&nbsp;in&nbsp;a&nbsp;Box</strong> server over the internet or over
+a local LAN &mdash; and scaffolds a working Android app that renders that region
+with <strong>no connectivity required afterward</strong>. The map data is bundled
+inside the generated APK, so the resulting app works in the field where the only
+sustainable map is one that already lives on the phone.</p>
+
+<p>It contributes a single <strong>Maps</strong> tab to the editor bottom sheet
+and a <strong>Maps project template</strong> in the New&nbsp;Project grid. Nothing
+runs in the background; nothing needs an account or an API key.</p>
+
+<h2>Core functionality</h2>
+
+<ul>
+  <li><strong>Region download (bbox picker).</strong> Open the Maps tab, draw a
+  bounding box on an interactive MapLibre map, and download just that area's
+  vector tiles. The plugin estimates the download size and auto-caps the zoom
+  range so a region stays a sensible size.</li>
+  <li><strong>Reusable region cache.</strong> Downloaded regions live under
+  <code>/sdcard/CodeOnTheGo/maps/&lt;region-id&gt;/</code>, shared across projects
+  so the same tile pack is never downloaded twice. The Region Manager lists each
+  cached region with its size and source, and lets you refresh or delete it.</li>
+  <li><strong>One-tap "Use in this project".</strong> Applying a region copies its
+  data files into the open project's <code>app/src/main/assets/maps/</code>. The
+  first region for an empty project auto-activates; switching regions is a single
+  tap.</li>
+  <li><strong>Maps project template.</strong> The New&nbsp;Project grid offers a
+  ready-to-build offline region-map app (Kotlin or Java) that already ships its
+  MapLibre wiring, loopback tile server, layout, style, manifest, and Gradle
+  configuration.</li>
+  <li><strong>Place &amp; street labels offline.</strong> The rendered map shows
+  place names and street names carried inside the OSM vector tiles, served from
+  bundled font glyphs &mdash; no network calls.</li>
+</ul>
+
+<h2>Technical architecture</h2>
+
+<p>The plugin is a single Android module loaded by CoGo's plugin system via a
+<code>DexClassLoader</code>. It depends on the host's <code>plugin-api</code> as a
+<code>compileOnly</code> contract and is organised into clean layers so the pure
+logic is JVM-unit-testable:</p>
+
+<table>
+  <thead><tr><th>Layer</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>domain/</code></td><td>Pure value types and logic (bounding
+    box, zoom-cap policy, tile estimates) &mdash; no Android imports.</td></tr>
+    <tr><td><code>slicer/</code></td><td>PMTiles v3 reader + Hilbert-curve range
+    decomposition that slices a bounding box out of a remote tile archive using
+    HTTP range reads.</td></tr>
+    <tr><td><code>data/</code></td><td>Region cache, downloader, installer, and the
+    active-region store &mdash; all file I/O, run off the main thread.</td></tr>
+    <tr><td><code>templates/</code></td><td>Builds and registers the Maps project
+    template, and copies a region's data into an open project on apply.</td></tr>
+    <tr><td><code>ui/</code></td><td>The bottom-sheet Region Manager fragment and
+    the download wizard (source &rarr; bbox picker &rarr; save &rarr; progress).</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Tiles.</strong> Map data is stored as <code>.pmtiles</code> archives
+(a cloud-optimized, range-readable tile format). The generated app runs a tiny
+in-process loopback HTTP server on <code>127.0.0.1</code> and points MapLibre at
+<code>pmtiles://http://127.0.0.1:&lt;port&gt;/&hellip;</code>, which is the only
+PMTiles URL scheme that dispatches reliably on the MapLibre 13.x OpenGL&nbsp;ES
+Android variant. The PMTiles are stored uncompressed in the APK so the server can
+seek into them.</p>
+
+<p><strong>Threading.</strong> All disk and network work runs off the main thread
+via <code>kotlinx.coroutines</code> (<code>Dispatchers.IO</code>); large copies are
+cancellable. The plugin holds no background threads or static references to host
+objects past its lifecycle &mdash; everything is released in
+<code>dispose()</code>.</p>
+
+<h2>Usage</h2>
+
+<ol>
+  <li>Install the Maps plugin from the Plugin Manager.</li>
+  <li>Create a new project from the <strong>Maps</strong> template (Kotlin or
+  Java), or open any existing CoGo project.</li>
+  <li>Open the <strong>Maps</strong> tab in the editor bottom sheet.</li>
+  <li>Tap <strong>+ Download new region</strong>, draw a bounding box over the
+  area you need, and confirm. The region downloads into the shared cache.</li>
+  <li>Tap <strong>Use in this project</strong> on the region (the first one
+  auto-applies). The tiles are copied into your project's assets.</li>
+  <li>Build and run. The app renders the bundled region fully offline.</li>
+</ol>
+
+<p>A full in-IDE tutorial covering Internet&nbsp;in&nbsp;a&nbsp;Box,
+OpenStreetMap, and MapLibre ships with the plugin &mdash; long-press the Maps tab
+tooltip and open <em>"OSM + MapLibre tutorial"</em>.</p>
+
+<h2>Key benefits</h2>
+
+<ul>
+  <li><strong>Truly offline.</strong> Once a region is bundled, the generated app
+  needs no internet &mdash; built for field work where connectivity is scarce or
+  absent.</li>
+  <li><strong>No accounts, no keys, no cost.</strong> Tiles come from
+  open OpenStreetMap data served by Internet&nbsp;in&nbsp;a&nbsp;Box; there are no
+  API keys or usage fees.</li>
+  <li><strong>Download once, reuse everywhere.</strong> The shared region cache
+  avoids re-downloading the same area for every project.</li>
+  <li><strong>Ready-to-build output.</strong> The template ships a complete,
+  correct MapLibre app &mdash; no boilerplate for the developer to get right.</li>
+  <li><strong>Small footprint.</strong> The bbox picker and zoom-cap keep regions
+  to only the data you need, which matters on low-storage devices.</li>
+</ul>
+
+<h2>Licensing</h2>
+
+<p>Map data is &copy; OpenStreetMap contributors (ODbL); the bundled Natural Earth
+basemap is public domain; glyph fonts are under the SIL Open Font License. The
+generated app surfaces the required OpenStreetMap attribution. See
+<code>src/main/assets/THIRD_PARTY_LICENSES.txt</code> for the full list.</p>
+
+</body>
+</html>

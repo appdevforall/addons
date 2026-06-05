@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Working with OpenStreetMap in Code on the Go</title>
+  <style>
+    html, body {
+      background: #ffffff;
+      color: #000000;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, "Roboto", "Segoe UI", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    h1, h2, h3 { color: #000000; line-height: 1.25; }
+    h1 { font-size: 1.6em; margin: 0 0 0.6em; }
+    h2 { font-size: 1.3em; margin: 1.4em 0 0.5em; }
+    h3 { font-size: 1.1em; margin: 1.2em 0 0.4em; }
+    a { color: #1565c0; }
+    code, pre {
+      font-family: "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+    }
+    code {
+      background: #f0f0f0;
+      color: #000000;
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f0f0f0;
+      color: #000000;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    pre code { background: transparent; padding: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+    th, td {
+      border: 1px solid #cccccc;
+      padding: 6px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f4f4f4; }
+    ul, ol { padding-left: 1.4em; }
+    li { margin: 0.3em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Working with OpenStreetMap in Code on the Go</h1>
+
+<p>This is the Tier&nbsp;3 tutorial that ships with the <strong>Maps plugin</strong>.
+The plugin helps you build <strong>offline mapping apps</strong>: you save an
+OpenStreetMap region for offline use &mdash; downloaded from an
+<strong>Internet in a Box</strong> server, either over the internet or over a
+local LAN &mdash; and the plugin scaffolds an app that renders that region with
+no connectivity required afterward. The whole point is field work in
+low-bandwidth regions, where the only sustainable map is one that already lives
+on the phone.</p>
+
+<p>This tutorial walks the three pieces that make that work, in the order they
+come into play: <strong>Internet in a Box</strong> (where the data lives),
+<strong>OpenStreetMap</strong> (what the data is), and
+<strong>MapLibre</strong> (what draws it).</p>
+
+<h2>What is Internet in a Box?</h2>
+
+<p><a href="https://internet-in-a-box.org/">Internet in a Box</a> (IIAB) is an
+open-source project that packages a library of the internet's most useful
+content &mdash; Wikipedia, educational courseware, medical references, and
+<strong>maps</strong> &mdash; onto an inexpensive device (often a Raspberry Pi)
+that serves it over local WiFi. A community without reliable or affordable
+internet plugs in the box and browses the content from any phone or laptop on
+the local network. App Dev For All works with IIAB as a distribution partner, so
+an IIAB server is the natural place this plugin looks for map data. (Source on
+GitHub: <a href="https://github.com/iiab/iiab">iiab/iiab</a>.)</p>
+
+<p>An IIAB server can be reached two ways, and this plugin supports both:</p>
+
+<ul>
+  <li><strong>Over the internet</strong> &mdash; a hosted IIAB instance (the
+  plugin defaults to the public <code>iiab.switnet.org</code>).</li>
+  <li><strong>Over a local LAN</strong> &mdash; a physical IIAB box on the same
+  WiFi, so the download never touches the internet at all. This is the field
+  scenario: a box sitting in a clinic or school, phones pulling map regions off
+  it locally.</li>
+</ul>
+
+<p><strong>What mapping data lives on an IIAB server?</strong> IIAB's maps
+content is OpenStreetMap-derived:</p>
+
+<ul>
+  <li><strong>Vector map tiles</strong> &mdash; the roads, buildings, rivers,
+  and labels of OSM, packaged as seekable tile archives. This plugin downloads
+  them as <code>.pmtiles</code>. They're usually shipped as
+  <strong>regional extracts</strong> (a country or area), though a well-stocked
+  box can carry much larger coverage.</li>
+  <li><strong>A low-zoom world basemap</strong> so there's something to show
+  before you zoom into a downloaded region (this plugin bundles a Natural Earth
+  basemap for the same reason).</li>
+</ul>
+
+<p>The rest of this tutorial unpacks each layer.</p>
+
+<h2>What is OpenStreetMap?</h2>
+
+<p>OpenStreetMap (OSM) is a free, public-domain map of the world built and
+maintained by volunteers. Unlike Google Maps or Apple Maps, the underlying data
+&mdash; every road, building, river, hospital, school &mdash; is
+<strong>available for download</strong> and can be <strong>bundled into your app
+for offline use</strong>. That is the whole reason this plugin exists: in
+low-bandwidth regions where many of App Dev For All's users do field work, the
+only sustainable map is one that already lives on the phone.</p>
+
+<p>Two important things to know up front:</p>
+
+<ol>
+  <li><strong>OSM data is structured around tags.</strong> Every feature on the
+  map has a <code>key=value</code> tag describing what it is:
+  <code>amenity=hospital</code>, <code>highway=primary</code>,
+  <code>place=village</code>, <code>shop=bakery</code>. There's no rigid schema
+  &mdash; the <a href="https://wiki.openstreetmap.org/wiki/Map_features">OSM
+  wiki</a> documents the conventions but anyone can invent a new tag. When you
+  write a query against OSM, you write it against tags.</li>
+  <li><strong>OSM tiles are not OSM data.</strong> Tiles are pre-rendered images
+  (or vector geometries with style instructions) that you stack like a mosaic to
+  show a map. This plugin bundles tiles as a single <code>.pmtiles</code>
+  archive (a cloud-optimized format that supports HTTP range reads, so one file
+  serves any zoom/region without a tile server). Raw OSM data, if you ever need
+  it, lives in <code>.osm.pbf</code> extracts. Your generated app renders the
+  PMTiles tiles directly, including the place-name and street-name labels carried
+  in the vector tiles.</li>
+</ol>
+
+<h2>How does MapLibre fit?</h2>
+
+<p>MapLibre is the open-source Android library that draws the map. The IDE
+template adds a <code>MapView</code> to your <code>activity_map_region.xml</code>;
+the library is responsible for rendering tiles at the right zoom level, handling
+pinch-to-zoom and pan gestures, and drawing markers / lines / polygons on
+top.</p>
+
+<p>The template wires up the minimum:</p>
+
+<ul>
+  <li><code>MapLibre.getInstance(this)</code> &mdash; initialises the renderer
+  (must run before <code>setContentView</code>)</li>
+  <li><code>MapView</code> &mdash; the actual map widget</li>
+  <li><code>mapView.onCreate / onStart / onResume / onPause / onStop /
+  onLowMemory / onDestroy / onSaveInstanceState</code> &mdash; every Activity
+  lifecycle callback <strong>must</strong> be forwarded to the
+  <code>MapView</code>. Skipping any of these leaks GPU memory or crashes the
+  renderer.</li>
+  <li>A <code>style.json</code> in <code>assets/maps/</code> &mdash; tells
+  MapLibre where to fetch tiles and how to draw them.</li>
+</ul>
+
+<h2>Where do tiles come from?</h2>
+
+<p>The generated app renders <strong>one bundled region</strong>, served from
+inside the APK. The tiles arrive from an <strong>Internet in a Box server</strong>
+(see above) through the IDE bottom-sheet <strong>Maps</strong> tab: open it, pick
+a region with the bbox picker, and download it &mdash; the plugin range-fetches
+the region's tiles from the IIAB server (the public <code>iiab.switnet.org</code>
+by default, or a local-LAN box) into
+<code>/sdcard/CodeOnTheGo/maps/&lt;region-id&gt;/</code>. When you tap
+<strong>Use in this project</strong>, the plugin <strong>copies that region's
+data files</strong> (<code>tiles.pmtiles</code>, <code>basemap.pmtiles</code>,
+<code>meta.json</code>) into the project's fixed
+<code>app/src/main/assets/maps/</code> folder, overwriting any previous region.
+That's the whole apply step &mdash; a pure data copy. The code, style, manifest,
+and Gradle wiring already ship in the project.</p>
+
+<p><strong>How the bundled tiles render.</strong> MapLibre 13.x on Android
+(OpenGL ES variant) only reliably dispatches the <code>pmtiles://http://...</code>
+URL scheme. <code>pmtiles://asset:///&hellip;</code> and
+<code>pmtiles://file:///&hellip;</code> do <strong>not</strong> work reliably in
+this app &mdash; don't use them. So the generated app runs a tiny
+<strong>in-process loopback HTTP server</strong> (<code>PmtilesHttpServer</code>)
+on <code>127.0.0.1</code> that serves the bundled PMTiles assets with HTTP Range
+support, and the <code>MapRegionActivity</code> substitutes
+<code>pmtiles://http://127.0.0.1:&lt;port&gt;/maps/tiles.pmtiles</code> into the
+style at runtime.</p>
+
+<p>This requires the PMTiles to be stored uncompressed in the APK &mdash;
+<code>androidResources { noCompress.add("pmtiles") }</code>, already set in
+<code>build.gradle.kts</code> &mdash; so the loopback server can seek into them.
+No internet is needed once a region is bundled.</p>
+
+<p>If you want to bundle a region by hand instead of using the Maps tab, drop the
+data files into <code>app/src/main/assets/maps/</code> (<code>tiles.pmtiles</code>
++ <code>basemap.pmtiles</code> + a <code>meta.json</code> with the region's
+<code>bbox</code>) and rebuild. You can build a <code>.pmtiles</code> archive
+yourself:</p>
+
+<ul>
+  <li><a href="https://openmaptiles.org/">OpenMapTiles</a> &mdash; ready-made
+  vector packs (convert MBTiles &rarr; PMTiles with the <code>pmtiles</code> CLI:
+  <code>pmtiles convert region.mbtiles region.pmtiles</code>).</li>
+  <li><a href="https://download.geofabrik.de/">Geofabrik</a> &mdash;
+  <code>.osm.pbf</code> extracts you process server-side via
+  <code>tilemaker</code> (emit MBTiles, then convert to PMTiles).</li>
+</ul>
+
+<h2>Tag reference (most useful for field-data apps)</h2>
+
+<table>
+  <thead>
+    <tr><th>Tag</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>amenity=hospital</code>, <code>=clinic</code>, <code>=pharmacy</code></td><td>Health</td></tr>
+    <tr><td><code>amenity=school</code>, <code>=university</code>, <code>=library</code></td><td>Education</td></tr>
+    <tr><td><code>amenity=drinking_water</code>, <code>man_made=water_well</code></td><td>Water</td></tr>
+    <tr><td><code>shop=*</code></td><td>Retail of any kind</td></tr>
+    <tr><td><code>place=village</code>, <code>=town</code>, <code>=city</code></td><td>Populated places</td></tr>
+    <tr><td><code>highway=primary</code>, <code>=secondary</code>, <code>=tertiary</code>, <code>=track</code></td><td>Roads, by importance</td></tr>
+    <tr><td><code>leisure=park</code>, <code>landuse=forest</code></td><td>Open space</td></tr>
+  </tbody>
+</table>
+
+<p>The full reference is at
+<a href="https://wiki.openstreetmap.org/wiki/Map_features">OSM Wiki: Map
+features</a>.</p>
+
+<h2>Where to ask for help</h2>
+
+<ul>
+  <li>The MapLibre community:
+  <a href="https://maplibre.org/community/">maplibre.org</a></li>
+  <li>OSM users in your region &mdash; most regions have a local mailing list at
+  <code>talk-{country}@openstreetmap.org</code></li>
+  <li>Code on the Go's own help &mdash; long-press any tooltip in the IDE for the
+  relevant docs</li>
+</ul>
+
+</body>
+</html>
