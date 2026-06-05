@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
+
+    <!--
+        Region list container. Visible by default; hidden while a wizard
+        step (source picker / bbox picker / save / download) is showing
+        in the picker_container below.
+    -->
+    <LinearLayout
+        android:id="@+id/list_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:clipToPadding="false"
+        android:paddingBottom="16dp">
+
+        <!--
+            Title header (v3 addition). Bryan, 2026-05-15:
+            "Pick one active region to build into your app" — reinforces
+            the per-project one-active-at-a-time rule (R2 scope).
+        -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="8dp">
+
+            <TextView
+                style="@style/TextAppearance.Material3.TitleMedium"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/colorOnSurface"
+                android:text="@string/maps_regions_title" />
+
+            <TextView
+                style="@style/TextAppearance.Material3.BodySmall"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:text="@string/maps_regions_subtitle" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?attr/colorOutlineVariant" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <!-- paddingBottom=88dp clears the ExtendedFAB (~56dp + 16dp
+                 margin + safety) so the last card's actions aren't covered
+                 when scrolled to the bottom. Bryan, 2026-05-26. -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/regions_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="88dp"
+                tools:listitem="@layout/item_region" />
+
+            <LinearLayout
+                android:id="@+id/empty_state"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="32dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="@string/maps_regions_empty"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+            </LinearLayout>
+        </FrameLayout>
+
+        <!--
+            Footer: total cache size + device free space. Refreshed on every
+            list render via StatFs. Per the v2 bottom-tab mockup.
+        -->
+        <!-- Cache footer was here; removed 2026-05-26 per Bryan: not needed. -->
+
+    </LinearLayout>
+
+    <!--
+        Primary "Download new region" CTA. ExtendedFAB pinned bottom-end.
+    -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/btn_download_new"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="@string/maps_regions_download_new"
+        app:icon="@android:drawable/ic_input_add" />
+
+    <!--
+        Wizard mode wrapper — vertical: header strip with Close (X) + step
+        content. Hidden by default; shown by RegionManagerFragment's
+        showSourcePicker / showBboxPicker / showStep3Save / showDownloadProgress.
+
+        Header strip + close icon added 2026-05-26 (UX review C-2 fix) so the
+        user can always escape the wizard back to the region list. Android
+        BACK is also intercepted by RegionManagerFragment to do the same.
+    -->
+    <LinearLayout
+        android:id="@+id/wizard_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="?attr/colorSurface"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp"
+            android:paddingVertical="4dp">
+
+            <TextView
+                android:id="@+id/wizard_title"
+                style="@style/TextAppearance.Material3.TitleMedium"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="Choose Region" />
+
+            <ImageButton
+                android:id="@+id/wizard_close"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/maps_wizard_close" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/picker_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+</FrameLayout>

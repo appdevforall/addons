@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Maps</string>
+    <string name="plugin_name">Maps</string>
+
+    <!-- Bbox picker (full-screen Activity launched from the regions panel) -->
+    <string name="maps_bbox_title">Choose area</string>
+    <string name="maps_bbox_subtitle">Drag the corners to resize. Drag the box to move.</string>
+    <string name="maps_bbox_save">Save</string>
+    <string name="maps_bbox_cancel">Cancel</string>
+    <string name="maps_bbox_search_hint">Region name (e.g. Lalibela, Ethiopia)</string>
+
+    <!-- Region manager (bottom-sheet plugin tab "Maps") -->
+    <string name="maps_regions_title">Map Regions</string>
+    <!-- Wizard headers + close (2026-05-26: C-2 fix — always-visible exit). -->
+    <string name="maps_wizard_title_source">Pick map source</string>
+    <string name="maps_wizard_title_bbox">Choose region</string>
+    <string name="maps_wizard_title_save">Save region</string>
+    <string name="maps_wizard_title_download">Downloading region</string>
+    <string name="maps_wizard_close">Cancel and return to region list</string>
+    <!-- Subtitle below the step-title in the Region Manager header. Bryan,
+         2026-05-15: "Pick one active region to build into your app" —
+         reinforces the per-project one-active-at-a-time rule (R2 scope). -->
+    <string name="maps_regions_subtitle">Pick one active region to build into your app</string>
+    <string name="maps_tab_title">Maps</string>
+    <string name="maps_regions_empty">No regions cached yet. Tap "+ Download new region" to add one.</string>
+    <string name="maps_regions_no_project">No project open. Open a Map project to apply a region.</string>
+    <string name="maps_regions_delete">Delete</string>
+    <string name="maps_regions_redownload">Refresh</string>
+    <string name="maps_regions_use_in_project">Use in this project</string>
+    <string name="maps_regions_in_this_project">✓ In this project</string>
+    <string name="maps_regions_download_new">+ Download new region</string>
+    <string name="maps_regions_confirm_delete_title">Delete cached region?</string>
+    <string name="maps_regions_confirm_delete_message">This frees disk space but any project that has already bundled this region keeps its own copy.</string>
+    <string name="maps_regions_apply_success">Region applied · rebuild to see new map</string>
+    <string name="maps_regions_apply_failed">Couldn\'t apply region — check the project layout</string>
+
+    <!-- Source picker (v3 wizard, restructured 2026-05-15) -->
+    <string name="maps_source_title">New map region</string>
+    <string name="maps_source_region_name">Region name</string>
+    <string name="maps_source_where_from">Where from?</string>
+    <string name="maps_source_intro">Choose Internet in a Box Server:</string>
+    <string name="maps_source_lan_title">Local Network</string>
+    <string name="maps_source_lan_host_hint">Local Network Hostname</string>
+    <string name="maps_source_internet_title">Internet (iiab.switnet.org)</string>
+    <string name="maps_source_layers_title">Layers</string>
+    <string name="maps_source_layers_subtitle">Vector + Natural Earth raster are always bundled.</string>
+    <string name="maps_source_layer_vector">Vector basemap (OpenStreetMap)</string>
+    <string name="maps_source_layer_basemap">Natural Earth raster (low zoom)</string>
+    <string name="maps_source_layer_locked">🔒 always on</string>
+    <string name="maps_source_next">Next →</string>
+    <string name="maps_source_back">← Back</string>
+    <string name="maps_source_save">Save</string>
+    <string name="maps_source_probe_checking">● Checking…</string>
+    <string name="maps_source_probe_reachable">● Reachable</string>
+    <string name="maps_source_probe_unreachable">● Not reachable</string>
+    <string name="maps_source_probe_lan_empty">Enter a hostname above</string>
+    <string name="maps_source_no_source_selected">Pick a source to continue.</string>
+    <string name="maps_source_lan_unreachable_fallback_title">LAN box unreachable</string>
+    <string name="maps_source_lan_unreachable_fallback_message">Couldn\'t reach %1$s. Use the internet path instead?</string>
+    <string name="maps_source_lan_unreachable_fallback_yes">Use internet</string>
+    <string name="maps_source_lan_unreachable_fallback_no">Pick another source</string>
+
+    <!-- v3 wizard step headers -->
+    <string name="maps_step1_of_3">Step 1 of 3</string>
+    <string name="maps_step1_title">Pick Map Data Source</string>
+    <string name="maps_step2_of_3">Step 2 of 3</string>
+    <string name="maps_step2_title">Choose Region</string>
+    <string name="maps_step3_of_3">Step 3 of 3</string>
+    <string name="maps_step3_title">Save Region</string>
+
+    <!-- v3 location permission rationale -->
+    <string name="maps_location_perm_title">Allow Maps to access your location?</string>
+    <string name="maps_location_perm_rationale">The wizard uses your current location to center the region you\'re about to download. You can pick the region manually if you decline.</string>
+    <string name="maps_location_perm_allow">While using the app</string>
+    <string name="maps_location_perm_deny">Don\'t allow</string>
+
+    <!-- Step 3 (Save Region). Layer-row keys match the maps_layer_* labels used
+         in Step 2's size overlay + the Download progress UI, so all three
+         surfaces speak the same vocabulary. -->
+    <string name="maps_save_region_name_hint">Region name</string>
+    <string name="maps_save_summary_source">Source</string>
+    <string name="maps_save_summary_center">Center</string>
+    <string name="maps_save_summary_extent">Extent</string>
+    <string name="maps_save_summary_total">Total to download</string>
+    <string name="maps_save_collision_message">A region named &quot;%1$s&quot; already exists. Save will replace it.</string>
+
+    <!-- Layer labels — human-readable, not filenames. Used by Step 2 size
+         overlay, Step 3 summary card rows, and Download progress rows. -->
+    <string name="maps_layer_natural_earth">Natural Earth</string>
+    <string name="maps_layer_osm_vector">OpenStreetMap vector</string>
+
+    <!-- Download progress (Phase 1d) -->
+    <string name="maps_download_title_downloading">Downloading…</string>
+    <string name="maps_download_status_done">done</string>
+    <string name="maps_download_status_queued">queued</string>
+    <string name="maps_download_status_failed">failed</string>
+    <string name="maps_download_cancel_discard">Cancel + discard</string>
+    <string name="maps_download_lan_failed_title">LAN download stopped</string>
+    <string name="maps_download_lan_failed_message">Couldn\'t finish from %1$s. Continue from internet?</string>
+    <string name="maps_download_lan_failed_use_internet">Use internet</string>
+    <string name="maps_download_lan_failed_cancel">Cancel</string>
+
+    <!-- Region Manager active/inactive -->
+    <string name="maps_region_active_in_project">● Active in this project</string>
+    <string name="maps_region_toggle_on">Active</string>
+    <string name="maps_region_toggle_off">Inactive</string>
+    <string name="maps_region_switched_active">Switched active region from %1$s to %2$s</string>
+    <string name="maps_region_activated">Activated %1$s</string>
+    <string name="maps_region_deactivated">Deactivated %1$s</string>
+
+    <!-- Tooltip / overview -->
+    <string name="maps_tooltip_overview_summary"><![CDATA[<b>Maps</b><br>Offline OpenStreetMap: a project template plus a Maps tab to download and apply region data.]]></string>
+</resources>
