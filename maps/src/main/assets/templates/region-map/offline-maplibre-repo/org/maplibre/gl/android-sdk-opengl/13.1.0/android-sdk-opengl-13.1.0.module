@@ -1,0 +1,234 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.maplibre.gl",
+    "module": "android-sdk-opengl",
+    "version": "13.1.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.4.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "openglReleaseVariantOpenglReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "org.maplibre.gl",
+          "module": "android-sdk-geojson",
+          "version": {
+            "requires": "6.0.1"
+          }
+        },
+        {
+          "group": "org.maplibre.gl",
+          "module": "maplibre-android-gestures",
+          "version": {
+            "requires": "0.0.4"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "android-sdk-opengl-13.1.0.aar",
+          "url": "android-sdk-opengl-13.1.0.aar",
+          "size": 4514904,
+          "sha256": "59382000d31f014330fb620b9213dcc6e0b0c3d91874f02d4ad3dfd4e7660922",
+          "sha1": "0a6675a63ef15f2f55e547e1713c0aa614a46b69",
+          "md5": "c3e39b4024e15e781b6ba5a12fe9163d"
+        }
+      ]
+    },
+    {
+      "name": "openglReleaseVariantOpenglReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.maplibre.gl",
+          "module": "android-sdk-turf",
+          "version": {
+            "requires": "6.0.1"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.8.2"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "androidx.fragment",
+          "module": "fragment",
+          "version": {
+            "requires": "1.8.9"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "com.squareup.okhttp3",
+          "module": "okhttp",
+          "version": {
+            "requires": "4.12.0"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "com.jakewharton.timber",
+          "module": "timber",
+          "version": {
+            "requires": "5.0.1"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "androidx.interpolator",
+          "module": "interpolator",
+          "version": {
+            "requires": "1.0.0"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "org.maplibre.gl",
+          "module": "android-sdk-geojson",
+          "version": {
+            "requires": "6.0.1"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "org.maplibre.gl",
+          "module": "maplibre-android-gestures",
+          "version": {
+            "requires": "0.0.4"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.10"
+          },
+          "excludes": [
+            {
+              "group": "commons-logging",
+              "module": "commons-logging"
+            },
+            {
+              "group": "commons-collections",
+              "module": "commons-collections"
+            }
+          ]
+        }
+      ],
+      "files": [
+        {
+          "name": "android-sdk-opengl-13.1.0.aar",
+          "url": "android-sdk-opengl-13.1.0.aar",
+          "size": 4514904,
+          "sha256": "59382000d31f014330fb620b9213dcc6e0b0c3d91874f02d4ad3dfd4e7660922",
+          "sha1": "0a6675a63ef15f2f55e547e1713c0aa614a46b69",
+          "md5": "c3e39b4024e15e781b6ba5a12fe9163d"
+        }
+      ]
+    }
+  ]
+}
