@@ -1,0 +1,79 @@
+plugins {
+    id("com.android.application") version "${{AGP_VERSION}}"
+${% if LANGUAGE == 'kotlin' %}
+    kotlin("android") version "${{KOTLIN_VERSION}}"
+${% endif %}
+}
+
+android {
+    namespace = "${{PACKAGE_NAME}}"
+    // Trailing comments below are load-bearing: the CGT/Pebble renderer trims the
+    // newline right after a print tag, so a line that ENDS in a substitution merges
+    // into the next line. Keeping a comment after each tag preserves the line break.
+    compileSdk = ${{COMPILE_SDK}}  // IDE-installed compile SDK
+
+    defaultConfig {
+        applicationId = "${{PACKAGE_NAME}}"
+        // MapLibre 13.x requires minSdk >= 23, so this is pinned (not a build
+        // option) — a lower value fails manifest merger against the AAR.
+        minSdk = 23
+        targetSdk = ${{TARGET_SDK}}  // IDE-installed target SDK
+        versionCode = 1
+        versionName = "1.0"
+
+        // The bundled offline-maplibre-repo ships MapLibre's native lib for
+        // arm64-v8a ONLY (the team's target devices + the on-device build host
+        // are all arm64). Packaging only that ABI keeps the vendored repo small
+        // and avoids a missing-.so failure for the other ABIs. (ADFA-2436 / E13)
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = ${{JAVA_SOURCE_COMPAT}}  // resolves to JavaVersion.VERSION_NN
+        targetCompatibility = ${{JAVA_TARGET_COMPAT}}  // resolves to JavaVersion.VERSION_NN
+    }
+${% if LANGUAGE == 'kotlin' %}
+    kotlinOptions {
+        jvmTarget = "${{JAVA_TARGET}}"
+        // MapLibre 13.1.0 is published with Kotlin 2.2 metadata; the IDE's embedded
+        // Kotlin compiler is older and otherwise rejects it ("module compiled with an
+        // incompatible version of Kotlin"). Skipping the metadata-version check lets
+        // the app compile against MapLibre's Kotlin classes. (ADFA-2436)
+        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
+    }
+${% endif %}
+
+    // PMTiles assets must stay uncompressed so MapLibre's loopback HTTP server
+    // can random-access seek into them via AssetManager.openFd (ADFA-2436).
+    androidResources {
+        noCompress.add("pmtiles")
+        // Glyph .pbf fonts are served by the loopback HTTP server too, which uses
+        // AssetManager.openFd — that only works on uncompressed assets.
+        noCompress.add("pbf")
+    }
+}
+
+dependencies {
+    // Versions aligned to CoGo's bundled offline Maven repo where one exists, so
+    // these resolve from the bundle with NO network (appcompat 1.6.1 / cardview
+    // 1.0.0 / coordinatorlayout 1.1.0 / material 1.9.0 are all bundled). The
+    // genuine gap — MapLibre and the androidx/material transitive closure that
+    // floats above the bundled versions — is supplied by the project-local
+    // `offline-maplibre-repo` declared in settings.gradle.kts. (ADFA-2436 / E13)
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.coordinatorlayout:coordinatorlayout:1.1.0")
+    implementation("androidx.cardview:cardview:1.0.0")
+    // Material — provides the Material3 app theme (themes.xml parent).
+    implementation("com.google.android.material:material:1.9.0")
+
+    // MapLibre Native — OpenGL ES variant for low-end device compatibility.
+    // Using android-sdk-opengl (not android-sdk) because many devices in
+    // ADFA's target audience (API 26-29 low-end phones) don't have Vulkan
+    // support. The OpenGL ES variant is identical in API; only the renderer
+    // backend differs. MapLibre 13.x requires minSdk >= 23. The map's
+    // current-location dot uses MapLibre's built-in default location engine,
+    // so no Play Services Location dependency is needed.
+    implementation("org.maplibre.gl:android-sdk-opengl:13.1.0")
+}

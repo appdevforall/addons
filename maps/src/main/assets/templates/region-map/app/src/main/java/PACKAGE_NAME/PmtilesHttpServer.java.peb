@@ -1,0 +1,170 @@
+package ${{PACKAGE_NAME}};
+
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
+import android.util.Log;
+
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Tiny in-process HTTP/1.1 server (loopback only) that serves bundled APK assets
+ * with Range-request support. Used to feed bundled PMTiles into MapLibre via
+ * {@code pmtiles://http://127.0.0.1:PORT/...} — the only PMTiles URL scheme proven
+ * to work in MapLibre 13.1.0 OpenGL ES on Android.
+ *
+ * <p>Requires assets to be stored uncompressed in the APK
+ * ({@code androidResources { noCompress.add("pmtiles") }}) so {@link
+ * AssetManager#openFd} returns a real seekable fd.
+ */
+public class PmtilesHttpServer {
+    private static final String TAG = "PmtilesHttpServer";
+    private static final int BUF = 64 * 1024;
+
+    private final AssetManager assets;
+    private final String rootPrefix;
+    private ServerSocket socket;
+    private ExecutorService pool;
+    private int port;
+    private volatile boolean running;
+
+    public PmtilesHttpServer(AssetManager assets, String rootPrefix) {
+        this.assets = assets;
+        this.rootPrefix = rootPrefix.endsWith("/") ? rootPrefix : rootPrefix + "/";
+    }
+
+    public int start() throws IOException {
+        socket = new ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"));
+        port = socket.getLocalPort();
+        running = true;
+        pool = Executors.newCachedThreadPool();
+        Thread accept = new Thread(() -> {
+            while (running) {
+                try {
+                    Socket client = socket.accept();
+                    pool.submit(() -> handle(client));
+                } catch (IOException e) {
+                    if (running) Log.w(TAG, "accept: " + e);
+                }
+            }
+        }, "PmtilesHttpServer-accept");
+        accept.setDaemon(true);
+        accept.start();
+        Log.i(TAG, "listening on 127.0.0.1:" + port + " serving assets/" + rootPrefix);
+        return port;
+    }
+
+    public int port() { return port; }
+
+    public void stop() {
+        running = false;
+        try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+        if (pool != null) pool.shutdownNow();
+    }
+
+    private void handle(Socket client) {
+        try (Socket c = client;
+             InputStream in = c.getInputStream();
+             OutputStream out = c.getOutputStream()) {
+            BufferedReader r = new BufferedReader(new InputStreamReader(in));
+            String reqLine = r.readLine();
+            if (reqLine == null) return;
+            String[] parts = reqLine.split(" ");
+            if (parts.length < 2 || !parts[0].equalsIgnoreCase("GET")) {
+                writeStatus(out, 405, "Method Not Allowed"); return;
+            }
+            String path = parts[1];
+            if (path.startsWith("/")) path = path.substring(1);
+            int q = path.indexOf('?');
+            if (q >= 0) path = path.substring(0, q);
+            if (!path.startsWith(rootPrefix)) { writeStatus(out, 404, "Not Found"); return; }
+            // Reject path-traversal segments. AssetManager already sandboxes to
+            // the APK's assets/ tree and the server is loopback-only, but a ".."
+            // in the request path has no legitimate use here.
+            if (path.contains("..")) { writeStatus(out, 404, "Not Found"); return; }
+
+            long rangeStart = 0;
+            long rangeEnd = -1;
+            String line;
+            while ((line = r.readLine()) != null && !line.isEmpty()) {
+                if (line.regionMatches(true, 0, "Range:", 0, 6)) {
+                    String v = line.substring(6).trim();
+                    if (v.startsWith("bytes=")) {
+                        String spec = v.substring(6);
+                        int dash = spec.indexOf('-');
+                        if (dash > 0) {
+                            try { rangeStart = Long.parseLong(spec.substring(0, dash)); } catch (Exception ignored) {}
+                            String rest = spec.substring(dash + 1);
+                            if (!rest.isEmpty()) {
+                                try { rangeEnd = Long.parseLong(rest); } catch (Exception ignored) {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            AssetFileDescriptor afd;
+            try { afd = assets.openFd(path); }
+            catch (IOException e) { writeStatus(out, 404, "Not Found"); return; }
+            long totalLen = afd.getLength();
+            try {
+                if (rangeEnd < 0 || rangeEnd >= totalLen) rangeEnd = totalLen - 1;
+                if (rangeStart < 0) rangeStart = 0;
+                if (rangeStart >= totalLen) {
+                    writeStatus(out, 416, "Requested Range Not Satisfiable"); return;
+                }
+                long sliceLen = rangeEnd - rangeStart + 1;
+                boolean partial = (rangeStart != 0) || (rangeEnd != totalLen - 1);
+                StringBuilder hdr = new StringBuilder(partial
+                    ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n");
+                hdr.append("Content-Type: application/octet-stream\r\n");
+                hdr.append("Accept-Ranges: bytes\r\n");
+                hdr.append("Content-Length: ").append(sliceLen).append("\r\n");
+                if (partial) {
+                    hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
+                       .append(rangeEnd).append('/').append(totalLen).append("\r\n");
+                }
+                hdr.append("Connection: close\r\n\r\n");
+                out.write(hdr.toString().getBytes("US-ASCII"));
+
+                try (FileInputStream fis = afd.createInputStream()) {
+                    long skipped = 0;
+                    while (skipped < rangeStart) {
+                        long s = fis.skip(rangeStart - skipped);
+                        if (s <= 0) break;
+                        skipped += s;
+                    }
+                    byte[] buf = new byte[BUF];
+                    long remaining = sliceLen;
+                    while (remaining > 0) {
+                        int want = (int) Math.min(buf.length, remaining);
+                        int n = fis.read(buf, 0, want);
+                        if (n < 0) break;
+                        out.write(buf, 0, n);
+                        remaining -= n;
+                    }
+                    out.flush();
+                }
+            } finally {
+                try { afd.close(); } catch (IOException ignored) {}
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "handle: " + e);
+        }
+    }
+
+    private void writeStatus(OutputStream out, int code, String msg) throws IOException {
+        String s = "HTTP/1.1 " + code + " " + msg + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        out.write(s.getBytes("US-ASCII"));
+        out.flush();
+    }
+}
