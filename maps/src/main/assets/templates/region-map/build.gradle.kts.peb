@@ -1,0 +1,12 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// Pre-declaring the AGP version here (apply false) ensures Gradle sets up the AGP classpath
+// before any subproject plugin—including CoGo's internal LogSenderPlugin—is applied.  Without
+// this declaration, LogSenderPlugin's Gradle-decorated class generation fails at configuration
+// time with "com/android/build/api/variant/ApplicationVariant" (ADFA-2436).
+plugins {
+    id("com.android.application") apply false version "8.11.0"
+}
+
+tasks.register<Delete>("clean") {
+    delete(rootProject.layout.buildDirectory)
+}
