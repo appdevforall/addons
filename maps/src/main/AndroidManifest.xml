@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Step 2's "20×20km around current GPS" default needs a coarse
+        location fix. We request the permission lazily on first wizard
+        run via ActivityCompat#requestPermissions; this declaration is
+        what makes the runtime request resolvable. The plugin doesn't
+        track location continuously — one lastKnownLocation read per
+        wizard session.
+        Plugin permissions ride the host's permission grants because
+        plugin APKs load via DexClassLoader; this <uses-permission>
+        declaration is documentary (clarifies intent for reviewers).
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <application
+        android:label="Maps"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.maps" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Maps" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <!--
+            Description shown in the Plugin Manager. A single "Maps" tab in
+            the editor bottom sheet that downloads OSM tile data and
+            applies it to the currently-open project. Also registers a
+            Maps project template (offered in New Project) that scaffolds a
+            standalone offline region-map app.
+        -->
+        <meta-data
+            android:name="plugin.description"
+            android:value="Offline OpenStreetMap tools. Adds a 'Maps' tab to the editor bottom sheet that downloads OSM tile data and applies it to your currently-open project." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <!--
+            Minimum compatible IDE version, pinned to the current stable CoGo
+            (26.23, the real YY.WW scheme) as of the 2026-06-04 review. Max is
+            left open (no plugin.max_ide_version) so future CoGo releases aren't
+            rejected. The host's plugin-api currently only enforces that min is
+            non-blank (no hard range gate yet).
+        -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.23" />
+
+        <!--
+            native.code is REQUIRED to make production CoGo's plugin loader
+            extract the bundled libmaplibre.so into the per-plugin native
+            library directory. Without it, the loader returns
+            nativeLibPath=null and MapLibre fails to load at runtime —
+            getEditorTabs() never gets called and the Maps tab silently
+            doesn't appear. (Bug surfaced 2026-05-15 during A56 QA; copy
+            convention from forms-plugin's manifest.)
+        -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,network.access,native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.maps.MapsPlugin" />
+
+        <!-- Plugin Manager icons. Required for debug builds (host CoGo
+             gates installation on these); release builds skip the check.
+             Paths are inside the .cgp (APK) zip — assets/ entries land at
+             exactly this path because the Android build system bundles
+             assets verbatim. Globe glyph (Africa + Europe, prime-meridian
+             centered) in the shared monochrome day/night plugin style. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+        <!-- No sidebar entries: 2026-05-14 migration moved the surface to
+             a bottom-sheet plugin tab. -->
+        <meta-data
+            android:name="plugin.sidebar_items"
+            android:value="0" />
+
+        <!--
+            No <activity> declarations: plugin APKs are loaded with
+            DexClassLoader and never registered with the host's
+            PackageManager, so plugin-Activity launches via Intent fail at
+            runtime. UI lives in Fragments hosted under the editor
+            bottom-sheet plugin tab (see MapsPlugin.getEditorTabs).
+        -->
+
+    </application>
+
+</manifest>
