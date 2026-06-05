@@ -62,6 +62,13 @@ com.squareup.okhttp3:okhttp:4.12.0
   License: Apache-2.0
   https://github.com/square/okhttp/blob/master/LICENSE.txt
 
+com.github.davidmoten:hilbert-curve:0.2.3
+  Hilbert-curve tile-id range decomposition for the bbox->tile slicer.
+  Transitively bundles com.github.davidmoten:guava-mini:0.1.6 and
+  com.google.guava:listenablefuture:1.0.
+  License: Apache-2.0
+  https://github.com/davidmoten/hilbert-curve
+
 org.jetbrains.kotlin:kotlin-stdlib:2.3.0
 org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1
   Kotlin standard library + coroutines.
