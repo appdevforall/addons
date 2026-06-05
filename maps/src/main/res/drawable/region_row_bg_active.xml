@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Active region row background — green-tinted with a 2dp accent border so the
+    "active in this project" state is glanceable in the region list.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#0F4CAF50" />
+    <stroke
+        android:width="2dp"
+        android:color="#4CAF50" />
+    <corners android:radius="10dp" />
+</shape>
