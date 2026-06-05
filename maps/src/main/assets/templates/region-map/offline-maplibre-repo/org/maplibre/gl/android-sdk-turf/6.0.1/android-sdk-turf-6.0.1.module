@@ -1,0 +1,78 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.maplibre.gl",
+    "module": "android-sdk-turf",
+    "version": "6.0.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.7"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 7,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "org.maplibre.gl",
+          "module": "android-sdk-geojson",
+          "version": {
+            "requires": "6.0.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "android-sdk-turf-6.0.1.jar",
+          "url": "android-sdk-turf-6.0.1.jar",
+          "size": 27945,
+          "sha512": "a28033013b0efaff00b842a286006670970fdb053627a4ecfa24f583840dadc777c60e33c002fc65c551b83fac483b5ebd1c24cfb8f94edbd574123d77f84b30",
+          "sha256": "c0fd543d17fbd3b7c2e946515caf2d53b602f0eac1438ad4dca731d9a508af79",
+          "sha1": "394851f55221cae098ea80dbcba615a5577e6429",
+          "md5": "68965aa668b43afa110b2365f0128509"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 7,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.maplibre.gl",
+          "module": "android-sdk-geojson",
+          "version": {
+            "requires": "6.0.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "android-sdk-turf-6.0.1.jar",
+          "url": "android-sdk-turf-6.0.1.jar",
+          "size": 27945,
+          "sha512": "a28033013b0efaff00b842a286006670970fdb053627a4ecfa24f583840dadc777c60e33c002fc65c551b83fac483b5ebd1c24cfb8f94edbd574123d77f84b30",
+          "sha256": "c0fd543d17fbd3b7c2e946515caf2d53b602f0eac1438ad4dca731d9a508af79",
+          "sha1": "394851f55221cae098ea80dbcba615a5577e6429",
+          "md5": "68965aa668b43afa110b2365f0128509"
+        }
+      ]
+    }
+  ]
+}
