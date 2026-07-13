@@ -1,7 +1,6 @@
 package org.appdevforall.maps.ui
 
 import android.content.Context
-import android.net.TrafficStats
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -14,20 +13,17 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import org.appdevforall.maps.MapsPlugin
 import org.appdevforall.maps.R
+import org.appdevforall.maps.data.ReachabilityProbe
 import org.appdevforall.maps.domain.SourceKind
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
-import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Wizard step 1 — Pick Map Data Source.
@@ -87,21 +83,6 @@ class SourcePickerFragment : Fragment() {
          */
         private const val PROBE_RETRY_INTERVAL_MS = 5_000L
 
-        /**
-         * Per-probe HTTP timeout. 6s covers cold-start DNS resolution + TLS
-         * handshake + first request on a slow path; a warm path returns in
-         * ~200-500ms.
-         */
-        private const val PROBE_TIMEOUT_MS = 6_000L
-
-        /**
-         * Traffic-stats tag for the reachability HEAD probe. Tagging the thread
-         * before the HttpURLConnection call keeps StrictMode's
-         * UntaggedSocketViolation quiet and attributes the probe traffic to Maps.
-         */
-        private const val PROBE_STATS_TAG = 0x4D41_5053 // "MAPS"
-
-        private const val INTERNET_PROBE_URL = "https://iiab.switnet.org/maps/2/"
     }
 
     // ----- View references -----
@@ -119,11 +100,10 @@ class SourcePickerFragment : Fragment() {
     private var selectedSource: SourceKind = SourceKind.UNKNOWN
 
     private var probeJob: Job? = null
+    private val reachabilityProbe = ReachabilityProbe()
 
-    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
-        val inflater = super.onGetLayoutInflater(savedInstanceState)
-        return PluginFragmentHelper.getPluginInflater(MapsPlugin.PLUGIN_ID, inflater)
-    }
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater =
+        themedPluginInflater(super.onGetLayoutInflater(savedInstanceState))
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -223,12 +203,7 @@ class SourcePickerFragment : Fragment() {
                     continue
                 }
                 showReach(getString(R.string.maps_source_probe_checking))
-                val url = when (source) {
-                    SourceKind.IIAB_LAN -> buildLanProbeUrl(hostSnapshot)
-                    SourceKind.INTERNET -> INTERNET_PROBE_URL
-                    else -> INTERNET_PROBE_URL
-                }
-                val reachable = withContext(Dispatchers.IO) { probeHead(url) }
+                val reachable = reachabilityProbe.isReachable(source, hostSnapshot)
                 if (view == null) return@launch
                 showReach(
                     if (reachable) getString(R.string.maps_source_probe_reachable)
@@ -257,44 +232,6 @@ class SourcePickerFragment : Fragment() {
 
     private fun showReach(message: String) {
         reachText.text = message
-    }
-
-    private suspend fun probeHead(url: String): Boolean = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
-        // Tag the socket so the HEAD probe doesn't trip StrictMode's
-        // UntaggedSocketViolation (same fix as RangeFetcher's range fetch).
-        TrafficStats.setThreadStatsTag(PROBE_STATS_TAG)
-        try {
-            runCatching {
-                val conn = URL(url).openConnection() as HttpURLConnection
-                try {
-                    conn.requestMethod = "HEAD"
-                    conn.connectTimeout = PROBE_TIMEOUT_MS.toInt()
-                    conn.readTimeout = PROBE_TIMEOUT_MS.toInt()
-                    conn.instanceFollowRedirects = true
-                    val code = conn.responseCode
-                    code in 200..399
-                } finally {
-                    conn.disconnect()
-                }
-            }.getOrDefault(false)
-        } finally {
-            TrafficStats.clearThreadStatsTag()
-        }
-    } ?: false
-
-    /**
-     * LAN probe URL = `http://<host>/maps/extracts.json`. The `extracts.json`
-     * file is the canonical IIAB inventory; HEAD on it is the lightest probe
-     * that confirms the maps role is reachable. If the host already includes
-     * a scheme (`http://` / `https://`) we honour it; otherwise default to
-     * plain http (IIAB boxes don't typically run TLS on the LAN).
-     */
-    private fun buildLanProbeUrl(host: String): String {
-        val base = when {
-            host.startsWith("http://") || host.startsWith("https://") -> host
-            else -> "http://$host"
-        }
-        return base.trimEnd('/') + "/maps/extracts.json"
     }
 
     // ----- LAN host persistence -----

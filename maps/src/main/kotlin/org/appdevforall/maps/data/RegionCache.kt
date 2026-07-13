@@ -2,6 +2,8 @@ package org.appdevforall.maps.data
 
 import android.os.Environment
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.appdevforall.maps.domain.RegionId
 import org.json.JSONArray
 import org.json.JSONObject
@@ -62,13 +64,18 @@ internal object RegionCache {
      */
     fun isValidRegionId(regionId: String): Boolean = RegionId.isValid(regionId)
 
-    /** Returns the root directory of the cache. Creates it lazily; never null. */
-    fun rootDir(): File {
+    /**
+     * Returns the root directory of the cache. Creates it lazily; never null.
+     *
+     * `suspend` + `withContext(Dispatchers.IO)`: the `exists()`/`mkdirs()` is filesystem I/O, so
+     * the hop is baked in here — callers can't accidentally resolve the root on the main thread.
+     */
+    suspend fun rootDir(): File = withContext(Dispatchers.IO) {
         val storage = Environment.getExternalStorageDirectory()
             ?: error("External storage unavailable")
         val root = File(storage, DEFAULT_ROOT_NAME)
         if (!root.exists()) root.mkdirs()
-        return root
+        root
     }
 
     /**
@@ -80,15 +87,16 @@ internal object RegionCache {
      * sideloaded directories (or partial / aborted downloads) don't show up
      * as ghost rows. Plain dirs land on a quiet log line, not in the UI.
      */
-    fun list(): List<RegionInfo> {
+    suspend fun list(): List<RegionInfo> {
         val root = runCatching { rootDir() }.getOrNull() ?: return emptyList()
         return listFromRoot(root)
     }
 
-    /** Testable variant of [list] taking an explicit root directory. */
-    fun listFromRoot(root: File): List<RegionInfo> {
-        val children = root.listFiles { f -> f.isDirectory } ?: return emptyList()
-        return children.mapNotNull { dir ->
+    /** Testable variant of [list] taking an explicit root directory. Runs on `Dispatchers.IO`. */
+    suspend fun listFromRoot(root: File): List<RegionInfo> = withContext(Dispatchers.IO) {
+        val children = root.listFiles { f -> f.isDirectory }
+            ?: return@withContext emptyList()
+        children.mapNotNull { dir ->
             val meta = File(dir, FILE_META_JSON)
             if (!meta.exists()) {
                 // The wizard writes meta.json LAST, so a missing meta means a
@@ -113,31 +121,32 @@ internal object RegionCache {
      * complementary: the regex prevents most attacks at the API boundary,
      * canonicalisation catches anything the regex missed (defense in depth).
      */
-    fun delete(regionId: String): Boolean {
+    suspend fun delete(regionId: String): Boolean {
         val root = runCatching { rootDir() }.getOrNull() ?: return false
         return deleteFromRoot(root, regionId)
     }
 
-    /** Testable variant of [delete] taking an explicit root directory. */
-    fun deleteFromRoot(root: File, regionId: String): Boolean {
+    /** Testable variant of [delete] taking an explicit root directory. Runs on `Dispatchers.IO`. */
+    suspend fun deleteFromRoot(root: File, regionId: String): Boolean = withContext(Dispatchers.IO) {
         if (!isValidRegionId(regionId)) {
             warn("Refusing to delete invalid regionId: $regionId")
-            return false
+            return@withContext false
         }
         val target = File(root, regionId).canonicalFile
         if (!target.toPath().startsWith(root.canonicalFile.toPath())) {
             warn("Refusing to delete out-of-bounds path: $target")
-            return false
+            return@withContext false
         }
-        if (!target.exists()) return true
-        return target.deleteRecursively()
+        if (!target.exists()) return@withContext true
+        target.deleteRecursively()
     }
 
     /**
      * Public read of a single region directory. Returns null on read failure.
      * Used by tests; production code goes through [list] / [listFromRoot].
      */
-    fun readDir(dir: File): RegionInfo? = runCatching { read(dir) }.getOrNull()
+    suspend fun readDir(dir: File): RegionInfo? =
+        withContext(Dispatchers.IO) { runCatching { read(dir) }.getOrNull() }
 
     /** Best-effort read of `meta.json`. Falls back to disk-derived defaults. */
     private fun read(dir: File): RegionInfo {

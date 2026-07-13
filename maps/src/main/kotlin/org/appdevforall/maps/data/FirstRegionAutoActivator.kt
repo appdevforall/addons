@@ -1,5 +1,7 @@
 package org.appdevforall.maps.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -55,8 +57,8 @@ internal object FirstRegionAutoActivator {
         regionsCacheRoot: File,
         downloadedRegionId: String,
         applyRegionToProject: suspend (info: RegionInfo, projectDir: File) -> Boolean,
-        writeActiveRegion: (projectDir: File, regionId: String) -> Unit,
-    ): Result {
+        writeActiveRegion: suspend (projectDir: File, regionId: String) -> Unit,
+    ): Result = withContext(Dispatchers.IO) {
         val mapsRoot = File(projectDir, mapsSubpath)
         val activeFile = File(mapsRoot, "active.txt")
         val existingActive = readActiveSentinel(activeFile)
@@ -69,21 +71,21 @@ internal object FirstRegionAutoActivator {
             // previously-active region, the sentinel is stale — treat the project
             // as having no active region so the new download auto-activates.
             val activeStillExists = cacheEntries.any { it.regionId == existingActive }
-            if (activeStillExists) return Result.NoOpAlreadyActive
+            if (activeStillExists) return@withContext Result.NoOpAlreadyActive
             // else fall through — sentinel is stale.
         }
         val info = cacheEntries.firstOrNull { it.regionId == downloadedRegionId }
-            ?: return Result.NoOpRegionNotFound
+            ?: return@withContext Result.NoOpRegionNotFound
 
         val applied = applyRegionToProject(info, projectDir)
         if (!applied) {
             // Don't write active.txt if files weren't actually copied — would
             // produce a project that references a region but doesn't have its
             // tiles, failing the build with a misleading "missing tiles" error.
-            return Result.ApplyFailed(info.regionId, "applyRegionToProject returned false")
+            return@withContext Result.ApplyFailed(info.regionId, "applyRegionToProject returned false")
         }
         writeActiveRegion(projectDir, info.regionId)
-        return Result.Activated(info.regionId, info.displayName)
+        Result.Activated(info.regionId, info.displayName)
     }
 
     private fun readActiveSentinel(file: File): String? {

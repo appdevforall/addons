@@ -1,5 +1,6 @@
 package org.appdevforall.maps.data
 
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -38,7 +39,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun sourceObjectWithBlankHostCoalescesToNull() {
+    fun sourceObjectWithBlankHostCoalescesToNull() = runBlocking {
         // Object-form source whose host is blank → sourceHost must read as null,
         // exercising the `takeIf { it.isNotBlank() }` false branch.
         val dir = File(tempRoot, "blank-host").apply { mkdirs() }
@@ -58,7 +59,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun sourceObjectMissingKindFallsBackToUnknown() {
+    fun sourceObjectMissingKindFallsBackToUnknown() = runBlocking {
         // Object-form source with no "kind" → optString default "unknown".
         val dir = File(tempRoot, "no-kind").apply { mkdirs() }
         val meta = JSONObject().apply {
@@ -73,7 +74,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun downloadedAtAndLastUsedAtSurfacedWhenPositive() {
+    fun downloadedAtAndLastUsedAtSurfacedWhenPositive() = runBlocking {
         // The `takeIf { it > 0L }` TRUE branch — both timestamps are non-null.
         val dir = File(tempRoot, "with-times").apply { mkdirs() }
         val meta = JSONObject().apply {
@@ -89,7 +90,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun zeroTimestampsCoalesceToNull() {
+    fun zeroTimestampsCoalesceToNull() = runBlocking {
         // The `takeIf { it > 0L }` FALSE branch — explicit 0 reads as null.
         val dir = File(tempRoot, "zero-times").apply { mkdirs() }
         val meta = JSONObject().apply {
@@ -105,7 +106,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun layersDropsBlankEntries() {
+    fun layersDropsBlankEntries() = runBlocking {
         // Layers array containing blank strings — the `takeIf { isNotBlank }`
         // filter must drop them, keeping only the real layer names.
         val dir = File(tempRoot, "blank-layers").apply { mkdirs() }
@@ -120,7 +121,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun bboxWithNonNumericEntriesIsDroppedViaRunCatching() {
+    fun bboxWithNonNumericEntriesIsDroppedViaRunCatching() = runBlocking {
         // A length-4 bbox whose entries aren't parseable as doubles makes
         // arr.getDouble(i) throw inside the runCatching, so getOrNull() yields
         // null — the catch arm, distinct from the `!has` / `length != 4` early
@@ -138,7 +139,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun bboxFullyParsedWhenAllFourPresentAndNumeric() {
+    fun bboxFullyParsedWhenAllFourPresentAndNumeric() = runBlocking {
         // The success arm: has("bbox") true, length == 4, all getDouble succeed.
         val dir = File(tempRoot, "good-bbox").apply { mkdirs() }
         val meta = JSONObject().apply {
@@ -154,7 +155,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun layersPresentButEmptyArrayYieldsEmptyList() {
+    fun layersPresentButEmptyArrayYieldsEmptyList() = runBlocking {
         // layers key present but the array is empty → the for-loop body never
         // runs, buildList returns empty. Distinct from the no-layers-key path.
         val dir = File(tempRoot, "empty-layers").apply { mkdirs() }
@@ -168,7 +169,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun deleteFromRootRefusesInvalidIdViaRegex() {
+    fun deleteFromRootRefusesInvalidIdViaRegex() = runBlocking {
         // Hits the `!isValidRegionId` true branch in deleteFromRoot (the regex
         // guard) — returns false before any canonicalisation.
         assertFalse(RegionCache.deleteFromRoot(tempRoot, "Bad Id!"))
@@ -176,7 +177,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun deleteFromRootSucceedsForValidExistingRegion() {
+    fun deleteFromRootSucceedsForValidExistingRegion() = runBlocking {
         // The happy path: valid id, path contained, target exists → deleted.
         val dir = File(tempRoot, "goodregion").apply { mkdirs() }
         File(dir, "meta.json").writeText("{}")
@@ -186,7 +187,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun listFromRootSkipsDirWithoutMeta_butKeepsValidSibling() {
+    fun listFromRootSkipsDirWithoutMeta_butKeepsValidSibling() = runBlocking {
         // No-meta dir is skipped (warn path); the valid sibling still lists.
         File(tempRoot, "ghost").apply { mkdirs() }
         val ok = File(tempRoot, "real").apply { mkdirs() }
@@ -200,14 +201,14 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun listFromRootReturnsEmptyWhenRootHasNoSubdirs() {
+    fun listFromRootReturnsEmptyWhenRootHasNoSubdirs() = runBlocking {
         // listFiles filter returns an empty array (root has only files).
         File(tempRoot, "loose-file.txt").writeText("x")
         assertTrue(RegionCache.listFromRoot(tempRoot).isEmpty())
     }
 
     @Test
-    fun listReturnsEmptyWhenExternalStorageUnavailableOnJvm() {
+    fun listReturnsEmptyWhenExternalStorageUnavailableOnJvm() = runBlocking {
         // The no-arg list() routes through rootDir(), which calls
         // Environment.getExternalStorageDirectory() — unavailable on the JVM, so
         // it throws and the `runCatching { rootDir() }.getOrNull() ?: return
@@ -217,7 +218,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun deleteReturnsFalseWhenExternalStorageUnavailableOnJvm() {
+    fun deleteReturnsFalseWhenExternalStorageUnavailableOnJvm() = runBlocking {
         // The no-arg delete() also reaches rootDir(); when it throws, the
         // `getOrNull() ?: return false` branch returns false (couldn't even
         // resolve the root, so nothing was deleted).
@@ -225,7 +226,7 @@ class RegionCacheBranchCoverageTest {
     }
 
     @Test
-    fun readDirReturnsNullWhenReadThrowsOnNonDirectory() {
+    fun readDirReturnsNullWhenReadThrowsOnNonDirectory() = runBlocking {
         // read() opening a path that isn't a usable directory: readDir wraps in
         // runCatching and yields a best-effort RegionInfo (dir name fallbacks),
         // never throwing.

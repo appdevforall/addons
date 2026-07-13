@@ -1,5 +1,6 @@
 package org.appdevforall.maps.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -52,7 +53,7 @@ class RegionInstallerCoverageTest {
     }
 
     @Test
-    fun applyCopiesRegionDataIntoTheProjectAndReturnsTrue() {
+    fun applyCopiesRegionDataIntoTheProjectAndReturnsTrue() = runBlocking {
         val cacheRoot = tmp.newFolder("cache-ok")
         val regionDir = File(cacheRoot, "test-region").apply { mkdirs() }
         File(regionDir, RegionCache.FILE_TILES_PMTILES).writeBytes(ByteArray(16))
@@ -75,7 +76,7 @@ class RegionInstallerCoverageTest {
     }
 
     @Test
-    fun applyReturnsFalseWhenEmitterRejectsTheRegion() {
+    fun applyReturnsFalseWhenEmitterRejectsTheRegion() = runBlocking {
         // Region is under the cache root but has NO tiles.pmtiles, so
         // ProjectMapEmitter returns success=false — exercising RegionInstaller's
         // post-rootDir orchestration: the free-space `needed` compute + proceed,
@@ -99,7 +100,7 @@ class RegionInstallerCoverageTest {
     }
 
     @Test
-    fun applyRoutesFailureToInjectedLogger() {
+    fun applyRoutesFailureToInjectedLogger() = runBlocking {
         val project = tmp.newFolder("project")
         val regionDir = tmp.newFolder("cache", "test-region")
         var reportedMessage: String? = null
@@ -121,7 +122,7 @@ class RegionInstallerCoverageTest {
     }
 
     @Test
-    fun applyUsesDefaultNoOpLoggerWithoutThrowing() {
+    fun applyUsesDefaultNoOpLoggerWithoutThrowing() = runBlocking {
         // Calling apply without a logError lambda exercises the default no-op
         // parameter; the catch block must still swallow the exception and
         // return false rather than propagating.
@@ -137,7 +138,7 @@ class RegionInstallerCoverageTest {
     }
 
     @Test
-    fun applyRoutesTheExternalStorageGuardSpecifically() {
+    fun applyRoutesTheExternalStorageGuardSpecifically() = runBlocking {
         // Pin the failure MODE, not just "some throwable". On the JVM the very
         // first statement in `apply` — `RegionCache.rootDir()` — throws an
         // IllegalStateException("External storage unavailable") because

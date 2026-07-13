@@ -17,7 +17,6 @@ import org.appdevforall.maps.domain.TileEstimate
 import org.appdevforall.maps.data.RegionCache
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
-import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,10 +105,8 @@ class Step3SaveFragment : Fragment() {
     @Volatile
     private var existingRegionIds: Set<String>? = null
 
-    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
-        val inflater = super.onGetLayoutInflater(savedInstanceState)
-        return PluginFragmentHelper.getPluginInflater(MapsPlugin.PLUGIN_ID, inflater)
-    }
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater =
+        themedPluginInflater(super.onGetLayoutInflater(savedInstanceState))
 
     override fun onCreateView(
         inflater: LayoutInflater,

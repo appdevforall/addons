@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Dark variants of the plugin's own colors. Keep in sync with values/colors.xml
+         (see that file's header for what each token is for and why the set is small). -->
+    <!-- Plugin-owned accent (forest green) — bbox handle + active-region highlight -->
     <color name="plugin_primary">#8AD6B3</color>
-    <color name="plugin_on_primary">#003827</color>
     <color name="plugin_primary_container">#005139</color>
-    <color name="plugin_on_primary_container">#A6F2CE</color>
-    <color name="plugin_secondary">#B4CCBE</color>
-    <color name="plugin_on_secondary">#1F352B</color>
+
+    <!-- Error — the plugin's own error text -->
+    <color name="plugin_error">#FFB4AB</color>
+
+    <!-- Surface / text / outline — used by the plugin's own layouts via ?attr/* -->
     <color name="plugin_surface">#191C1A</color>
     <color name="plugin_on_surface">#E1E3DF</color>
+    <color name="plugin_surface_variant">#404943</color>
     <color name="plugin_on_surface_variant">#BFC9C1</color>
     <color name="plugin_outline">#89938D</color>
     <color name="plugin_outline_variant">#404943</color>
-    <color name="plugin_error">#FFB4AB</color>
-    <color name="plugin_on_error">#690005</color>
-
-    <color name="status_text">#E1E3DF</color>
-    <color name="status_background">#2E3230</color>
-
-    <color name="map_background_placeholder">#202320</color>
 </resources>
