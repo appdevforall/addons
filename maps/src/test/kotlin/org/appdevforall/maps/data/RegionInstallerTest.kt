@@ -1,5 +1,6 @@
 package org.appdevforall.maps.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -35,7 +36,7 @@ class RegionInstallerTest {
     )
 
     @Test
-    fun `apply fails gracefully and reports the error when the cache root is unavailable`() {
+    fun `apply fails gracefully and reports the error when the cache root is unavailable`() = runBlocking {
         val project = tmp.newFolder("project")
         val regionDir = tmp.newFolder("cache", "test-region")
         var reported: Throwable? = null

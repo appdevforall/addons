@@ -1,5 +1,6 @@
 package org.appdevforall.maps.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -27,20 +28,20 @@ class ActiveRegionStoreTest {
         File(project, "$mapsSubpath/${ActiveRegionStore.REGION_MARKER_FILE}")
 
     @Test
-    fun `write then read round-trips the regionId`() {
+    fun `write then read round-trips the regionId`() = runBlocking {
         val project = tmp.newFolder("project")
         ActiveRegionStore.write(project, mapsSubpath, "addis-ababa")
         assertEquals("addis-ababa", ActiveRegionStore.read(project, mapsSubpath))
     }
 
     @Test
-    fun `read returns null when no marker exists`() {
+    fun `read returns null when no marker exists`() = runBlocking {
         val project = tmp.newFolder("project")
         assertNull(ActiveRegionStore.read(project, mapsSubpath))
     }
 
     @Test
-    fun `read prefers active-txt over the legacy marker`() {
+    fun `read prefers active-txt over the legacy marker`() = runBlocking {
         val project = tmp.newFolder("project")
         activeFile(project).apply { parentFile!!.mkdirs(); writeText("current-region") }
         legacyFile(project).writeText("old-region")
@@ -48,14 +49,14 @@ class ActiveRegionStoreTest {
     }
 
     @Test
-    fun `read falls back to the legacy region-id-txt marker`() {
+    fun `read falls back to the legacy region-id-txt marker`() = runBlocking {
         val project = tmp.newFolder("project")
         legacyFile(project).apply { parentFile!!.mkdirs(); writeText("legacy-region") }
         assertEquals("legacy-region", ActiveRegionStore.read(project, mapsSubpath))
     }
 
     @Test
-    fun `clear removes both active-txt and the legacy marker`() {
+    fun `clear removes both active-txt and the legacy marker`() = runBlocking {
         val project = tmp.newFolder("project")
         activeFile(project).apply { parentFile!!.mkdirs(); writeText("region-a") }
         legacyFile(project).writeText("region-b")
@@ -66,21 +67,21 @@ class ActiveRegionStoreTest {
     }
 
     @Test
-    fun `write refuses an invalid regionId`() {
+    fun `write refuses an invalid regionId`() = runBlocking {
         val project = tmp.newFolder("project")
         ActiveRegionStore.write(project, mapsSubpath, "../escape")
         assertNull("invalid id must not land in active.txt", ActiveRegionStore.read(project, mapsSubpath))
     }
 
     @Test
-    fun `read ignores a blank marker`() {
+    fun `read ignores a blank marker`() = runBlocking {
         val project = tmp.newFolder("project")
         activeFile(project).apply { parentFile!!.mkdirs(); writeText("   ") }
         assertNull(ActiveRegionStore.read(project, mapsSubpath))
     }
 
     @Test
-    fun `read ignores an oversized marker`() {
+    fun `read ignores an oversized marker`() = runBlocking {
         val project = tmp.newFolder("project")
         // Over the 1 KB defensive bound — even if it parses to a valid-looking id.
         activeFile(project).apply { parentFile!!.mkdirs(); writeText("a".repeat(2048)) }
@@ -88,7 +89,7 @@ class ActiveRegionStoreTest {
     }
 
     @Test
-    fun `read ignores a marker whose content is not a valid regionId`() {
+    fun `read ignores a marker whose content is not a valid regionId`() = runBlocking {
         val project = tmp.newFolder("project")
         activeFile(project).apply { parentFile!!.mkdirs(); writeText("Not A Valid Id!") }
         assertNull(ActiveRegionStore.read(project, mapsSubpath))

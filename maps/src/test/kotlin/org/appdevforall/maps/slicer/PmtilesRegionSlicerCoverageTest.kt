@@ -232,7 +232,7 @@ class PmtilesRegionSlicerCoverageTest {
     fun tileIdRangesForBbox_single_tile_at_z0() {
         // z0 has exactly one tile (0,0). Range list is non-empty and covers
         // tile-id 0 (base accumulate(0)=0).
-        val ranges = PmtilesRegionSlicer.tileIdRangesForBbox(
+        val ranges = TileMath.tileIdRangesForBbox(
             Bbox(-85.0, -180.0, 85.0, 180.0), 0
         )
         assertEquals(1, ranges.size)
@@ -243,7 +243,7 @@ class PmtilesRegionSlicerCoverageTest {
     fun tileIdRangesForBbox_full_world_multi_tile_at_z2() {
         // z2 full world: xMin=0..xMax=3, yMin..yMax span the whole grid → the
         // Hilbert query returns one or more ranges covering all 16 ids.
-        val ranges = PmtilesRegionSlicer.tileIdRangesForBbox(
+        val ranges = TileMath.tileIdRangesForBbox(
             Bbox(-85.0, -180.0, 85.0, 180.0), 2
         )
         assertTrue("z2 full-world produces at least one range", ranges.isNotEmpty())
@@ -258,7 +258,7 @@ class PmtilesRegionSlicerCoverageTest {
     fun tileIdRangesForBbox_west_edge_clamps_into_grid() {
         // West edge of the world at z3 — coerceIn clamps xMin to 0; the result
         // is a valid non-empty range list, exercising the coerceIn branches.
-        val ranges = PmtilesRegionSlicer.tileIdRangesForBbox(
+        val ranges = TileMath.tileIdRangesForBbox(
             Bbox(-80.0, -180.0, -70.0, -179.0), 3
         )
         assertTrue("west-edge bbox yields ranges", ranges.isNotEmpty())

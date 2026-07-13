@@ -118,14 +118,12 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_back"
-            style="@style/Plugin.Button.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/maps_source_back" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_next"
-            style="@style/Plugin.Button.Filled"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"

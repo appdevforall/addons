@@ -128,6 +128,8 @@ internal object RegionDownloader {
         org.appdevforall.maps.slicer.HttpRangeByteCache.clear()
         val tilesUrl = buildTilesUrl(sourceKind, sourceHost)
         return downloadInto(
+            // RegionCache.rootDir() is a suspend, self-enforcing-IO call (does exists()/mkdirs()
+            // on /sdcard on Dispatchers.IO), so it's safe to call from this Main-dispatched scope.
             cacheRoot = RegionCache.rootDir(),
             regionId = regionId,
             displayName = displayName,

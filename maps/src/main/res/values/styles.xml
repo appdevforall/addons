@@ -1,73 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        PluginTheme — the theme applied to the Maps plugin's OWN views.
+
+        Why this file exists: CoGo's PluginResourceContext (since ADFA-3260) looks
+        up a style literally named "PluginTheme" in the plugin package and applies
+        it onto the context the plugin inflates its fragments with. So this is what
+        colors the plugin's own screens (region manager, source picker, save-region,
+        download-progress, bbox picker) and — via the DayNight parent + the
+        values-night color variants — makes them dark-mode correct. Keep the name.
+
+        Deliberately small, NOT a full M3 palette. The plugin does not brand
+        host-loaded Material widgets (buttons take the host's colors — see the note
+        below), so the only theme items here are the ones the plugin's own views
+        actually resolve:
+          - the surface / on-surface / outline + error color attrs its layouts and
+            drawables reference via ?attr/* ;
+          - the framework android:textColor* attrs, which are implicit defaults for
+            plain TextView / RadioButton (non-Material widgets that look up
+            android:textColorPrimary rather than the M3 colorOnSurface attr).
+    -->
     <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/plugin_primary</item>
-        <item name="colorOnPrimary">@color/plugin_on_primary</item>
-        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
-        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
-        <item name="colorSecondary">@color/plugin_secondary</item>
-        <item name="colorOnSecondary">@color/plugin_on_secondary</item>
+        <!-- Error -->
+        <item name="colorError">@color/plugin_error</item>
+        <!-- Surface / outline family — resolved by the plugin's own layouts via ?attr/* -->
         <item name="colorSurface">@color/plugin_surface</item>
         <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
         <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
-        <item name="colorOutline">@color/plugin_outline</item>
         <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
-        <item name="colorError">@color/plugin_error</item>
-        <item name="colorOnError">@color/plugin_on_error</item>
 
-        <!-- Override host materialButtonStyle so MaterialButton anchors on
-             the plugin's M3 palette. Without this, MaterialButton's internal
-             ColorStateList resolution can leak the host's Material You seed
-             colors into our widgets even with the inflater-wrap pattern. -->
-        <item name="materialButtonStyle">@style/Plugin.Button.Filled</item>
+        <!-- Framework attrs (android: ids are global, so these reach non-Material
+             widgets that plugin color* attrs can't). Implicit text-color defaults
+             for plain TextView / RadioButton. Mirrors the Forms plugin pattern. -->
+        <item name="android:textColorPrimary">@color/plugin_on_surface</item>
+        <item name="android:textColorSecondary">@color/plugin_on_surface_variant</item>
+        <item name="android:textColorHint">@color/plugin_outline</item>
     </style>
 
     <!--
-        Button styles for the Maps plugin. Mirrors the Forms plugin's
-        Plugin.Button.* convention; same style names + variants, swapped
-        color references. Use these in layouts instead of `Widget.Material3.Button.*`
-        so the plugin's palette wins over the host's seed colors.
-
-        Variants:
-          - Plugin.Button.Filled    — primary CTA. Filled with colorPrimary, white text.
-          - Plugin.Button.Outlined  — secondary action. Outlined, primary-color text.
-          - Plugin.Button.Text      — low-priority action. No bg, primary-color text.
-          - Plugin.Button.Tonal     — a step down from filled. Container color bg.
-
-        Shape: pill (M3 default ~28dp). Matches the team's recent layouts
-        (cv-image-to-xml, layout_project_filters_sheet, etc.) — no explicit
-        cornerRadius override needed.
+        NOTE — no button styles, and no primary/secondary/tertiary color attrs,
+        deliberately. Buttons (and all Material widgets) take the HOST's default
+        colors, like every other plugin in this repo. Branding them isn't just
+        unconventional here, it's structurally impossible from the plugin side:
+        plugin resources compile at a custom package id (Maps: 0x5d) while
+        MaterialButton & friends load from the host APK (parent-first plugin
+        classloader) and resolve M3 color attrs by the host's 0x7f attr ids — so
+        plugin-side theme/overlay items can never recolor them; only framework
+        android:* attrs or programmatic ColorStateLists get through (verified
+        on-device 2026-07-06; full mechanism in ThemedInflater.kt's KDoc). A
+        forest-green branding route was built and verified, then dropped to stay
+        consistent with the repo's host-themed-widgets convention. The plugin keeps
+        its forest-green accent only where it draws its OWN pixels (bbox handle,
+        active-region badge) — see @color/plugin_primary in colors.xml.
     -->
-    <!--
-        ThemeOverlay carrying ONLY the M3 color tokens MaterialButton's
-        internal ColorStateList selectors care about. Mirrors the Forms plugin
-        pattern — see Forms styles.xml's Plugin.Button.Overlay for the
-        rationale. Anchors MaterialButton's `?attr/colorOnPrimary` lookup on
-        the plugin's palette rather than the host's seed colors.
-    -->
-    <style name="Plugin.Button.Overlay" parent="">
-        <item name="colorPrimary">@color/plugin_primary</item>
-        <item name="colorOnPrimary">@color/plugin_on_primary</item>
-        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
-        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
-        <item name="colorOnSurface">@color/plugin_on_surface</item>
-        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
-        <item name="colorOutline">@color/plugin_outline</item>
-    </style>
-
-    <style name="Plugin.Button.Filled" parent="Widget.Material3.Button">
-        <item name="materialThemeOverlay">@style/Plugin.Button.Overlay</item>
-    </style>
-
-    <style name="Plugin.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
-        <item name="materialThemeOverlay">@style/Plugin.Button.Overlay</item>
-    </style>
-
-    <style name="Plugin.Button.Text" parent="Widget.Material3.Button.TextButton">
-        <item name="materialThemeOverlay">@style/Plugin.Button.Overlay</item>
-    </style>
-
-    <style name="Plugin.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
-        <item name="materialThemeOverlay">@style/Plugin.Button.Overlay</item>
-    </style>
 </resources>

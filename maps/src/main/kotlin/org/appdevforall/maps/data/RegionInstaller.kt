@@ -1,6 +1,8 @@
 package org.appdevforall.maps.data
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.appdevforall.maps.templates.ProjectMapEmitter
 import java.io.File
 
@@ -39,14 +41,14 @@ internal object RegionInstaller {
      *   of a large `tiles.pmtiles` aborts promptly. Defaults to a no-op for tests.
      * @return true if the region data was copied successfully.
      */
-    fun apply(
+    suspend fun apply(
         info: RegionInfo,
         projectDir: File,
         cacheRoot: File? = null,
         logError: (String, Throwable) -> Unit = { _, _ -> },
         onChunk: () -> Unit = {},
-    ): Boolean {
-        return try {
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
             val root = cacheRoot ?: RegionCache.rootDir()
             val canonicalSrc = info.directory.canonicalFile
 
@@ -70,7 +72,7 @@ internal object RegionInstaller {
                     "Insufficient space to apply region ${info.regionId}: " +
                         "need ${needed + safetyMargin}, have $usable",
                 )
-                return false
+                return@withContext false
             }
 
             val result = ProjectMapEmitter.apply(projectDir, canonicalSrc, root, onChunk)

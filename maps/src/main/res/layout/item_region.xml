@@ -117,14 +117,12 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_redownload"
-            style="@style/Plugin.Button.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/maps_regions_redownload" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_delete"
-            style="@style/Plugin.Button.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"

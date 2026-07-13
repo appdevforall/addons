@@ -14,7 +14,6 @@ import org.appdevforall.maps.domain.Bbox
 import org.appdevforall.maps.domain.SourceKind
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
-import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -82,10 +81,8 @@ class DownloadProgressFragment : Fragment() {
 
     private var downloadJob: Job? = null
 
-    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
-        val inflater = super.onGetLayoutInflater(savedInstanceState)
-        return PluginFragmentHelper.getPluginInflater(MapsPlugin.PLUGIN_ID, inflater)
-    }
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater =
+        themedPluginInflater(super.onGetLayoutInflater(savedInstanceState))
 
     override fun onCreateView(
         inflater: LayoutInflater,

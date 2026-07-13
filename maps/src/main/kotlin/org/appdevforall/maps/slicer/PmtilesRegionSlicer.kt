@@ -10,7 +10,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import org.davidmoten.hilbert.HilbertCurve
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.RandomAccessFile
@@ -18,13 +17,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.tan
 
 /**
  * PMTiles v3 region slicer — single source of truth for "which tiles cover a
@@ -106,7 +100,7 @@ internal object PmtilesRegionSlicer {
         //    than a single loose [lo, hi] per zoom. Same Hilbert ordering as our
         //    Hilbert function (verified by DavidmotenHilbertCompatTest).
         val zoomToIdRanges: Map<Int, List<LongRange>> = (zMin..zMax).associateWith { z ->
-            tileIdRangesForBbox(bbox, z)
+            TileMath.tileIdRangesForBbox(bbox, z)
         }
 
         // 4. Walk root, recursing into leaves on overlap, collecting tiles. Pass
@@ -164,7 +158,7 @@ internal object PmtilesRegionSlicer {
                     val (z, x, y) = Hilbert.tileIdToZxy(tid)
                     val ranges = zoomToIdRanges[z] ?: continue
                     if (ranges.none { tid in it }) continue
-                    if (!tileIntersectsBbox(z, x, y, bbox)) continue
+                    if (!TileMath.tileIntersectsBbox(z, x, y, bbox)) continue
                     out += TileEntry(
                         z = z,
                         x = x,
@@ -445,10 +439,10 @@ internal object PmtilesRegionSlicer {
             val tileDataBytes = nextLocalOffset
 
             // Compute new bbox from the sliced tiles' coverage.
-            val tileMinLon = tiles.minOf { tileToLon(it.x, it.z) }
-            val tileMaxLon = tiles.maxOf { tileToLon(it.x + 1, it.z) }
-            val tileMaxLat = tiles.maxOf { tileToLat(it.y, it.z) }
-            val tileMinLat = tiles.minOf { tileToLat(it.y + 1, it.z) }
+            val tileMinLon = tiles.minOf { TileMath.tileToLon(it.x, it.z) }
+            val tileMaxLon = tiles.maxOf { TileMath.tileToLon(it.x + 1, it.z) }
+            val tileMaxLat = tiles.maxOf { TileMath.tileToLat(it.y, it.z) }
+            val tileMinLat = tiles.minOf { TileMath.tileToLat(it.y + 1, it.z) }
 
             val newHeader = sourceHeader.copy(
                 rootDirOffset = rootDirOffset,
@@ -564,77 +558,6 @@ internal object PmtilesRegionSlicer {
         }
     }
 
-    // ---------- Geo helpers ----------
-
-    /**
-     * The set of Hilbert tile-id ranges that exactly covers every (z, x, y)
-     * tile inside [bbox] at zoom [z], expressed as a list of merged
-     * `[lo, hi]` ranges (PMTiles tile-id space, i.e. including the zoom-base
-     * accumulator).
-     *
-     * Backed by davidmoten/hilbert-curve's [SmallHilbertCurve.query], which
-     * implements the Skilling 2004 perimeter-walk range-decomposition
-     * algorithm (Lawder & King family). Returns `O(perimeter × log scale)`
-     * tight ranges instead of one loose `O(area)` range — meaning the slicer's
-     * leaf-overlap pre-filter actually filters, instead of marking ~30% of
-     * leaves as "potentially overlapping" for a 20° bbox.
-     *
-     * Verified to use the SAME Hilbert ordering as our [Hilbert.zxyToTileId]
-     * via DavidmotenHilbertCompatTest — so the returned ranges, after
-     * adding the zoom base accumulator, are exactly leaf-id-comparable.
-     */
-    internal fun tileIdRangesForBbox(bbox: Bbox, z: Int): List<LongRange> {
-        val n = 1 shl z
-        val xMin = lonToTileX(bbox.west, z).coerceIn(0, n - 1)
-        val xMax = lonToTileX(bbox.east, z).coerceIn(0, n - 1)
-        val yMin = latToTileY(bbox.north, z).coerceIn(0, n - 1)
-        val yMax = latToTileY(bbox.south, z).coerceIn(0, n - 1)
-        if (xMin > xMax || yMin > yMax) return emptyList()
-
-        // davidmoten's bits-per-dimension equals z (each dim takes z bits
-        // in a 2^z grid). 2D curve.
-        val curve = HilbertCurve.small().bits(z).dimensions(2)
-        val ranges = curve.query(
-            longArrayOf(xMin.toLong(), yMin.toLong()),
-            longArrayOf(xMax.toLong(), yMax.toLong()),
-        )
-        val base = Hilbert.accumulate(z)
-        // Add the zoom base so the ranges live in PMTiles global tile-id
-        // space (matches the ids encoded into leaf directories).
-        return ranges.toList().map { (it.low() + base)..(it.high() + base) }
-    }
-
-    private fun lonToTileX(lon: Double, z: Int): Int {
-        val n = 2.0.pow(z)
-        return floor((lon + 180.0) / 360.0 * n).toInt()
-    }
-
-    private fun latToTileY(lat: Double, z: Int): Int {
-        val n = 2.0.pow(z)
-        val latRad = Math.toRadians(lat.coerceIn(-85.0511, 85.0511))
-        return floor((1 - ln(tan(latRad) + 1.0 / cos(latRad)) / Math.PI) / 2.0 * n).toInt()
-    }
-
-    private fun tileToLon(x: Int, z: Int): Double {
-        val n = 2.0.pow(z)
-        return x / n * 360.0 - 180.0
-    }
-
-    private fun tileToLat(y: Int, z: Int): Double {
-        val n = 2.0.pow(z)
-        val latRad = Math.atan(Math.sinh(Math.PI * (1.0 - 2.0 * y / n)))
-        return Math.toDegrees(latRad)
-    }
-
-    /** True iff the (z, x, y) slippy-map tile overlaps [bbox]. */
-    private fun tileIntersectsBbox(z: Int, x: Int, y: Int, bbox: Bbox): Boolean {
-        val tileWest = tileToLon(x, z)
-        val tileEast = tileToLon(x + 1, z)
-        val tileNorth = tileToLat(y, z)
-        val tileSouth = tileToLat(y + 1, z)
-        return tileEast > bbox.west && tileWest < bbox.east &&
-            tileNorth > bbox.south && tileSouth < bbox.north
-    }
 }
 
 private fun LongRange.overlaps(other: LongRange): Boolean {
