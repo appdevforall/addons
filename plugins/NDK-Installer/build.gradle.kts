@@ -164,9 +164,15 @@ val downloadAssets by tasks.registering {
     }
 }
 
-
-
-
-
-
-
+// The archive is never committed, so fail loudly instead of packaging an NDK-less .cgp.
+val ndkArchiveFile = project.file("src/main/assets/ndk-cmake.tar.xz")
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    doFirst {
+        if (!ndkArchiveFile.isFile) {
+            throw GradleException(
+                "Missing src/main/assets/ndk-cmake.tar.xz. It is fetched at build time and " +
+                    "never committed, so run './gradlew downloadAssets' before assembling."
+            )
+        }
+    }
+}

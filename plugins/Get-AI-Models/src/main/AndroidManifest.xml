@@ -17,6 +17,16 @@
             android:name="plugin.version"
             android:value="${pluginVersion}" />
 
+        <!-- Build provenance (ADFA-5256): the commit and commit-date this .cgp was
+             built from. Both placeholders are always supplied by the plugin builder. -->
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
+
         <meta-data
             android:name="plugin.description"
             android:value="Browse a curated catalog of small GGUF language-model files and download them to /sdcard/Download, checksum-verified. Most are fully open; per-entry licences are shown. Download only - running the models is a separate plugin." />

@@ -133,6 +133,19 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
+# The plugin builder records this in each .cgp's assets/cgp-build.properties as
+# libs_revision. It cannot resolve the value itself -- the CodeOnTheGo checkout is
+# outside the plugin build -- so without this a released plugin's own revision does
+# not identify the plugin-api/gradle-plugin jars it was compiled against. Left unset
+# when the sha is unknown, so the field is omitted rather than recorded as a guess.
+# Re-resolved at 12 characters rather than reusing $CODEONTHEGO_SHA, which is abbreviated
+# to git's default length: the builder records `revision` at 12, and two differently
+# shaped shas in one properties file are needlessly hard to compare at a glance.
+LIBS_REVISION="$(git -C "$CODEONTHEGO_PATH" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+if [ "$LIBS_REVISION" != "unknown" ]; then
+    export PLUGIN_LIBS_REVISION="$LIBS_REVISION"
+fi
+
 # One discovery rule for the whole repository. The tool applies the skip
 # list in tools/addons/skip.txt. Do not use mapfile here: macOS ships
 # bash 3.2, which does not have it.
@@ -168,6 +181,78 @@ if [ -n "$ONLY_PLUGIN" ]; then
     PLUGINS=("$match")
 fi
 
+if ! command -v unzip >/dev/null 2>&1; then
+    echo "Error: unzip is required to verify the provenance record inside each built .cgp." >&2
+    exit 1
+fi
+
+# The plugin builder writes assets/cgp-build.properties into every .cgp (see the
+# Build provenance section of CLAUDE.md). Nothing in the Gradle build fails when
+# that record is missing, truncated or unreadable — the archive still assembles
+# either way — so a builder or asset-packaging regression would ship provenance-less
+# artifacts and only be noticed once a crash report could no longer be traced to
+# a commit. Assert the record here: both release workflows drive their builds
+# through this script, so this is the one chokepoint that covers all of them.
+REQUIRED_PROVENANCE_KEYS=(name version variant revision revision_source timestamp timestamp_source)
+
+verify_provenance() {
+    local plugin="$1"
+    local cgp props key value revision revision_source timestamp_source recorded_libs
+    cgp="$(ls "$REPO_ROOT/$plugin"/build/plugin/*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1 || true)"
+    if [ -z "$cgp" ]; then
+        echo "Error: $plugin assembled no release .cgp under build/plugin/." >&2
+        return 1
+    fi
+
+    if ! props="$(unzip -p "$cgp" assets/cgp-build.properties 2>/dev/null)" || [ -z "$props" ]; then
+        echo "Error: $(basename "$cgp") does not contain assets/cgp-build.properties." >&2
+        echo "       The builder in libs/gradle-plugin.jar either no longer generates the" >&2
+        echo "       provenance record or no longer packages it as an asset." >&2
+        return 1
+    fi
+
+    for key in "${REQUIRED_PROVENANCE_KEYS[@]}"; do
+        value="$(printf '%s\n' "$props" | sed -n "s/^${key}=//p" | head -n1)"
+        if [ -z "$value" ]; then
+            echo "Error: $(basename "$cgp") provenance record has no '$key' value." >&2
+            printf '%s\n' "$props" | sed 's/^/       /' >&2
+            return 1
+        fi
+    done
+
+    revision="$(printf '%s\n' "$props" | sed -n 's/^revision=//p' | head -n1)"
+    revision_source="$(printf '%s\n' "$props" | sed -n 's/^revision_source=//p' | head -n1)"
+    timestamp_source="$(printf '%s\n' "$props" | sed -n 's/^timestamp_source=//p' | head -n1)"
+    recorded_libs="$(printf '%s\n' "$props" | sed -n 's/^libs_revision=//p' | head -n1)"
+
+    # libs_revision only exists because this script exports PLUGIN_LIBS_REVISION
+    # above, so a mismatch means the export stopped reaching the build and every
+    # artifact this run publishes has lost the pairing to the jars it compiled
+    # against.
+    if [ -n "${PLUGIN_LIBS_REVISION:-}" ] && [ "$recorded_libs" != "$PLUGIN_LIBS_REVISION" ]; then
+        echo "Error: $(basename "$cgp") recorded libs_revision='$recorded_libs', expected '$PLUGIN_LIBS_REVISION'." >&2
+        return 1
+    fi
+
+    # Warnings, not errors: both are legitimate outside CI (a checkout with no
+    # .git, a machine with no git binary), but in a workflow run they mean the
+    # artifact cannot be traced back or reproduced.
+    if [ "$revision" = "unknown" ] || [ "$revision_source" = "none" ]; then
+        echo "Warning: $plugin recorded revision=unknown — the .cgp cannot be traced to a commit." >&2
+    fi
+    case "$revision" in
+        *+dirty)
+            echo "Warning: $plugin was built from a dirty $plugin/ directory, recorded as '$revision'." >&2
+            echo "         Build-time downloads must land on gitignored paths, never on tracked files." >&2
+            ;;
+    esac
+    if [ "$timestamp_source" = "wall-clock" ]; then
+        echo "Warning: $plugin stamped a wall-clock timestamp — this .cgp is not reproducible." >&2
+    fi
+
+    echo "  provenance: revision=$revision ($revision_source) libs_revision=${recorded_libs:-<unset>} timestamp_source=$timestamp_source"
+}
+
 echo ""
 echo "Discovered example plugins: ${PLUGINS[*]}"
 echo "Building all example plugins against the refreshed libs..."
@@ -185,6 +270,7 @@ for plugin in "${PLUGINS[@]}"; do
         fi
         "$gradlew" --console=plain assemblePlugin
     )
+    verify_provenance "$plugin"
 done
 echo ""
 echo "All plugins built successfully."

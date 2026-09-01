@@ -88,10 +88,39 @@ A plugin is an Android *application* module (despite installing as a library) wi
 
 1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../../libs/plugin-api.jar"))` — never `implementation`.
 2. **`settings.gradle.kts`** declares the jars it needs on the buildscript classpath plus AGP and Kotlin.
-3. **`src/main/AndroidManifest.xml`** declares plugin identity as `<meta-data>` entries on `<application>`: `plugin.id`, `plugin.name`, `plugin.version` (resolved from `${pluginVersion}`), `plugin.description`, `plugin.author`, `plugin.main_class`, `plugin.min_ide_version`, and optional `plugin.permissions`.
+3. **`src/main/AndroidManifest.xml`** declares plugin identity as `<meta-data>` entries on `<application>`: `plugin.id`, `plugin.name`, `plugin.version` (resolved from `${pluginVersion}`), `plugin.description`, `plugin.author`, `plugin.main_class`, `plugin.min_ide_version`, and optional `plugin.permissions`. Optionally `plugin.vcs_revision` / `plugin.build_timestamp` — see **Build provenance** below.
 4. **Main class** implements `com.itsaky.androidide.plugins.IPlugin`. Lifecycle: `initialize(PluginContext) → activate() → deactivate() → dispose()`. Services are obtained via `context.services.get(SomeService::class.java)` (e.g. `IdeBuildService` for build hooks). Android `Context` is `context.androidContext`.
 
 Available permission strings (declared comma-separated in `plugin.permissions`): `filesystem.read`, `filesystem.write`, `network.access`, `system.commands`, `ide.settings`, `project.structure`.
+
+### Build provenance (`plugin.vcs_revision`, `cgp-build.properties`)
+
+Every `.cgp` records the commit it was built from, so a crash report or a support question traces back to source (ADFA-5256). The builder resolves it once per build and publishes it three ways: two `<meta-data>` entries, `assets/cgp-build.properties` inside the archive, and the IDE's plugin details dialog.
+
+Manifests opt in by referencing the placeholders — the builder never injects `<meta-data>` on your behalf:
+
+```xml
+<meta-data android:name="plugin.vcs_revision"    android:value="${pluginVcsRevision}" />
+<meta-data android:name="plugin.build_timestamp" android:value="${pluginBuildTimestamp}" />
+```
+
+**This is a hard build-time coupling to `libs/gradle-plugin.jar`.** A manifest that references a placeholder the builder does not define fails the manifest merger outright (*"requires a placeholder substitution but no value ... is provided"*), and all plugins resolve the builder from the single committed jar. So a manifest may only adopt these **after** the builder change is merged in CoGo and the **Update libs from CodeOnTheGo** Action has refreshed `libs/`. Never the other way round. The same coupling hits on-device builders, whose builder jar ships in `plugin-maven-repo.zip` and refreshes only with a CoGo **app release** — a plugin referencing these cannot be built inside an older CoGo at all.
+
+Read the record out of a built artifact:
+
+```sh
+unzip -p <plugin>/build/plugin/<name>.cgp assets/cgp-build.properties
+```
+
+`revision_source` says how the revision was found, in the order the builder tries: `explicit` (you set `pluginBuilder { pluginVcsRevision = "..." }`) → `env:<VAR>` (`PLUGIN_VCS_REVISION`, `GITHUB_SHA`, `CI_COMMIT_SHA`, `GIT_COMMIT`) → `git` → `git-dir` (reads `.git` directly; this is the on-device path, since CoGo ships JGit in-process and no `git` binary) → `none`, which means `revision=unknown`. `+dirty` is appended when the plugin's **own** directory has uncommitted changes; the check is scoped to that directory so a `libs/` refresh elsewhere in the tree does not flag the build.
+
+`timestamp` is the committer date of that revision in UTC, not the wall clock, and it lands in the version string as well (`1.0.0-release.<timestamp>`), so two builds of one commit produce a `.cgp` whose every entry matches by CRC and mtime (see CoGo's ADR-0012). The archives are not byte-identical: the v2 APK Signing Block differs between runs, so compare entry CRCs rather than a file hash. That determinism holds only where the builder could reach a `git` binary; it falls back to the clock and says so with `timestamp_source=wall-clock`, and the stamp it puts in the version string then changes on every build, so the artifact is **not** reproducible even entry-by-entry. On device it is always the fallback — CoGo ships no `git` — and under `--configuration-cache` the clock reading additionally freezes into the cached configuration.
+
+`+dirty` has one systemic cause worth designing against: **a build-time download must land on a gitignored path.** A `downloadAssets` task that overwrites a git-tracked file (`ndk-installer` shipped a committed placeholder `ndk-cmake.tar.xz` until it was untracked) dirties the plugin directory on every build, so every artifact it ever produces records `+dirty` and no build of that plugin is traceable to a clean commit. Both download plugins now fetch onto ignored paths (`plugins/NDK-Installer/.gitignore`, `plugins/AI-Literacy-Course/.gitignore`); keep it that way when adding a new one.
+
+`libs_revision` records which CoGo commit produced the jars the plugin was compiled against. The builder cannot see that checkout, so `scripts/update-libs.sh` exports `PLUGIN_LIBS_REVISION` before the build loop — both Actions workflows inherit it through the script. Note that under **Update libs from CodeOnTheGo** the plugin's own `revision` is the commit *before* the `chore: update libs` commit, because plugins are built before that commit is created; `libs_revision` is what pins the pairing.
+
+`scripts/update-libs.sh` asserts the record after each `assemblePlugin`: a `.cgp` missing `assets/cgp-build.properties`, missing any required key, or disagreeing with the exported `PLUGIN_LIBS_REVISION` fails the run. `revision=unknown`, `+dirty` and `timestamp_source=wall-clock` warn instead — all three are legitimate off-CI (no `.git`, no `git` binary). Both Actions workflows build through the script, so this covers them without a per-workflow check.
 
 ### In-app help wiring (tooltips + Tier 3, `DocumentationExtension`)
 
@@ -121,9 +150,9 @@ This is intentional — the `application`-as-library packaging trips those check
 
 ### Asset downloads (rare)
 
-Some plugins (`ndk-installer`, `ai-literacy-course`) register a `downloadAssets` task that fetches large files at build time with pinned-MD5 verification. These assets are **not committed to git** (e.g. `ai-literacy-course` pulls a ~110 MB course ZIP plus `pdfjs.zip`). `scripts/update-libs.sh` runs `downloadAssets` automatically before `assemblePlugin` when the build file references it.
+Some plugins (`ndk-installer`, `ai-literacy-course`) register a `downloadAssets` task that fetches large files at build time with pinned-MD5 verification. These assets are **not committed to git** — each plugin gitignores its own download paths (`ai-literacy-course` pulls a ~110 MB course ZIP plus `pdfjs.zip`; `ndk-installer` pulls `ndk-cmake.tar.xz`). Committing one, even as a placeholder, makes every build dirty — see **Build provenance** above. `scripts/update-libs.sh` runs `downloadAssets` automatically before `assemblePlugin` when the build file references it.
 
-**Gotcha: a bare `./gradlew assemblePlugin` does NOT run `downloadAssets` and does not warn when the assets are missing** — it silently packages a broken `.cgp` (e.g. a course with no PDF viewer). When building such a plugin by hand, run `./gradlew downloadAssets assemblePlugin` (or the script), and confirm the expected files exist under `src/main/assets/` (or `unzip -l` the `.cgp`) before trusting it.
+**Gotcha: a bare `./gradlew assemblePlugin` does NOT run `downloadAssets` and does not warn when the assets are missing** — it silently packages a broken `.cgp` (e.g. a course with no PDF viewer). When building such a plugin by hand, run `./gradlew downloadAssets` and then `./gradlew assemblePlugin` as two separate invocations (or use the script, which does exactly that). Combining them in one invocation fails: `downloadAssets` declares an output inside `src/main/assets`, which Gradle sees as an undeclared dependency of `mergeReleaseAssets`. Then confirm the expected files exist under `src/main/assets/` (or `unzip -l` the `.cgp`) before trusting it. `ndk-installer` is the exception: its asset merge fails outright when `ndk-cmake.tar.xz` is absent, rather than shipping an NDK-less plugin.
 
 ### One-time on-device install markers
 

@@ -81,6 +81,10 @@ Search the source tree:
 - `settings.gradle.kts` must NOT include `mavenLocal()` in `dependencyResolutionManagement` (it's also iffy in `pluginManagement`).
 - All dependency versions pinned — no `+`, `latest.release`, or unbounded ranges.
 - Phase 1 already verified the build works from a clean checkout. Cite the result here.
+- **Provenance record** (ADFA-5256): `unzip -p <plugin>/build/plugin/<name>.cgp assets/cgp-build.properties` on the artifact Phase 1 built. The file is written unconditionally by any builder from 26.36 on, so its **absence** means the submission was built with a pre-5256 builder — note it, do not fail on it. When present, read `revision_source`: `git`, `git-dir`, `explicit` or `env:*` all satisfy "rebuildable from the linked source". `none` (i.e. `revision=unknown`) means the artifact cannot be traced back to a commit → **Partial**, and tell the author to either build from a checkout or declare `pluginBuilder { pluginVcsRevision = "..." }` for a source-archive distribution.
+- **`+dirty` in a submitted artifact** → **Partial**: the tree had uncommitted changes in the plugin's own directory, so the linked source does not reproduce it.
+- **Manifest wiring** is optional but graded together with the above: if `src/main/AndroidManifest.xml` declares `plugin.vcs_revision` / `plugin.build_timestamp`, both must use `${pluginVcsRevision}` / `${pluginBuildTimestamp}` verbatim — a hardcoded value defeats the point and is a **Fail**. If neither is declared, the record still exists in the archive but the IDE cannot show it; note it as a recommendation, not a defect.
+- Do **not** flag a revision that differs from the linked repo's `HEAD` — an artifact built one commit before a `libs/` refresh is normal in this repo's release pipeline (see CLAUDE.md, *Build provenance*). Cross-check `libs_revision` instead.
 
 #### 6.4 Native binaries
 - `find src -name '*.so'`, look for `jniLibs/`, `externalNativeBuild`, NDK config.
