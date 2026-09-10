@@ -84,16 +84,17 @@ class ChatSessionTest {
     }
 
     @Test
-    fun testChatSessionMutableMessages() {
+    fun givenASession_whenAddingAMessage_thenTheCopyCarriesItAndTheOriginalIsUntouched() {
         val session = ChatSession()
         val message = ChatMessage(
             text = "Test message",
             sender = Sender.USER
         )
 
-        session.messages.add(message)
+        val updated = session.copy(messages = session.messages + message)
 
-        assertEquals(1, session.messages.size)
-        assertEquals(message, session.messages[0])
+        assertTrue(session.messages.isEmpty())
+        assertEquals(1, updated.messages.size)
+        assertEquals(message, updated.messages[0])
     }
 }

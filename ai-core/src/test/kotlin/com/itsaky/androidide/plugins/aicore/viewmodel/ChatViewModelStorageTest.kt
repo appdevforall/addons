@@ -16,6 +16,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/** Stand-in project namespace; the digest itself is ProjectKey's business, not this file's. */
+private const val TEST_PROJECT_KEY = "a1b2c3d4e5f60718"
+private const val KEY_SESSIONS = "chat_sessions_$TEST_PROJECT_KEY"
+private const val KEY_CURRENT_ID = "current_session_id_$TEST_PROJECT_KEY"
+
 /**
  * Unit tests for ChatViewModel storage initialization logic.
  * Tests the interaction between ChatViewModel and ChatStorageManager.
@@ -39,11 +44,14 @@ class ChatViewModelStorageTest {
         editor = mockk(relaxed = true)
 
         every { androidContext.getSharedPreferences("ai_assistant_chats", Context.MODE_PRIVATE) } returns sharedPreferences
+        // A relaxed mock answers a String getter with "", not null, which would read as a stored
+        // blob; nothing is stored unless a test says so.
+        every { sharedPreferences.getString(any(), any()) } returns null
         every { sharedPreferences.edit() } returns editor
         every { editor.putString(any(), any()) } returns editor
         every { editor.apply() } returns Unit
 
-        storageManager = ChatStorageManager(androidContext)
+        storageManager = ChatStorageManager(androidContext, TEST_PROJECT_KEY)
     }
 
     @Test
@@ -55,7 +63,7 @@ class ChatViewModelStorageTest {
 
     @Test
     fun testLoadSessionsWhenEmpty() {
-        every { sharedPreferences.getString("chat_sessions", null) } returns null
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns null
 
         val sessions = storageManager.loadSessions()
 
@@ -74,7 +82,7 @@ class ChatViewModelStorageTest {
             ]
         """.trimIndent()
 
-        every { sharedPreferences.getString("chat_sessions", null) } returns sessionJson
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns sessionJson
 
         val sessions = storageManager.loadSessions()
 
@@ -84,7 +92,7 @@ class ChatViewModelStorageTest {
 
     @Test
     fun testLoadCurrentSessionId() {
-        every { sharedPreferences.getString("current_session_id", null) } returns "session-123"
+        every { sharedPreferences.getString(KEY_CURRENT_ID, null) } returns "session-123"
 
         val sessionId = storageManager.loadCurrentSessionId()
 
@@ -118,8 +126,8 @@ class ChatViewModelStorageTest {
             ]
         """.trimIndent()
 
-        every { sharedPreferences.getString("chat_sessions", null) } returns sessionJson
-        every { sharedPreferences.getString("current_session_id", null) } returns "session-2"
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns sessionJson
+        every { sharedPreferences.getString(KEY_CURRENT_ID, null) } returns "session-2"
 
         // Load sessions
         val loadedSessions = storageManager.loadSessions()
@@ -147,8 +155,8 @@ class ChatViewModelStorageTest {
             ]
         """.trimIndent()
 
-        every { sharedPreferences.getString("chat_sessions", null) } returns sessionJson
-        every { sharedPreferences.getString("current_session_id", null) } returns "non-existent"
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns sessionJson
+        every { sharedPreferences.getString(KEY_CURRENT_ID, null) } returns "non-existent"
 
         val loadedSessions = storageManager.loadSessions()
         val currentId = storageManager.loadCurrentSessionId()
@@ -182,18 +190,18 @@ class ChatViewModelStorageTest {
 
         // Save sessions
         storageManager.saveSessions(sessions)
-        verify { editor.putString("chat_sessions", any()) }
+        verify { editor.putString(KEY_SESSIONS, any()) }
         verify { editor.apply() }
 
         // Save current session ID
         storageManager.saveCurrentSessionId("persist-test")
-        verify { editor.putString("current_session_id", "persist-test") }
+        verify { editor.putString(KEY_CURRENT_ID, "persist-test") }
         verify(atLeast = 2) { editor.apply() }
     }
 
     @Test
     fun testEmptySessionsCreatesNewSession() {
-        every { sharedPreferences.getString("chat_sessions", null) } returns "[]"
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns "[]"
 
         val sessions = storageManager.loadSessions()
 
@@ -229,7 +237,7 @@ class ChatViewModelStorageTest {
             ]
         """.trimIndent()
 
-        every { sharedPreferences.getString("chat_sessions", null) } returns sessionJson
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns sessionJson
 
         val sessions = storageManager.loadSessions()
 
@@ -243,7 +251,7 @@ class ChatViewModelStorageTest {
 
     @Test
     fun testStorageHandlesCorruptedData() {
-        every { sharedPreferences.getString("chat_sessions", null) } returns "{invalid json"
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns "{invalid json"
 
         val sessions = storageManager.loadSessions()
 
@@ -259,7 +267,44 @@ class ChatViewModelStorageTest {
 
         storageManager.saveSessions(listOf(session1, session2, session3))
 
-        verify { editor.putString("chat_sessions", any()) }
+        verify { editor.putString(KEY_SESSIONS, any()) }
         verify { editor.apply() }
+    }
+
+
+    // ---- Per-project isolation, as ChatViewModel.initializeStorage drives it (ADFA-5583) ----
+
+    @Test
+    fun givenProjectSwitch_whenReloading_thenOnlyTheNewProjectsSessionsCome() {
+        val otherProjectKey = "0f0e0d0c0b0a0908"
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns
+            """[{"id": "alpha-chat", "createdAt": 1000, "messages": [], "projectKey": "$TEST_PROJECT_KEY"}]"""
+        every { sharedPreferences.getString("chat_sessions_$otherProjectKey", null) } returns
+            """[{"id": "beta-chat", "createdAt": 2000, "messages": [], "projectKey": "$otherProjectKey"}]"""
+
+        val alpha = storageManager.loadSessions()
+        val beta = ChatStorageManager(androidContext, otherProjectKey).loadSessions()
+
+        assertEquals(listOf("alpha-chat"), alpha.map { it.id })
+        assertEquals(listOf("beta-chat"), beta.map { it.id })
+    }
+
+    @Test
+    fun givenOutgoingProject_whenPersistedBeforeSwitch_thenItsSessionsGoToItsOwnKey() {
+        // ChatFragment persists the outgoing project first, so the last turn is not lost on a swap.
+        storageManager.saveSessions(listOf(ChatSession(id = "alpha-chat", projectKey = TEST_PROJECT_KEY)))
+        storageManager.saveCurrentSessionId("alpha-chat")
+
+        verify { editor.putString(KEY_SESSIONS, match { it.contains("alpha-chat") }) }
+        verify { editor.putString(KEY_CURRENT_ID, "alpha-chat") }
+    }
+
+    @Test
+    fun givenEmptyNamespace_whenLoading_thenNothingComesBackAndTheViewModelStartsFresh() {
+        every { sharedPreferences.getString("chat_sessions_0f0e0d0c0b0a0908", null) } returns null
+
+        val sessions = ChatStorageManager(androidContext, "0f0e0d0c0b0a0908").loadSessions()
+
+        assertTrue(sessions.isEmpty())
     }
 }

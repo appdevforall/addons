@@ -13,7 +13,12 @@ import java.nio.file.Files
 object PathGuard {
 
     private const val TAG = "$LOG_PREFIX.PathGuard"
-    private const val DEFAULT_ROOT = "/storage/emulated/0/AndroidIDEProjects"
+
+    /**
+     * Workspace parent used when nothing else resolves. Public because it is also the marker for
+     * "no project is open", which callers deriving a per-project identity have to reject.
+     */
+    const val DEFAULT_ROOT = "/storage/emulated/0/AndroidIDEProjects"
 
     /** Host-backed supplier of the current project root; queried on every resolution. */
     @Volatile

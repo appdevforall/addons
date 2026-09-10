@@ -25,6 +25,7 @@ import com.itsaky.androidide.plugins.aicore.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aicore.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
+import com.itsaky.androidide.plugins.aicore.managers.ProjectKey
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
@@ -160,10 +161,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
         initializeMarkwon()
         initializeViewModel()
-        if (!viewModel.isStorageInitialized()) {
-            // Application context: the ViewModel outlives this fragment, and the activity.
-            viewModel.initializeStorage(requireContext().applicationContext)
-        }
+        syncStorageToCurrentProject()
         setupToolbar()
         setupRecyclerView()
         setupInputArea()
@@ -233,8 +231,38 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         markwon = Markwon.create(requireContext())
     }
 
+    /**
+     * Binds storage to the project open right now, re-binding it when that project has changed.
+     *
+     * The ViewModel is plugin-scoped, so it survives a project switch holding the previous
+     * project's sessions. Those are written out under the outgoing key *before* the swap, or the
+     * switch silently drops that project's last turn.
+     */
+    private fun syncStorageToCurrentProject() {
+        val bound = viewModel.isStorageInitialized()
+        // A null key means the host could not be asked, which is not the same as the project
+        // having changed; rebinding on it would show an empty history for a transient failure.
+        // With nothing bound yet there is no binding to keep, so the no-project namespace it is.
+        val projectKey = ProjectKey.current() ?: if (bound) return else ProjectKey.NO_PROJECT
+        if (bound && viewModel.activeProjectKey == projectKey) return
+        if (bound) {
+            AgentTrace.stage("UI", "project changed; rebinding chat history to $projectKey")
+            // A run still in flight would append its remaining turns to whichever session the new
+            // project restores, which is the cross-project bleed this ticket exists to stop. Its
+            // file tools are also rooted at the project that just closed.
+            viewModel.stopProcessing(reason = "project changed")
+            viewModel.persistState()
+        }
+        // Application context: the ViewModel outlives this fragment, and the activity.
+        viewModel.initializeStorage(requireContext().applicationContext, projectKey)
+    }
+
     override fun onResume() {
         super.onResume()
+        // The plugin API has no project-change callback, so the open project is re-read at every
+        // lifecycle edge instead. The host tears this fragment down on each tab switch, so this
+        // fires well before the user can type into the wrong project's history.
+        syncStorageToCurrentProject()
         // On becoming visible, so the check runs after every plugin has loaded.
         viewModel.checkBackendAvailability()
         // Re-resolve the selected backend here: the settings screen is a separate activity that
