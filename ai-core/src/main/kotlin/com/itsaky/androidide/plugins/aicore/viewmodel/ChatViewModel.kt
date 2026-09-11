@@ -110,6 +110,12 @@ class ChatViewModel(
         private const val MAX_CONTEXT_OPEN_FILES = 8
 
         /**
+         * How many of a restored transcript's turns the model is given back. Bounds what a long
+         * conversation costs a small local model's context window; see [rebuildHistoryFrom].
+         */
+        private const val MAX_RESTORED_HISTORY = 40
+
+        /**
          * Path used in the tool-call examples when the IDE has nothing open, so there is no real one
          * to show. A concrete path is what a small model needs to copy the *shape* from — a
          * placeholder like "path/to/File.ext" measurably degrades its calls — so this is the
@@ -1615,8 +1621,12 @@ class ChatViewModel(
         stopStateTimer()
         _messages.value = emptyList()
         _history.value = emptyList()
+        // Without this the session keeps its messages and the cleared chat returns on the next sync.
+        replaceCurrentSessionMessages(emptyList())
         forgetRetryPoint()
         setState(AgentState.Idle)
+        // Written now rather than debounced: a clear is deliberate and must survive a force-stop.
+        persistState()
     }
 
     /**
@@ -1644,7 +1654,8 @@ class ChatViewModel(
         _currentSessionId.value = sessionId
         // Use immutable snapshot to ensure StateFlow emits on mutations
         _messages.value = session.messages.toList()
-        _history.value = emptyList()
+        // Emptying this is what had the model forget a conversation the user was looking at.
+        _history.value = rebuildHistoryFrom(session.messages)
         forgetRetryPoint()
         persistState()
     }
@@ -1659,14 +1670,58 @@ class ChatViewModel(
     }
 
     /**
+     * Rebuilds the LLM context from a restored transcript, so the model remembers what the user is
+     * looking at. Lossy on purpose: attached file bodies and tool scaffolding never reached the
+     * saved messages, so they are not reconstructed here.
+     *
+     * @param messages the session's transcript, oldest first.
+     * @return the last [MAX_RESTORED_HISTORY] eligible turns, oldest first.
+     */
+    private fun rebuildHistoryFrom(
+        messages: List<ChatMessage>
+    ): List<LlmInferenceService.ChatMessage> {
+        val eligible = messages.filter {
+            // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
+            (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
+                // A failed or half-streamed turn is not something the model said.
+                it.status != MessageStatus.ERROR &&
+                it.status != MessageStatus.LOADING &&
+                // Gemini rejects an empty content part, and AgentLoop never stores a blank turn.
+                it.text.isNotBlank()
+        }
+        // Capped after filtering, so the budget is spent on turns the model actually sees.
+        val kept = eligible.takeLast(MAX_RESTORED_HISTORY)
+        AgentTrace.detail(
+            "RESTORE",
+            "retained=${kept.size} discarded=${messages.size - kept.size} " +
+                "capped=${eligible.size - kept.size}"
+        )
+        // Starting on an ASSISTANT turn is left alone: every backend here flattens the array, and
+        // trimming back to a USER turn would drop one the user can still see.
+        return kept.map {
+            val role = if (it.sender == Sender.USER) {
+                LlmInferenceService.ChatMessage.Role.USER
+            } else {
+                LlmInferenceService.ChatMessage.Role.ASSISTANT
+            }
+            LlmInferenceService.ChatMessage(role, it.text)
+        }
+    }
+
+    /**
      * Delete a chat session.
      */
     fun deleteSession(sessionId: String) {
         _sessions.value = _sessions.value.filter { it.id != sessionId }
         if (_currentSessionId.value == sessionId) {
             val remaining = _sessions.value.firstOrNull()
+            val messages = remaining?.messages ?: emptyList()
             _currentSessionId.value = remaining?.id
-            _messages.value = remaining?.messages ?: emptyList()
+            _messages.value = messages
+            // Left alone, the deleted conversation's context stays live under the surviving one.
+            _history.value = rebuildHistoryFrom(messages)
+            // The rewind point names a run this transcript does not have, and would truncate it.
+            forgetRetryPoint()
         }
         persistState()
     }
