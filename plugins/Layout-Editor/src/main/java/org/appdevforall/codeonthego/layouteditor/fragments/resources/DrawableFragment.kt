@@ -27,7 +27,6 @@ import org.appdevforall.codeonthego.layouteditor.showPluginToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.commons.io.FileUtils
 import org.appdevforall.codeonthego.layouteditor.ProjectFile
 import org.appdevforall.codeonthego.layouteditor.R
 import org.appdevforall.codeonthego.layouteditor.adapters.DPIsListAdapter
@@ -58,6 +57,7 @@ class DrawableFragment : Fragment() {
     private var adapter: DrawableResourceAdapter? = null
     var dpiAdapter: DPIsListAdapter? = null
     private var dpiList = mutableListOf("ldpi", "mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi")
+    private val drawableExtensions = setOf("png", "jpg", "jpeg", "gif", "xml")
 
     private val logger = LoggerFactory.getLogger(DrawableFragment::class.java)
 
@@ -138,11 +138,9 @@ class DrawableFragment : Fragment() {
 
             val dpiVersionMap = buildDpiVersionMap(projectDir)
 
-            val drawableFiles = FileUtils.listFiles(
-                baseDrawableFolder,
-                arrayOf("png", "jpg", "jpeg", "gif", "xml"),
-                false
-            )
+            val drawableFiles = baseDrawableFolder.listFiles { file ->
+                file.isFile && file.extension in drawableExtensions
+            }.orEmpty()
 
             drawableFiles.mapNotNull { file ->
                 createDrawableFile(context, file, dpiVersionMap)
