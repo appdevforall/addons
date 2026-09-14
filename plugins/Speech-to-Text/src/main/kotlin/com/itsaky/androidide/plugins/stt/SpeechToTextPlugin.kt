@@ -62,6 +62,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     /** Populated on the main thread by activate(), read from [scope]'s IO threads. */
     @Volatile
     private var llmService: LlmInferenceService? = null
+
+    /** Orders a [resolveLlmService] write against the clear-and-cancel in [teardown]. */
+    private val serviceLock = Any()
     private var editorService: IdeEditorService? = null
     private var uiService: IdeUIService? = null
 
@@ -154,7 +157,12 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             return null
         }
 
-        llmService = service
+        // teardown() cancels the scope and clears the field under this lock, so a lookup that
+        // overlapped a disable cannot write AI Core's router back and pin its ClassLoader.
+        synchronized(serviceLock) {
+            if (!scope.isActive) return null
+            llmService = service
+        }
         logger?.info("LlmInferenceService resolved - voice generation enabled")
         return service
     }
@@ -195,13 +203,17 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         if (::context.isInitialized) {
             runCatching { context.removePluginLifecycleListener(aiCoreLifecycleListener) }
         }
-        llmService = null
+        // Cancelled and cleared together: resolveLlmService takes the same lock, so an in-flight
+        // resolution cannot cache the router again after this returned.
+        synchronized(serviceLock) {
+            scope.cancel()
+            llmService = null
+        }
         // A cancelled generation's finally still posts setState, which lands after deactivate()
         // returned; without these a disabled plugin reaches into the host toolbar.
         editorService = null
         uiService = null
         destroyRecognizer()
-        scope.cancel()
     }
 
     /**
@@ -418,11 +430,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             var completedWithoutResponse = false
             // await() is cancellation-aware, so dispose() unwinds this instead of leaving an IO
             // thread parked in Future.get for the rest of the timeout.
-            val response = withContext(Dispatchers.IO) {
-                withTimeoutOrNull(GENERATION_TIMEOUT_SECONDS * MILLIS_PER_SECOND) {
-                    service.generateCompletion(prompt, config).await()
-                        .also { if (it == null) completedWithoutResponse = true }
-                }
+            // The caller already launched this on [scope]'s IO dispatcher, so there is nothing
+            // to switch to here.
+            val response = withTimeoutOrNull(GENERATION_TIMEOUT_SECONDS * MILLIS_PER_SECOND) {
+                service.generateCompletion(prompt, config).await()
+                    .also { if (it == null) completedWithoutResponse = true }
             }
             if (response == null) {
                 if (completedWithoutResponse) {
@@ -483,7 +495,13 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         // The opening line can carry code after its info string whether or not it also closes.
         val afterFence = lines[opening].trim().removePrefix(FENCE)
-        val firstCodeLine = stripLanguageInfo(afterFence.removeSuffix(FENCE).trim())
+        val closesInline = afterFence.endsWith(FENCE)
+        val opener = afterFence.removeSuffix(FENCE).trim()
+        // A lone token on an opening line that does not close is an info string by definition,
+        // so it goes whether or not LANGUAGE_TAGS names it - `dart`, `kts` and `rust` were all
+        // reaching the file as a bare identifier. A tag followed by code still keeps the code.
+        val firstCodeLine =
+            if (!closesInline && !opener.contains(' ')) "" else stripLanguageInfo(opener)
 
         val rest = lines.drop(opening + 1)
         val closing = rest.indexOfFirst { it.trimStart().startsWith(FENCE) }
@@ -498,15 +516,18 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Drops the natural-language lines of an unfenced reply wherever they sit, so neither a
-     * lead-in nor a trailing explanation is written into the open file. An all-prose reply yields
-     * empty, which the caller reports as a failed generation and answers with the raw transcript.
+     * Drops the natural-language lead-in and trailing explanation of an unfenced reply, so
+     * neither is written into the open file. Interior lines are kept whatever they read like:
+     * a docstring, a comment or a line of Markdown is content the user asked for. An all-prose
+     * reply yields empty, which the caller reports as a failed generation and answers with the
+     * raw transcript.
      *
      * @param lines the trimmed reply, split into lines
-     * @return the reply's code lines, or empty when it holds none
+     * @return the reply without its prose framing, or empty when it holds nothing else
      */
     private fun dropProse(lines: List<String>): String =
-        lines.filterNot { it.isNotBlank() && isProse(it.trim()) }
+        lines.dropWhile { it.isBlank() || isProse(it.trim()) }
+            .dropLastWhile { it.isBlank() || isProse(it.trim()) }
             .joinToString("\n")
             .trim()
 
@@ -695,7 +716,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         /**
          * Bounds one generation so a wedged backend can't strand the toolbar on the spinner.
-         * Sized to [MAX_GENERATION_TOKENS] so a slow device finishes rather than being cut off.
+         * Sized to [MAX_GENERATION_TOKENS] so a slow device finishes rather than being cut off:
+         * 512 / 5 + 30 works out to 132 s, which is what the toolbar spinner's worst case is.
          */
         private const val GENERATION_TIMEOUT_SECONDS =
             MAX_GENERATION_TOKENS / SLOWEST_TOKENS_PER_SECOND + PROMPT_EVAL_SECONDS
@@ -720,8 +742,10 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         /** Bare fence infos ("java", "kotlin", ...) that are never code. */
         private val LANGUAGE_TAGS = setOf(
-            "java", "kotlin", "kt", "python", "py", "xml", "json", "gradle", "groovy",
+            "java", "kotlin", "kt", "kts", "python", "py", "xml", "json", "gradle", "groovy",
             "javascript", "js", "typescript", "ts", "c", "cpp", "c++", "sh", "bash",
+            "dart", "rust", "rs", "go", "swift", "html", "css", "yaml", "yml", "toml",
+            "sql", "cmake", "properties", "markdown", "md",
             "text", "plaintext", "code",
         )
     }
