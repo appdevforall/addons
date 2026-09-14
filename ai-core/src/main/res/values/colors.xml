@@ -36,5 +36,8 @@
     <color name="plugin_text_muted">#737373</color>
     <color name="plugin_text_subtle">#A3A3A3</color>
 
+    <!-- Dims the transcript behind the open chat sidebar. -->
+    <color name="plugin_scrim">#99000000</color>
+
     <color name="plugin_ripple">#1F0A0A0A</color>
 </resources>

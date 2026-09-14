@@ -32,10 +32,10 @@ class ChatSessionTest {
     }
 
     @Test
-    fun testChatSessionTitle_NewChat() {
+    fun givenAnEmptySession_whenReadingItsTitle_thenThereIsNoneForTheUiToLabelItself() {
         val session = ChatSession()
 
-        assertEquals("New Chat", session.title)
+        assertNull(session.displayTitle)
     }
 
     @Test
@@ -48,7 +48,7 @@ class ChatSessionTest {
         )
         val session = ChatSession(messages = messages)
 
-        assertEquals("Hello, assistant!", session.title)
+        assertEquals("Hello, assistant!", session.displayTitle)
     }
 
     @Test
@@ -70,7 +70,34 @@ class ChatSessionTest {
         val session = ChatSession(messages = messages)
 
         // Should get the first user message
-        assertEquals("First user message", session.title)
+        assertEquals("First user message", session.displayTitle)
+    }
+
+    @Test
+    fun givenARenamedSession_whenReadingItsTitle_thenTheNameWinsOverTheFirstMessage() {
+        val session = ChatSession(
+            messages = listOf(ChatMessage(text = "Hello, assistant!", sender = Sender.USER)),
+            name = "Build failure",
+        )
+
+        assertEquals("Build failure", session.displayTitle)
+    }
+
+    @Test
+    fun givenANameOfOnlyWhitespace_whenReadingTheTitle_thenTheFirstMessageIsUsedInstead() {
+        val session = ChatSession(
+            messages = listOf(ChatMessage(text = "Hello, assistant!", sender = Sender.USER)),
+            name = "   ",
+        )
+
+        assertEquals("Hello, assistant!", session.displayTitle)
+    }
+
+    @Test
+    fun givenARenamedSessionWithNoMessages_whenReadingTheTitle_thenItIsTheName() {
+        val session = ChatSession(name = "Planning the refactor")
+
+        assertEquals("Planning the refactor", session.displayTitle)
     }
 
     @Test

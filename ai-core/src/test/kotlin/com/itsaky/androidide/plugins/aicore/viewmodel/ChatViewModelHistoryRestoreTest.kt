@@ -328,12 +328,13 @@ class ChatViewModelHistoryRestoreTest {
     }
 
     @Test
-    fun givenTheLastSessionDeleted_whenNoneRemains_thenHistoryIsEmpty() {
+    fun givenTheLastSessionDeleted_whenAnEmptyOneReplacesIt_thenHistoryIsEmpty() {
         seed(session("s1", message("m1", "only conversation", "USER")))
         val viewModel = restoredViewModel()
 
         viewModel.deleteSession("s1")
 
+        // The replacement is empty, so the deleted conversation must not still be in the context.
         assertTrue(viewModel.history.value.isEmpty())
     }
 

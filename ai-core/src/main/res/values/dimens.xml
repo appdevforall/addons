@@ -37,4 +37,30 @@
     <dimen name="chat_composer_toggle_touch_height">48dp</dimen>
     <dimen name="chat_composer_tab_inset_top">32dp</dimen>
     <dimen name="chat_composer_tab_padding_top">34dp</dimen>
+    <!-- Chat history rows (see ChatSidebarController). -->
+    <dimen name="session_row_min_height">56dp</dimen>
+    <dimen name="session_row_icon_size">20dp</dimen>
+    <dimen name="session_row_menu_size">40dp</dimen>
+    <!-- Keeps the rename field off the dialog's edges; a bare EditText sits flush to them. -->
+    <dimen name="session_dialog_input_inset">24dp</dimen>
+
+    <!--
+      Chat sidebar. The width is a ceiling, not the width: ChatSidebarController caps the panel at
+      the container's width less chat_sidebar_min_scrim, so there is always a strip of scrim left to
+      tap on and the panel can never cover the chat whole.
+    -->
+    <dimen name="chat_sidebar_width">320dp</dimen>
+    <dimen name="chat_sidebar_min_scrim">56dp</dimen>
+    <dimen name="chat_sidebar_elevation">16dp</dimen>
+    <dimen name="chat_sidebar_row_height">48dp</dimen>
+    <dimen name="chat_sidebar_row_padding">12dp</dimen>
+    <dimen name="chat_sidebar_row_gap">16dp</dimen>
+    <dimen name="chat_sidebar_icon_size">20dp</dimen>
+    <dimen name="chat_sidebar_padding_horizontal">8dp</dimen>
+    <dimen name="chat_sidebar_padding_vertical">8dp</dimen>
+    <!-- Aligns the section label with the row text above it, past the row's own padding. -->
+    <dimen name="chat_sidebar_label_padding_horizontal">20dp</dimen>
+    <dimen name="chat_sidebar_button_size">40dp</dimen>
+    <dimen name="chat_sidebar_button_padding">8dp</dimen>
+    <dimen name="chat_sidebar_action_corner_radius">12dp</dimen>
 </resources>

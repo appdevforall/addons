@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The chat sidebar: fixed header, scrolling history, fixed footer. Included into fragment_chat.xml,
+  where it is laid over the transcript rather than docked beside it.
+
+  Same weighting tax as fragment_chat.xml, and for the same reason: session_recycler_view is the
+  only weighted child, so it is measured at whatever the header and footer leave. Keep both of them
+  bounded — every row here is a fixed chat_sidebar_row_height, and nothing in the chrome wraps to a
+  second line — or on a short bottom sheet in landscape the history is measured at zero and stops
+  scrolling. ChatSidebarController.panelWidth caps the panel's *width*; nothing caps its height.
+
+  Width is set from code (see ChatSidebarController), so the value here is only what the layout
+  editor previews with.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/chat_sidebar_width"
+    android:layout_height="match_parent"
+    android:layout_gravity="end"
+    android:background="@drawable/bg_chat_sidebar"
+    android:elevation="@dimen/chat_sidebar_elevation"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <!--
+      Header, fixed. Two mutually exclusive bars in one slot: the browse bar while tapping a row
+      opens that chat, the selection bar once long-press has switched the list to picking several.
+      Both are one row tall, so the history below keeps the same height in either mode.
+    -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="@dimen/chat_sidebar_padding_horizontal"
+        android:paddingEnd="@dimen/chat_sidebar_padding_horizontal"
+        android:paddingTop="@dimen/chat_sidebar_padding_vertical">
+
+        <!--
+          The bar itself is not the button: the close icon is on the leading edge, where it lands
+          under the toolbar button that opened the panel, and New chat is pushed to the trailing
+          edge by the Space between them. Only sidebar_new_chat is clickable.
+        -->
+        <LinearLayout
+            android:id="@+id/sidebar_browse_bar"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/chat_sidebar_row_height"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btn_sidebar_close"
+                android:layout_width="@dimen/chat_sidebar_button_size"
+                android:layout_height="@dimen/chat_sidebar_button_size"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/desc_sidebar_close"
+                android:padding="@dimen/chat_sidebar_button_padding"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_side_panel"
+                android:tint="@color/plugin_on_surface_variant" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/sidebar_new_chat"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_sidebar_action"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/chat_sidebar_row_padding"
+                android:paddingEnd="@dimen/chat_sidebar_row_padding">
+
+                <ImageView
+                    android:layout_width="@dimen/chat_sidebar_icon_size"
+                    android:layout_height="@dimen/chat_sidebar_icon_size"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_add"
+                    android:tint="@color/plugin_primary" />
+
+                <!-- wrap_content, so a long translation pushes the group wider rather than
+                     ellipsising; the Space beside it gives up its width first. -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/chat_sidebar_row_gap"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/menu_new_chat"
+                    android:textColor="@color/plugin_on_surface"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!--
+          Sits on top of the browse bar and hides it while picking, so leaving selection mode never
+          has to rebuild the header.
+        -->
+        <LinearLayout
+            android:id="@+id/sidebar_selection_bar"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/chat_sidebar_row_height"
+            android:background="@color/plugin_surface_variant"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/btn_sidebar_selection_cancel"
+                android:layout_width="@dimen/chat_sidebar_button_size"
+                android:layout_height="@dimen/chat_sidebar_button_size"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/session_selection_cancel"
+                android:padding="@dimen/chat_sidebar_button_padding"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_close"
+                android:tint="@color/plugin_on_surface" />
+
+            <TextView
+                android:id="@+id/sidebar_selection_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/chat_sidebar_row_gap"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/plugin_on_surface"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btn_sidebar_delete_selected"
+                android:layout_width="@dimen/chat_sidebar_button_size"
+                android:layout_height="@dimen/chat_sidebar_button_size"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/session_delete"
+                android:padding="@dimen/chat_sidebar_button_padding"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_delete"
+                android:tint="@color/plugin_error" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="@dimen/chat_sidebar_padding_horizontal"
+        android:layout_marginEnd="@dimen/chat_sidebar_padding_horizontal"
+        android:layout_marginTop="@dimen/chat_sidebar_padding_vertical"
+        android:background="@color/plugin_outline_variant" />
+
+    <TextView
+        android:id="@+id/sidebar_history_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="@dimen/chat_sidebar_label_padding_horizontal"
+        android:paddingEnd="@dimen/chat_sidebar_label_padding_horizontal"
+        android:paddingTop="@dimen/chat_sidebar_padding_vertical"
+        android:paddingBottom="@dimen/chat_caption_spacing"
+        android:text="@string/sidebar_recent"
+        android:textAllCaps="true"
+        android:textColor="@color/plugin_text_muted"
+        android:textSize="@dimen/chat_caption_text_size" />
+
+    <!--
+      The one scrolling region. layout_weight is what makes it the *only* one: the header above and
+      the footer below are wrap_content, so whatever is left over is the history's, and the panel
+      itself never scrolls as a whole.
+    -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/session_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="@dimen/chat_sidebar_padding_vertical"
+            android:scrollbars="vertical" />
+
+        <TextView
+            android:id="@+id/sidebar_history_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:gravity="center"
+            android:paddingStart="@dimen/chat_sidebar_padding_horizontal"
+            android:paddingEnd="@dimen/chat_sidebar_padding_horizontal"
+            android:text="@string/sidebar_history_empty"
+            android:textColor="@color/plugin_text_muted"
+            android:textSize="@dimen/chat_caption_text_size"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="@dimen/chat_sidebar_padding_horizontal"
+        android:layout_marginEnd="@dimen/chat_sidebar_padding_horizontal"
+        android:background="@color/plugin_outline_variant" />
+
+    <!-- Footer, fixed. Two rows, both bounded; see the note at the top of this file. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/chat_sidebar_padding_horizontal"
+        android:paddingEnd="@dimen/chat_sidebar_padding_horizontal"
+        android:paddingTop="@dimen/chat_sidebar_padding_vertical"
+        android:paddingBottom="@dimen/chat_sidebar_padding_vertical">
+
+        <LinearLayout
+            android:id="@+id/sidebar_clear_chat"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/chat_sidebar_row_height"
+            android:background="@drawable/bg_sidebar_action"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/chat_sidebar_row_padding"
+            android:paddingEnd="@dimen/chat_sidebar_row_padding">
+
+            <ImageView
+                android:layout_width="@dimen/chat_sidebar_icon_size"
+                android:layout_height="@dimen/chat_sidebar_icon_size"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_clear_all"
+                android:tint="@color/plugin_on_surface_variant" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/chat_sidebar_row_gap"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/sidebar_clear_chat"
+                android:textColor="@color/plugin_on_surface" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/sidebar_settings"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/chat_sidebar_row_height"
+            android:background="@drawable/bg_sidebar_action"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/chat_sidebar_row_padding"
+            android:paddingEnd="@dimen/chat_sidebar_row_padding">
+
+            <ImageView
+                android:layout_width="@dimen/chat_sidebar_icon_size"
+                android:layout_height="@dimen/chat_sidebar_icon_size"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_settings"
+                android:tint="@color/plugin_on_surface_variant" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/chat_sidebar_row_gap"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/menu_settings"
+                android:textColor="@color/plugin_on_surface" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>
