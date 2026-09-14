@@ -35,6 +35,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -76,16 +77,42 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     /** Held only between startListening() and the terminal result/error callback. */
     private var speechRecognizer: SpeechRecognizer? = null
 
-    /** Locale the in-flight attempt asked for, so an error can name the failing language. */
+    /** Locale the in-flight attempt asked for, so a log line can name the failing language. */
     @Volatile
     private var activeLocale: Locale = Locale.getDefault()
 
     /**
-     * True once this capture has spent its single language fallback. Main-thread only, like
-     * every other capture field here: the toolbar action, the recognizer callbacks and the
-     * recovery runnables all run on the main looper, so no synchronization is needed.
+     * The language the user actually configured, kept apart from [activeLocale] because a
+     * fallback overwrites that one: naming the region recovery settled on would send the user
+     * off to install a pack for a language they never chose.
      */
-    private var languageFallbackSpent = false
+    private var requestedLocale: Locale = Locale.getDefault()
+
+    /**
+     * The recovery budget, one flag per strategy rather than one attempt in total: an offline
+     * fallback that fails must still be able to reach the network, which is the only recovery
+     * that can serve a language this device has no pack for. Main-thread only, like every other
+     * capture field here: the toolbar action, the recognizer callbacks and the recovery
+     * runnables all run on the main looper, so no synchronization is needed.
+     */
+    private var offlineFallbackSpent = false
+    private var onlineRetrySpent = false
+
+    /**
+     * Identifies the attempt a recognizer callback came from. This service double-delivers -
+     * the support check below sees one answer three times - so a callback from an attempt that
+     * has been torn down must not end the retry that replaced it.
+     */
+    private var recognitionAttempt = 0L
+
+    /**
+     * Identifies the capture a transcript belongs to, so a generation that outlived its capture
+     * cannot drop stale text into the file or reset a newer capture's toolbar state.
+     */
+    private var captureId = 0L
+
+    /** The in-flight generation, cancelled when the next capture starts. */
+    private var generationJob: Job? = null
 
     /** Held only across a checkRecognitionSupport / triggerModelDownload call. */
     private var supportRecognizer: SpeechRecognizer? = null
@@ -96,7 +123,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     /** Tags the delayed recovery work so teardown can cancel exactly that and nothing else. */
     private val recoveryToken = Any()
 
-    /** When the current non-idle capture started, so a wedged state can't kill the button. */
+    /**
+     * When the current phase of a non-idle capture started, so a wedged state can't kill the
+     * button. Restarted at PROCESSING so it measures the generation [STALE_CAPTURE_MS] bounds
+     * rather than the listening that came before it.
+     */
     private var captureStartedAt = 0L
 
     /** Drives the toolbar icon via [ToolbarAction.iconProvider]. */
@@ -351,9 +382,22 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             return
         }
 
-        languageFallbackSpent = false
+        // A tap the guard above let through means the previous capture is over or wedged, so
+        // drop what it left behind: a queued retry would build a recognizer for a capture that
+        // no longer exists, and its generation would insert into the middle of this one.
+        mainHandler.removeCallbacksAndMessages(recoveryToken)
+        generationJob?.cancel()
+        captureId++
+        offlineFallbackSpent = false
+        onlineRetrySpent = false
         captureStartedAt = System.currentTimeMillis()
-        beginRecognition(preferOffline = true, announcement = str(R.string.stt_listening))
+        val requested = recognitionLocale()
+        requestedLocale = requested
+        beginRecognition(
+            preferOffline = true,
+            announcement = str(R.string.stt_listening),
+            locale = requested,
+        )
     }
 
     /**
@@ -362,18 +406,20 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      *
      * @param preferOffline true to ask for on-device recognition, false to force the network one
      * @param announcement toast shown once the attempt is about to start listening
-     * @param locale language to recognize; defaults to the host's configured one
+     * @param locale language to recognize
      */
     private fun beginRecognition(
         preferOffline: Boolean,
         announcement: String,
-        locale: Locale = recognitionLocale(),
+        locale: Locale,
     ) {
         val ctx = hostContext()
         try {
             destroyRecognizer()
             val recognizer = SpeechRecognizer.createSpeechRecognizer(ctx)
-            recognizer.setRecognitionListener(recognitionListener)
+            // Its own listener, carrying this attempt's id, so the attempt just torn down can
+            // no longer speak for the capture.
+            recognizer.setRecognitionListener(recognitionListener(++recognitionAttempt))
             speechRecognizer = recognizer
 
             activeLocale = locale
@@ -407,8 +453,25 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
         }
 
-    private val recognitionListener = object : RecognitionListener {
+    /**
+     * The listener for one attempt. It is built per attempt rather than shared because a
+     * callback carries no session of its own: the first terminal callback of the current
+     * attempt wins, and a repeat or a late one from a replaced attempt is dropped.
+     *
+     * @param attempt the [recognitionAttempt] value this recognizer was started with
+     */
+    private fun recognitionListener(attempt: Long) = object : RecognitionListener {
+        private var settled = false
+
+        /** True for the one terminal callback this attempt is allowed to act on. */
+        private fun claim(): Boolean {
+            if (settled || attempt != recognitionAttempt) return false
+            settled = true
+            return true
+        }
+
         override fun onResults(results: Bundle?) {
+            if (!claim()) return
             val transcript = results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()
@@ -419,34 +482,21 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 setState(RecordingState.IDLE)
                 return
             }
+            // Restart the stale-capture clock here: STALE_CAPTURE_MS covers one generation, and
+            // timing it from the tap would spend that budget on the listening phase as well.
+            captureStartedAt = System.currentTimeMillis()
             setState(RecordingState.PROCESSING)
             handleTranscript(transcript)
         }
 
         override fun onError(error: Int) {
+            if (!claim()) return
             destroyRecognizer()
-            // A language the recognizer can't serve is recoverable, so spend the capture's one
-            // fallback rather than ending the dictation session.
+            // A language the recognizer can't serve is recoverable, so spend a recovery
+            // strategy rather than ending the dictation session.
             val isLanguageError = error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
                 error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
-            if (isLanguageError && !languageFallbackSpent) {
-                languageFallbackSpent = true
-                logger?.info(
-                    "Recognizer rejected ${activeLocale.toLanguageTag()} (error $error) - " +
-                        "asking which languages it does support"
-                )
-                setState(RecordingState.PROCESSING)
-                guardRecovery {
-                    // checkRecognitionSupport arrived in API 33 and the IDE itself runs on 28,
-                    // so an older device gets the network retry directly.
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        checkLanguageSupport()
-                    } else {
-                        retryOnline()
-                    }
-                }
-                return
-            }
+            if (isLanguageError && recoverFromLanguageError(error)) return
             toast(describeError(error))
             setState(RecordingState.IDLE)
         }
@@ -458,6 +508,48 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         override fun onEndOfSpeech() {}
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    /**
+     * Spends the next recovery strategy on a language the recognizer rejected: the on-device
+     * options first, then the network. The two are budgeted separately because an offline
+     * fallback that is refused in turn still has the network left, and the network is the only
+     * recovery that can serve the words already spoken.
+     *
+     * @param error the recognizer's language error code, for the log
+     * @return true when a retry was started, false when the budget is spent and the caller
+     *   should report the error to the user
+     */
+    private fun recoverFromLanguageError(error: Int): Boolean {
+        if (!offlineFallbackSpent) {
+            offlineFallbackSpent = true
+            logger?.info(
+                "Recognizer rejected ${activeLocale.toLanguageTag()} (error $error) - " +
+                    "asking which languages it does support"
+            )
+            setState(RecordingState.PROCESSING)
+            guardRecovery {
+                // checkRecognitionSupport arrived in API 33. The loader gates on
+                // plugin.min_ide_version alone and never on a plugin's own minSdk, so the IDE
+                // can still run us below 33; that device gets the network retry directly.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    checkLanguageSupport()
+                } else {
+                    retryOnline()
+                }
+            }
+            return true
+        }
+        if (!onlineRetrySpent) {
+            logger?.info(
+                "The offline fallback ${activeLocale.toLanguageTag()} was rejected too " +
+                    "(error $error) - trying the network"
+            )
+            setState(RecordingState.PROCESSING)
+            guardRecovery { retryOnline() }
+            return true
+        }
+        return false
     }
 
     /**
@@ -635,12 +727,16 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * The network recognizer, tried once the on-device options are exhausted. It is never gated
      * on [RecognitionSupport.getOnlineLanguages], which this service reports empty even though
      * its network path works; a language it really cannot serve fails on the next error instead.
+     *
+     * It asks for [requestedLocale], not [activeLocale]: this runs after an offline fallback may
+     * have moved the latter to a region picked for a pack that then failed, and the announcement
+     * names the requested language either way.
      */
     private fun retryOnline() {
         restartRecognition(
             preferOffline = false,
             announcement = str(R.string.stt_error_language_retrying, languageLabel()),
-            locale = activeLocale,
+            locale = requestedLocale,
         )
     }
 
@@ -650,6 +746,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * it still held the old session open, and failed within milliseconds.
      */
     private fun restartRecognition(preferOffline: Boolean, announcement: String, locale: Locale) {
+        // Recorded here so the budget reflects what was actually attempted, whichever route
+        // through the recovery picked this attempt.
+        if (preferOffline) offlineFallbackSpent = true else onlineRetrySpent = true
         mainHandler.postDelayed(
             { guardRecovery { beginRecognition(preferOffline, announcement, locale) } },
             recoveryToken,
@@ -674,7 +773,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     ): String? {
         if (tags.isNullOrEmpty()) return null
         val wanted = normalizeTag(locale.toLanguageTag())
-        val language = locale.language.lowercase(Locale.ROOT)
+        // Taken from the tag, not from Locale.getLanguage(), which still answers with the
+        // legacy ISO-639 codes (iw, in, ji) that no recognizer lists.
+        val language = wanted.substringBefore('-')
         val normalized = tags.map(::normalizeTag)
         val candidates = if (skipRequested) normalized.filterNot { it == wanted } else normalized
         return candidates.firstOrNull { it == wanted }
@@ -696,7 +797,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         logger?.debug("Transcript received (${transcript.length} chars)")
         // Read here: onResults is a main-thread callback, and the IO dispatcher below is not.
         val language = currentLanguageId()
-        scope.launch {
+        val capture = captureId
+        generationJob = scope.launch {
             try {
                 // Resolved once per transcript: AI Core may have finished activating after we did.
                 val service = resolveLlmService()
@@ -705,6 +807,12 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 val generationFailed = service != null && generated == null
                 val output = generated ?: transcript
                 withContext(Dispatchers.Main) {
+                    // A generation that outlived its capture has nothing left to say: the user
+                    // has moved the cursor on and a newer capture owns the toolbar.
+                    if (capture != captureId) {
+                        logger?.info("Dropped a result from a capture that is already over")
+                        return@withContext
+                    }
                     val inserted = insertCodeAtCursor(output)
                     toast(
                         when {
@@ -718,7 +826,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 // Posted, not dispatched: a cancelled coroutine can no longer suspend, and the
                 // toolbar must leave the spinner even then. Only our own PROCESSING is cleared.
                 runOnMain {
-                    if (recordingState == RecordingState.PROCESSING) {
+                    if (capture == captureId && recordingState == RecordingState.PROCESSING) {
                         setState(RecordingState.IDLE)
                     }
                 }
@@ -752,6 +860,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             }
             // withTimeoutOrNull reports a timeout as null, and generateCompletion is platform-typed,
             // so record a future that completed with null rather than reading it as a slow model.
+            // It bounds the await, not the call that starts the request: a backend that blocks in
+            // generateCompletion itself runs past it, and the capture id checked before insertion
+            // is what keeps that generation out of the capture that replaced it.
             var completedWithoutResponse = false
             // await() is cancellation-aware, so dispose() unwinds this instead of leaving an IO
             // thread parked in Future.get for the rest of the timeout.
@@ -984,7 +1095,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         SpeechRecognizer.ERROR_AUDIO -> str(R.string.stt_error_audio)
         SpeechRecognizer.ERROR_CLIENT -> str(R.string.stt_error_client)
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> str(R.string.stt_error_permissions)
-        // Error 12/13 without these two branches is what surfaced as "unknown error 12".
+        // Error 12/13 without these two branches is what surfaced as "unknown error 12". They
+        // reach here only once recoverFromLanguageError has spent both strategies, so the
+        // _unavailable wording can state that the network was tried too.
         SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ->
             str(R.string.stt_error_language_not_supported, languageLabel())
         SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
@@ -1011,13 +1124,14 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Names the recognition language for a user-facing message, pairing the display name with
-     * the BCP-47 tag the user will see in Android's on-device recognition settings.
+     * Names the language the user asked for, pairing the display name with the BCP-47 tag they
+     * will see in Android's on-device recognition settings. Deliberately not [activeLocale]: a
+     * fallback moves that to a region the user never chose and cannot be told to go install.
      *
      * @return e.g. "English (United States) (en-US)"
      */
     private fun languageLabel(): String {
-        val locale = activeLocale
+        val locale = requestedLocale
         val display = locale.displayName.takeIf { it.isNotBlank() } ?: locale.toLanguageTag()
         return "$display (${locale.toLanguageTag()})"
     }
@@ -1106,13 +1220,22 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         /** Lets the failed session finish tearing down before the next attempt starts. */
         private const val RESTART_DELAY_MS = 400L
 
-        /** How long to wait for a support answer before falling back to the network. */
-        private const val SUPPORT_TIMEOUT_MS = 1_200L
+        /**
+         * How long to wait for a support answer before falling back to the network. Generous
+         * because the service has to bind first and a cold bind can take seconds: too short and
+         * the installed-pack and download paths below would almost never run. The cost of the
+         * wait is only that a device with no answer reaches the network retry later.
+         */
+        private const val SUPPORT_TIMEOUT_MS = 4_000L
 
         /** How long a pack-download request keeps its recognizer alive so the request survives. */
         private const val PACK_REQUEST_HOLD_MS = 5_000L
 
-        /** Slack over one whole generation, so the guard never expires before what it guards. */
+        /**
+         * Slack over one whole generation, so the guard never expires before what it guards.
+         * It covers the generation alone: [captureStartedAt] is restarted when the capture
+         * reaches PROCESSING, so the listening phase does not eat into it.
+         */
         private const val STALE_CAPTURE_HEADROOM_MS = 15_000L
 
         /**
