@@ -3,6 +3,7 @@ package org.appdevforall.codeonthego.layouteditor.adapters
 import org.appdevforall.codeonthego.layouteditor.pluginDialogContext
 import android.content.DialogInterface
 import android.text.Editable
+import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.MenuItem
@@ -14,7 +15,6 @@ import androidx.appcompat.widget.PopupMenu
 import androidx.recyclerview.widget.RecyclerView
 import com.blankj.utilcode.util.ClipboardUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import org.apache.commons.lang3.StringEscapeUtils
 import org.appdevforall.codeonthego.layouteditor.ProjectFile
 import org.appdevforall.codeonthego.layouteditor.R
 import org.appdevforall.codeonthego.layouteditor.adapters.models.ValuesItem
@@ -67,7 +67,7 @@ class StringResourceAdapter(
       sb.append("\t<string name=\"")
         .append(name)
         .append("\">")
-        .append(StringEscapeUtils.escapeXml11(value))
+        .append(TextUtils.htmlEncode(value))
         .append("</string>\n")
     }
     sb.append("</resources>")
