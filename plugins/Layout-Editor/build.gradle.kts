@@ -89,8 +89,6 @@ dependencies {
     implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))
     implementation("io.github.Rosemoe.sora-editor:editor")
     implementation("io.github.Rosemoe.sora-editor:language-textmate")
-    implementation("org.apache.commons:commons-text:1.11.0")
-    implementation("commons-io:commons-io:2.15.1")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
 }
 

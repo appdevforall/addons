@@ -1,5 +1,6 @@
 package org.appdevforall.codeonthego.layouteditor.tools;
 
+import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CalendarView;
@@ -11,7 +12,6 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.tabs.TabLayout;
 
-import org.apache.commons.text.StringEscapeUtils;
 import org.appdevforall.codeonthego.layouteditor.editor.DesignEditor;
 import org.appdevforall.codeonthego.layouteditor.editor.initializer.AttributeMap;
 
@@ -68,7 +68,7 @@ public class XmlLayoutGenerator {
     List<String> keys =
             (attributeMap.get(view) != null) ? new ArrayList<>(Objects.requireNonNull(attributeMap.get(view)).keySet()) : new ArrayList<>();
     for (String key : keys) {
-      builder.append(TAB).append(indent).append(key).append("=\"").append(StringEscapeUtils.escapeXml11(Objects.requireNonNull(attributeMap.get(view)).getValue(key))).append("\"\n");
+      builder.append(TAB).append(indent).append(key).append("=\"").append(TextUtils.htmlEncode(Objects.requireNonNull(attributeMap.get(view)).getValue(key))).append("\"\n");
     }
 
     if (builder.charAt(builder.length() - 1) == '\n') {
@@ -131,7 +131,7 @@ public class XmlLayoutGenerator {
 
         builder.append("\n").append(indent).append(TAB)
           .append(key).append("=\"")
-          .append(StringEscapeUtils.escapeXml11(attrs.getValue(key)))
+          .append(TextUtils.htmlEncode(attrs.getValue(key)))
           .append("\"");
       }
       builder.append(" />\n\n");
@@ -152,7 +152,7 @@ public class XmlLayoutGenerator {
 
         builder.append("\n").append(indent).append(TAB)
           .append(key).append("=\"")
-          .append(StringEscapeUtils.escapeXml11(attrs.getValue(key)))
+          .append(TextUtils.htmlEncode(attrs.getValue(key)))
           .append("\"");
       }
       builder.append(" />\n\n");
@@ -173,7 +173,7 @@ public class XmlLayoutGenerator {
 
                 builder.append("\n").append(indent).append(TAB)
                         .append(key).append("=\"")
-                        .append(StringEscapeUtils.escapeXml11(attrs.getValue(key)))
+                        .append(TextUtils.htmlEncode(attrs.getValue(key)))
                         .append("\"");
             }
 
