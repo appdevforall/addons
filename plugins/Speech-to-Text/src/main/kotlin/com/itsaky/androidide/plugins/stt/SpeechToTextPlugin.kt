@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
@@ -121,8 +122,15 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     /** The in-flight generation, cancelled when the next capture starts. */
     private var generationJob: Job? = null
 
-    /** Held only across a checkRecognitionSupport / triggerModelDownload call. */
+    /** Held only across a checkRecognitionSupport call. */
     private var supportRecognizer: SpeechRecognizer? = null
+
+    /**
+     * Held across a triggerModelDownload request and its [PACK_REQUEST_HOLD_MS] hold. Its own
+     * field because the next capture's support check claims [supportRecognizer] within a second
+     * or two, and releasing this one with it would cancel the download inside its hold window.
+     */
+    private var packRecognizer: SpeechRecognizer? = null
 
     /** Everything recognizer-related is posted here; [SpeechRecognizer] is main-thread only. */
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -132,8 +140,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     /**
      * When the current phase of a capture started, so a wedged PROCESSING can't kill the button.
-     * Restarted once a transcript arrives so it measures the generation [STALE_CAPTURE_MS]
-     * bounds rather than the listening that came before it.
+     * Restarted at PROCESSING so it bounds the generation alone, and monotonic so a clock
+     * correction cannot leave the guard refusing every tap on the capture it exists to escape.
      */
     private var captureStartedAt = 0L
 
@@ -307,6 +315,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         mainHandler.removeCallbacksAndMessages(recoveryToken)
         destroyRecognizer()
         destroySupportRecognizer()
+        destroyPackRecognizer()
         recordingState = RecordingState.IDLE
     }
 
@@ -378,7 +387,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         // Refuse a second tap mid-generation until the capture goes stale; one while RECORDING
         // instead restarts the capture, since nothing else bounds a recognizer that never settles.
         if (recordingState == RecordingState.PROCESSING &&
-            System.currentTimeMillis() - captureStartedAt < STALE_CAPTURE_MS
+            SystemClock.elapsedRealtime() - captureStartedAt < STALE_CAPTURE_MS
         ) {
             logger?.info("Ignoring the tap: a capture is already $recordingState")
             toast(str(R.string.stt_busy))
@@ -403,23 +412,39 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             return
         }
 
-        // A tap the guard above let through means the previous capture is over or wedged, so
-        // drop what it left behind: a queued retry would build a recognizer for a capture that
-        // no longer exists, and its generation would insert into the middle of this one.
+        // A tap the guard above let through means the previous capture is over, wedged, or
+        // still listening, so drop what it left behind: a queued retry would build a recognizer
+        // for a capture that is gone, and its generation would insert into the middle of this one.
         mainHandler.removeCallbacksAndMessages(recoveryToken)
         generationJob?.cancel()
         captureId++
         offlineFallbackSpent = false
         onlineRetrySpent = false
-        captureStartedAt = System.currentTimeMillis()
+        captureStartedAt = SystemClock.elapsedRealtime()
         val requested = recognitionLocale()
         requestedLocale = requested
-        beginRecognition(
-            preferOffline = true,
-            announcement = str(R.string.stt_listening),
-            locale = requested,
-        )
+        if (recordingState == RecordingState.RECORDING) {
+            // This tap replaces a live session, so let the platform settle for RESTART_DELAY_MS
+            // first, for the reason restartRecognition records. The attempt is retired with it,
+            // or the ERROR_CLIENT the dying recognizer reports would end the capture replacing it.
+            recognitionAttempt++
+            destroyRecognizer()
+            mainHandler.postDelayed(
+                { guardRecovery { beginListening(requested) } },
+                recoveryToken,
+                RESTART_DELAY_MS,
+            )
+            return
+        }
+        beginListening(requested)
     }
+
+    /** The first attempt of a capture: on-device, and announced as the prompt to speak. */
+    private fun beginListening(locale: Locale) = beginRecognition(
+        preferOffline = true,
+        announcement = str(R.string.stt_listening),
+        locale = locale,
+    )
 
     /**
      * Runs one recognition attempt. Pre-flight checks live in [startVoiceCapture]; the
@@ -435,12 +460,16 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         locale: Locale,
     ) {
         val ctx = hostContext()
+        // Bumped before anything below can throw: a construction that fails still has to retire
+        // the attempt it replaces, or that recognizer's dying ERROR_CLIENT toasts on top of the
+        // stt_start_failed the catch already showed.
+        val attempt = ++recognitionAttempt
         try {
             destroyRecognizer()
             val recognizer = SpeechRecognizer.createSpeechRecognizer(ctx)
             // Its own listener, carrying this attempt's id, so the attempt just torn down can
             // no longer speak for the capture.
-            recognizer.setRecognitionListener(recognitionListener(++recognitionAttempt))
+            recognizer.setRecognitionListener(recognitionListener(attempt))
             speechRecognizer = recognizer
 
             activeLocale = locale
@@ -505,7 +534,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             }
             // Restart the stale-capture clock here: STALE_CAPTURE_MS covers one generation, and
             // timing it from the tap would spend that budget on the listening phase as well.
-            captureStartedAt = System.currentTimeMillis()
+            captureStartedAt = SystemClock.elapsedRealtime()
             setState(RecordingState.PROCESSING)
             handleTranscript(transcript)
         }
@@ -619,12 +648,14 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         supportRecognizer = recognizer
 
         // Speech Services by Google answers one query with an error and then the same result
-        // twice, and each answer used to start its own recognizer. First answer wins.
+        // twice, and each answer used to start its own recognizer. First answer wins. Every
+        // release below names this recognizer: `handled` is a local that teardown cannot set, so
+        // a callback that outlived its capture must not destroy the one now in the field.
         var handled = false
         val giveUp = Runnable {
             if (!handled) {
                 handled = true
-                destroySupportRecognizer()
+                destroySupportRecognizer(recognizer)
                 logger?.info("No support answer in ${SUPPORT_TIMEOUT_MS}ms - retrying online")
                 guardRecovery { retryOnline() }
             }
@@ -639,7 +670,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                         if (handled) return
                         handled = true
                         mainHandler.removeCallbacks(giveUp)
-                        destroySupportRecognizer()
+                        destroySupportRecognizer(recognizer)
                         // Teardown and the next tap both bump the attempt; this is where a
                         // result that outlived its capture is dropped, since neither can
                         // cancel a callback the executor has already queued.
@@ -658,8 +689,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                     }
 
                     override fun onError(code: Int) {
-                        // Not terminal: this service reports 14 (can't report download events)
-                        // and then answers anyway, so let [giveUp] decide when to stop waiting.
+                        // Advisory, not terminal: Speech Services by Google reports 14
+                        // (ERROR_CANNOT_CHECK_SUPPORT) and then answers anyway, so let [giveUp]
+                        // decide when to stop waiting rather than the code decide it here.
                         logger?.info("Support check reported error $code")
                     }
                 },
@@ -667,7 +699,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             mainHandler.postDelayed(giveUp, recoveryToken, SUPPORT_TIMEOUT_MS)
         } catch (e: Exception) {
             handled = true
-            destroySupportRecognizer()
+            destroySupportRecognizer(recognizer)
             logger?.warn("checkRecognitionSupport is not usable here", e)
             retryOnline()
         }
@@ -719,9 +751,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Asks the recognizer to fetch the missing pack for next time. Best effort by contract, and
-     * silent by choice: this service answers the support check with code 14, meaning it cannot
-     * report download events, so any promise made to the user here could not be kept.
+     * Asks the recognizer to fetch the missing pack for next time. Best effort by contract and
+     * unobservable in practice - the device this was written against still reported `pending=[]`
+     * 20 s after two requests - so nothing is promised to the user and nothing waits on it.
      *
      * @param locale pack to fetch, built from the normalized tag [usableTag] returned
      */
@@ -733,14 +765,14 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             logger?.warn("Could not create a recognizer to request the pack", e)
             return
         }
-        destroySupportRecognizer()
-        supportRecognizer = recognizer
+        destroyPackRecognizer()
+        packRecognizer = recognizer
         try {
             recognizer.triggerModelDownload(recognitionIntent(locale, preferOffline = true))
             logger?.info("Requested pack download for ${locale.toLanguageTag()}")
         } catch (e: Exception) {
             logger?.warn("Could not request the pack download", e)
-            destroySupportRecognizer(recognizer)
+            destroyPackRecognizer(recognizer)
             return
         }
         // triggerModelDownload only queues the request: the recognizer binds to the service
@@ -749,7 +781,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         // Untokened: the next tap clears recoveryToken, which would drop this release and
         // orphan the recognizer. The expected check makes it a no-op once the field moved on.
         mainHandler.postDelayed(
-            { destroySupportRecognizer(recognizer) },
+            { destroyPackRecognizer(recognizer) },
             PACK_REQUEST_HOLD_MS,
         )
     }
@@ -1138,24 +1170,44 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Releases the short-lived recognizer used for support checks and pack downloads. The
-     * destroy is always posted, so it can be called from inside that recognizer's own callback
-     * without tearing it down mid-dispatch.
+     * Releases the short-lived recognizer used for support checks.
      *
      * @param expected when given, does nothing unless this is still the recognizer being held,
      *   so a delayed release cannot destroy the one a later capture has since put in its place
      */
     private fun destroySupportRecognizer(expected: SpeechRecognizer? = null) {
-        val recognizer = supportRecognizer ?: return
-        if (expected != null && expected !== recognizer) return
-        supportRecognizer = null
+        supportRecognizer = release(supportRecognizer, expected, "support")
+    }
+
+    /**
+     * Releases the recognizer holding a pack download request.
+     *
+     * @param expected as for [destroySupportRecognizer]
+     */
+    private fun destroyPackRecognizer(expected: SpeechRecognizer? = null) {
+        packRecognizer = release(packRecognizer, expected, "pack download")
+    }
+
+    /**
+     * Destroys [held] and answers what its field should hold afterwards. The destroy is posted,
+     * so this can be called from inside that recognizer's own callback without tearing it down
+     * mid-dispatch, and [held] is kept when [expected] shows the field has already moved on.
+     */
+    private fun release(
+        held: SpeechRecognizer?,
+        expected: SpeechRecognizer?,
+        role: String,
+    ): SpeechRecognizer? {
+        if (held == null) return null
+        if (expected != null && expected !== held) return held
         mainHandler.post {
             try {
-                recognizer.destroy()
+                held.destroy()
             } catch (e: Exception) {
-                logger?.warn("Failed to destroy the support SpeechRecognizer", e)
+                logger?.warn("Failed to destroy the $role SpeechRecognizer", e)
             }
         }
+        return null
     }
 
     /**
@@ -1184,11 +1236,13 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     /**
      * The language recognition should run in: the host's configured locale, which honours a
-     * per-app language the process-wide default would miss.
+     * per-app language the process-wide default would miss. Its Unicode `-u-` extensions - the
+     * user's regional preferences - are dropped, or they ride into the tags and into every toast.
      */
     private fun recognitionLocale(): Locale = try {
-        hostContext().resources.configuration.locales
+        val configured = hostContext().resources.configuration.locales
             .takeIf { !it.isEmpty }?.get(0) ?: Locale.getDefault()
+        Locale.Builder().setLocale(configured).clearExtensions().build()
     } catch (e: Exception) {
         logger?.warn("Could not read the host locale", e)
         Locale.getDefault()
