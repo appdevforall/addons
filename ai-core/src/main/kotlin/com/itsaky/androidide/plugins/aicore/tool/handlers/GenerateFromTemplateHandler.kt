@@ -26,7 +26,12 @@ class GenerateFromTemplateHandler(
         required = listOf("template_name"),
     )
     override val description = "Generate files from Pebble templates with variable substitution"
-    override val requiresApproval = false
+
+    /**
+     * A tool that generates files into the project asks first. Declared true although [execute]
+     * today only locates the template and writes nothing — do not flip it back once it does.
+     */
+    override val requiresApproval = true
 
     /**
      * Reads the `variables` argument, whatever shape the backend delivered it in.

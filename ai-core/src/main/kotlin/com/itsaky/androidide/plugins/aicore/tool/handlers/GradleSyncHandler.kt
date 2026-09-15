@@ -20,7 +20,13 @@ class GradleSyncHandler(
 ) : ToolHandler {
     override val toolName = "gradle_sync"
     override val description = "Sync the Gradle project (reload dependencies and rebuild cache)"
-    override val requiresApproval = false
+
+    /**
+     * Approved like the build tool it is, not like a read: a sync starts a real Gradle build, can
+     * pull dependencies over a metered connection, and writes `.gradle/` and the Gradle cache.
+     * [RunAppHandler], the same action one step further, already asks.
+     */
+    override val requiresApproval = true
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         Log.d(TAG, "Gradle sync requested")

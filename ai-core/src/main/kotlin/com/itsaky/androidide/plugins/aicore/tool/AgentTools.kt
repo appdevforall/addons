@@ -55,8 +55,6 @@ class AgentTools private constructor(
         ): AgentTools {
             val reserved = builtInHandlers.mapTo(mutableSetOf()) { it.toolName }
             reserved += terminalTool
-            // The approval gate exempts a name, not a handler, so those names are reserved too.
-            reserved += ToolApprovalManager.AUTO_APPROVED_TOOLS
 
             val handlers = builtInHandlers + store.handlers(reserved)
             // The grammar is built from the budgeted list, not from every handler: a name the
