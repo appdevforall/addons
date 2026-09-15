@@ -19,10 +19,10 @@ private const val TAG = "$LOG_PREFIX.ChatStorageManager"
  * namespace per project and a conversation never surfaces in a codebase it was not written in.
  *
  * **Threading.** Constructed on the main thread, because the migration and first read have to
- * settle before anything can mutate the sessions they produce. Reads and writes afterwards may run
- * on any thread, but [saveSessions] serializes the list it is handed, so the caller must hand it a
- * snapshot no other thread is still mutating — a session's `messages` list grows on the main thread
- * for the whole of a streamed reply.
+ * settle before anything can mutate the sessions they produce. Reads may run on any thread;
+ * [persist] blocks until the write lands, so it belongs on a background one. It also serializes
+ * the list it is handed, so the caller must hand it a snapshot no other thread is still mutating —
+ * a session's `messages` list grows on the main thread for the whole of a streamed reply.
  *
  * **Failure.** Nothing here throws. Losing the history must not stop the Agent from opening, and a
  * write that fails must not take the IDE down mid-conversation, so every failure is logged and
@@ -62,15 +62,25 @@ class ChatStorageManager(context: Context, private val projectKey: String) {
     }
 
     /**
-     * Replaces this project's stored history with [sessions].
+     * Replaces this project's stored history and selection, in one edit.
+     *
+     * Both keys move together on purpose: written back-to-back, a process death between them
+     * leaves a selection naming a session the stored list has never heard of. `commit()` rather
+     * than `apply()` for the same reason — the write is done when this returns, instead of being
+     * queued for whichever later main-thread pause flushes it. It blocks, so call it off the main
+     * thread.
      *
      * @param sessions a snapshot of every session to keep, owned by the caller and not being
      *   mutated elsewhere; an empty list clears the history
+     * @param currentSessionId the session the user is looking at, or null to leave none selected
      */
-    fun saveSessions(sessions: List<ChatSession>) {
+    fun persist(sessions: List<ChatSession>, currentSessionId: String?) {
         val prefs = prefs ?: return
         try {
-            prefs.edit().putString(sessionsKey, gson.toJson(sessions)).apply()
+            prefs.edit()
+                .putString(sessionsKey, gson.toJson(sessions))
+                .putString(currentSessionIdKey, currentSessionId)
+                .commit()
         } catch (e: Exception) {
             Log.e(TAG, "Could not save ${sessions.size} session(s) for project $projectKey", e)
         }
@@ -91,20 +101,6 @@ class ChatStorageManager(context: Context, private val projectKey: String) {
         return parseSessions(json)
             .filter { it.projectKey == null || it.projectKey == projectKey }
             .map { if (it.projectKey == null) it.copy(projectKey = projectKey) else it }
-    }
-
-    /**
-     * Records which session the user was last looking at in this project.
-     *
-     * @param sessionId the session's id, or null to leave no session selected
-     */
-    fun saveCurrentSessionId(sessionId: String?) {
-        val prefs = prefs ?: return
-        try {
-            prefs.edit().putString(currentSessionIdKey, sessionId).apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not save current session id for project $projectKey", e)
-        }
     }
 
     /**
@@ -174,10 +170,26 @@ class ChatStorageManager(context: Context, private val projectKey: String) {
     private fun parseSessions(json: String): List<ChatSession> {
         val type = object : TypeToken<List<ChatSession>>() {}.type
         return try {
-            gson.fromJson<List<ChatSession>?>(json, type)?.filterNotNull() ?: emptyList()
+            gson.fromJson<List<ChatSession>?>(json, type)
+                ?.filterNotNull()
+                ?.map(::withMessages)
+                ?: emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "Discarding an unreadable chat history blob for project $projectKey", e)
             emptyList()
         }
     }
+
+    /**
+     * Repairs a session whose transcript did not survive the round trip. Gson builds instances
+     * through Unsafe, so a blob truncated mid-write — or one written before the field existed —
+     * deserializes `messages` as null however Kotlin declares it, and the first caller to read the
+     * transcript throws rather than showing an empty chat.
+     *
+     * @param session a session straight out of Gson.
+     * @return [session], or a copy with an empty transcript when it arrived without one.
+     */
+    @Suppress("SENSELESS_COMPARISON")
+    private fun withMessages(session: ChatSession): ChatSession =
+        if (session.messages == null) session.copy(messages = emptyList()) else session
 }

@@ -240,8 +240,9 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
      */
     private fun syncStorageToCurrentProject() {
         val bound = viewModel.isStorageInitialized()
-        // A null key means the host could not be asked, which is not the same as the project
-        // having changed; rebinding on it would show an empty history for a transient failure.
+        // A null key means nothing answered — the host could not be asked, or has not published a
+        // root yet — which is not the same as the project having changed; rebinding on it would
+        // show an empty history for a transient failure.
         // With nothing bound yet there is no binding to keep, so the no-project namespace it is.
         val projectKey = ProjectKey.current() ?: if (bound) return else ProjectKey.NO_PROJECT
         if (bound && viewModel.activeProjectKey == projectKey) return

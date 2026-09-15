@@ -471,8 +471,7 @@ class ChatViewModel(
                 // to another namespace and say nothing about how current this one is.
                 if (ticket < (lastWrittenTicket[projectKey] ?: 0L)) return@withLock
                 lastWrittenTicket[projectKey] = ticket
-                manager.saveSessions(sessions)
-                manager.saveCurrentSessionId(currentSessionId)
+                manager.persist(sessions, currentSessionId)
             }
         }
     }

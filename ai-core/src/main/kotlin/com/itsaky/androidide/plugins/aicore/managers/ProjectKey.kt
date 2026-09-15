@@ -30,12 +30,14 @@ object ProjectKey {
      * The namespace for the project open right now. Safe to call from the main thread; it asks the
      * host for the open project and does no I/O beyond canonicalizing the path it gets back.
      *
-     * @return the current project's key, [NO_PROJECT] when no project is open, or null when the
-     *   host could not be asked at all. Null is not "the project changed" — a caller holding a
-     *   binding should keep it rather than swap the user onto an empty history over a hiccup.
+     * @return the current project's key, [NO_PROJECT] when the host named a root that is no
+     *   particular project, or null when nothing answered at all. Null is not "the project
+     *   changed" — a caller holding a binding should keep it rather than swap the user onto an
+     *   empty history over a hiccup. [PathGuard.rawProjectRoot] rather than `projectRoot()`
+     *   precisely so those two stay apart: the latter's fallback answers for a host that did not.
      */
     fun current(): String? = try {
-        forRoot(PathGuard.projectRoot())
+        PathGuard.rawProjectRoot()?.let(::forRoot)
     } catch (e: Exception) {
         Log.w(TAG, "Could not resolve the open project; leaving the chat history where it is", e)
         null

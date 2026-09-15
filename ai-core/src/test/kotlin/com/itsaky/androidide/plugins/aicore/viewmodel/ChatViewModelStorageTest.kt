@@ -50,6 +50,7 @@ class ChatViewModelStorageTest {
         every { sharedPreferences.edit() } returns editor
         every { editor.putString(any(), any()) } returns editor
         every { editor.apply() } returns Unit
+        every { editor.commit() } returns true
 
         storageManager = ChatStorageManager(androidContext, TEST_PROJECT_KEY)
     }
@@ -176,9 +177,8 @@ class ChatViewModelStorageTest {
 
     @Test
     fun testSessionPersistenceFlow() {
-        // This tests the expected flow that ChatViewModel.onCleared() should follow:
-        // 1. Save all sessions
-        // 2. Save current session ID
+        // This tests the expected flow that ChatViewModel.persistState() follows: one write
+        // carrying both the session list and the selection.
 
         val message = ChatMessage(text = "Test message", sender = Sender.USER)
         val session = ChatSession(
@@ -188,15 +188,11 @@ class ChatViewModelStorageTest {
         )
         val sessions = listOf(session)
 
-        // Save sessions
-        storageManager.saveSessions(sessions)
+        // Both the sessions and the selection go out together
+        storageManager.persist(sessions, "persist-test")
         verify { editor.putString(KEY_SESSIONS, any()) }
-        verify { editor.apply() }
-
-        // Save current session ID
-        storageManager.saveCurrentSessionId("persist-test")
         verify { editor.putString(KEY_CURRENT_ID, "persist-test") }
-        verify(atLeast = 2) { editor.apply() }
+        verify(exactly = 1) { editor.commit() }
     }
 
     @Test
@@ -265,10 +261,10 @@ class ChatViewModelStorageTest {
         val session2 = ChatSession(id = "s2", createdAt = 2000)
         val session3 = ChatSession(id = "s3", createdAt = 3000)
 
-        storageManager.saveSessions(listOf(session1, session2, session3))
+        storageManager.persist(listOf(session1, session2, session3), null)
 
         verify { editor.putString(KEY_SESSIONS, any()) }
-        verify { editor.apply() }
+        verify { editor.commit() }
     }
 
 
@@ -292,8 +288,10 @@ class ChatViewModelStorageTest {
     @Test
     fun givenOutgoingProject_whenPersistedBeforeSwitch_thenItsSessionsGoToItsOwnKey() {
         // ChatFragment persists the outgoing project first, so the last turn is not lost on a swap.
-        storageManager.saveSessions(listOf(ChatSession(id = "alpha-chat", projectKey = TEST_PROJECT_KEY)))
-        storageManager.saveCurrentSessionId("alpha-chat")
+        storageManager.persist(
+            listOf(ChatSession(id = "alpha-chat", projectKey = TEST_PROJECT_KEY)),
+            "alpha-chat"
+        )
 
         verify { editor.putString(KEY_SESSIONS, match { it.contains("alpha-chat") }) }
         verify { editor.putString(KEY_CURRENT_ID, "alpha-chat") }

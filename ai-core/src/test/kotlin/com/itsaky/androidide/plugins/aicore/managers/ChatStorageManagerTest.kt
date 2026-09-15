@@ -46,28 +46,29 @@ class ChatStorageManagerTest {
         every { sharedPreferences.edit() } returns editor
         every { editor.putString(any(), any()) } returns editor
         every { editor.apply() } returns Unit
+        every { editor.commit() } returns true
 
         storageManager = ChatStorageManager(context, TEST_PROJECT_KEY)
     }
 
     @Test
-    fun testSaveSessionsWithEmptyList() {
+    fun givenAnEmptyList_whenPersisting_thenTheStoredHistoryIsCleared() {
         val sessions = emptyList<ChatSession>()
         val jsonSlot = slot<String>()
 
         every { editor.putString(KEY_SESSIONS, capture(jsonSlot)) } returns editor
 
-        storageManager.saveSessions(sessions)
+        storageManager.persist(sessions, null)
 
         verify { editor.putString(KEY_SESSIONS, any()) }
-        verify { editor.apply() }
+        verify { editor.commit() }
 
         // Should serialize to empty JSON array
         assertEquals("[]", jsonSlot.captured)
     }
 
     @Test
-    fun testSaveSessionsWithSingleSession() {
+    fun givenOneSession_whenPersisting_thenItsFieldsAreSerialized() {
         val session = ChatSession(
             id = "test-123",
             createdAt = 1234567890L,
@@ -78,10 +79,10 @@ class ChatStorageManagerTest {
 
         every { editor.putString(KEY_SESSIONS, capture(jsonSlot)) } returns editor
 
-        storageManager.saveSessions(sessions)
+        storageManager.persist(sessions, null)
 
         verify { editor.putString(KEY_SESSIONS, any()) }
-        verify { editor.apply() }
+        verify { editor.commit() }
 
         // Verify JSON contains session data
         val json = jsonSlot.captured
@@ -90,7 +91,7 @@ class ChatStorageManagerTest {
     }
 
     @Test
-    fun testSaveSessionsWithMultipleSessions() {
+    fun givenSeveralSessions_whenPersisting_thenAllAreSerialized() {
         val session1 = ChatSession(id = "session-1", createdAt = 1000L)
         val session2 = ChatSession(id = "session-2", createdAt = 2000L)
         val sessions = listOf(session1, session2)
@@ -98,7 +99,7 @@ class ChatStorageManagerTest {
 
         every { editor.putString(KEY_SESSIONS, capture(jsonSlot)) } returns editor
 
-        storageManager.saveSessions(sessions)
+        storageManager.persist(sessions, null)
 
         val json = jsonSlot.captured
         assertTrue(json.contains("session-1"))
@@ -106,7 +107,7 @@ class ChatStorageManagerTest {
     }
 
     @Test
-    fun testSaveSessionsWithMessages() {
+    fun givenASessionWithMessages_whenPersisting_thenTheTranscriptIsSerialized() {
         val message1 = ChatMessage(
             id = "msg-1",
             text = "Hello",
@@ -125,7 +126,7 @@ class ChatStorageManagerTest {
 
         every { editor.putString(KEY_SESSIONS, capture(jsonSlot)) } returns editor
 
-        storageManager.saveSessions(listOf(session))
+        storageManager.persist(listOf(session), null)
 
         val json = jsonSlot.captured
         assertTrue(json.contains("Hello"))
@@ -273,29 +274,29 @@ class ChatStorageManagerTest {
     }
 
     @Test
-    fun testSaveCurrentSessionIdWithValidId() {
+    fun givenASelection_whenPersisting_thenItIsStored() {
         val sessionId = "session-123"
         val idSlot = slot<String>()
 
         every { editor.putString(KEY_CURRENT_ID, capture(idSlot)) } returns editor
 
-        storageManager.saveCurrentSessionId(sessionId)
+        storageManager.persist(emptyList(), sessionId)
 
         verify { editor.putString(KEY_CURRENT_ID, any()) }
-        verify { editor.apply() }
+        verify { editor.commit() }
         assertEquals(sessionId, idSlot.captured)
     }
 
     @Test
-    fun testSaveCurrentSessionIdWithNull() {
+    fun givenNoSelection_whenPersisting_thenNullIsStored() {
         val idSlot = slot<String?>()
 
         every { editor.putString(KEY_CURRENT_ID, captureNullable(idSlot)) } returns editor
 
-        storageManager.saveCurrentSessionId(null)
+        storageManager.persist(emptyList(), null)
 
         verify { editor.putString(KEY_CURRENT_ID, null) }
-        verify { editor.apply() }
+        verify { editor.commit() }
         assertNull(idSlot.captured)
     }
 
@@ -334,7 +335,7 @@ class ChatStorageManagerTest {
         every { editor.putString(KEY_SESSIONS, capture(jsonSlot)) } returns editor
 
         // Save
-        storageManager.saveSessions(sessions)
+        storageManager.persist(sessions, null)
 
         // Now mock the load to return what was saved
         every { sharedPreferences.getString(KEY_SESSIONS, null) } returns jsonSlot.captured
@@ -358,7 +359,7 @@ class ChatStorageManagerTest {
         every { editor.putString(KEY_CURRENT_ID, capture(idSlot)) } returns editor
 
         // Save
-        storageManager.saveCurrentSessionId(sessionId)
+        storageManager.persist(emptyList(), sessionId)
 
         // Mock load to return what was saved
         every { sharedPreferences.getString(KEY_CURRENT_ID, null) } returns idSlot.captured
@@ -377,17 +378,22 @@ class ChatStorageManagerTest {
 
     @Test
     fun testUsesCorrectKeys() {
-        val sessions = listOf(ChatSession())
-        storageManager.saveSessions(sessions)
+        storageManager.persist(listOf(ChatSession()), "test")
 
-        // Verify correct key is used
+        // Verify correct keys are used
         verify { editor.putString(KEY_SESSIONS, any()) }
-
-        val sessionId = "test"
-        storageManager.saveCurrentSessionId(sessionId)
-
-        // Verify correct key is used
         verify { editor.putString(KEY_CURRENT_ID, any()) }
+    }
+
+    @Test
+    fun givenAPersist_whenItRuns_thenBothKeysGoOutInOneEdit() {
+        // Two edits could be torn apart by a process death, leaving a selection that names a
+        // session the stored list has never heard of.
+        storageManager.persist(listOf(ChatSession(id = "only")), "only")
+
+        verify(exactly = 1) { sharedPreferences.edit() }
+        verify(exactly = 1) { editor.commit() }
+        verify(exactly = 0) { editor.apply() }
     }
 
     // ---- Per-project namespacing (ADFA-5583) ----
@@ -396,8 +402,8 @@ class ChatStorageManagerTest {
     fun givenTwoProjects_whenSaving_thenEachWritesItsOwnKey() {
         val other = ChatStorageManager(context, "ffffffffffffffff")
 
-        storageManager.saveSessions(listOf(ChatSession(id = "mine")))
-        other.saveSessions(listOf(ChatSession(id = "theirs")))
+        storageManager.persist(listOf(ChatSession(id = "mine")), null)
+        other.persist(listOf(ChatSession(id = "theirs")), null)
 
         verify { editor.putString(KEY_SESSIONS, match { it.contains("mine") }) }
         verify { editor.putString("chat_sessions_ffffffffffffffff", match { it.contains("theirs") }) }
@@ -407,8 +413,8 @@ class ChatStorageManagerTest {
     fun givenTwoProjects_whenSavingCurrentId_thenEachWritesItsOwnKey() {
         val other = ChatStorageManager(context, "ffffffffffffffff")
 
-        storageManager.saveCurrentSessionId("mine")
-        other.saveCurrentSessionId("theirs")
+        storageManager.persist(emptyList(), "mine")
+        other.persist(emptyList(), "theirs")
 
         verify { editor.putString(KEY_CURRENT_ID, "mine") }
         verify { editor.putString("current_session_id_ffffffffffffffff", "theirs") }
@@ -447,13 +453,26 @@ class ChatStorageManagerTest {
         val jsonSlot = slot<String>()
         every { editor.putString(KEY_SESSIONS, capture(jsonSlot)) } returns editor
 
-        storageManager.saveSessions(listOf(ChatSession(id = "stamped", projectKey = TEST_PROJECT_KEY)))
+        storageManager.persist(listOf(ChatSession(id = "stamped", projectKey = TEST_PROJECT_KEY)), null)
         every { sharedPreferences.getString(KEY_SESSIONS, null) } returns jsonSlot.captured
 
         val sessions = storageManager.loadSessions()
 
         assertEquals(1, sessions.size)
         assertEquals(TEST_PROJECT_KEY, sessions[0].projectKey)
+    }
+
+    @Test
+    fun givenASessionWithNoMessagesField_whenLoading_thenTheTranscriptIsEmptyRatherThanNull() {
+        // Gson builds through Unsafe, so a truncated blob leaves the non-null field null and the
+        // first read of the transcript throws.
+        every { sharedPreferences.getString(KEY_SESSIONS, null) } returns
+            """[{"id": "torn", "createdAt": 1000}]"""
+
+        val sessions = storageManager.loadSessions()
+
+        assertEquals(1, sessions.size)
+        assertTrue(sessions[0].messages.isEmpty())
     }
 
     // ---- Legacy global history migration (ADFA-5583) ----
@@ -563,15 +582,14 @@ class ChatStorageManagerTest {
 
         assertTrue(manager.loadSessions().isEmpty())
         assertNull(manager.loadCurrentSessionId())
-        manager.saveSessions(listOf(ChatSession()))
-        manager.saveCurrentSessionId("anything")
+        manager.persist(listOf(ChatSession()), "anything")
     }
 
     @Test
     fun givenAFailingWrite_whenSaving_thenNothingIsThrown() {
         every { editor.putString(KEY_SESSIONS, any()) } throws IllegalStateException("disk full")
 
-        storageManager.saveSessions(listOf(ChatSession(id = "doomed")))
+        storageManager.persist(listOf(ChatSession(id = "doomed")), "doomed")
     }
 
     @Test

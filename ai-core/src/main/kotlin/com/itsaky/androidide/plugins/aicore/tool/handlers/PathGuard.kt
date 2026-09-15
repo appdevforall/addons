@@ -49,11 +49,18 @@ object PathGuard {
      * (it is "/" on Android) so [isValidRoot] can reject it and the guard fails closed.
      * @return the resolved root path (not guaranteed valid).
      */
-    fun projectRoot(): String =
+    fun projectRoot(): String = rawProjectRoot() ?: DEFAULT_ROOT
+
+    /**
+     * The same resolution as [projectRoot], but without the [DEFAULT_ROOT] fallback. Containment
+     * checks want a path to fail closed against; a caller deriving a per-project identity instead
+     * has to tell "nothing answered" apart from "this project", which the fallback hides.
+     * @return the resolved root path, or null when no source answered.
+     */
+    fun rawProjectRoot(): String? =
         projectRootOverride
             ?: projectRootProvider?.invoke()?.takeIf { it.isNotBlank() }
             ?: System.getProperty("project.dir")
-            ?: DEFAULT_ROOT
 
     /**
      * A usable root is a non-blank, existing directory that isn't the filesystem root "/"

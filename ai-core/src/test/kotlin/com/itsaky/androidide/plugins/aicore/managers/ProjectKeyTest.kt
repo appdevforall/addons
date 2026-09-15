@@ -92,6 +92,17 @@ class ProjectKeyTest {
     }
 
     @Test
+    fun givenHostThatNamesNoRoot_whenAskingForCurrent_thenNullRatherThanTheNoProjectNamespace() {
+        // The workspace-parent fallback answers for a host that did not, so resolving through it
+        // would report "no project open" for a host that simply had not published one yet — and
+        // the caller would swap the user onto an empty history.
+        PathGuard.setProjectRootProvider { null }
+        System.clearProperty("project.dir")
+
+        assertNull(ProjectKey.current())
+    }
+
+    @Test
     fun givenHostThatThrows_whenAskingForCurrent_thenNullRatherThanAnException() {
         // Null tells the caller to keep the binding it has, instead of swapping the user onto an
         // empty history because the host answered badly once.
