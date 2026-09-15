@@ -252,6 +252,17 @@ class PathGuardTest {
     }
 
     @Test
+    fun givenNoSourceAnswers_whenTheRawProjectRootIsQueried_thenItIsNullRatherThanTheFallback() {
+        // Containment wants a path to fail closed against, so projectRoot() still answers; a caller
+        // deriving a per-project identity has to see that nothing resolved.
+        PathGuard.setProjectRootForTesting(null)
+        System.clearProperty("project.dir")
+
+        assertNull(PathGuard.rawProjectRoot())
+        assertEquals(PathGuard.DEFAULT_ROOT, PathGuard.projectRoot())
+    }
+
+    @Test
     fun givenABlankProviderResult_whenTheProjectRootIsQueried_thenItFallsThroughToTheNextSource() {
         PathGuard.setProjectRootForTesting(null)
         PathGuard.setProjectRootProvider { "  " }
