@@ -69,8 +69,15 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     @Volatile
     private var llmService: LlmInferenceService? = null
 
-    /** Orders a [resolveLlmService] write against the clear-and-cancel in [teardown]. */
+    /** Orders a [resolveLlmService] write against every clear of [llmService]. */
     private val serviceLock = Any()
+
+    /**
+     * Counts how often the cached router has been dropped; guarded by [serviceLock]. A lookup
+     * reads it before it starts and writes only if it has not moved, so a resolution overtaken
+     * by a clear cannot put the stale router back.
+     */
+    private var serviceEpoch = 0
     private var editorService: IdeEditorService? = null
     private var uiService: IdeUIService? = null
 
@@ -124,9 +131,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private val recoveryToken = Any()
 
     /**
-     * When the current phase of a non-idle capture started, so a wedged state can't kill the
-     * button. Restarted at PROCESSING so it measures the generation [STALE_CAPTURE_MS] bounds
-     * rather than the listening that came before it.
+     * When the current phase of a capture started, so a wedged PROCESSING can't kill the button.
+     * Restarted once a transcript arrives so it measures the generation [STALE_CAPTURE_MS]
+     * bounds rather than the listening that came before it.
      */
     private var captureStartedAt = 0L
 
@@ -203,6 +210,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun resolveLlmService(): LlmInferenceService? {
         llmService?.let { return it }
 
+        val epoch = synchronized(serviceLock) { serviceEpoch }
         val service = try {
             SharedServices.get(LlmInferenceService::class.java)
                 ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
@@ -217,10 +225,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             return null
         }
 
-        // teardown() cancels the scope and clears the field under this lock, so a lookup that
-        // overlapped a disable cannot write AI Core's router back and pin its ClassLoader.
+        // Both clears happen under this lock, so a lookup that overlapped one cannot write AI
+        // Core's router back and pin its ClassLoader: teardown() cancels the scope, and
+        // forgetLlmService() moves the epoch on without touching it.
         synchronized(serviceLock) {
-            if (!scope.isActive) return null
+            if (!scope.isActive || serviceEpoch != epoch) return null
             llmService = service
         }
         logger?.info("LlmInferenceService resolved - voice generation enabled")
@@ -239,7 +248,12 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     private fun forgetLlmService(pluginId: String) {
         if (pluginId != AI_CORE_PLUGIN_ID) return
-        llmService = null
+        // Deactivating AI Core does not cancel our scope, so the epoch is what tells a lookup
+        // already in flight that the router it is holding belongs to an unloaded plugin.
+        synchronized(serviceLock) {
+            serviceEpoch++
+            llmService = null
+        }
         logger?.info("AI Core went away - dropped the cached LlmInferenceService")
     }
 
@@ -263,9 +277,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         if (::context.isInitialized) {
             runCatching { context.removePluginLifecycleListener(aiCoreLifecycleListener) }
         }
-        // Cancelled and cleared together: resolveLlmService takes the same lock, so an in-flight
-        // resolution cannot cache the router again after this returned.
+        // Cancelled and cleared together: resolveLlmService takes the same lock and re-checks
+        // both guards, so an in-flight resolution cannot cache the router again after this
+        // returned - including after activate() has handed the plugin a fresh scope.
         synchronized(serviceLock) {
+            serviceEpoch++
             scope.cancel()
             llmService = null
         }
@@ -354,11 +370,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun startVoiceCapture() {
         val ctx = hostContext()
 
-        // One capture at a time: a second tap would race the first for the microphone, insert
-        // twice, and leave the icon describing whichever run finished last. A capture stuck
-        // past the LLM timeout is treated as over.
-        val elapsed = System.currentTimeMillis() - captureStartedAt
-        if (recordingState != RecordingState.IDLE && elapsed < STALE_CAPTURE_MS) {
+        // Refuse a second tap mid-generation until the capture goes stale; one while RECORDING
+        // instead restarts the capture, since nothing else bounds a recognizer that never settles.
+        if (recordingState == RecordingState.PROCESSING &&
+            System.currentTimeMillis() - captureStartedAt < STALE_CAPTURE_MS
+        ) {
             logger?.info("Ignoring the tap: a capture is already $recordingState")
             toast(str(R.string.stt_busy))
             return
@@ -884,7 +900,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 return null
             }
             if (response.success) {
-                response.text?.let { stripCodeFences(it) }?.takeIf { it.isNotBlank() }
+                response.text?.let { stripCodeFences(it, language) }?.takeIf { it.isNotBlank() }
             } else {
                 logger?.warn("Code generation failed: ${response.error}")
                 null
@@ -920,29 +936,35 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * receives code rather than a lead-in line, backticks and a language tag.
      *
      * @param raw the backend's response text
+     * @param language the open file's language id, which decides whether an unfenced sentence is
+     *   prose to drop or content to keep
      * @return the fenced block's body, the code of an unfenced reply, or empty when the reply
      *   held no code at all
      */
-    private fun stripCodeFences(raw: String): String {
+    private fun stripCodeFences(raw: String, language: String): String {
         val lines = raw.trim().lines()
         // The fence can open on any line: a model often writes "Here is the code:" first.
         val opening = lines.indexOfFirst { it.trimStart().startsWith(FENCE) }
-        if (opening < 0) return dropProse(lines)
+        if (opening < 0) return dropProse(lines, language)
 
         // The opening line can carry code after its info string whether or not it also closes.
         val afterFence = lines[opening].trim().removePrefix(FENCE)
         val closesInline = afterFence.endsWith(FENCE)
         val opener = afterFence.removeSuffix(FENCE).trim()
-        // A lone token on an opening line that does not close is an info string by definition,
-        // so it goes whether or not LANGUAGE_TAGS names it - `dart`, `kts` and `rust` were all
-        // reaching the file as a bare identifier. A tag followed by code still keeps the code.
+        // An opening line that does not close carries an info string, never code - unless the
+        // model put code there anyway, which is what [isInfoString] tells apart.
         val firstCodeLine =
-            if (!closesInline && !opener.contains(' ')) "" else stripLanguageInfo(opener)
+            if (!closesInline && isInfoString(opener)) "" else stripLanguageInfo(opener)
 
         val rest = lines.drop(opening + 1)
         val closing = rest.indexOfFirst { it.trimStart().startsWith(FENCE) }
-        // An unclosed fence (a reply truncated at maxTokens) keeps everything that did arrive.
-        val body = if (closing >= 0) rest.take(closing) else rest
+        // An inline close ends the block on the opening line, so what follows is the model's own
+        // explanation. An unclosed fence (a reply truncated at maxTokens) keeps what did arrive.
+        val body = when {
+            closesInline -> emptyList()
+            closing >= 0 -> rest.take(closing)
+            else -> rest
+        }
 
         return (if (firstCodeLine.isEmpty()) body else listOf(firstCodeLine) + body)
             .joinToString("\n")
@@ -958,14 +980,47 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * reply yields empty, which the caller reports as a failed generation and answers with the
      * raw transcript.
      *
+     * Skipped for the languages whose real content is sentence-shaped. [currentLanguageId] feeds
+     * the open file's own id into the prompt, so a Markdown or YAML request comes back as the
+     * prose this would delete - `## Setup` and `Description: ...` are the file, not framing.
+     * Elsewhere a drop is logged, because losing a line silently reads as a short answer from
+     * the model rather than as an edit made here.
+     *
      * @param lines the trimmed reply, split into lines
+     * @param language the open file's language id
      * @return the reply without its prose framing, or empty when it holds nothing else
      */
-    private fun dropProse(lines: List<String>): String =
-        lines.dropWhile { it.isBlank() || isProse(it.trim()) }
+    private fun dropProse(lines: List<String>, language: String): String {
+        if (language.lowercase() in PROSE_LANGUAGES) return lines.joinToString("\n").trim()
+
+        val kept = lines.dropWhile { it.isBlank() || isProse(it.trim()) }
             .dropLastWhile { it.isBlank() || isProse(it.trim()) }
-            .joinToString("\n")
-            .trim()
+        if (kept.size != lines.size) {
+            logger?.info("Dropped ${lines.size - kept.size} prose line(s) from an unfenced reply")
+        }
+        return kept.joinToString("\n").trim()
+    }
+
+    /**
+     * Tells an info string from code a model wrote on the opening fence line. Markdown says
+     * everything after the fence is the info string, and F18's `kotlin fun main() {` is why this
+     * cannot simply be believed, so the shape decides: a lone token names a language, and
+     * `{1,3}` or `title="Foo.kt"` after one are attributes. Anything else is kept as code.
+     *
+     * @param opener the opening fence line, fence markers removed and trimmed
+     * @return true when the line carries no code
+     */
+    private fun isInfoString(opener: String): Boolean {
+        val tokens = opener.split(' ', '\t').filter { it.isNotBlank() }
+        if (tokens.size <= 1) return true
+        val attributes = tokens.drop(1)
+        // A brace group may hold spaces of its own, so it is matched across the whole remainder.
+        if (attributes.first().startsWith('{') && attributes.last().endsWith('}')) return true
+        return attributes.all {
+            '=' in it || it.startsWith('.') || it.startsWith('#') ||
+                it.startsWith('{') || it.endsWith('}')
+        }
+    }
 
     /**
      * Detects a natural-language line: a lead-in ("Here is the code:") or a refusal ("I cannot
@@ -1257,6 +1312,15 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         /** Three words or more, matching the sibling's isPreamble; shorter lines stay. */
         private const val MIN_PROSE_SPACES = 2
+
+        /**
+         * Host language ids whose files are sentence-shaped, so prose filtering would delete the
+         * answer instead of its framing. Matched against [currentLanguageId], which is the
+         * editor's id (`md`, `txt`), not the fence tag the model writes.
+         */
+        private val PROSE_LANGUAGES = setOf(
+            "markdown", "md", "text", "plaintext", "txt", "yaml", "yml", "properties",
+        )
 
         /** Bare fence infos ("java", "kotlin", ...) that are never code. */
         private val LANGUAGE_TAGS = setOf(
