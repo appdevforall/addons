@@ -297,8 +297,13 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * retry cannot build a recognizer for a plugin that is going away, and the state is reset
      * because nothing else will: a teardown mid-recovery would otherwise leave the toolbar
      * spinning on a capture that no longer exists.
+     *
+     * Bumping [recognitionAttempt] covers what the token cannot reach: a support answer or a
+     * recognizer callback already queued on the main looper is not a tokened post, so the only
+     * thing that can still stop it is failing the attempt check it carries.
      */
     private fun endCapture() {
+        recognitionAttempt++
         mainHandler.removeCallbacksAndMessages(recoveryToken)
         destroyRecognizer()
         destroySupportRecognizer()
@@ -601,6 +606,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun checkLanguageSupport() {
         val locale = activeLocale
+        // The support answer arrives on the main looper untokened, so it carries this instead.
+        val attempt = recognitionAttempt
         val recognizer = try {
             SpeechRecognizer.createSpeechRecognizer(hostContext())
         } catch (e: Exception) {
@@ -633,6 +640,13 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                         handled = true
                         mainHandler.removeCallbacks(giveUp)
                         destroySupportRecognizer()
+                        // Teardown and the next tap both bump the attempt; this is where a
+                        // result that outlived its capture is dropped, since neither can
+                        // cancel a callback the executor has already queued.
+                        if (attempt != recognitionAttempt) {
+                            logger?.info("Dropping a support answer for a capture that is over")
+                            return
+                        }
                         logger?.info(
                             "Support for ${locale.toLanguageTag()}: " +
                                 "installed=${support.installedOnDeviceLanguages}, " +
@@ -732,9 +746,10 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         // triggerModelDownload only queues the request: the recognizer binds to the service
         // first and drops everything still queued when it is destroyed, so destroying it in
         // this same tick cancelled the download we just asked for. Hold it a moment instead.
+        // Untokened: the next tap clears recoveryToken, which would drop this release and
+        // orphan the recognizer. The expected check makes it a no-op once the field moved on.
         mainHandler.postDelayed(
             { destroySupportRecognizer(recognizer) },
-            recoveryToken,
             PACK_REQUEST_HOLD_MS,
         )
     }
@@ -778,7 +793,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * pack transcribes es-ES speech).
      *
      * @param skipRequested drops [locale]'s own tag from the candidates, for the caller that
-     *   has already watched it fail
+     *   has already watched it fail; that makes the exact match below moot, so such a caller
+     *   is always answered by the region fallback
      * @return the tag normalized, so callers can hand it to [Locale.forLanguageTag], or null
      *   when the language is absent
      */
