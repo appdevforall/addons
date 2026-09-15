@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aicore.backends.SelectedBackend
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.managers.ChatStorageManager
+import com.itsaky.androidide.plugins.aicore.managers.ProjectKey
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
@@ -46,11 +47,17 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +68,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -93,6 +102,9 @@ class ChatViewModel(
 
         /** Sampling temperature for a backend that declares no preference of its own. */
         private const val DEFAULT_TEMPERATURE = 0.2f
+
+        /** Quiet period a debounced persist waits out; see [schedulePersist]. */
+        private const val PERSIST_DEBOUNCE_MS = 1_000L
 
         /** Max open files named in the prompt's IDE-context block. */
         private const val MAX_CONTEXT_OPEN_FILES = 8
@@ -230,10 +242,10 @@ class ChatViewModel(
      */
     private var backendCheckSequence = 0
 
-    private val generationEpoch = java.util.concurrent.atomic.AtomicInteger(0)
+    private val generationEpoch = AtomicInteger(0)
 
     /** True while a generation is admitted and its coroutine has not yet unwound; gates re-entry. */
-    private val isGenerating = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val isGenerating = AtomicBoolean(false)
 
     /** Whether the current run's most recent tool batch failed; reset per run. */
     @Volatile
@@ -270,6 +282,43 @@ class ChatViewModel(
     private var stateUpdateJob: Job? = null
 
     private lateinit var storageManager: ChatStorageManager
+
+    /**
+     * Namespace of the project the live sessions belong to, so the fragment can notice the open
+     * project changing under a ViewModel that outlives it. Null until storage is initialized.
+     */
+    var activeProjectKey: String? = null
+        private set
+
+    /**
+     * Coalesces the burst of [syncMessageToSession] calls a streamed reply makes into one write.
+     * Main-thread only, like every call that schedules or cancels it.
+     */
+    private var persistJob: Job? = null
+
+    /**
+     * Where writes actually run. Deliberately not [viewModelScope]: that is already cancelled by
+     * the time [onCleared] asks for the last write, and this scope must outlive it. A failure
+     * reaching here is logged rather than thrown, so a full disk cannot take the IDE down.
+     */
+    private val persistScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e ->
+            logError("Chat history write failed", e)
+        }
+    )
+
+    /** Held for the whole of a write, so two writes can never interleave in the same prefs file. */
+    private val persistMutex = Mutex()
+
+    /** Numbers each snapshot handed to [persistScope]; see the staleness check in [persistState]. */
+    private val persistTicket = AtomicLong(0)
+
+    /**
+     * Ticket of the newest snapshot written, per project namespace; read and written under
+     * [persistMutex]. Per namespace because the flush of the outgoing project on a switch is older
+     * than the incoming project's first write, and one counter discarded it as stale.
+     */
+    private val lastWrittenTicket = mutableMapOf<String, Long>()
 
     fun isStorageInitialized(): Boolean = ::storageManager.isInitialized
 
@@ -354,8 +403,18 @@ class ChatViewModel(
         )
     }
 
-    fun initializeStorage(context: android.content.Context) {
-        storageManager = ChatStorageManager(context)
+    /**
+     * Points storage at [projectKey]'s history and loads it, replacing whatever was loaded before.
+     *
+     * Callers switching projects must [persistState] first: the live sessions still belong to the
+     * outgoing project, and this call is the moment they stop being reachable.
+     *
+     * @param context any Android context; the application one, since this outlives the fragment.
+     * @param projectKey the open project's namespace, from [ProjectKey].
+     */
+    fun initializeStorage(context: android.content.Context, projectKey: String) {
+        activeProjectKey = projectKey
+        storageManager = ChatStorageManager(context, projectKey)
         loadSessions()
     }
 
@@ -376,23 +435,66 @@ class ChatViewModel(
      * Writes the transcript to disk if storage is up. Public because this ViewModel now outlives
      * the fragment, so [onCleared] fires only on plugin dispose and can no longer be the only
      * writer.
+     *
+     * Call it from the main thread. It returns as soon as it has taken its snapshot; serializing
+     * and writing happen on [persistScope], in the order the snapshots were taken.
      */
     fun persistState() {
+        persistJob?.cancel()
+        persistJob = null
         if (!isStorageInitialized()) {
             AgentTrace.detail("PERSIST", "skipped=storage not initialized")
             return
         }
-        persistSessions()
+        // Read on the main thread, which owns all three: the manager is swapped on a project
+        // change, and writing the outgoing project's sessions through the incoming project's
+        // manager is exactly the bleed this ticket removes.
+        val manager = storageManager
+        val projectKey = activeProjectKey ?: ProjectKey.NO_PROJECT
+        val currentSessionId = _currentSessionId.value
+        // Safe to hand straight to the serializer, which runs on another thread: a session's
+        // messages are immutable, so a running turn replaces the session rather than growing the
+        // list under Gson's feet.
+        val sessions = _sessions.value
+        val ticket = persistTicket.incrementAndGet()
+
         AgentTrace.detail(
             "PERSIST",
-            "sessions=${_sessions.value.size} messages=${_messages.value.size} " +
-                "session=${_currentSessionId.value}"
+            "sessions=${sessions.size} messages=${_messages.value.size} " +
+                "session=$currentSessionId"
         )
+        persistScope.launch {
+            persistMutex.withLock {
+                // Coroutines dispatched to the IO pool do not start in the order they were
+                // launched, so an older snapshot can arrive after a newer one has landed. Only a
+                // snapshot of the same project can supersede this one; another project's writes go
+                // to another namespace and say nothing about how current this one is.
+                if (ticket < (lastWrittenTicket[projectKey] ?: 0L)) return@withLock
+                lastWrittenTicket[projectKey] = ticket
+                manager.persist(sessions, currentSessionId)
+            }
+        }
     }
 
-    private fun persistSessions() {
-        storageManager.saveSessions(_sessions.value)
-        storageManager.saveCurrentSessionId(_currentSessionId.value)
+    /**
+     * Persists shortly after the last change, rather than on the change itself.
+     *
+     * [syncMessageToSession] runs once per streamed token, and every write serializes every session
+     * in the namespace, so writing on each one would snapshot and serialize the whole history per
+     * token. The delay bounds what a process kill can cost to the tokens of the last second; a run
+     * that ends normally writes again as it finishes.
+     *
+     * Main-dispatched because [persistState] reads main-confined state before handing it off, and
+     * because [persistJob] is only ever touched from that thread.
+     */
+    private fun schedulePersist() {
+        persistJob?.cancel()
+        persistJob = viewModelScope.launch(Dispatchers.Main) {
+            delay(PERSIST_DEBOUNCE_MS)
+            // Cleared first so the write below does not cancel the coroutine running it.
+            persistJob = null
+            persistState()
+        }
     }
 
     /**
@@ -422,9 +524,32 @@ class ChatViewModel(
      */
     private fun removeMessageFromSession(messageId: String) {
         _messages.value = _messages.value.filter { it.id != messageId }
-        _currentSessionId.value
-            ?.let { id -> _sessions.value.firstOrNull { it.id == id } }
-            ?.messages?.removeAll { it.id == messageId }
+        val session = currentSessionOrNull() ?: return
+        replaceCurrentSessionMessages(session.messages.filter { it.id != messageId })
+    }
+
+    /**
+     * @return the session [_currentSessionId] names, or null when none is selected or it names a
+     *   session the list no longer holds.
+     */
+    private fun currentSessionOrNull(): ChatSession? {
+        val sessionId = _currentSessionId.value ?: return null
+        return _sessions.value.firstOrNull { it.id == sessionId }
+    }
+
+    /**
+     * Publishes the current session with [messages] in place of its transcript.
+     *
+     * Rebuilt around a copied session rather than edited in place: [_sessions] holds one immutable
+     * value, and an in-place edit reaches collectors equal to the value they already hold.
+     *
+     * @param messages the current session's new transcript.
+     */
+    private fun replaceCurrentSessionMessages(messages: List<ChatMessage>) {
+        val sessionId = _currentSessionId.value ?: return
+        _sessions.value = _sessions.value.map {
+            if (it.id == sessionId) it.copy(messages = messages) else it
+        }
     }
 
     /**
@@ -432,19 +557,18 @@ class ChatViewModel(
      * Updates or adds the message to the session's message list.
      */
     private fun syncMessageToSession(message: ChatMessage) {
-        _currentSessionId.value?.let { sessionId ->
-            val session = _sessions.value.firstOrNull { it.id == sessionId }
-            if (session != null) {
-                val existingIndex = session.messages.indexOfFirst { it.id == message.id }
-                if (existingIndex >= 0) {
-                    session.messages[existingIndex] = message
-                } else {
-                    session.messages.add(message)
-                }
-                // Emit immutable snapshot to trigger StateFlow update
-                _messages.value = session.messages.toList()
+        val session = currentSessionOrNull() ?: return
+        val existingIndex = session.messages.indexOfFirst { it.id == message.id }
+        val updated = if (existingIndex >= 0) {
+            session.messages.mapIndexed { index, existing ->
+                if (index == existingIndex) message else existing
             }
+        } else {
+            session.messages + message
         }
+        replaceCurrentSessionMessages(updated)
+        _messages.value = updated
+        schedulePersist()
     }
 
     /**
@@ -1499,12 +1623,13 @@ class ChatViewModel(
      * Create a new chat session.
      */
     fun createNewSession() {
-        val newSession = ChatSession()
+        val newSession = ChatSession(projectKey = activeProjectKey)
         _sessions.value = _sessions.value + newSession
         _currentSessionId.value = newSession.id
         _messages.value = emptyList()
         _history.value = emptyList()
         forgetRetryPoint()
+        persistState()
     }
 
     /**
@@ -1521,6 +1646,7 @@ class ChatViewModel(
         _messages.value = session.messages.toList()
         _history.value = emptyList()
         forgetRetryPoint()
+        persistState()
     }
 
     /**
@@ -1542,6 +1668,7 @@ class ChatViewModel(
             _currentSessionId.value = remaining?.id
             _messages.value = remaining?.messages ?: emptyList()
         }
+        persistState()
     }
 
     /**
@@ -1595,13 +1722,8 @@ class ChatViewModel(
         }
         _messages.value = finalized
 
-        // Mirror the change into the current session's backing list.
-        _currentSessionId.value?.let { sessionId ->
-            _sessions.value.firstOrNull { it.id == sessionId }?.let { session ->
-                session.messages.clear()
-                session.messages.addAll(finalized)
-            }
-        }
+        // Mirror the change into the current session's transcript.
+        replaceCurrentSessionMessages(finalized)
     }
 
     /**
@@ -1635,8 +1757,10 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         ToolSourceStore.shared.removeChangeListener(toolSourcesChanged)
-        persistState()
+        // Stopped first, so the turns it finalizes are in the snapshot: the debounced write it
+        // schedules cannot run, since viewModelScope is already cancelled by the time we get here.
         stopProcessing(reason = "viewModel cleared")
+        persistState()
         stopStateTimer()
     }
 }
