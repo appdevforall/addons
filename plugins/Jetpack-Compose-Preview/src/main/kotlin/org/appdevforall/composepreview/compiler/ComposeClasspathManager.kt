@@ -41,6 +41,8 @@ class ComposeClasspathManager(private val context: Context) {
         "kotlin-reflect" to "org/jetbrains/kotlin/kotlin-reflect",
         "kotlin-script-runtime" to "org/jetbrains/kotlin/kotlin-script-runtime",
         "trove4j" to "org/jetbrains/intellij/deps/trove4j",
+        "kotlinx-coroutines" to "org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm",
+        "compose-compiler-plugin" to "org/jetbrains/kotlin/kotlin-compose-compiler-plugin-embeddable",
         "annotations" to "org/jetbrains/annotations"
     )
 
@@ -160,7 +162,8 @@ class ComposeClasspathManager(private val context: Context) {
     }
 
     fun getCompilerPlugin(): File {
-        return File(composeDir, "compose-compiler-plugin.jar")
+        return findMavenJar("compose-compiler-plugin")
+            ?: error("kotlin-compose-compiler-plugin-embeddable not found in $localMavenRepo")
     }
 
     fun getKotlinStdlib(): File? {
@@ -174,6 +177,7 @@ class ComposeClasspathManager(private val context: Context) {
             findMavenJar("kotlin-reflect")?.let { add(it) }
             findMavenJar("kotlin-script-runtime")?.let { add(it) }
             findMavenJar("trove4j")?.let { add(it) }
+            findMavenJar("kotlinx-coroutines")?.let { add(it) }
             findMavenJar("annotations")?.let { add(it) }
         }
         return jars.filter { it.exists() }
@@ -181,9 +185,9 @@ class ComposeClasspathManager(private val context: Context) {
     }
 
     fun getRuntimeJars(): List<File> {
-        val compilerPlugin = getCompilerPlugin()
+        val bundledPlugin = File(composeDir, "compose-compiler-plugin.jar")
         return composeDir.listFiles { file ->
-            file.extension == "jar" && file != compilerPlugin
+            file.extension == "jar" && file != bundledPlugin
         }?.toList() ?: emptyList()
     }
 

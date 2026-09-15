@@ -1,45 +1,29 @@
 package org.appdevforall.codeonthego.layouteditor.utils
 
 import android.Manifest
-import android.app.Activity
-import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.view.View
-import androidx.activity.result.ActivityResultCaller
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import org.appdevforall.codeonthego.layouteditor.R
 import org.appdevforall.codeonthego.layouteditor.utils.SBUtils.Companion.make
 
 /**
- * Class for FilePicker. Works from either a Fragment (plugin editor) or an AppCompatActivity
- * (legacy sub-activities), registering its result launchers on the given caller.
+ * Class for FilePicker. Registers its result launchers on the hosting fragment.
  */
-abstract class FilePicker private constructor(
-  caller: ActivityResultCaller,
-  private val activityProvider: () -> Activity,
-  private val contextProvider: () -> Context,
-) {
-  constructor(fragment: Fragment) : this(
-    fragment,
-    { fragment.requireActivity() },
-    { fragment.requireContext() },
-  )
-
-  constructor(activity: AppCompatActivity) : this(activity, { activity }, { activity })
+abstract class FilePicker(private val fragment: Fragment) {
 
   private val getFile: ActivityResultLauncher<String> =
-    caller.registerForActivityResult(ActivityResultContracts.GetContent()) { onPickFile(it) }
+    fragment.registerForActivityResult(ActivityResultContracts.GetContent()) { onPickFile(it) }
 
   private val reqPermission: ActivityResultLauncher<String> =
-    caller.registerForActivityResult(ActivityResultContracts.RequestPermission()) { onRequestPermission(it) }
+    fragment.registerForActivityResult(ActivityResultContracts.RequestPermission()) { onRequestPermission(it) }
 
-  private fun contentRoot(): View = activityProvider().findViewById(android.R.id.content)
+  private fun contentRoot(): View = fragment.requireActivity().findViewById(android.R.id.content)
 
   private fun onRequestPermission(isGranted: Boolean) {
     if (isGranted) make(contentRoot(), R.string.permission_granted)
@@ -70,7 +54,7 @@ abstract class FilePicker private constructor(
       mimeType == "image/*" || mimeType == "image/png" || mimeType == "image/jpg" || mimeType == "image/jpeg"
 
     if (isImageType) {
-      val ctx = contextProvider()
+      val ctx = fragment.requireContext()
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_MEDIA_IMAGES)
           == PackageManager.PERMISSION_DENIED

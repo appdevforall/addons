@@ -1,30 +1,23 @@
 package org.appdevforall.codeonthego.layouteditor.utils
 
 import android.net.Uri
-import androidx.activity.result.ActivityResultCaller
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.Fragment
 
 /**
  * FileCreator Class is used to create a file with given name and MIME Type.
  */
-abstract class FileCreator(caller: ActivityResultCaller) {
+abstract class FileCreator(fragment: Fragment) {
   /** To create a file  */
   private val createFile: ActivityResultLauncher<String>
 
   /** MIME Type of file  */
   private var mimeType = "*/*"
 
-  /**
-   * Constructor of class
-   *
-   * @param actvty Instance of AppCompatActivity
-   */
   init {
-    // Set MIME type
-    // Register activity result for CreateDocument
     this.createFile =
-      caller.registerForActivityResult<String, Uri>(
+      fragment.registerForActivityResult<String, Uri>(
         ActivityResultContracts.CreateDocument(mimeType)
       ) { onCreateFile(it) }
   }
