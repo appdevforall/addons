@@ -61,14 +61,15 @@
     <li>a pack for <b>another region</b> of the same language is used right away
       (an es-US pack understands es-ES speech);</li>
     <li>otherwise the missing pack is <b>requested for next time</b> and this
-      capture continues <b>online</b>, so the words you just spoke still land.
-      Pack downloads are best effort — Android does not always report them — so
-      nothing here waits on one.</li>
+      capture continues <b>online</b>. Pack downloads are best effort — Android
+      does not always report them — so nothing here waits on one.</li>
   </ul>
-  <p>Either way you get one message and one prompt to speak again. The
-  microphone button ignores taps while the plugin is turning your words into
-  code; a tap while it is still listening discards what you have said so far and
-  starts a fresh capture.</p>
+  <p>Either way the recognition starts over, so you get one message and one
+  prompt to <b>say it again</b> — the words from the failed attempt are not
+  carried across. The microphone button ignores taps while the plugin is turning
+  your words into code; a tap while it is still listening discards what you have
+  said so far and starts a fresh capture, or stops the capture if the recognizer
+  never got as far as opening the microphone.</p>
 
   <h2>Privacy</h2>
   <div class="note">
