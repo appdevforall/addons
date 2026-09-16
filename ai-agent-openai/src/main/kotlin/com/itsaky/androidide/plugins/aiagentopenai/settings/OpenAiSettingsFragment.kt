@@ -380,6 +380,21 @@ class OpenAiSettingsFragment : Fragment() {
             dressKeySection()
         }
 
+        /**
+         * Report a request the server refused for credential reasons, if there is one. Read on
+         * resume as well, since a refusal can land while this pane is already open and that does
+         * not rebuild the view.
+         */
+        fun showCredentialFailure() {
+            viewModel.credentialFailure()?.let { failure ->
+                showStatus(
+                    verificationText,
+                    getString(R.string.msg_key_chat_failure, getString(failure.messageRes)),
+                    R.drawable.ic_key_rejected
+                )
+            }
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             val stored = viewModel.getApiKey()
             val savedApiKey = (stored as? KeystoreSecretStore.Stored.Value)?.plain
@@ -416,16 +431,8 @@ class OpenAiSettingsFragment : Fragment() {
                     ).show()
                 }
             }
-            // A request the server refused for credential reasons is reported here too, and named:
-            // this pane is where the key gets fixed, and the transcript that carried the reason has
-            // been left behind by the time the user arrives.
-            viewModel.credentialFailure()?.let { failure ->
-                showStatus(
-                    verificationText,
-                    getString(R.string.msg_key_chat_failure, getString(failure.messageRes)),
-                    R.drawable.ic_key_rejected
-                )
-            }
+            // This pane is where the key gets fixed, and the transcript naming the reason is gone.
+            showCredentialFailure()
         }
 
         // Not saved either, so a recreate cannot park a typed key in plain text in the state
@@ -457,6 +464,8 @@ class OpenAiSettingsFragment : Fragment() {
                         getString(R.string.msg_key_hint_edit_first)
                     }
                 )
+            } else {
+                showCredentialFailure()
             }
         }
 
@@ -490,6 +499,8 @@ class OpenAiSettingsFragment : Fragment() {
                 getString(R.string.msg_api_key_saved),
                 Toast.LENGTH_SHORT
             ).show()
+            // Collapsing the field only hides a revealed key: unmasked, the window stays secure.
+            reveal.mask()
             updateUiState(isEditing = false)
             statusTextView.text = savedApiKeyStatusText()
             showStatus(verificationText, resultText, resultIcon)

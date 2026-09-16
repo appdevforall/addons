@@ -222,6 +222,20 @@ class GeminiSettingsFragment : Fragment() {
             }
         }
 
+        /**
+         * Report a request Google refused for credential reasons, if there is one. Read on resume
+         * as well, since a refusal can land while this pane is already open and that does not
+         * rebuild the view.
+         */
+        fun showCredentialFailure() {
+            viewModel.credentialFailure()?.let { failure ->
+                showVerification(
+                    getString(R.string.msg_key_chat_failure, getString(failure.messageRes)),
+                    R.drawable.ic_key_rejected
+                )
+            }
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             val stored = viewModel.getGeminiApiKey()
             val savedApiKey = (stored as? KeystoreSecretStore.Stored.Value)?.plain
@@ -257,15 +271,8 @@ class GeminiSettingsFragment : Fragment() {
                     ).show()
                 }
             }
-            // A request Google refused for credential reasons is reported here too, and named:
-            // this pane is where the key gets fixed, and the transcript that carried the reason
-            // has been left behind by the time the user arrives.
-            viewModel.credentialFailure()?.let { failure ->
-                showVerification(
-                    getString(R.string.msg_key_chat_failure, getString(failure.messageRes)),
-                    R.drawable.ic_key_rejected
-                )
-            }
+            // This pane is where the key gets fixed, and the transcript naming the reason is gone.
+            showCredentialFailure()
         }
 
         // Not saved, so a recreate cannot park a typed or revealed key in plain text in the state
@@ -297,6 +304,8 @@ class GeminiSettingsFragment : Fragment() {
                         getString(R.string.msg_key_hint_edit_first)
                     }
                 )
+            } else {
+                showCredentialFailure()
             }
         }
 
@@ -330,6 +339,8 @@ class GeminiSettingsFragment : Fragment() {
                 getString(R.string.msg_api_key_saved),
                 Toast.LENGTH_SHORT
             ).show()
+            // Collapsing the field only hides a revealed key: unmasked, the window stays secure.
+            reveal.mask()
             updateUiState(isEditing = false)
             statusTextView.text = savedApiKeyStatusText()
             showVerification(resultText, resultIcon)

@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.ui
 
 import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
+import android.view.Choreographer
 import android.widget.EditText
 import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.aiagentopenai.R
@@ -82,6 +83,24 @@ internal class SecretRevealController(
         // Swapping the transformation drops the cursor to the start, so typing would continue in
         // front of the key rather than after it.
         field.setSelection(field.text?.length ?: 0)
-        onLegibleChanged(isRevealed)
+        // Masking only invalidates: the secret stays on screen until the next frame is drawn.
+        if (isRevealed) {
+            onLegibleChanged(true)
+        } else {
+            afterNextDraw { if (!isRevealed) onLegibleChanged(false) }
+        }
+    }
+
+    /**
+     * Run [action] once the next frame has been drawn, or right away if the field is already gone:
+     * a frame callback runs before that frame's traversal, so a message posted from it lands after
+     * the field has been redrawn.
+     */
+    private fun afterNextDraw(action: () -> Unit) {
+        if (!field.isAttachedToWindow) {
+            action()
+            return
+        }
+        Choreographer.getInstance().postFrameCallback { field.post(action) }
     }
 }

@@ -709,7 +709,6 @@ class OpenAiBackend(
         return future
     }
 
-    /** The stored key as a possibly-empty string, for the calls that treat "no key" as valid. */
     /**
      * When the stored key was saved, or 0 when none is stored.
      *
