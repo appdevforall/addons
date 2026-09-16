@@ -12,6 +12,7 @@
     <!-- Recording lifecycle -->
     <string name="stt_listening">Listening… speak now.</string>
     <string name="stt_start_failed">Couldn\'t start recording. Please close any app using the microphone and try again.</string>
+    <string name="stt_busy">Still working on your last voice command. Wait for it to finish, then tap the microphone again.</string>
 
     <!-- Results -->
     <string name="stt_no_words">No words were recognized. Speak clearly and a little louder, then tap the microphone to try again.</string>

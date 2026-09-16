@@ -31,11 +31,11 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.17" />
+            android:value="26.29" />
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.30" />
+            android:value="26.99" />
 
         <meta-data
             android:name="plugin.permissions"
