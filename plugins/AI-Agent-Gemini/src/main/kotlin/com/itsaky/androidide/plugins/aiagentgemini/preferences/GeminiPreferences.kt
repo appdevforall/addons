@@ -24,6 +24,14 @@ internal object GeminiPreferences {
     const val KEY_MODEL = "gemini_model"
 
     /**
+     * Embedding model id, e.g. `gemini-embedding-001`.
+     *
+     * Separate from [KEY_MODEL] because no Gemini model advertises both `generateContent` and
+     * `embedContent`, so one setting could never serve both.
+     */
+    const val KEY_EMBEDDING_MODEL = "gemini_embedding_model"
+
+    /**
      * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a
      * setting, so deliberately outside [OWNED_KEYS]: there is nothing here worth carrying over from
      * a legacy store, and a stale reason would accuse a key the user has since replaced.
@@ -42,7 +50,7 @@ internal object GeminiPreferences {
 
     /** Everything this backend owns; anything else in the old shared file is not ours to take. */
     private val OWNED_KEYS = listOf(
-        KEY_API_KEY, KEY_API_KEY_TIMESTAMP, KEY_API_KEY_VERIFIED, KEY_MODEL,
+        KEY_API_KEY, KEY_API_KEY_TIMESTAMP, KEY_API_KEY_VERIFIED, KEY_MODEL, KEY_EMBEDDING_MODEL,
     )
 
     /**

@@ -59,7 +59,8 @@ Every source file sits in a package named for its layer; nothing is loose at the
 root of `com/itsaky/androidide/plugins/aiagentgemini/`.
 
 - `plugin/GeminiPlugin.kt` — plugin entry point; registers the backend with ai-core
-- `backend/GeminiBackend.kt` — the REST transport, streaming (SSE) and model catalog
+- `backend/GeminiBackend.kt` — the REST transport, streaming (SSE), embeddings and model catalog
+- `backend/GeminiEmbeddingProtocol.kt` — the `batchEmbedContents` body, per-call cap and positional reply (pure)
 - `errors/GeminiErrorFormatter.kt` — turns an API failure into one translated sentence
 - `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 - `preferences/GeminiPreferences.kt` — this plugin's settings store, plus the

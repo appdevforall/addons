@@ -44,23 +44,24 @@
   Code on the Go's project search. Instead of matching only exact text, it ranks
   code by similarity of meaning, so a search for "read a file into a string" can
   surface the relevant method even when those exact words don't appear.</p>
-  <p>It is a <b>headless</b> plugin — it has no screens of its own. It
+  <p>It is a <b>headless</b> plugin &mdash; it has no screens of its own. It
   contributes an extra <b>"Semantic Results"</b> section to the existing project
-  search. Everything runs on-device.</p>
+  search.</p>
 
   <h2>Core functionality</h2>
   <ul>
-    <li><b>Semantic project search</b> — contributes ranked results via the IDE's
-      project-search extension point.</li>
-    <li><b>On-device indexing</b> — walks the project (capped, skipping
+    <li><b>Semantic project search</b> &mdash; contributes ranked results via the
+      IDE's project-search extension point.</li>
+    <li><b>Indexing</b> &mdash; walks the project (capped, skipping
       <code>build</code>/<code>.git</code> and similar), chunks files by
-      language-aware boundaries, and stores embeddings in a local SQLite
-      database.</li>
-    <li><b>Model embeddings when available</b> — uses AI Core's embedding service
-      when present.</li>
-    <li><b>Lexical fallback</b> — when AI Core embeddings aren't available, it
-      falls back to a local lexical embedding (lower quality, but always works
-      offline).</li>
+      language-aware boundaries, embeds those chunks in batches, and stores the
+      vectors in a local SQLite database.</li>
+    <li><b>Routed through your own AI selection</b> &mdash; it embeds with the
+      backend you chose in AI settings and that backend's embedding model. It
+      names no provider of its own.</li>
+    <li><b>Versioned vectors</b> &mdash; every row records the backend, model and
+      width that produced it; a search only ranks vectors of the same origin, and
+      changing either builds the index again.</li>
     <li><b>Cosine-similarity ranking</b> with a relevance cutoff so only strong
       matches are returned.</li>
   </ul>
@@ -71,21 +72,30 @@
     <tr><td><code>VectorSearchPlugin</code></td><td>Entry point. Implements
       <code>ProjectSearchExtension</code>; runs indexing on a background scope and
       answers search requests.</td></tr>
+    <tr><td><code>EmbedderResolver</code></td><td>Resolves the selected backend to
+      an <code>EmbeddingBackend</code>, or says which of the reasons it could
+      not.</td></tr>
     <tr><td><code>CodeChunker</code></td><td>Splits files into small, language-aware
       chunks with overlap for context.</td></tr>
+    <tr><td><code>EmbeddingBatches</code></td><td>Groups chunks into batched calls
+      so a large project is never held in memory whole.</td></tr>
     <tr><td><code>EmbeddingIndexingService</code></td><td>Collects files and stores
-      chunk embeddings as BLOBs in a local SQLite database
+      chunk vectors, with their provenance, in a local SQLite database
       (<code>embeddings.db</code>).</td></tr>
+    <tr><td><code>ReindexDecision</code></td><td>Decides whether the existing index
+      can answer the query, or has to be built again.</td></tr>
     <tr><td><code>VectorMath</code> / <code>VectorSearchService</code></td><td>Cosine
       similarity and top-K ranking of stored embeddings against the query.</td></tr>
   </table>
-  <p>Embeddings are requested from <b>AI Core</b> over the shared service registry
-  when available; the plugin contains no model and no native code of its own.</p>
+  <p>Embeddings are requested through <b>AI Core</b>'s inference service over the
+  shared service registry; the plugin contains no model, no HTTP client and no
+  native code of its own.</p>
 
   <h2>Usage</h2>
   <ol>
-    <li>(Optional) Install <b>AI Core</b> and select a local model for
-      higher-quality embeddings.</li>
+    <li>Install <b>AI Core</b> and an agent plugin whose backend embeds
+      (<b>OpenAI</b> or <b>Gemini</b>), then select it in AI settings and give it
+      a key.</li>
     <li>Install <b>Vector Search</b> via the Plugin Manager and restart the
       IDE.</li>
     <li>Use the IDE's <b>project search</b>. Semantic matches appear under a
@@ -93,20 +103,23 @@
       background index build.</li>
   </ol>
   <div class="note">
-    <b>Privacy:</b> indexing and search run entirely on-device. File contents are
-    chunked and stored in a local SQLite database; nothing leaves the device.
+    <b>Privacy:</b> the index is a local SQLite database, but the chunk text is
+    sent to the backend you selected in order to be embedded &mdash; indexing a
+    project sends its source to that provider. Vector Search never picks a
+    backend for you: with none selected, nothing is sent and nothing is indexed.
   </div>
 
   <h2>Key benefits</h2>
   <ul>
-    <li><b>Find code by meaning</b> — surfaces relevant code even without an exact
-      keyword match.</li>
-    <li><b>Fully offline</b> — no network use; embeddings and the index stay on the
-      device.</li>
-    <li><b>Always usable</b> — degrades gracefully to lexical embeddings when AI
-      Core isn't installed.</li>
-    <li><b>Lightweight</b> — no bundled model or native libraries; a compact SQLite
-      index.</li>
+    <li><b>Find code by meaning</b> &mdash; surfaces relevant code even without an
+      exact keyword match.</li>
+    <li><b>Honest about what it is</b> &mdash; with no embedder available it
+      contributes nothing, rather than presenting word matches as semantic
+      ones.</li>
+    <li><b>Provider-neutral</b> &mdash; it follows your AI selection and gains any
+      new backend that embeds, with no change here.</li>
+    <li><b>Lightweight</b> &mdash; no bundled model or native libraries; a compact
+      SQLite index.</li>
   </ul>
 </body>
 </html>

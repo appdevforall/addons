@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentopenai.settings
 
 import com.itsaky.androidide.plugins.PluginLogger
+import com.itsaky.androidide.plugins.aiagentopenai.backend.ModelCatalog
 import com.itsaky.androidide.plugins.aiagentopenai.backend.OpenAiBackend
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.plugin.OpenAiPlugin
@@ -65,10 +66,10 @@ class BackendOpenAiCatalogGateway(
         get() = OpenAiPlugin.getContext()?.logger
 
     override fun listModelsForSavedSettings(): CatalogResult =
-        await { it.listModels() }
+        await { it.listCatalog() }
 
     override fun listModels(apiKey: String, baseUrl: String): CatalogResult =
-        await { it.listModels(apiKey, baseUrl) }
+        await { it.listCatalog(apiKey, baseUrl) }
 
     /**
      * Runs [request] against the backend and awaits its future.
@@ -78,7 +79,7 @@ class BackendOpenAiCatalogGateway(
      * @param request the catalog call to make; picks which server and credential are used
      */
     private fun await(
-        request: (OpenAiBackend) -> CompletableFuture<List<String>>
+        request: (OpenAiBackend) -> CompletableFuture<ModelCatalog>
     ): CatalogResult {
         val backend = try {
             backendProvider()
@@ -95,7 +96,9 @@ class BackendOpenAiCatalogGateway(
         }
 
         return try {
-            CatalogResult.Success(future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty())
+            val catalog = future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                ?: ModelCatalog.EMPTY
+            CatalogResult.Success(catalog.chat, catalog.embedding)
         } catch (e: ExecutionException) {
             // The API failure the backend reported; its message carries the HTTP status.
             CatalogResult.Failed(e.cause ?: e)

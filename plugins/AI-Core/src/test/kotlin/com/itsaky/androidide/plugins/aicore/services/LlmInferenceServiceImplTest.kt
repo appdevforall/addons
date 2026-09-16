@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.io.IOException
 import java.util.concurrent.CompletableFuture
 import org.junit.Assert.*
 import org.junit.Before
@@ -318,6 +319,80 @@ class LlmInferenceServiceImplTest {
         assertEquals(1, healthy.cancelCount)
     }
 
+    @Test
+    fun givenAnEmbeddingBackend_whenAutoRouting_thenItIsResolvedLikeAChatTurn() {
+        // The point of ADFA-6054: an embedding request must land on the backend the user already
+        // chose for chat, not on a provider named by whoever asked for the vector.
+        service.registerBackend(EmbeddingRecordingBackend("local", vector = floatArrayOf(1f, 2f)))
+        service.registerBackend(EmbeddingRecordingBackend("gemini", vector = floatArrayOf(9f)))
+
+        val vector = service.getEmbeddings("chunk", AiBackend.AUTO).get()
+
+        assertArrayEquals(floatArrayOf(1f, 2f), vector, 0f)
+    }
+
+    @Test
+    fun givenABackendWithoutEmbeddings_whenEmbedding_thenAnEmptyVectorIsReturned() {
+        // The local backend's permanent path: no embeddings, no exception, no substitute provider.
+        service.registerBackend(RecordingBackend("local"))
+        val other = EmbeddingRecordingBackend("gemini", vector = floatArrayOf(9f))
+        service.registerBackend(other)
+
+        val vector = service.getEmbeddings("chunk", "local").get()
+
+        assertEquals(0, vector.size)
+        assertTrue("no substitute backend may be asked", other.embedded.isEmpty())
+    }
+
+    @Test
+    fun givenAnUnregisteredBackend_whenEmbedding_thenAnEmptyVectorIsReturned() {
+        val vector = service.getEmbeddings("chunk", "absent").get()
+
+        assertEquals(0, vector.size)
+    }
+
+    @Test
+    fun givenABackendThatThrowsSynchronously_whenEmbedding_thenNoExceptionReachesTheCaller() {
+        // Thrown before the future exists: this crosses a plugin boundary, so it must not escape.
+        service.registerBackend(object : RecordingBackend("local"), EmbeddingBackend {
+            override fun getEmbeddingModelId(): String = "broken"
+            override fun getEmbeddingDimensions(): Int = 0
+            override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> =
+                throw IllegalStateException("backend is wedged")
+        })
+
+        val vector = service.getEmbeddings("chunk", "local").get()
+
+        assertEquals(0, vector.size)
+    }
+
+    @Test
+    fun givenABackendWhoseFutureFails_whenEmbedding_thenNoExceptionReachesTheCaller() {
+        service.registerBackend(object : RecordingBackend("local"), EmbeddingBackend {
+            override fun getEmbeddingModelId(): String = "broken"
+            override fun getEmbeddingDimensions(): Int = 0
+            override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> =
+                CompletableFuture<List<FloatArray>>().apply {
+                    completeExceptionally(IOException("HTTP 401"))
+                }
+        })
+
+        val vector = service.getEmbeddings("chunk", "local").get()
+
+        assertEquals(0, vector.size)
+    }
+
+    @Test
+    fun givenABackendThatAnswersNothing_whenEmbedding_thenAnEmptyVectorIsReturned() {
+        // An empty batch answer is a protocol failure, not a vector; it must not become float[0]
+        // by way of an index-out-of-bounds somewhere downstream.
+        service.registerBackend(EmbeddingRecordingBackend("local", vector = null))
+
+        val vector = service.getEmbeddings("chunk", "local").get()
+
+        assertEquals(0, vector.size)
+    }
+
     /** A backend implementing only what [LlmBackend] declares as abstract. */
     private open class RecordingBackend(private val backendId: String) : LlmBackend {
 
@@ -374,6 +449,28 @@ class LlmInferenceServiceImplTest {
         ) {
             historySizes.add(history.size)
             prompts.add(prompt)
+        }
+    }
+
+    /**
+     * Mirrors a cloud backend that embeds.
+     *
+     * @param vector the single vector to answer with, or null to answer with no vectors at all
+     */
+    private class EmbeddingRecordingBackend(
+        backendId: String,
+        private val vector: FloatArray?,
+    ) : RecordingBackend(backendId), EmbeddingBackend {
+
+        val embedded = mutableListOf<List<String>>()
+
+        override fun getEmbeddingModelId(): String = "test-embedder"
+
+        override fun getEmbeddingDimensions(): Int = vector?.size ?: 0
+
+        override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> {
+            embedded.add(texts)
+            return CompletableFuture.completedFuture(listOfNotNull(vector))
         }
     }
 

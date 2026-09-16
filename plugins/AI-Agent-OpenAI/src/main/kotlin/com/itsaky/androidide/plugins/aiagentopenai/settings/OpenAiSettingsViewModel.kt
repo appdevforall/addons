@@ -53,6 +53,12 @@ class OpenAiSettingsViewModel(
             "gpt-4o",
             "gpt-4o-mini",
         )
+
+        /** The embedding half of [FALLBACK_MODELS], offered under the same conditions. */
+        private val FALLBACK_EMBEDDING_MODELS = listOf(
+            "text-embedding-3-small",
+            "text-embedding-3-large",
+        )
     }
 
     /**
@@ -72,15 +78,31 @@ class OpenAiSettingsViewModel(
     private val _selectedModel = MutableLiveData<String>()
     val selectedModel: LiveData<String> get() = _selectedModel
 
+    private val _modelsLoading = MutableLiveData(false)
+    val modelsLoading: LiveData<Boolean> get() = _modelsLoading
+
+    private val _embeddingModels =
+        MutableLiveData(OpenAiModelOptions(emptyList(), isLive = false))
+    val embeddingModels: LiveData<OpenAiModelOptions> get() = _embeddingModels
+
+    /**
+     * The embedding model the field should show, republished on the same terms as [selectedModel].
+     *
+     * Its own stream rather than a second use of [selectedModel]: the two are separate settings and
+     * a server can retire one while still offering the other.
+     */
+    private val _selectedEmbeddingModel = MutableLiveData<String>()
+    val selectedEmbeddingModel: LiveData<String> get() = _selectedEmbeddingModel
+
+    // Last, after every stream it publishes to. Kotlin runs initializers in declaration order, so
+    // an init block above them would call publishRememberedModels() while their backing fields are
+    // still null — which threw inside the ViewModel's constructor and left the pane blank.
     init {
         // This ViewModel is scoped to the settings pane, so it is rebuilt every time the pane
         // opens. Without this the model dropdown would be empty until the user tested the
         // connection again, which is what made the field look text-only on a second visit.
         publishRememberedModels()
     }
-
-    private val _modelsLoading = MutableLiveData(false)
-    val modelsLoading: LiveData<Boolean> get() = _modelsLoading
 
     /**
      * This plugin's own settings store — the same one [OpenAiBackend] reads at request time, so a
@@ -148,6 +170,7 @@ class OpenAiSettingsViewModel(
         if (rememberedFor != getBaseUrl()) {
             // Remembered from a different server, so it says nothing about this one.
             publishModels(OpenAiModelOptions(emptyList(), isLive = false))
+            publishEmbeddingModels(OpenAiModelOptions(emptyList(), isLive = false))
             return
         }
         val remembered =
@@ -155,6 +178,12 @@ class OpenAiSettingsViewModel(
         if (remembered.isNotEmpty()) {
             logger?.debug("$TAG: offering ${remembered.size} remembered models")
             publishModels(OpenAiModelOptions(remembered, isLive = false))
+        }
+        val rememberedEmbedding = RememberedModels.decode(
+            prefs.getString(OpenAiPreferences.KEY_REMEMBERED_EMBEDDING_MODELS, null)
+        )
+        if (rememberedEmbedding.isNotEmpty()) {
+            publishEmbeddingModels(OpenAiModelOptions(rememberedEmbedding, isLive = false))
         }
     }
 
@@ -181,6 +210,31 @@ class OpenAiSettingsViewModel(
     }
 
     /**
+     * Publishes [options] to the embedding picker and retires the saved embedding model when it is
+     * not among them.
+     *
+     * The same rule as [publishModels], applied to the other setting: a vector space carried over
+     * from another server does not fail, it silently ranks against an index it never shared.
+     */
+    private fun publishEmbeddingModels(options: OpenAiModelOptions) {
+        _embeddingModels.postValue(options)
+
+        val replacement = ModelSelection.adopt(
+            current = getEmbeddingModel(),
+            models = options.models,
+            isLive = options.isLive,
+            savedForThisServer = embeddingModelBelongsToSavedServer(),
+            preferred = OpenAiBackend.DEFAULT_EMBEDDING_MODEL,
+        ) ?: return
+
+        logger?.debug(
+            "$TAG: this server does not offer the saved embedding model; switching to $replacement"
+        )
+        saveEmbeddingModel(replacement)
+        _selectedEmbeddingModel.postValue(replacement)
+    }
+
+    /**
      * Whether the saved model was chosen for the server now configured.
      *
      * An unrecorded server counts as this one: settings written before the model was tracked per
@@ -188,6 +242,13 @@ class OpenAiSettingsViewModel(
      */
     private fun modelBelongsToSavedServer(): Boolean {
         val chosenFor = prefs()?.getString(OpenAiPreferences.KEY_MODEL_URL, null) ?: return true
+        return chosenFor == getBaseUrl()
+    }
+
+    /** [modelBelongsToSavedServer] for the embedding setting, which records its own origin. */
+    private fun embeddingModelBelongsToSavedServer(): Boolean {
+        val chosenFor = prefs()?.getString(OpenAiPreferences.KEY_EMBEDDING_MODEL_URL, null)
+            ?: return true
         return chosenFor == getBaseUrl()
     }
 
@@ -211,13 +272,27 @@ class OpenAiSettingsViewModel(
             return
         }
         publishModels(OpenAiModelOptions(FALLBACK_MODELS, isLive = false))
+        publishEmbeddingModels(OpenAiModelOptions(FALLBACK_EMBEDDING_MODELS, isLive = false))
     }
 
-    /** Stores [models] against the current server, so the next visit can offer them at once. */
-    private fun rememberModels(models: List<String>) {
-        val encoded = RememberedModels.encode(models) ?: return
+    /**
+     * Stores a fetched catalog against the current server, so the next visit can offer both
+     * pickers at once.
+     *
+     * One write for both halves and one origin key: they came from one listing, so remembering
+     * them separately would let a later read offer chat models from one server beside embedding
+     * models from another.
+     *
+     * @param models the chat half, as fetched
+     * @param embeddingModels the embedding half, as fetched
+     */
+    private fun rememberModels(models: List<String>, embeddingModels: List<String>) {
+        val encodedChat = RememberedModels.encode(models)
+        val encodedEmbedding = RememberedModels.encode(embeddingModels)
+        if (encodedChat == null && encodedEmbedding == null) return
         prefs()?.edit()
-            ?.putString(OpenAiPreferences.KEY_REMEMBERED_MODELS, encoded)
+            ?.putString(OpenAiPreferences.KEY_REMEMBERED_MODELS, encodedChat)
+            ?.putString(OpenAiPreferences.KEY_REMEMBERED_EMBEDDING_MODELS, encodedEmbedding)
             ?.putString(OpenAiPreferences.KEY_REMEMBERED_MODELS_URL, getBaseUrl())
             ?.apply()
     }
@@ -385,6 +460,27 @@ class OpenAiSettingsViewModel(
             ?: OpenAiBackend.DEFAULT_MODEL
 
     /**
+     * Stores [model] as the embedding model, against the server it was chosen for — see
+     * [OpenAiPreferences.KEY_EMBEDDING_MODEL_URL].
+     */
+    fun saveEmbeddingModel(model: String) {
+        val trimmed = model.trim()
+        if (trimmed.isEmpty()) return
+        prefs()?.edit()
+            ?.putString(OpenAiPreferences.KEY_EMBEDDING_MODEL, trimmed)
+            ?.putString(OpenAiPreferences.KEY_EMBEDDING_MODEL_URL, getBaseUrl())
+            ?.apply()
+    }
+
+    fun getEmbeddingModel(): String =
+        prefs()?.getString(
+            OpenAiPreferences.KEY_EMBEDDING_MODEL,
+            OpenAiBackend.DEFAULT_EMBEDDING_MODEL,
+        )
+            ?.takeIf { it.isNotBlank() }
+            ?: OpenAiBackend.DEFAULT_EMBEDDING_MODEL
+
+    /**
      * Ask the configured server which models it offers, and publish them to [models].
      *
      * Falls back to [FALLBACK_MODELS] when the lookup fails — which for a compatible server that
@@ -398,15 +494,21 @@ class OpenAiSettingsViewModel(
             try {
                 when (val result = catalogGateway.listModelsForSavedSettings()) {
                     is CatalogResult.Success -> {
-                        if (result.models.isEmpty()) {
+                        if (result.models.isEmpty() && result.embeddingModels.isEmpty()) {
                             logger?.warn("$TAG: server listed no models")
                             publishFallbackModels()
                         } else {
-                            logger?.debug("$TAG: fetched ${result.models.size} models")
+                            logger?.debug(
+                                "$TAG: fetched ${result.models.size} chat and " +
+                                    "${result.embeddingModels.size} embedding models"
+                            )
                             // Remembered before publishing, so a pane reopened straight after a
                             // successful test still finds the list.
-                            rememberModels(result.models)
+                            rememberModels(result.models, result.embeddingModels)
                             publishModels(OpenAiModelOptions(result.models, isLive = true))
+                            publishEmbeddingModels(
+                                OpenAiModelOptions(result.embeddingModels, isLive = true)
+                            )
                         }
                     }
                     // Logged by the gateway; degrade to something the user can override.

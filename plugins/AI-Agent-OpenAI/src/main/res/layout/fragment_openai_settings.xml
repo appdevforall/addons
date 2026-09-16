@@ -234,6 +234,47 @@
         android:text="@string/hint_openai_model_help"
         android:textAppearance="@style/Plugin.Text.Small" />
 
+    <!-- Embedding model. The other half of the same catalog: semantic search embeds with this one,
+         never with the chat model above. -->
+
+    <TextView
+        android:id="@+id/openai_embedding_model_label"
+        style="@style/Plugin.SectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:text="@string/label_openai_embedding_model" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/openai_embedding_model_box"
+        style="@style/PluginTextInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_openai_embedding_model"
+        app:endIconContentDescription="@string/cd_show_embedding_models"
+        app:endIconDrawable="@drawable/ic_dropdown"
+        app:endIconMode="custom">
+
+        <AutoCompleteTextView
+            android:id="@+id/openai_embedding_model_input"
+            style="@style/PluginTextInputEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:completionThreshold="0"
+            android:imeOptions="actionDone"
+            android:inputType="text"
+            android:maxLines="1"
+            android:popupBackground="@color/plugin_surface" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/openai_embedding_model_hint_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:text="@string/hint_openai_embedding_model_help"
+        android:textAppearance="@style/Plugin.Text.Small" />
+
     <!-- Connection test, which is also what fills the model dropdown: both are GET /v1/models. -->
 
     <com.google.android.material.button.MaterialButton

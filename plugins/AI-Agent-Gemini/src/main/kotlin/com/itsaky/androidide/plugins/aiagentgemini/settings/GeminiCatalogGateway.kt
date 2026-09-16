@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentgemini.settings
 
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentgemini.backend.GeminiBackend
+import com.itsaky.androidide.plugins.aiagentgemini.backend.ModelCatalog
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.plugin.GeminiPlugin
 import java.util.concurrent.CancellationException
@@ -63,10 +64,10 @@ class BackendGeminiCatalogGateway(
         get() = GeminiPlugin.getContext()?.logger
 
     override fun listModelsForSavedKey(): CatalogResult =
-        await { it.listModels() }
+        await { it.listCatalog() }
 
     override fun listModels(apiKey: String): CatalogResult =
-        await { it.listModels(apiKey) }
+        await { it.listCatalog(apiKey) }
 
     /**
      * Runs [request] against the backend and awaits its future.
@@ -76,7 +77,7 @@ class BackendGeminiCatalogGateway(
      * @param request the catalog call to make; picks which credential is used
      */
     private fun await(
-        request: (GeminiBackend) -> CompletableFuture<List<String>>
+        request: (GeminiBackend) -> CompletableFuture<ModelCatalog>
     ): CatalogResult {
         val backend = try {
             backendProvider()
@@ -93,7 +94,9 @@ class BackendGeminiCatalogGateway(
         }
 
         return try {
-            CatalogResult.Success(future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty())
+            val catalog = future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                ?: ModelCatalog.EMPTY
+            CatalogResult.Success(catalog.chat, catalog.embedding)
         } catch (e: ExecutionException) {
             // The API failure the backend reported; its message carries the HTTP status.
             CatalogResult.Failed(e.cause ?: e)

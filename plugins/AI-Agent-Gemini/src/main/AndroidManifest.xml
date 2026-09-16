@@ -34,7 +34,7 @@
              26.35 would name a release that cannot run this plugin. Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.36" />
+            android:value="26.39" />
 
         <meta-data
             android:name="plugin.max_ide_version"

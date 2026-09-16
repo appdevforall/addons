@@ -14,6 +14,9 @@ internal object NetworkTags {
 
     /** The ListModels catalog — `"GECT"`. */
     const val CATALOG = 0x47454354
+
+    /** Batch embedding — `"GEEM"`. */
+    const val EMBEDDING = 0x4745454D
 }
 
 /**

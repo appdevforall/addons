@@ -21,7 +21,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="Semantic code search using embeddings and vector similarity" />
+            android:value="Semantic code search using embeddings and vector similarity. Needs AI Core and an agent plugin whose backend produces embeddings." />
 
         <meta-data
             android:name="plugin.author"
@@ -29,11 +29,11 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.17" />
+            android:value="26.39" />
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.30" />
+            android:value="26.99" />
 
         <meta-data
             android:name="plugin.permissions"

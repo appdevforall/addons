@@ -1,6 +1,6 @@
 {
   "summary": "Searches the project by meaning, not only by exact text.",
-  "description": "Ranks search results by how close their meaning is to the words you typed, so you find related code that a plain text search would miss.",
+  "description": "Ranks search results by how close their meaning is to the words you typed, so you find related code that a plain text search would miss. Needs AI Core and an agent plugin whose backend produces embeddings.",
   "tags": [
     "search",
     "ai",
