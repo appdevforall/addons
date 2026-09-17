@@ -120,20 +120,53 @@ class ChatViewModelHistoryRestoreTest {
     }
 
     @Test
-    fun givenAFailedOrHalfStreamedAgentTurn_whenRestoring_thenItIsExcludedFromHistory() {
+    fun givenATurnStoppedMidStream_whenRestoring_thenItIsExcludedFromHistory() {
         seed(
             session(
                 "s1",
                 message("m1", "build the app", "USER"),
-                message("m2", "the backend is unreachable", "AGENT", status = "ERROR"),
-                message("m3", "the build succ", "AGENT", status = "LOADING"),
-                message("m4", "the build succeeded", "AGENT"),
+                // Zero duration is what finalizeInProgressMessages stamps on a turn Stop cut off.
+                message("m2", "the build succ", "AGENT", durationMs = 0),
+                message("m3", "the build succeeded", "AGENT", durationMs = 1200),
             )
         )
 
         val history = restoredViewModel().history.value
 
         assertEquals(listOf("build the app", "the build succeeded"), history.map { it.content })
+    }
+
+    @Test
+    fun givenATurnRenderedForDisplay_whenRestoring_thenTheModelsOwnTextIsUsed() {
+        seed(
+            session(
+                "s1",
+                message("m1", "delete the file", "USER"),
+                message("m2", "The action failed", "AGENT", historyText = "deleted it"),
+            )
+        )
+
+        val history = restoredViewModel().history.value
+
+        assertEquals(listOf("delete the file", "deleted it"), history.map { it.content })
+    }
+
+    @Test
+    fun givenTurnsOverTheCharacterBudget_whenRestoring_thenOnlyTheNewestFit() {
+        val long = "x".repeat(3_000)
+        seed(
+            session(
+                "s1",
+                message("m1", long, "USER"),
+                message("m2", long, "AGENT"),
+                message("m3", long, "USER"),
+            )
+        )
+
+        val history = restoredViewModel().history.value
+
+        // The oldest turn is what the budget drops; the two nearest the next message survive.
+        assertEquals(listOf(Role.ASSISTANT, Role.USER), history.map { it.role })
     }
 
     @Test
@@ -331,6 +364,17 @@ class ChatViewModelHistoryRestoreTest {
             """"messages":[${messages.joinToString(",")}]}"""
     }
 
-    private fun message(id: String, text: String, sender: String, status: String = "SENT"): String =
-        """{"id":"$id","text":"$text","sender":"$sender","status":"$status","timestamp":1}"""
+    private fun message(
+        id: String,
+        text: String,
+        sender: String,
+        status: String = "SENT",
+        durationMs: Long? = null,
+        historyText: String? = null,
+    ): String {
+        val duration = durationMs?.let { ""","durationMs":$it""" } ?: ""
+        val history = historyText?.let { ""","historyText":"$it"""" } ?: ""
+        return """{"id":"$id","text":"$text","sender":"$sender","status":"$status",""" +
+            """"timestamp":1$duration$history}"""
+    }
 }

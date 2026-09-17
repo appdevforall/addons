@@ -110,10 +110,16 @@ class ChatViewModel(
         private const val MAX_CONTEXT_OPEN_FILES = 8
 
         /**
-         * How many of a restored transcript's turns the model is given back. Bounds what a long
-         * conversation costs a small local model's context window; see [rebuildHistoryFrom].
+         * How many of a restored transcript's messages the model is given back; one exchange
+         * spends two. See [rebuildHistoryFrom].
          */
         private const val MAX_RESTORED_HISTORY = 40
+
+        /**
+         * Character budget for the same restore, since 40 messages carrying code blocks would
+         * otherwise push the next send past a small local model's created context.
+         */
+        private const val MAX_RESTORED_HISTORY_CHARS = 8_000
 
         /**
          * Path used in the tool-call examples when the IDE has nothing open, so there is no real one
@@ -1356,7 +1362,9 @@ class ChatViewModel(
                             text = displayText,
                             sender = Sender.AGENT,
                             status = MessageStatus.COMPLETED,
-                            durationMs = durationMs
+                            durationMs = durationMs,
+                            // Only when it differs, so a turn is not stored twice over.
+                            historyText = reply.historyText.takeIf { it != displayText }
                         )
                         _messages.value = _messages.value.map { if (it.id == agentMessageId) finalMsg else it }
                         syncMessageToSession(finalMsg)
@@ -1609,16 +1617,7 @@ class ChatViewModel(
      */
     fun clearMessages() {
         // Clear Chat must also stop any in-flight run, not just wipe the list.
-        AgentTrace.stage(
-            "CANCEL",
-            "reason=clear chat wasRunning=${_agentState.value.isRunning}"
-        )
-        generationEpoch.incrementAndGet()
-        approvalManager.cancelPendingApproval()
-        generationJob?.cancel()
-        generationJob = null
-        getLlmService()?.cancelGeneration()
-        stopStateTimer()
+        cancelActiveRun("clear chat")
         _messages.value = emptyList()
         _history.value = emptyList()
         // Without this the session keeps its messages and the cleared chat returns on the next sync.
@@ -1630,9 +1629,26 @@ class ChatViewModel(
     }
 
     /**
+     * Stops any in-flight run, so the transcript it is streaming into cannot be swapped out from
+     * under it: without the epoch bump the stale run's callbacks keep writing, and its reply lands
+     * in the conversation that replaced the one it was asked for.
+     */
+    private fun cancelActiveRun(reason: String) {
+        AgentTrace.stage("CANCEL", "reason=$reason wasRunning=${_agentState.value.isRunning}")
+        generationEpoch.incrementAndGet()
+        approvalManager.cancelPendingApproval()
+        generationJob?.cancel()
+        generationJob = null
+        getLlmService()?.cancelGeneration()
+        stopStateTimer()
+    }
+
+    /**
      * Create a new chat session.
      */
     fun createNewSession() {
+        cancelActiveRun("new session")
+        setState(AgentState.Idle)
         val newSession = ChatSession(projectKey = activeProjectKey)
         _sessions.value = _sessions.value + newSession
         _currentSessionId.value = newSession.id
@@ -1675,7 +1691,7 @@ class ChatViewModel(
      * saved messages, so they are not reconstructed here.
      *
      * @param messages the session's transcript, oldest first.
-     * @return the last [MAX_RESTORED_HISTORY] eligible turns, oldest first.
+     * @return the eligible messages that fit both budgets, oldest first.
      */
     private fun rebuildHistoryFrom(
         messages: List<ChatMessage>
@@ -1683,29 +1699,36 @@ class ChatViewModel(
         val eligible = messages.filter {
             // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
             (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
-                // A failed or half-streamed turn is not something the model said.
-                it.status != MessageStatus.ERROR &&
-                it.status != MessageStatus.LOADING &&
+                // Zero is the marker finalizeInProgressMessages leaves on a turn Stop cut mid
+                // sentence, which the model must not be told it finished saying.
+                it.durationMs != 0L &&
                 // Gemini rejects an empty content part, and AgentLoop never stores a blank turn.
                 it.text.isNotBlank()
         }
-        // Capped after filtering, so the budget is spent on turns the model actually sees.
-        val kept = eligible.takeLast(MAX_RESTORED_HISTORY)
-        AgentTrace.detail(
-            "RESTORE",
-            "retained=${kept.size} discarded=${messages.size - kept.size} " +
-                "capped=${eligible.size - kept.size}"
-        )
-        // Starting on an ASSISTANT turn is left alone: every backend here flattens the array, and
-        // trimming back to a USER turn would drop one the user can still see.
-        return kept.map {
-            val role = if (it.sender == Sender.USER) {
+        // Newest-first, so both budgets are spent on the turns nearest the next message.
+        val kept = ArrayDeque<LlmInferenceService.ChatMessage>()
+        var chars = 0
+        for (message in eligible.asReversed()) {
+            // What the model wrote, not the bubble: a turn whose tool call failed renders as
+            // "the action failed" in the IDE's language, a sentence the model never produced.
+            val text = message.historyText ?: message.text
+            chars += text.length
+            if (kept.size >= MAX_RESTORED_HISTORY || chars > MAX_RESTORED_HISTORY_CHARS) break
+            val role = if (message.sender == Sender.USER) {
                 LlmInferenceService.ChatMessage.Role.USER
             } else {
                 LlmInferenceService.ChatMessage.Role.ASSISTANT
             }
-            LlmInferenceService.ChatMessage(role, it.text)
+            // Starting on an ASSISTANT turn is left alone: every backend here flattens the array,
+            // and trimming back to a USER turn would drop one the user can still see.
+            kept.addFirst(LlmInferenceService.ChatMessage(role, text))
         }
+        AgentTrace.detail(
+            "RESTORE",
+            "retained=${kept.size} discarded=${messages.size - eligible.size} " +
+                "capped=${eligible.size - kept.size}"
+        )
+        return kept.toList()
     }
 
     /**

@@ -302,16 +302,16 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         binding.btnOverflowMenu.setOnClickListener { view ->
             // The anchor's Context is theme-aware, so the menu follows the IDE day/night theme.
             val popup = android.widget.PopupMenu(view.context, view)
-            popup.menuInflater.inflate(com.itsaky.androidide.plugins.aicore.R.menu.chat_overflow_menu, popup.menu)
+            popup.menuInflater.inflate(R.menu.chat_overflow_menu, popup.menu)
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
-                    com.itsaky.androidide.plugins.aicore.R.id.menu_settings -> {
+                    R.id.menu_settings -> {
                         openSettingsFragment()
                         true
                     }
-                    com.itsaky.androidide.plugins.aicore.R.id.menu_clear_chat -> {
-                        viewModel.createNewSession()
+                    R.id.menu_clear_chat -> {
+                        viewModel.clearMessages()
                         true
                     }
                     else -> false
