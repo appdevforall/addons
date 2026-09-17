@@ -280,7 +280,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 are recognised directly and run without going through the model,
                 so they work on every backend.</p>
                 <p>Anything that writes to the project asks for your approval
-                first.</p>
+                first, as does starting a Gradle sync or generating from a
+                template.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)

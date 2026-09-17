@@ -586,7 +586,7 @@ class AgentLoopTest {
             generate = model::generate,
             executeTools = { toolBatches++; listOf(ToolResult.success("ok")) },
             events = object : AgentLoop.Events {
-                override suspend fun onNoProgressCycle(turns: Int, staleTurns: Int) { cycledTurns = turns }
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
                 override suspend fun onMaxIterationsReached(turns: Int) { maxReachedTurns = turns }
             }
         )
@@ -639,7 +639,7 @@ class AgentLoopTest {
             generate = model::generate,
             executeTools = { listOf(ToolResult.failure("nope")) },
             events = object : AgentLoop.Events {
-                override suspend fun onNoProgressCycle(turns: Int, staleTurns: Int) { cycledTurns = turns }
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
             }
         )
 
@@ -662,7 +662,7 @@ class AgentLoopTest {
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("ok")) },
             events = object : AgentLoop.Events {
-                override suspend fun onNoProgressCycle(turns: Int, staleTurns: Int) { cycledTurns = turns }
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
             }
         )
 
@@ -695,7 +695,7 @@ class AgentLoopTest {
             executeTools = { listOf(ToolResult.success("ok")) },
             events = object : AgentLoop.Events {
                 override suspend fun onRepeatAfterSuccess(turn: Int) { repeatAfterSuccessTurn = turn }
-                override suspend fun onNoProgressCycle(turns: Int, staleTurns: Int) { cycledTurns = turns }
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
             }
         )
 

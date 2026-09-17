@@ -87,8 +87,12 @@ internal class AgentRunReporter(private val notices: Notices) : AgentLoop.Events
         notices.repeatedCalls()
     }
 
-    override suspend fun onNoProgressCycle(turns: Int, staleTurns: Int) {
-        AgentTrace.refusal("LOOP", "turns=$turns", "no new tool action for $staleTurns turns")
+    override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) {
+        AgentTrace.refusal(
+            "LOOP",
+            "turns=$turns",
+            "no new tool action for the configured $staleLimit turns",
+        )
         notices.noProgress()
     }
 }

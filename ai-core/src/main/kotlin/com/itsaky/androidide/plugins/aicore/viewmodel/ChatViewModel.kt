@@ -1067,6 +1067,10 @@ class ChatViewModel(
                             runModelTurn(llmService, turns, config, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
+                        // A handler that asks for approval is one that changes the project.
+                        isMutatingTool = { name ->
+                            tools.router.getHandler(name)?.requiresApproval == true
+                        },
                         events = AgentRunReporter(runNotices),
                     )
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)

@@ -95,9 +95,10 @@ class AgentLoop(
          * The loop stopped because several turns in a row introduced no action the run had not
          * already taken — a rotation the consecutive-repeat guard cannot see.
          * @param turns total turns run.
-         * @param staleTurns turns running that introduced nothing new, as configured for this loop.
+         * @param staleLimit the configured no-progress limit the run hit; the same number every
+         *   time, since the guard stops the moment the count reaches it.
          */
-        suspend fun onNoProgressCycle(turns: Int, staleTurns: Int) {}
+        suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) {}
 
         /**
          * The model re-issued the batch it had just run successfully, which the loop reads as the
@@ -174,6 +175,8 @@ class AgentLoop(
      *   emit one turn per message; flattening callers can use [renderTranscript]. Returns a
      *   [ModelReply], whose two texts a natively-calling caller sets apart.
      * @param executeTools runs a batch of tool calls.
+     * @param isMutatingTool whether a tool name changes the project; the progress guard stops
+     *   asking for novelty while the run is making changes.
      * @param events UI/state callbacks.
      * @return the run [Result].
      */
@@ -181,10 +184,12 @@ class AgentLoop(
         history: MutableList<ChatMessage>,
         generate: suspend (turns: List<ChatMessage>) -> ModelReply,
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
+        isMutatingTool: (String) -> Boolean = { false },
         events: Events = object : Events {},
     ): Result {
         var turn = 0
-        val progress = ToolCallProgressGuard(maxConsecutiveRepeats, maxTurnsWithoutProgress)
+        val progress =
+            ToolCallProgressGuard(maxConsecutiveRepeats, maxTurnsWithoutProgress, isMutatingTool)
         while (turn < maxIterations) {
             turn++
 

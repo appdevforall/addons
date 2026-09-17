@@ -9,10 +9,13 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
  *
  * @param maxConsecutiveRepeats identical unsuccessful batches tolerated back to back.
  * @param maxTurnsWithoutProgress turns tolerated introducing no batch the run has not already run.
+ * @param isMutatingTool whether a tool name changes the project, so a run that is editing is not
+ *   judged on novelty.
  */
 internal class ToolCallProgressGuard(
     private val maxConsecutiveRepeats: Int,
     private val maxTurnsWithoutProgress: Int,
+    private val isMutatingTool: (String) -> Boolean = { false },
 ) {
 
     /** What [AgentLoop] should do with the batch just inspected. */
@@ -35,6 +38,7 @@ internal class ToolCallProgressGuard(
     private var previousSignature: String? = null
     private var consecutiveRepeats = 0
     private var turnsWithoutNewSignature = 0
+    private var currentBatchMutates = false
 
     // Null until a batch has run: "no tools yet" and "the tools failed" end a run differently.
     private var previousBatchSucceeded: Boolean? = null
@@ -53,7 +57,10 @@ internal class ToolCallProgressGuard(
     fun inspect(calls: List<ToolCall>): Verdict {
         val signature = signatureOf(calls)
         val verdict = verdictFor(signature)
-        if (verdict == Verdict.PROCEED) previousSignature = signature
+        if (verdict == Verdict.PROCEED) {
+            previousSignature = signature
+            currentBatchMutates = calls.any { isMutatingTool(it.name) }
+        }
         return verdict
     }
 
@@ -63,6 +70,12 @@ internal class ToolCallProgressGuard(
      */
     fun recordResults(results: List<ToolResult>) {
         previousBatchSucceeded = results.isNotEmpty() && results.all { it.success }
+        // An edit makes earlier calls stale rather than repeatable: re-reading a file it changed
+        // is a new action, so a run that edits and then verifies is not judged as going in circles.
+        if (previousBatchSucceeded == true && currentBatchMutates) {
+            seenSignatures.clear()
+            turnsWithoutNewSignature = 0
+        }
     }
 
     private fun verdictFor(signature: String): Verdict {

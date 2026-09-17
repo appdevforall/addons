@@ -12,8 +12,12 @@ import org.junit.Test
  */
 class ToolCallProgressGuardTest {
 
-    private fun guard(repeats: Int = 2, stale: Int = 3) =
-        ToolCallProgressGuard(maxConsecutiveRepeats = repeats, maxTurnsWithoutProgress = stale)
+    private fun guard(repeats: Int = 2, stale: Int = 3, mutating: Set<String> = setOf("edit_file")) =
+        ToolCallProgressGuard(
+            maxConsecutiveRepeats = repeats,
+            maxTurnsWithoutProgress = stale,
+            isMutatingTool = { it in mutating },
+        )
 
     private fun call(name: String, path: String = "A.kt") = listOf(ToolCall(name, mapOf("path" to path)))
 
@@ -80,6 +84,26 @@ class ToolCallProgressGuardTest {
         guard.recordResults(ok)
         assertEquals(ToolCallProgressGuard.Verdict.CYCLING, guard.inspect(cycle[2]))
         assertEquals(3, guard.staleTurns)
+    }
+
+    @Test
+    fun givenEditsFollowedByReReads_whenInspected_thenVerifyingItsOwnWorkIsNotCycling() {
+        val guard = guard(stale = 3)
+        val turns = listOf(
+            call("search_project", "foo"), call("read_file", "A.kt"), call("edit_file", "A.kt"),
+            call("read_file", "B.kt"), call("edit_file", "B.kt"),
+        )
+        turns.forEach { guard.inspect(it); guard.recordResults(ok) }
+
+        // The two edits changed what a re-read returns, so none of these three is a repeat.
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(call("read_file", "A.kt")))
+        guard.recordResults(ok)
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(call("read_file", "B.kt")))
+        guard.recordResults(ok)
+        assertEquals(
+            ToolCallProgressGuard.Verdict.PROCEED,
+            guard.inspect(call("search_project", "foo")),
+        )
     }
 
     @Test
