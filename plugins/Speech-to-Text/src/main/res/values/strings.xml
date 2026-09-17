@@ -13,6 +13,7 @@
     <string name="stt_listening">Listening… speak now.</string>
     <string name="stt_start_failed">Couldn\'t start recording. Please close any app using the microphone and try again.</string>
     <string name="stt_busy">Still working on your last voice command. Wait for it to finish, then tap the microphone again.</string>
+    <string name="stt_recovery_failed">Voice input stopped unexpectedly. Please tap the microphone to try again.</string>
 
     <!-- Results -->
     <string name="stt_no_words">No words were recognized. Speak clearly and a little louder, then tap the microphone to try again.</string>
@@ -31,8 +32,16 @@
     <string name="stt_error_network_timeout">The speech recognition service took too long to respond. Check your connection and try again.</string>
     <string name="stt_error_no_match">Couldn\'t make out any words. Reduce background noise, speak clearly, and try again.</string>
     <string name="stt_error_busy">Speech recognition is still finishing the previous request. Wait a moment, then try again.</string>
+    <string name="stt_error_service_restarted">The speech service is busy or has just restarted. Tap the microphone to try again.</string>
     <string name="stt_error_server">The speech recognition service returned an error. Please try again in a moment.</string>
     <string name="stt_error_speech_timeout">No speech was detected. Tap the microphone and start speaking right away.</string>
+    <!-- Missing/unsupported offline language pack. %1$s is the recognition language, e.g. "English (United States) (en-US)". -->
+    <string name="stt_error_language_not_supported">Speech recognition doesn\'t support %1$s. Switch to a supported language under Settings \u2192 System \u2192 Languages &amp; input, then try again.</string>
+    <string name="stt_error_language_unavailable">Voice input can\'t use %1$s on this device: there is no offline pack for it, and recognition failed again with the offline restriction lifted. Install the pack under Settings \u2192 System \u2192 Languages &amp; input \u2192 On-device recognition, then try again.</string>
+    <string name="stt_error_language_retrying">Voice input couldn\'t use %1$s on this device. Trying again without the offline restriction \u2014 please speak again.</string>
+    <!-- Language-pack recovery. %1$s is the requested language; %2$s in _using_installed is the one actually used. -->
+    <string name="stt_language_using_installed">No offline pack for %1$s, so %2$s is being used instead \u2014 please speak again.</string>
+    <string name="stt_language_downloading_retrying">No offline pack for %1$s yet \u2014 fetching it for next time and recognizing without the offline restriction now. Please speak again.</string>
     <!-- %1$d is the raw recognizer error code -->
     <string name="stt_error_unknown">Speech recognition failed (error %1$d). Please try again.</string>
 

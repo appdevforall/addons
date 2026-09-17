@@ -51,10 +51,25 @@
       model; otherwise the raw transcript is inserted.</li>
   </ul>
 
-  <h2>On-device vs. cloud recognition</h2>
-  <p>The plugin prefers Android's <b>on-device</b> speech recognition. If the
-  device lacks an offline recognizer, Android may fall back to its network
-  recognition service.</p>
+  <h2>Languages and offline packs</h2>
+  <p>The plugin prefers Android's <b>on-device</b> speech recognition and asks
+  for the language Code on the Go itself is running in, so switching the app's
+  language switches the language you dictate in.</p>
+  <p>If the offline pack for that language is missing, the plugin asks the
+  recognizer what it does have and recovers without ending the capture:</p>
+  <ul>
+    <li>a pack for <b>another region</b> of the same language is used right away
+      (an es-US pack understands es-ES speech);</li>
+    <li>otherwise the missing pack is <b>requested for next time</b> and this
+      capture continues <b>online</b>. Pack downloads are best effort — Android
+      does not always report them — so nothing here waits on one.</li>
+  </ul>
+  <p>Either way the recognition starts over, so you get one message and one
+  prompt to <b>say it again</b> — the words from the failed attempt are not
+  carried across. The microphone button ignores taps while the plugin is turning
+  your words into code; a tap while it is still listening discards what you have
+  said so far and starts a fresh capture, or stops the capture if the recognizer
+  never got as far as opening the microphone.</p>
 
   <h2>Privacy</h2>
   <div class="note">
@@ -73,6 +88,28 @@
       recognizer; install/enable Google's speech services.</li>
     <li><b>Permission prompt didn't appear</b> — grant Microphone under
       Settings → Apps → CodeOnTheGo → Permissions, then tap again.</li>
+    <li><b>"No offline pack for …, so … is being used instead"</b> — a pack for
+      another region of the same language was used. Add the exact language under
+      Settings → System → Languages &amp; input → On-device recognition if you
+      want it.</li>
+    <li><b>"No offline pack for … yet — fetching it for next time"</b> — speak
+      again; this capture is recognized online. If the pack arrives, later
+      captures are offline again. To be sure of it, install the language under
+      Settings → System → Languages &amp; input → On-device recognition.</li>
+    <li><b>"Voice input couldn't use … on this device"</b> — no offline pack, so
+      the plugin is retrying over the network. Just speak again.</li>
+    <li><b>"Voice input can't use … on this device"</b> — offline and online both
+      failed for that language. Install the pack from that same screen, or switch
+      the app's language.</li>
+    <li><b>"Speech recognition is still finishing the previous request"</b> — a
+      capture is already running; wait for it to finish, then tap again.</li>
+    <li><b>"Speech recognition doesn't support …"</b> — the recognizer has no
+      model for that language at all, offline or online. Switch your device
+      language to a supported one.</li>
+    <li><b>"Voice input stopped unexpectedly"</b> — the device's speech service
+      failed in a way the plugin can't recover from. Tap the microphone to start
+      over; if it keeps happening, check for an update to the speech service
+      (Speech Services by Google, or your device's own).</li>
   </ul>
 </body>
 </html>
