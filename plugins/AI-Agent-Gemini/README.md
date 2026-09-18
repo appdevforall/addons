@@ -1,7 +1,7 @@
 # AI Agent Gemini plugin for CodeOnTheGo
 
 Google Gemini API inference for CodeOnTheGo's AI plugins. Registers itself as the
-`gemini` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
+`gemini` backend with [`ai-core`](../AI-Core/)'s `LlmInferenceService`, which is
 what `ai-core`'s Agent chat, `Code-Suggestions`, `Speech-to-Text` and
 `Vector-Search` actually talk to.
 
@@ -16,9 +16,9 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. This plugin uses the shared wrapper at the repo root:
 
 ```bash
-cd ai-agent-gemini
-../gradlew assemblePlugin          # release  -> build/plugin/ai-agent-gemini.cgp
-../gradlew assemblePluginDebug     # debug variant
+cd plugins/AI-Agent-Gemini
+../../gradlew assemblePlugin          # release  -> build/plugin/ai-agent-gemini.cgp
+../../gradlew assemblePluginDebug     # debug variant
 ```
 
 ## API key handling

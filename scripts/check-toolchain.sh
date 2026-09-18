@@ -22,10 +22,11 @@
 # SCOPE: this walks *every* build.gradle.kts, deliberately broader than the
 # "top-level dir applying com.itsaky.androidide.plugins.build" definition of a
 # plugin used by .githooks/pre-push (plugin_dirs()), scripts/update-libs.sh and
-# CLAUDE.md. Subprojects such as ai-core/llama-api and ai-core/llama-impl
-# compile into a plugin and must agree on the toolchain, but are invisible to
-# that definition -- which is exactly how ai-core/llama-impl kept compileSdk 34
-# through a dedicated standardization pass. Do not "unify" discovery onto
+# CLAUDE.md. Subprojects such as plugins/AI-Agent-Local/llama-api and
+# plugins/AI-Agent-Local/llama-impl compile into a plugin and must agree on the
+# toolchain, but are invisible to that definition -- which is exactly how
+# plugins/AI-Agent-Local/llama-impl kept compileSdk 34 through a dedicated
+# standardization pass. Do not "unify" discovery onto
 # plugin_dirs(): it would silently drop those modules from coverage.
 #
 # Usage:

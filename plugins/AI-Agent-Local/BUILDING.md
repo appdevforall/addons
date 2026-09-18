@@ -5,7 +5,7 @@ This guide explains how to build the AI assistant plugins. It lives here because
 `ai-agent-gemini` are plain Kotlin plugins that need nothing beyond the SDK.
 
 > **TL;DR** — A normal build needs only the Android SDK + JDK 17. The native
-> llama.cpp library ships **prebuilt** as `ai-agent-local/libs/v8/llama-v8-release.aar`,
+> llama.cpp library ships **prebuilt** as `plugins/AI-Agent-Local/libs/v8/llama-v8-release.aar`,
 > so you do **not** need the git submodule, the NDK, or CMake to build the
 > plugins. Those are only required when *regenerating* that AAR (see
 > [Updating llama.cpp](#updating-llamacpp-regenerating-the-aar)).
@@ -32,8 +32,7 @@ This guide explains how to build the AI assistant plugins. It lives here because
 ## Step 1: Configure the Android SDK
 
 Create or update `local.properties` in **each plugin directory** you build
-(`ai-agent-local/`, `ai-core/`, `ai-agent-gemini/`, and, for the frontend,
-`ai-assistant/`):
+(`plugins/AI-Agent-Local/`, `plugins/AI-Core/`, `plugins/AI-Agent-Gemini/`):
 
 ```properties
 # Path to Android SDK (required)
@@ -44,9 +43,9 @@ ndk.dir=/Users/your-username/Library/Android/sdk/ndk/27.0.12077973
 ```
 
 That's the only setup a normal build needs. The native llama.cpp library is
-already committed as `ai-agent-local/libs/v8/llama-v8-release.aar` (the JNI
+already committed as `plugins/AI-Agent-Local/libs/v8/llama-v8-release.aar` (the JNI
 wrapper plus the `.so` files), with its tiny interface jar at
-`ai-agent-local/libs/llama-api.jar`.
+`plugins/AI-Agent-Local/libs/llama-api.jar`.
 
 The plugin packages **arm64-v8a only**. The IDE extracts a single ABI
 (`PluginLoader.extractNativeLibs` reads `lib/${Build.SUPPORTED_ABIS[0]}/`) and
@@ -61,24 +60,23 @@ and fails the build if it carries anything else.
 ### Option A: Build via Gradle (Recommended)
 
 Every plugin is an **independent** Gradle build — build each in its own
-directory. `ai-agent-local` uses the shared wrapper at the repo root, so it is
-invoked as `../gradlew`:
+directory. They all use the shared wrapper at the repo root, so from an addon
+under `plugins/` it is invoked as `../../gradlew`:
 
 ```bash
 # release .cgp for each plugin
-cd plugin-examples/ai-agent-local  && ../gradlew assemblePlugin
-cd ../ai-agent-gemini              && ../gradlew assemblePlugin
-cd ../ai-core                        && ./gradlew assemblePlugin
-cd ../ai-assistant                   && ./gradlew assemblePlugin
+cd plugin-examples/plugins/AI-Agent-Local && ../../gradlew assemblePlugin
+cd ../AI-Agent-Gemini                     && ../../gradlew assemblePlugin
+cd ../AI-Core                             && ../../gradlew assemblePlugin
 
 # Debug variant
-cd plugin-examples/ai-agent-local  && ../gradlew assemblePluginDebug
+cd plugin-examples/plugins/AI-Agent-Local && ../../gradlew assemblePluginDebug
 ```
 
 ### Option B: Build via Android Studio
 
 1. Open Android Studio
-2. **File → Open** → Select `plugin-examples/ai-agent-local/` (or `plugin-examples/ai-assistant/`)
+2. **File → Open** → Select `plugin-examples/plugins/AI-Agent-Local/` (or any other addon directory)
 3. Wait for Gradle sync
 4. Run the `assemblePlugin` task from the Gradle panel
 
@@ -91,8 +89,8 @@ cd plugin-examples/ai-agent-local  && ../gradlew assemblePluginDebug
 `assemblePlugin` writes ready-to-install `.cgp` files directly:
 
 ```
-ai-agent-local/build/plugin/ai-agent-local.cgp
-ai-assistant/build/plugin/ai-assistant.cgp
+plugins/AI-Agent-Local/build/plugin/ai-agent-local.cgp
+plugins/AI-Core/build/plugin/ai-core.cgp
 ```
 
 No renaming needed.
@@ -101,15 +99,15 @@ No renaming needed.
 
 ```bash
 # Push plugins to device
-adb push ai-agent-local/build/plugin/ai-agent-local.cgp /sdcard/Download/
-adb push ai-assistant/build/plugin/ai-assistant.cgp /sdcard/Download/
+adb push plugins/AI-Agent-Local/build/plugin/ai-agent-local.cgp /sdcard/Download/
+adb push plugins/AI-Core/build/plugin/ai-core.cgp /sdcard/Download/
 
 # Then install via CodeOnTheGo Plugin Manager:
 # 1. Open CodeOnTheGo app
 # 2. Navigate to Settings → Plugins
 # 3. Tap "Install from file"
 # 4. Select ai-agent-local.cgp first
-# 5. Then install ai-assistant.cgp
+# 5. Then install ai-core.cgp
 # 6. Restart CodeOnTheGo
 ```
 
@@ -122,8 +120,8 @@ toolchain and the submodule; a normal build does not.
 
 ```bash
 # Run from the ai-agent-local plugin dir. One command: inits the submodule, compiles
-# :llama-impl + :llama-api from source, copies fresh artifacts into ai-agent-local/libs/.
-cd plugin-examples/ai-agent-local
+# :llama-impl + :llama-api from source, copies fresh artifacts into plugins/AI-Agent-Local/libs/.
+cd plugin-examples/plugins/AI-Agent-Local
 ./scripts/rebuild-llama-aar.sh
 
 # To point at a specific fork commit first:
@@ -132,8 +130,8 @@ git -C subprojects/llama.cpp checkout <commit-or-branch>
 ./scripts/rebuild-llama-aar.sh
 ```
 
-Then commit the refreshed `ai-agent-local/libs/v8/llama-v8-release.aar` and
-`ai-agent-local/libs/llama-api.jar`. The `:llama-impl` / `:llama-api` Gradle
+Then commit the refreshed `plugins/AI-Agent-Local/libs/v8/llama-v8-release.aar` and
+`plugins/AI-Agent-Local/libs/llama-api.jar`. The `:llama-impl` / `:llama-api` Gradle
 modules load only while the submodule is checked out, so they never affect a
 normal build.
 
@@ -151,7 +149,7 @@ The plugin packages arm64-v8a only, so it needs a 64-bit ARM device. Confirm
 what the AAR carries:
 
 ```bash
-unzip -l ai-agent-local/libs/v8/llama-v8-release.aar | grep 'jni/'
+unzip -l plugins/AI-Agent-Local/libs/v8/llama-v8-release.aar | grep 'jni/'
 ```
 
 ### llama.cpp Not Found (only when regenerating the AAR)
@@ -245,11 +243,11 @@ Failed to resolve content URI to file path
 For faster iteration during development:
 
 ```bash
-# Clean this plugin (run from ai-agent-local/)
-../gradlew clean
+# Clean this plugin (run from plugins/AI-Agent-Local/)
+../../gradlew clean
 
 # Full clean (when the CMake cache is stale)
-../gradlew clean
+../../gradlew clean
 rm -rf .gradle .cxx build
 ```
 
@@ -262,7 +260,7 @@ When modifying `llama-android.cpp` or `llama.cpp` sources:
 rm -rf llama-impl/.cxx
 
 # Rebuild
-../gradlew :llama-impl:assembleV8Debug
+../../gradlew :llama-impl:assembleV8Debug
 ```
 
 ### Debugging with Logcat
@@ -307,7 +305,7 @@ Regeneration path (only when rebuilding the AAR from source):
 ```
 llama-impl → llama.cpp (native, git submodule)
 llama-api  → interfaces
-   ⇒ scripts/rebuild-llama-aar.sh copies their output into ai-agent-local/libs/
+   ⇒ scripts/rebuild-llama-aar.sh copies their output into plugins/AI-Agent-Local/libs/
 ```
 
 Every plugin depends on `plugin-api` from the parent `plugin-examples/libs/` directory.
@@ -336,7 +334,7 @@ git fetch origin
 git merge origin/master
 
 # Resolve any conflicts in Android-specific code, then regenerate the AAR
-cd ../plugin-examples/ai-agent-local
+cd ../plugin-examples/plugins/AI-Agent-Local
 ./scripts/rebuild-llama-aar.sh
 ```
 
@@ -348,11 +346,10 @@ cd ../plugin-examples/ai-agent-local
 
 ```bash
 # Build optimized release variants
-../gradlew assembleV8Release
+../../gradlew assembleV8Release
 
 # Outputs with ProGuard/R8 optimization
-ai-agent-local/build/outputs/apk/v8/release/ai-agent-local-v8-release.apk
-ai-assistant/build/outputs/apk/v8/release/ai-assistant-plugin-v8-release.apk
+plugins/AI-Agent-Local/build/outputs/apk/v8/release/ai-agent-local-v8-release.apk
 ```
 
 ### Code Signing

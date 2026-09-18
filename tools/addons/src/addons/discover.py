@@ -36,6 +36,10 @@ def find_addons(root: Path, only: list[str] | None = None,
     skip = (read_skip(root, only_never_build=True) if include_skipped
             else read_skip(root))
     found = []
+    # The root glob still has work to do: cotg-ndk and
+    # pebble-custom-function-template-installer live beside libs/ and tools/,
+    # not under an area. ADFA-6167 moved the five AI addons under plugins/;
+    # these two are what is left. Drop it once they move too.
     patterns = ["*/build.gradle.kts"] + [f"{a}/*/build.gradle.kts" for a in AREAS]
     for pattern in patterns:
         for f in root.glob(pattern):

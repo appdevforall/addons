@@ -55,7 +55,7 @@ android {
 }
 
 dependencies {
-    compileOnly(files("../libs/plugin-api.jar"))
+    compileOnly(files("../../libs/plugin-api.jar"))
 
     // 'implementation' (not 'compileOnly') for the androidx/Material libraries: AAPT2 needs them
     // at compile time to process the settings pane's layout, as in every CoGo plugin with XML.
@@ -65,7 +65,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    testImplementation(files("../libs/plugin-api.jar"))
+    testImplementation(files("../../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
     testImplementation("org.json:json:20231013")

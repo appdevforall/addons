@@ -1,7 +1,7 @@
 # AI Agent OpenAI plugin for CodeOnTheGo
 
 OpenAI-compatible inference for CodeOnTheGo's AI plugins. Registers itself as the
-`openai` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
+`openai` backend with [`ai-core`](../AI-Core/)'s `LlmInferenceService`, which is
 what `ai-core`'s Agent chat, `Code-Suggestions`, `Speech-to-Text`
 and `Vector-Search` actually talk to.
 
@@ -31,10 +31,10 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. This plugin uses the shared wrapper at the repo root:
 
 ```bash
-cd ai-agent-openai
-../gradlew assemblePlugin          # release  -> build/plugin/ai-agent-openai.cgp
-../gradlew assemblePluginDebug     # debug variant
-../gradlew testDebugUnitTest       # the JVM unit tests
+cd plugins/AI-Agent-OpenAI
+../../gradlew assemblePlugin          # release  -> build/plugin/ai-agent-openai.cgp
+../../gradlew assemblePluginDebug     # debug variant
+../../gradlew testDebugUnitTest       # the JVM unit tests
 ```
 
 ## Configuration

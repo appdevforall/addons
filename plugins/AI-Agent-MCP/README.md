@@ -2,7 +2,7 @@
 
 Connects CodeOnTheGo's Agent to **Model Context Protocol** servers. Tools a
 configured server advertises are contributed to
-[`ai-core`](../ai-core/)'s agent through the host's `ToolSourceRegistry`, so they
+[`ai-core`](../AI-Core/)'s agent through the host's `ToolSourceRegistry`, so they
 appear beside the Agent's own tools with no change to `ai-core`.
 
 This is a *tool* plugin, not a model backend: it adds no inference. Install
@@ -22,10 +22,10 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. This plugin uses the shared wrapper at the repo root:
 
 ```bash
-cd ai-agent-mcp
-../gradlew assemblePlugin          # release -> build/plugin/ai-agent-mcp.cgp
-../gradlew assemblePluginDebug     # debug variant
-../gradlew testDebugUnitTest       # JVM tests: framing, error classification, sanitising
+cd plugins/AI-Agent-MCP
+../../gradlew assemblePlugin          # release -> build/plugin/ai-agent-mcp.cgp
+../../gradlew assemblePluginDebug     # debug variant
+../../gradlew testDebugUnitTest       # JVM tests: framing, error classification, sanitising
 ```
 
 ## Using it

@@ -65,7 +65,7 @@ android {
 }
 
 dependencies {
-    compileOnly(files("../libs/plugin-api.jar"))
+    compileOnly(files("../../libs/plugin-api.jar"))
 
     implementation(files("libs/v8/llama-v8-release.aar"))
     implementation(files("libs/llama-api.jar"))
@@ -78,7 +78,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    testImplementation(files("../libs/plugin-api.jar"))
+    testImplementation(files("../../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
     // LiveData's postValue needs the arch-core executor swapped for a synchronous one; the

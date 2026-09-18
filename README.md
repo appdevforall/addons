@@ -8,12 +8,17 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 
 | Plugin                                             | Purpose                                                           |
 | -------------------------------------------------- | ----------------------------------------------------------------- |
+| [`plugins/AI-Agent-Gemini/`](plugins/AI-Agent-Gemini/) | Adds Google Gemini as an inference backend for AI Core. |
+| [`plugins/AI-Agent-Local/`](plugins/AI-Agent-Local/) | Runs GGUF models on the device itself, with no network access. |
+| [`plugins/AI-Agent-MCP/`](plugins/AI-Agent-MCP/) | Gives the AI Core agent the tools of Model Context Protocol servers. |
+| [`plugins/AI-Agent-OpenAI/`](plugins/AI-Agent-OpenAI/) | Adds OpenAI-compatible servers as an inference backend for AI Core. |
 | [`plugins/APK-Analyzer/`](plugins/APK-Analyzer/) | Inspects the structure of an APK file inside the editor. |
 | [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
 | [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
 | [`plugins/AI-Code-Suggestions/`](plugins/AI-Code-Suggestions/) | Shows inline code completions as you type. |
 | [`plugins/AI-Literacy-Course/`](plugins/AI-Literacy-Course/) | An offline "Introduction to AI" course with lesson videos and activities. |
 | [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
+| [`plugins/AI-Core/`](plugins/AI-Core/) | The agent chat and the inference router every other AI addon needs. |
 | [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
 | [`plugins/Flutter-Templates/`](plugins/Flutter-Templates/) | Adds five Flutter starter projects to the New Project screen. |
 | [`plugins/Get-AI-Models/`](plugins/Get-AI-Models/) | Downloads small language models for on-device AI addons. |
@@ -32,7 +37,8 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Vector-Search/`](plugins/Vector-Search/) | Searches the project by meaning, not only by exact text. |
 | [`plugins/Voice-Alerts/`](plugins/Voice-Alerts/) | Plays a sound when a build finishes or fails. |
 
-> The `ai-*` addons and `cotg-ndk` are not listed yet. They stay at the repository root until their own work lands; see `tools/addons/skip.txt`.
+> `cotg-ndk` and `pebble-custom-function-template-installer` are not listed. They are still at the repository root, beside `libs/` and `tools/`, until their own work lands.
+> The `AI-*` addons above build from `plugins/` like every other example but are still held out of the published gallery; `tools/addons/skip.txt` states the reason for each.
 
 
 ## Building a plugin

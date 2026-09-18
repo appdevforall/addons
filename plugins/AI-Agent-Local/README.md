@@ -1,7 +1,7 @@
 # AI Agent Local plugin for CodeOnTheGo
 
 On-device GGUF inference for CodeOnTheGo's AI plugins. Registers itself as the
-`local` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
+`local` backend with [`ai-core`](../AI-Core/)'s `LlmInferenceService`, which is
 what `ai-core`'s Agent chat, `Code-Suggestions`, `Speech-to-Text` and
 `Vector-Search` actually talk to.
 
@@ -17,12 +17,12 @@ library is committed prebuilt. This plugin uses the shared wrapper at the repo
 root:
 
 ```bash
-cd ai-agent-local
-../gradlew assemblePlugin          # release  -> build/plugin/ai-agent-local.cgp
-../gradlew assemblePluginDebug     # debug variant
+cd plugins/AI-Agent-Local
+../../gradlew assemblePlugin          # release  -> build/plugin/ai-agent-local.cgp
+../../gradlew assemblePluginDebug     # debug variant
 ```
 
-The build resolves `plugin-api.jar` from the repo-root `../libs/` and the native
+The build resolves `plugin-api.jar` from the repo-root `../../libs/` and the native
 library from `libs/v8/llama-v8-release.aar` + `libs/llama-api.jar`.
 
 ## Native llama.cpp: prebuilt by default
