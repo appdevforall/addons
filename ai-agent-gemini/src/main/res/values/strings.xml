@@ -18,8 +18,10 @@
     <!-- Settings pane this backend contributes (see GeminiSettingsFragment) -->
     <string name="label_gemini_api_key">Gemini API Key</string>
     <string name="hint_gemini_api_key">Enter your Gemini API key</string>
-    <string name="cd_show_api_key">Show API key</string>
-    <string name="cd_hide_api_key">Hide API key</string>
+    <!-- Reveal toggle on the masked credential field. Deliberately the same wording in
+         every AI plugin: one control, one announcement, whatever the field holds. -->
+    <string name="cd_show_credential">Show credential</string>
+    <string name="cd_hide_credential">Hide credential</string>
     <string name="btn_save_api_key">Save Key</string>
     <string name="btn_edit_api_key">Edit</string>
     <string name="btn_clear_api_key">Clear</string>
@@ -37,6 +39,8 @@
     <string name="msg_key_verified">Verified, your API key works</string>
     <string name="msg_key_verified_rate_limited">Key accepted — Google is rate-limiting right now</string>
     <string name="msg_key_rejected">Invalid API key. It wasn\'t saved, check it and try again.</string>
+    <string name="msg_key_rejected_kept">Invalid API key. It wasn\'t saved \u2014 the key you had saved was kept, and chat is still using it.</string>
+    <string name="msg_key_chat_failure">A chat request was refused: %1$s</string>
     <string name="msg_key_unreachable">Couldn\'t reach Google to check this key.</string>
     <string name="msg_key_uncheckable">Couldn\'t check this key — make sure the AI Core plugin is installed, enabled and up to date.</string>
     <string name="title_save_unverified_key">Save this key anyway?</string>

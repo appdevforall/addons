@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
@@ -15,11 +17,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
+import com.itsaky.androidide.plugins.aiagentmcp.ui.SecretRevealController
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
@@ -41,6 +45,13 @@ class McpSettingsFragment : Fragment() {
      */
     private var serverDialog: AlertDialog? = null
     private var deleteDialog: AlertDialog? = null
+
+    /**
+     * The token field's reveal control, while the add/edit dialog is up. Held so a revealed token
+     * can be re-masked when the screen leaves the foreground; captures the dialog's views, so it
+     * is dropped with the dialog.
+     */
+    private var tokenReveal: SecretRevealController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,6 +105,18 @@ class McpSettingsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         viewModel.reload()
+    }
+
+    /**
+     * Re-mask a revealed token on the way out of the foreground.
+     *
+     * Re-masking rather than only clearing [WindowManager.LayoutParams.FLAG_SECURE]: the flag has
+     * to go, since the activity window outlives this screen and nothing else would clear it, and
+     * dropping it over a legible token is what would let the recents thumbnail keep a copy of it.
+     */
+    override fun onPause() {
+        tokenReveal?.mask()
+        super.onPause()
     }
 
     /**
@@ -153,12 +176,24 @@ class McpSettingsFragment : Fragment() {
         val view = layoutInflater.inflate(R.layout.dialog_mcp_server, null)
         val nameField = view.findViewById<EditText>(R.id.mcpName)
         val urlField = view.findViewById<EditText>(R.id.mcpUrl)
+        val tokenBox = view.findViewById<TextInputLayout>(R.id.mcpTokenBox)
         val tokenField = view.findViewById<EditText>(R.id.mcpToken)
         val status = view.findViewById<TextView>(R.id.mcpStatus)
 
         wireTooltip(nameField, McpPlugin.TOOLTIP_TAG_SERVER_NAME)
         wireTooltip(urlField, McpPlugin.TOOLTIP_TAG_SERVER_URL)
         wireTooltip(tokenField, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
+        wireTooltip(tokenBox, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
+        wireEndIconTooltip(tokenBox, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
+
+        // Not saved, so a recreate cannot park a typed or revealed token in plain text in the
+        // state Bundle; a stored one is read back from the encrypted store instead.
+        tokenField.isSaveEnabled = false
+
+        // The token was maskable and nothing more before this: it could only be typed blind.
+        tokenReveal = SecretRevealController(tokenBox, tokenField) { legible ->
+            setSecureWindows(legible)
+        }.also { it.attach() }
 
         var server = existing ?: viewModel.newServer()
         // Unknown, never Absent, until the decrypt answers: guessing is what let an http:// URL
@@ -320,7 +355,12 @@ class McpSettingsFragment : Fragment() {
 
         val dialog = builder.create()
         serverDialog = dialog
-        dialog.setOnDismissListener { serverDialog = null }
+        dialog.setOnDismissListener {
+            // Masked first, so the flag is cleared while the dialog's own window is still reachable.
+            tokenReveal?.mask()
+            tokenReveal = null
+            serverDialog = null
+        }
         dialog.setOnShowListener {
             val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE) ?: return@setOnShowListener
             saveButton.setOnClickListener {
@@ -519,6 +559,31 @@ class McpSettingsFragment : Fragment() {
         serverDialog = null
         deleteDialog?.dismiss()
         deleteDialog = null
+        tokenReveal = null
+        // The activity window outlives this screen, so a flag left on it would outlive it too.
+        setSecureWindows(false)
+    }
+
+    /**
+     * Add or clear [WindowManager.LayoutParams.FLAG_SECURE] on every window that can be showing the
+     * token, so screenshots and the recents thumbnail cannot capture it.
+     *
+     * Both windows, not just the dialog's: the dialog is the window the token is drawn in, and the
+     * activity behind it is the one the recents thumbnail is taken of.
+     *
+     * @param secure true to block capture, false to allow it again
+     */
+    private fun setSecureWindows(secure: Boolean) {
+        for (window in listOfNotNull<Window>(activity?.window, serverDialog?.window)) {
+            if (secure) {
+                window.setFlags(
+                    WindowManager.LayoutParams.FLAG_SECURE,
+                    WindowManager.LayoutParams.FLAG_SECURE
+                )
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
     }
 
     /**
@@ -633,6 +698,21 @@ class McpSettingsFragment : Fragment() {
         view.setOnLongClickListener { anchor ->
             val service = tooltipService ?: return@setOnLongClickListener false
             service.showTooltip(anchor, McpPlugin.TOOLTIP_CATEGORY, tag)
+            true
+        }
+    }
+
+    /**
+     * Long-press on [box]'s end icon shows [tag]'s tooltip.
+     *
+     * Separate from [wireTooltip] because the end icon is a clickable child that consumes the
+     * long-press before the box sees it — without this the reveal control would be the one
+     * contributed element with no tooltip of its own.
+     */
+    private fun wireEndIconTooltip(box: TextInputLayout, tag: String) {
+        box.setEndIconOnLongClickListener { icon ->
+            val service = tooltipService ?: return@setEndIconOnLongClickListener false
+            service.showTooltip(icon, McpPlugin.TOOLTIP_CATEGORY, tag)
             true
         }
     }

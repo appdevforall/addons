@@ -7,10 +7,12 @@ import android.util.Log
 import android.widget.Toast
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
+import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailure
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailureMessages
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiHttpException
+import com.itsaky.androidide.plugins.aiagentopenai.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
@@ -18,7 +20,9 @@ import com.itsaky.androidide.plugins.aiagentopenai.security.ApiKeyCache
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlPolicy
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlResult
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
+import java.io.BufferedReader
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
@@ -65,6 +69,12 @@ class OpenAiBackend(
         ApiKeyCache(::openAiPrefs, OpenAiPreferences.KEY_API_KEY, context.logger, scope)
 
     private val failureMessages = OpenAiFailureMessages(context, ::getBaseUrl)
+
+    /**
+     * Where a refused credential is left for the settings pane to report, so a key problem is not
+     * only readable in a transcript the user has already navigated away from.
+     */
+    private val credentialFailures = CredentialFailureLog(::openAiPrefs)
 
     @Volatile
     private var currentJob: Job? = null
@@ -184,6 +194,7 @@ class OpenAiBackend(
         val future = CompletableFuture<LlmResponse>()
 
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
                 context.logger.info("OpenAiBackend: Generating response for prompt (${prompt.length} chars)")
@@ -203,7 +214,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("OpenAiBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
 
@@ -233,6 +244,7 @@ class OpenAiBackend(
         val future = CompletableFuture<LlmResponse>()
 
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
 
@@ -251,7 +263,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("OpenAiBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
 
@@ -337,6 +349,7 @@ class OpenAiBackend(
         callback: ToolStreamCallback
     ) {
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
 
@@ -415,7 +428,7 @@ class OpenAiBackend(
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
                 context.logger.error("OpenAiBackend: Error in streaming", e)
-                callback.onError(formatErrorMessage(e))
+                callback.onError(formatErrorMessage(e, keyStamp))
             }
         }
     }
@@ -458,9 +471,7 @@ class OpenAiBackend(
         val requestContext = coroutineContext
         var cancelHandle: DisposableHandle? = null
         try {
-            http.post(
-                url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
-                apiKey = readApiKeyOrBlank(),
+            postChat(
                 body = body,
                 sse = true,
                 onConnected = { conn ->
@@ -623,14 +634,36 @@ class OpenAiBackend(
             val body = OpenAiRequestBuilder.body(
                 messages, getModelName(), stream = false, config = config, tuning = tuning
             )
-            text = http.post(
-                url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
-                apiKey = readApiKeyOrBlank(),
-                body = body,
-            ) { reader -> extractText(JSONObject(reader.readText())) }
+            text = postChat(body) { reader -> extractText(JSONObject(reader.readText())) }
         }
         return text
     }
+
+    /**
+     * POST [body] to the configured server's chat endpoint with the stored credential.
+     *
+     * Every generation goes through here, streaming or not, which is why the recorded refusal is
+     * cleared here — on the status line, since a 2xx is the server accepting the key whether or not
+     * the body that follows is read to the end, or cancelled, or dropped mid-stream.
+     *
+     * @param sse true to ask for the server-sent-events stream
+     * @param onConnected receives the live connection, so the caller can disconnect it on cancel
+     * @return whatever [readResponse] produced
+     */
+    private fun <T> postChat(
+        body: JSONObject,
+        sse: Boolean = false,
+        onConnected: (HttpURLConnection) -> Unit = {},
+        readResponse: (BufferedReader) -> T,
+    ): T = http.post(
+        url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
+        apiKey = readApiKeyOrBlank(),
+        body = body,
+        sse = sse,
+        onConnected = onConnected,
+        onAccepted = { credentialFailures.clear() },
+        readResponse = readResponse,
+    )
 
     /**
      * List the models the configured server offers, filtered to plausible chat models.
@@ -676,7 +709,15 @@ class OpenAiBackend(
         return future
     }
 
-    /** The stored key as a possibly-empty string, for the calls that treat "no key" as valid. */
+    /**
+     * When the stored key was saved, or 0 when none is stored.
+     *
+     * Read into a local at the top of each request and carried to that request's error handler: a
+     * field on the backend is overwritten by any other key read before the refusal lands.
+     */
+    private fun storedKeyStamp(): Long =
+        openAiPrefs()?.getLong(OpenAiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
+
     /**
      * The saved key, but only for the server it was saved for.
      *
@@ -738,17 +779,23 @@ class OpenAiBackend(
      *
      * [OpenAiErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
      * raw HTTP error body stays on the logged exception and must never reach the transcript.
+     *
+     * @param keyStamp when the key this request read was saved, so a refusal landing after a later
+     *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception): String {
+    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
         val baseUrl = getBaseUrl()
-        return failureMessages.of(
-            OpenAiErrorFormatter.classify(
-                error = e,
-                modelName = getModelName(),
-                hasApiKey = readApiKeyOrBlank().isNotBlank(),
-                isOpenAiHost = BaseUrlPolicy.requiresApiKey(baseUrl),
-            )
+        val failure = OpenAiErrorFormatter.classify(
+            error = e,
+            modelName = getModelName(),
+            hasApiKey = readApiKeyOrBlank().isNotBlank(),
+            isOpenAiHost = BaseUrlPolicy.requiresApiKey(baseUrl),
         )
+        val message = failureMessages.of(failure)
+        // Only a credential failure is recorded: any other reason says nothing about the key, and
+        // filing it as one would send the user off to replace a key that works.
+        if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
+        return message
     }
 }
 

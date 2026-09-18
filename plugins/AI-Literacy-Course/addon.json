@@ -1,0 +1,16 @@
+{
+  "summary": "An offline \"Introduction to AI\" course: 26 lesson videos, activities, and teacher resources.",
+  "description": "An offline \"Introduction to AI\" course from Learn AI Anywhere: 26 lesson videos plus interactive activities, the NeuroPocket app, and teacher resources. Everything runs fully offline inside Code on the Go — no internet required.",
+  "tags": [
+    "education",
+    "ai",
+    "course",
+    "offline"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

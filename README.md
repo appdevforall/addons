@@ -12,6 +12,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
 | [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
 | [`plugins/AI-Code-Suggestions/`](plugins/AI-Code-Suggestions/) | Shows inline code completions as you type. |
+| [`plugins/AI-Literacy-Course/`](plugins/AI-Literacy-Course/) | An offline "Introduction to AI" course with lesson videos and activities. |
 | [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
 | [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
 | [`plugins/Flutter-Templates/`](plugins/Flutter-Templates/) | Adds five Flutter starter projects to the New Project screen. |

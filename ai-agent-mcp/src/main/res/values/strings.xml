@@ -25,6 +25,10 @@
     <string name="mcp_hint_token_stored">Stored — type to replace it</string>
     <string name="mcp_hint_token_unreadable">Stored but unreadable — type it again</string>
     <string name="mcp_hint_token_unavailable">Stored, but unreadable right now — try again</string>
+    <!-- Reveal toggle on the masked credential field. Deliberately the same wording in
+         every AI plugin: one control, one announcement, whatever the field holds. -->
+    <string name="cd_show_credential">Show credential</string>
+    <string name="cd_hide_credential">Hide credential</string>
     <string name="mcp_connect">Connect</string>
     <string name="mcp_save">Save</string>
     <string name="mcp_cancel">Cancel</string>
