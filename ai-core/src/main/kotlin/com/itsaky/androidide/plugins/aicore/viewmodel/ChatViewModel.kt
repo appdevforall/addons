@@ -1667,6 +1667,7 @@ class ChatViewModel(
             logWarn("switchToSession: no session $sessionId")
             return
         }
+        cancelActiveRun("switch session")
         _currentSessionId.value = sessionId
         // Use immutable snapshot to ensure StateFlow emits on mutations
         _messages.value = session.messages.toList()
@@ -1691,7 +1692,8 @@ class ChatViewModel(
      * saved messages, so they are not reconstructed here.
      *
      * @param messages the session's transcript, oldest first.
-     * @return the eligible messages that fit both budgets, oldest first.
+     * @return the eligible messages that fit both budgets, oldest first; the newest one is
+     *   always kept, however long it is.
      */
     private fun rebuildHistoryFrom(
         messages: List<ChatMessage>
@@ -1699,9 +1701,9 @@ class ChatViewModel(
         val eligible = messages.filter {
             // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
             (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
-                // Zero is the marker finalizeInProgressMessages leaves on a turn Stop cut mid
-                // sentence, which the model must not be told it finished saying.
-                it.durationMs != 0L &&
+                // Only a finished agent turn carries a duration: null is a bubble process death
+                // cut mid sentence, zero the marker Stop leaves; neither was finished saying.
+                (it.sender == Sender.USER || (it.durationMs ?: 0L) > 0L) &&
                 // Gemini rejects an empty content part, and AgentLoop never stores a blank turn.
                 it.text.isNotBlank()
         }
@@ -1711,9 +1713,14 @@ class ChatViewModel(
         for (message in eligible.asReversed()) {
             // What the model wrote, not the bubble: a turn whose tool call failed renders as
             // "the action failed" in the IDE's language, a sentence the model never produced.
-            val text = message.historyText ?: message.text
+            // Blank when a native respond call carried no text part, where the bubble is the answer.
+            val text = message.historyText?.takeIf { it.isNotBlank() } ?: message.text
+            // The newest eligible turn is kept whatever it costs: breaking on it would restore
+            // nothing at all, which is the regression this rebuild exists to remove.
+            if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
+                    chars + text.length > MAX_RESTORED_HISTORY_CHARS)
+            ) break
             chars += text.length
-            if (kept.size >= MAX_RESTORED_HISTORY || chars > MAX_RESTORED_HISTORY_CHARS) break
             val role = if (message.sender == Sender.USER) {
                 LlmInferenceService.ChatMessage.Role.USER
             } else {
@@ -1738,11 +1745,16 @@ class ChatViewModel(
         _sessions.value = _sessions.value.filter { it.id != sessionId }
         if (_currentSessionId.value == sessionId) {
             val remaining = _sessions.value.firstOrNull()
-            val messages = remaining?.messages ?: emptyList()
-            _currentSessionId.value = remaining?.id
-            _messages.value = messages
+            if (remaining == null) {
+                // A null current session drops every later message on the floor; it also cancels.
+                createNewSession()
+                return
+            }
+            cancelActiveRun("delete session")
+            _currentSessionId.value = remaining.id
+            _messages.value = remaining.messages
             // Left alone, the deleted conversation's context stays live under the surviving one.
-            _history.value = rebuildHistoryFrom(messages)
+            _history.value = rebuildHistoryFrom(remaining.messages)
             // The rewind point names a run this transcript does not have, and would truncate it.
             forgetRetryPoint()
         }
