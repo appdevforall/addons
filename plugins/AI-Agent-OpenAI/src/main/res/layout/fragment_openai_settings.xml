@@ -22,7 +22,9 @@
         android:text="@string/label_openai_server" />
 
     <!-- The preset picker and the model picker are the same control on purpose: one tap opens a
-         list, and typing is still possible where it makes sense. -->
+         list, and typing is still possible where it makes sense. The chevron is not declared here:
+         Material 1.10 never reads app:endIconDrawable, so the icon a layout asks for draws blank —
+         setupDropdownEndIcon() sets it on every box in code. -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/openai_preset_box"
         style="@style/PluginTextInputLayout"
@@ -30,7 +32,6 @@
         android:layout_height="wrap_content"
         android:hint="@string/hint_openai_preset"
         app:endIconContentDescription="@string/cd_show_presets"
-        app:endIconDrawable="@drawable/ic_dropdown"
         app:endIconMode="custom">
 
         <AutoCompleteTextView
@@ -211,7 +212,6 @@
         android:layout_height="wrap_content"
         android:hint="@string/hint_openai_model"
         app:endIconContentDescription="@string/cd_show_models"
-        app:endIconDrawable="@drawable/ic_dropdown"
         app:endIconMode="custom">
 
         <AutoCompleteTextView
@@ -252,7 +252,6 @@
         android:layout_height="wrap_content"
         android:hint="@string/hint_openai_embedding_model"
         app:endIconContentDescription="@string/cd_show_embedding_models"
-        app:endIconDrawable="@drawable/ic_dropdown"
         app:endIconMode="custom">
 
         <AutoCompleteTextView

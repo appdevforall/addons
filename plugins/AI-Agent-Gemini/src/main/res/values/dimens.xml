@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Spacing, radius and type scale shared with the other CoGo house plugins (see
+  client-time-tracker), so this pane sits on the same grid as the rest of the IDE's plugin UI
+  instead of the ad-hoc 4/8/24dp margins it used before.
+-->
+<resources>
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">24dp</dimen>
+
+    <dimen name="radius_md">8dp</dimen>
+    <dimen name="radius_lg">12dp</dimen>
+
+    <dimen name="text_micro">11sp</dimen>
+    <dimen name="text_small">13sp</dimen>
+    <dimen name="text_body">15sp</dimen>
+
+    <dimen name="touch_target_min">48dp</dimen>
+</resources>
