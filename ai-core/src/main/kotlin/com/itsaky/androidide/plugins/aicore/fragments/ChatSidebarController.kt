@@ -24,8 +24,11 @@ import com.itsaky.androidide.plugins.aicore.models.SessionSelection
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -102,9 +105,12 @@ internal class ChatSidebarController(
      */
     private var childDialog: AlertDialog? = null
 
-    /** True from the moment the panel starts opening until it has finished closing. */
-    var isOpen: Boolean = false
-        private set
+    /**
+     * True from the moment the panel starts opening until it has finished closing. A flow rather
+     * than a plain field so [observeSessions] can stand down while the panel is hidden.
+     */
+    private val openState = MutableStateFlow(false)
+    val isOpen: Boolean get() = openState.value
 
     /** Wires the panel's controls and starts the collector that fills its list. */
     fun attach() {
@@ -145,6 +151,13 @@ internal class ChatSidebarController(
 
     /** Stops the animations and releases the views; call from onDestroyView. */
     fun detach() {
+        // The panel is gone with its views, so anything the fragment keeps in step with it — the
+        // Back handler above all — must be told, or it stays armed against a controller that has
+        // nothing left to close.
+        if (isOpen) {
+            openState.value = false
+            onOpenChanged(false)
+        }
         _binding?.chatSidebar?.root?.animate()?.cancel()
         _binding?.sidebarScrim?.animate()?.cancel()
         childDialog?.dismiss()
@@ -156,6 +169,9 @@ internal class ChatSidebarController(
      * Re-measures the panel after a rotation. EditorActivity handles orientation itself, so nothing
      * here is recreated and the width worked out for the old orientation would otherwise stand —
      * either overhanging the screen or leaving most of it bare.
+     *
+     * Call it once the rotated geometry has been published — [panelWidth] measures the container,
+     * which still reports the pre-rotation width when the configuration change first arrives.
      */
     fun onConfigurationChanged() {
         val panel = _binding?.chatSidebar?.root ?: return
@@ -168,13 +184,14 @@ internal class ChatSidebarController(
     fun open() {
         val binding = _binding ?: return
         if (isOpen) return
-        isOpen = true
         AgentTrace.detail("UI", "chat sidebar opened sessions=${viewModel.sessions.value.size}")
 
         // A fresh open starts at the newest conversations, so the list is re-paged from the top.
+        // Before the flag below, so the collector it restarts never builds last time's rows first.
         visibleCount.value = pageSize
         selection.value = SessionSelection.BROWSING
         binding.chatSidebar.sessionRecyclerView.scrollToPosition(0)
+        openState.value = true
 
         val width = panelWidth()
         binding.chatSidebar.root.updateLayoutParams { this.width = width }
@@ -200,7 +217,7 @@ internal class ChatSidebarController(
     fun close(): Boolean {
         val binding = _binding ?: return false
         if (!isOpen) return false
-        isOpen = false
+        openState.value = false
 
         binding.chatSidebar.root.animate()
             // Re-derived rather than read off the view: a close in the same frame as the open that
@@ -300,21 +317,27 @@ internal class ChatSidebarController(
     }
 
     /**
-     * Republishes the list on every change to the sessions, which one is active, what is ticked or
-     * how much has been paged in — so a row retitles itself as a reply streams in, the tick follows
-     * a switch made from anywhere, and a page appended by scrolling goes through the same path as
-     * everything else.
+     * Republishes the list, while the panel is open, on every change to the sessions, which one is
+     * active, what is ticked or how much has been paged in — so a row retitles itself as a reply
+     * streams in, the tick follows a switch made from anywhere, and a page appended by scrolling
+     * goes through the same path as everything else.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeSessions() {
         val untitled = _binding?.root?.context?.getString(R.string.session_untitled) ?: return
         scope.launch {
-            combine(
-                viewModel.sessions,
-                viewModel.currentSessionId,
-                selection,
-                visibleCount,
-            ) { sessions, currentId, picked, limit ->
-                ChatSessionRows.from(sessions, currentId, untitled, picked, limit)
+            // Nothing is collected while the panel is hidden: the sessions are rewritten once per
+            // streamed token, and re-sorting, re-paging and diffing a list nobody can see is the
+            // per-token cost SessionPaging was added to avoid.
+            openState.flatMapLatest { open ->
+                if (!open) emptyFlow() else combine(
+                    viewModel.sessions,
+                    viewModel.currentSessionId,
+                    selection,
+                    visibleCount,
+                ) { sessions, currentId, picked, limit ->
+                    ChatSessionRows.from(sessions, currentId, untitled, picked, limit)
+                }
             }.collect { rows ->
                 sessionAdapter.submitList(rows)
                 // Counted from the rows, not from the ticked ids: a conversation deleted while the

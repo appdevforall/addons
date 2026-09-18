@@ -435,10 +435,10 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         super.onConfigurationChanged(newConfig)
         val binding = _binding ?: return
         composer?.onConfigurationChanged(newConfig)
-        sidebar?.onConfigurationChanged()
-        // Posted so the window has published the rotated cutout before it is read back.
+        // Posted so the window has published the rotated cutout and width before they are read back.
         binding.root.post {
             val root = _binding?.root ?: return@post
+            sidebar?.onConfigurationChanged()
             ViewCompat.getRootWindowInsets(root)?.let(::applyCutoutPadding)
         }
     }
