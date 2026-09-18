@@ -74,6 +74,12 @@ class ContributedToolHandler(
     val readOnly: Boolean get() = tool.readOnly
 
     /**
+     * From the provider's own declaration, never [requiresApproval], which is forced true above and
+     * would make every contributed tool, read-only ones included, look like a change to the run.
+     */
+    override val mutatesProject: Boolean get() = !readOnly
+
+    /**
      * Checks the schema's required properties before an approval dialog is spent on a call that
      * cannot succeed.
      * @param args the normalized call arguments.

@@ -150,6 +150,7 @@ class ContributedToolHandlerTest {
         assertTrue("a source cannot decline the approval dialog", handler.requiresApproval)
         assertFalse(handler.allowsSessionApproval)
         assertTrue(handler.readOnly)
+        assertFalse("a read-only tool changes nothing, whatever approval it needs", handler.mutatesProject)
     }
 
     @Test

@@ -1067,9 +1067,11 @@ class ChatViewModel(
                             runModelTurn(llmService, turns, config, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
-                        // A handler that asks for approval is one that changes the project.
-                        isMutatingTool = { name ->
-                            tools.router.getHandler(name)?.requiresApproval == true
+                        // The paths a changing call rewrites, so a re-read of one counts as new.
+                        mutatedPathsOf = { call ->
+                            val handler = tools.router.getHandler(call.name)
+                            if (handler?.mutatesProject != true) emptySet()
+                            else handler.pathArgs.mapNotNull { call.args[it]?.toString() }.toSet()
                         },
                         events = AgentRunReporter(runNotices),
                     )

@@ -31,6 +31,14 @@ interface ToolHandler {
         get() = false
 
     /**
+     * Whether this tool changes the project, which is what the progress guard reads. Defaults to
+     * [requiresApproval], true of exactly the built-ins that act on the project; a source whose
+     * approval flag is forced true overrides this instead.
+     */
+    val mutatesProject: Boolean
+        get() = requiresApproval
+
+    /**
      * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means
      * untyped, flat string arguments, which is what the tool-call protocol supports today.
      */

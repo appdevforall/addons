@@ -16,7 +16,9 @@ class ToolCallProgressGuardTest {
         ToolCallProgressGuard(
             maxConsecutiveRepeats = repeats,
             maxTurnsWithoutProgress = stale,
-            isMutatingTool = { it in mutating },
+            mutatedPathsOf = { call ->
+                if (call.name in mutating) setOfNotNull(call.args["path"]?.toString()) else emptySet()
+            },
         )
 
     private fun call(name: String, path: String = "A.kt") = listOf(ToolCall(name, mapOf("path" to path)))
@@ -104,6 +106,27 @@ class ToolCallProgressGuardTest {
             ToolCallProgressGuard.Verdict.PROCEED,
             guard.inspect(call("search_project", "foo")),
         )
+    }
+
+    @Test
+    fun givenOneFileRewrittenBackAndForth_whenInspected_thenItStopsAsCycling() {
+        val guard = guard(stale = 3)
+        val x = listOf(ToolCall("edit_file", mapOf("path" to "A.kt", "content" to "X")))
+        val y = listOf(ToolCall("edit_file", mapOf("path" to "A.kt", "content" to "Y")))
+        listOf(x, y, x, y).forEach { guard.inspect(it); guard.recordResults(ok) }
+
+        // Each edit invalidates reads of A.kt, but never the other edit of it.
+        assertEquals(ToolCallProgressGuard.Verdict.CYCLING, guard.inspect(x))
+    }
+
+    @Test
+    fun givenAnEditReissuedBetweenReReads_whenInspected_thenItStopsAsCycling() {
+        val guard = guard(stale = 3)
+        val turns = listOf(call("edit_file"), call("read_file"), call("edit_file"), call("read_file"))
+        turns.forEach { guard.inspect(it); guard.recordResults(ok) }
+
+        // Only an edit the run had not already made invalidates the read that follows it.
+        assertEquals(ToolCallProgressGuard.Verdict.CYCLING, guard.inspect(call("edit_file")))
     }
 
     @Test
