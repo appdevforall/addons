@@ -26,33 +26,29 @@
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:paddingBottom="4dp"/>
 
-        <LinearLayout
+        <!--
+          The reveal toggle is the box's own end icon rather than the loose ImageButton that used to
+          sit beside the field: the icon has a real touch target, and it is the same control the
+          other AI plugins' credential fields carry. Nothing endIcon-related is declared here —
+          SecretRevealController sets the mode, drawable, description and listener in code, because
+          Material 1.10 never reads app:endIconDrawable and a custom icon declared in XML draws
+          blank.
+        -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/gemini_api_key_box"
+            style="@style/PluginTextInputLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:hint="@string/hint_gemini_api_key">
 
-            <EditText
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/gemini_api_key_input"
-                android:layout_width="0dp"
+                style="@style/PluginTextInputEditText"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:inputType="textPassword"
-                android:hint="@string/hint_gemini_api_key"
                 android:maxLines="1" />
-
-            <ImageButton
-                android:id="@+id/btn_toggle_api_key_visibility"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/cd_show_api_key"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:padding="4dp"
-                android:src="@drawable/ic_visibility" />
-        </LinearLayout>
+        </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
 
     <TextView

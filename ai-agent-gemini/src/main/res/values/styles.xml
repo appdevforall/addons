@@ -35,4 +35,22 @@
         <item name="colorOnErrorContainer">@color/plugin_on_error_container</item>
     </style>
 
+    <!--
+      The API key box, styled by an explicit style= on the widget rather than through the theme's
+      textInputStyle: the host may build this plugin's inflation Context by layering PluginTheme
+      onto the activity's theme without forcing it, in which case a theme attribute resolves to the
+      host's value and the box loses its colours.
+    -->
+    <style name="PluginTextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/plugin_outline</item>
+        <item name="boxStrokeErrorColor">@color/plugin_error</item>
+        <item name="hintTextColor">@color/plugin_text_muted</item>
+        <item name="android:textColorHint">@color/plugin_text_muted</item>
+        <item name="endIconTint">@color/plugin_on_surface_variant</item>
+    </style>
+
+    <style name="PluginTextInputEditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:textColor">@color/plugin_on_surface</item>
+    </style>
+
 </resources>

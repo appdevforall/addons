@@ -41,6 +41,7 @@ internal class OpenAiHttpClient(
      * @param apiKey bearer token, or blank for a server that needs none
      * @param sse true to ask for the server-sent-events stream
      * @param onConnected receives the live connection, so a caller can disconnect it on cancellation
+     * @param onAccepted called once the status line says 2xx, before a byte of the body is read
      * @return whatever [readResponse] produced
      * @throws OpenAiHttpException on a non-2xx answer, carrying the server's error body
      */
@@ -50,6 +51,7 @@ internal class OpenAiHttpClient(
         body: JSONObject,
         sse: Boolean = false,
         onConnected: (HttpURLConnection) -> Unit = {},
+        onAccepted: () -> Unit = {},
         readResponse: (BufferedReader) -> T,
     ): T = withTrafficTag(NetworkTags.INFERENCE) {
         val conn = open(url, "POST", apiKey).apply {
@@ -62,6 +64,7 @@ internal class OpenAiHttpClient(
         try {
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             conn.failIfNotOk()
+            onAccepted()
             conn.inputStream.bufferedReader().use(readResponse)
         } finally {
             conn.disconnect()

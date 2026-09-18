@@ -23,6 +23,20 @@ internal object GeminiPreferences {
     const val KEY_API_KEY_VERIFIED = "gemini_api_key_verified"
     const val KEY_MODEL = "gemini_model"
 
+    /**
+     * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a
+     * setting, so deliberately outside [OWNED_KEYS]: there is nothing here worth carrying over from
+     * a legacy store, and a stale reason would accuse a key the user has since replaced.
+     */
+    const val KEY_CREDENTIAL_FAILURE = "gemini_credential_failure"
+
+    /**
+     * When the key that [KEY_CREDENTIAL_FAILURE] describes was saved, so a refusal that lands after
+     * a replacement was saved can be told from one about the key in use. Outside [OWNED_KEYS] with
+     * the reason it stamps.
+     */
+    const val KEY_CREDENTIAL_FAILURE_KEY_STAMP = "gemini_credential_failure_key_stamp"
+
     /** Set once [migrateIfNeeded] has run, so a value changed since is never overwritten. */
     private const val KEY_MIGRATED = "migrated_from_agent_settings"
 

@@ -5,8 +5,11 @@ import android.os.Looper
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.R
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailure
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
+import com.itsaky.androidide.plugins.aiagentgemini.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
@@ -65,6 +68,12 @@ class GeminiBackend(
     @Volatile
     private var keyCache: Pair<String, String?>? = null
 
+    /**
+     * Where a refused credential is left for the settings pane to report, so a key problem is not
+     * only readable in a transcript the user has already navigated away from.
+     */
+    private val credentialFailures = CredentialFailureLog(::agentPrefs)
+
     companion object {
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
@@ -96,6 +105,15 @@ class GeminiBackend(
      */
     private fun getModelName(): String =
         agentPrefs()?.getString(GeminiPreferences.KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
+
+    /**
+     * When the stored key was saved, or 0 when none is stored.
+     *
+     * Read into a local at the top of each request and carried to that request's error handler: a
+     * field on the backend is overwritten by any other key read before the refusal lands.
+     */
+    private fun storedKeyStamp(): Long =
+        agentPrefs()?.getLong(GeminiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
 
     /**
      * Read the saved Gemini API key from AI Core's shared prefs, or null.
@@ -210,6 +228,7 @@ class GeminiBackend(
         val future = CompletableFuture<LlmResponse>()
 
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
@@ -235,7 +254,7 @@ class GeminiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
 
@@ -321,6 +340,7 @@ class GeminiBackend(
         callback: ToolStreamCallback
     ) {
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
@@ -419,7 +439,7 @@ class GeminiBackend(
             } catch (e: Exception) {
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
-                callback.onError(formatErrorMessage(e))
+                callback.onError(formatErrorMessage(e, keyStamp))
             }
         }
     }
@@ -434,6 +454,7 @@ class GeminiBackend(
         val future = CompletableFuture<LlmResponse>()
 
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
@@ -459,7 +480,7 @@ class GeminiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
 
@@ -745,6 +766,10 @@ User: $userPrompt"""
             val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
             throw IOException("Gemini HTTP $code: $err")
         }
+        // Every request passes here, streaming or not, and a 2xx is the API accepting the key: any
+        // recorded refusal describes a credential that is no longer the one in use. Cleared here
+        // rather than on one success path, which left the pane accusing a key it had just proven.
+        credentialFailures.clear()
     }
 
     /**
@@ -840,9 +865,18 @@ User: $userPrompt"""
      *
      * [GeminiErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
      * raw HTTP error body stays on the logged exception and must never reach the transcript.
+     *
+     * @param keyStamp when the key this request read was saved, so a refusal landing after a later
+     *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception): String =
-        userMessage(GeminiErrorFormatter.classify(e, getModelName()))
+    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
+        val failure = GeminiErrorFormatter.classify(e, getModelName())
+        val message = userMessage(failure)
+        // Only a credential failure is recorded: any other reason says nothing about the key, and
+        // filing it as one would send the user off to replace a key that works.
+        if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
+        return message
+    }
 
     /**
      * Resolve a [GeminiFailure] against the plugin's own resources.
@@ -859,11 +893,13 @@ User: $userPrompt"""
             GeminiFailure.QuotaExceeded ->
                 resources.getString(R.string.gemini_error_quota)
 
+            // Through CredentialFailure, which is also what the settings pane resolves, so the
+            // transcript and the pane cannot describe the same refusal differently.
             GeminiFailure.KeyRefused ->
-                resources.getString(R.string.gemini_error_key_refused)
+                resources.getString(CredentialFailure.KeyRefused.messageRes)
 
             GeminiFailure.KeyInvalid ->
-                resources.getString(R.string.gemini_error_key_invalid)
+                resources.getString(CredentialFailure.KeyInvalid.messageRes)
 
             is GeminiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_request_rejected_reason, it)

@@ -119,17 +119,16 @@
 
             <!-- The reveal toggle is the box's own end icon rather than a loose ImageButton: it
                  gets a real touch target, and the fragment still owns the click so the window can
-                 be flagged secure while the key is legible. -->
+                 be flagged secure while the key is legible. Nothing endIcon-related is declared
+                 here — SecretRevealController sets the mode, drawable, description and listener in
+                 code, because Material 1.10 never reads app:endIconDrawable and the icon a layout
+                 asks for draws blank. -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/openai_api_key_box"
                 style="@style/PluginTextInputLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/hint_openai_api_key"
-                app:endIconCheckable="true"
-                app:endIconContentDescription="@string/cd_show_api_key"
-                app:endIconDrawable="@drawable/ic_visibility"
-                app:endIconMode="custom">
+                android:hint="@string/hint_openai_api_key">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/openai_api_key_input"

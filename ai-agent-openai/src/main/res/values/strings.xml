@@ -53,8 +53,10 @@
     <string name="label_openai_api_key_required">API Key (required for OpenAI)</string>
     <string name="label_openai_api_key_optional">API Key (if this server needs one)</string>
     <string name="hint_openai_api_key">Paste your key</string>
-    <string name="cd_show_api_key">Show API key</string>
-    <string name="cd_hide_api_key">Hide API key</string>
+    <!-- Reveal toggle on the masked credential field. Deliberately the same wording in
+         every AI plugin: one control, one announcement, whatever the field holds. -->
+    <string name="cd_show_credential">Show credential</string>
+    <string name="cd_hide_credential">Hide credential</string>
     <string name="btn_save_api_key">Save Key</string>
     <string name="btn_edit_api_key">Edit</string>
     <string name="btn_clear_api_key">Clear</string>
@@ -77,6 +79,8 @@
     <string name="msg_key_verified">Verified, your API key works</string>
     <string name="msg_key_verified_rate_limited">Key accepted — the server is rate-limiting right now</string>
     <string name="msg_key_rejected">The server refused this key. It wasn\'t saved, check it and try again.</string>
+    <string name="msg_key_rejected_kept">The server refused this key. It wasn\'t saved \u2014 the key you had saved was kept, and chat is still using it.</string>
+    <string name="msg_key_chat_failure">A chat request was refused: %1$s</string>
     <string name="msg_key_uncheckable">Couldn\'t check this — make sure the AI Core plugin is installed, enabled and up to date.</string>
     <string name="title_save_unverified_key">Save without checking?</string>
     <string name="msg_save_unverified_key">%s\n\nYour key has not been checked, so there is no way to tell yet whether it works. Save it now and it will be used as soon as the server answers.</string>
