@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentgemini.errors
 
+import androidx.annotation.StringRes
+import com.itsaky.androidide.plugins.aiagentgemini.R
 import org.json.JSONObject
 import java.io.IOException
 
@@ -59,6 +61,48 @@ sealed interface GeminiFailure {
     /** Everything else, including failures that never reached the network. */
     data class Failed(val reason: String?) : GeminiFailure
 }
+
+/**
+ * A credential failure in the form the settings pane can be handed: a tag stable enough to persist,
+ * and the wording resolved wherever it is shown.
+ *
+ * The pane is handed one of these rather than a rendered sentence. A sentence recorded at the
+ * moment of failure is frozen in the locale it was produced in — change the device language and
+ * the banner reads half in each — and it outlives a later correction to the wording.
+ */
+internal enum class CredentialFailure(val tag: String, @get:StringRes val messageRes: Int) {
+    KeyRefused("key_refused", R.string.gemini_error_key_refused),
+    KeyInvalid("key_invalid", R.string.gemini_error_key_invalid);
+
+    companion object {
+        /**
+         * The credential failure [failure] is, or null when it is about something else.
+         *
+         * The settings pane reports only these: a 500 or an unreachable network says nothing about
+         * the key, and reporting one as a credential problem would send the user off to re-enter a
+         * key that works. Listed exhaustively so a failure added later has to be classified here.
+         */
+        fun of(failure: GeminiFailure): CredentialFailure? = when (failure) {
+            GeminiFailure.KeyRefused -> KeyRefused
+            GeminiFailure.KeyInvalid -> KeyInvalid
+            is GeminiFailure.ModelUnavailable,
+            GeminiFailure.QuotaExceeded,
+            is GeminiFailure.RequestRejected,
+            is GeminiFailure.ServiceUnavailable,
+            is GeminiFailure.Unexpected,
+            GeminiFailure.Unreachable,
+            GeminiFailure.ReplyTruncated,
+            is GeminiFailure.Failed -> null
+        }
+
+        /** The failure [tag] names, or null for a tag this release no longer knows. */
+        fun ofTag(tag: String): CredentialFailure? = entries.firstOrNull { it.tag == tag }
+    }
+}
+
+/** Whether this failure is about the credential rather than the request, the model or the network. */
+internal val GeminiFailure.isCredentialProblem: Boolean
+    get() = CredentialFailure.of(this) != null
 
 /**
  * Classifies a Gemini failure so it can be reported as one translated sentence.

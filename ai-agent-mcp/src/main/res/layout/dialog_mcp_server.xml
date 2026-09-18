@@ -74,16 +74,39 @@
             android:textColor="@color/plugin_on_surface"
             android:textSize="14sp" />
 
-        <EditText
-            android:id="@+id/mcpToken"
+        <!--
+          The token field carries the same reveal control as the other AI plugins' credential
+          fields: the box's own end icon, which has a real touch target, instead of the nothing it
+          had before — a masked token could only be typed blind.
+
+          Wrapped in a TextInputLayout only to get that end icon. It is declared bare, with no
+          style and no app: attribute: a library `app:` attribute is compiled against this plugin's
+          resource ids but read by whichever copy of the Material classes the host process loaded,
+          so it silently resolves to nothing (see mcpAddHeader below). SecretRevealController sets
+          the end icon in code and strips the box's own hint and background, so the field keeps
+          looking like the plain ones above it.
+
+          The child is a TextInputEditText rather than the plain EditText its siblings are: it is
+          what a TextInputLayout expects, and only that pairing hands the field's hint and the end
+          icon's state to accessibility services as one control. It styles identically here — both
+          resolve to ?attr/editTextStyle — so it costs the plain look nothing.
+        -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/mcpTokenBox"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:autofillHints="password"
-            android:hint="@string/mcp_hint_token"
-            android:inputType="textPassword"
-            android:maxLines="1"
-            android:textColor="@color/plugin_on_surface"
-            android:textColorHint="@color/plugin_text_subtle" />
+            android:layout_height="wrap_content">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/mcpToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autofillHints="password"
+                android:hint="@string/mcp_hint_token"
+                android:inputType="textPassword"
+                android:maxLines="1"
+                android:textColor="@color/plugin_on_surface"
+                android:textColorHint="@color/plugin_text_subtle" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <!--
           Shown only while something is stored: an empty token field means "keep what is there", so

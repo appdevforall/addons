@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentgemini.backend.GeminiBackend
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailure
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
@@ -80,6 +82,22 @@ class GeminiSettingsViewModel(
     private val logger: PluginLogger?
         get() = getContext()?.logger
 
+    /** The credential refusal the backend last hit, which this pane is the place to act on. */
+    private val credentialFailures = CredentialFailureLog(::prefs)
+
+    /**
+     * Why the last request was refused for credential reasons.
+     *
+     * Reading does not forget: the view is recreated on every rotation, and a read that cleared
+     * would drop the message on the first one — while the credential it names is still the one
+     * being used. It is cleared where it stops being true instead: when a new credential is saved,
+     * and when a request goes through on the stored one.
+     *
+     * @return the failure to report, whose wording the caller resolves, or null when the
+     *   credential has not been refused
+     */
+    internal fun credentialFailure(): CredentialFailure? = credentialFailures.read()
+
     /**
      * Check whether [apiKey] actually works, without storing it anywhere.
      *
@@ -137,11 +155,15 @@ class GeminiSettingsViewModel(
                 return@withContext false
             }
             // commit(), not apply(): only a synchronous write can honestly return "persisted".
-            prefs.edit()
+            val saved = prefs.edit()
                 .putString(KEY_API_KEY, encrypted)
                 .putLong(KEY_API_KEY_TIMESTAMP, System.currentTimeMillis())
                 .putBoolean(KEY_API_KEY_VERIFIED, verified)
                 .commit()
+            // The recorded refusal described the key this one replaces; kept, it would be reported
+            // against a key that has never been tried.
+            if (saved) credentialFailures.clear()
+            saved
         }
 
     /**
@@ -182,6 +204,9 @@ class GeminiSettingsViewModel(
             remove(KEY_API_KEY_TIMESTAMP)
             // Removed with the key, or the next saved key would inherit this one's verdict.
             remove(KEY_API_KEY_VERIFIED)
+            // Same reasoning: the refusal described the key being removed.
+            remove(GeminiPreferences.KEY_CREDENTIAL_FAILURE)
+            remove(GeminiPreferences.KEY_CREDENTIAL_FAILURE_KEY_STAMP)
             apply()
         }
     }

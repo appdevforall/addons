@@ -33,14 +33,16 @@ internal class OpenAiFailureMessages(
             OpenAiFailure.BillingRequired ->
                 resources.getString(R.string.openai_error_billing)
 
+            // Through CredentialFailure, which is also what the settings pane resolves, so the
+            // transcript and the pane cannot describe the same refusal differently.
             OpenAiFailure.KeyRefused ->
-                resources.getString(R.string.openai_error_key_refused)
+                resources.getString(CredentialFailure.KeyRefused.messageRes)
 
             OpenAiFailure.KeyMissing ->
-                resources.getString(R.string.openai_error_key_missing)
+                resources.getString(CredentialFailure.KeyMissing.messageRes)
 
             OpenAiFailure.KeyForbidden ->
-                resources.getString(R.string.openai_error_key_forbidden)
+                resources.getString(CredentialFailure.KeyForbidden.messageRes)
 
             is OpenAiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.openai_error_request_rejected_reason, it)
