@@ -120,14 +120,16 @@ class ChatViewModelHistoryRestoreTest {
     }
 
     @Test
-    fun givenATurnStoppedMidStream_whenRestoring_thenItIsExcludedFromHistory() {
+    fun givenAnUnfinishedAgentTurn_whenRestoring_thenItIsExcludedFromHistory() {
         seed(
             session(
                 "s1",
                 message("m1", "build the app", "USER"),
                 // Zero duration is what finalizeInProgressMessages stamps on a turn Stop cut off.
                 message("m2", "the build succ", "AGENT", durationMs = 0),
-                message("m3", "the build succeeded", "AGENT", durationMs = 1200),
+                // Null is the streaming bubble a persist wrote out before process death.
+                message("m3", "the build suc", "AGENT", durationMs = null),
+                message("m4", "the build succeeded", "AGENT"),
             )
         )
 
@@ -149,6 +151,42 @@ class ChatViewModelHistoryRestoreTest {
         val history = restoredViewModel().history.value
 
         assertEquals(listOf("delete the file", "deleted it"), history.map { it.content })
+    }
+
+    @Test
+    fun givenABlankHistoryText_whenRestoring_thenTheRenderedAnswerIsUsed() {
+        seed(
+            session(
+                "s1",
+                message("m1", "what does this do", "USER"),
+                // A native respond call carries no text part, so the stored history text is empty.
+                message("m2", "it applies the plugin builder", "AGENT", historyText = ""),
+            )
+        )
+
+        val history = restoredViewModel().history.value
+
+        assertEquals(
+            listOf("what does this do", "it applies the plugin builder"),
+            history.map { it.content },
+        )
+    }
+
+    @Test
+    fun givenANewestTurnOverTheWholeBudget_whenRestoring_thenItIsStillRestored() {
+        seed(
+            session(
+                "s1",
+                message("m1", "older turn", "USER"),
+                message("m2", "x".repeat(8_001), "AGENT"),
+            )
+        )
+
+        val history = restoredViewModel().history.value
+
+        // Dropping it would hand the model nothing at all, the regression this restore removes.
+        assertEquals(1, history.size)
+        assertEquals(Role.ASSISTANT, history.single().role)
     }
 
     @Test
@@ -336,6 +374,9 @@ class ChatViewModelHistoryRestoreTest {
 
         // The replacement is empty, so the deleted conversation must not still be in the context.
         assertTrue(viewModel.history.value.isEmpty())
+        // A null current session would render every later message and store none of them.
+        assertEquals(1, viewModel.sessions.value.size)
+        assertTrue(viewModel.sessions.value.single().messages.isEmpty())
     }
 
     /** Builds a ViewModel whose storage is already bound to [projectKey]'s namespace. */
@@ -370,7 +411,8 @@ class ChatViewModelHistoryRestoreTest {
         text: String,
         sender: String,
         status: String = "SENT",
-        durationMs: Long? = null,
+        // A finished agent turn is stamped with one; only a cut-off bubble has null or zero.
+        durationMs: Long? = if (sender == "AGENT") 1_200 else null,
         historyText: String? = null,
     ): String {
         val duration = durationMs?.let { ""","durationMs":$it""" } ?: ""
