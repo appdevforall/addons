@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentopenai.backend.OpenAiBackend
+import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailure
+import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
 import com.itsaky.androidide.plugins.aiagentopenai.security.secureApiKeyStore
@@ -93,6 +95,22 @@ class OpenAiSettingsViewModel(
      */
     private val logger: PluginLogger?
         get() = getContext()?.logger
+
+    /** The credential refusal the backend last hit, which this pane is the place to act on. */
+    private val credentialFailures = CredentialFailureLog(::prefs)
+
+    /**
+     * Why the last request was refused for credential reasons.
+     *
+     * Reading does not forget: the view is recreated on every rotation, and a read that cleared
+     * would drop the message on the first one — while the credential it names is still the one
+     * being used. It is cleared where it stops being true instead: when a new credential is saved,
+     * and when a request goes through on the stored one.
+     *
+     * @return the failure to report, whose wording the caller resolves, or null when the
+     *   credential has not been refused
+     */
+    internal fun credentialFailure(): CredentialFailure? = credentialFailures.read()
 
     /** The stored server URL, or OpenAI's own API when nothing has been saved. */
     fun getBaseUrl(): String =
@@ -268,13 +286,17 @@ class OpenAiSettingsViewModel(
                 return@withContext false
             }
             // commit(), not apply(): only a synchronous write can honestly return "persisted".
-            prefs.edit()
+            val saved = prefs.edit()
                 .putString(OpenAiPreferences.KEY_API_KEY, encrypted)
                 .putLong(OpenAiPreferences.KEY_API_KEY_TIMESTAMP, System.currentTimeMillis())
                 .putBoolean(OpenAiPreferences.KEY_API_KEY_VERIFIED, verified)
                 // Written with the key so the backend can refuse to send it anywhere else.
                 .putString(OpenAiPreferences.KEY_API_KEY_URL, getBaseUrl())
                 .commit()
+            // The recorded refusal described the key this one replaces; kept, it would be reported
+            // against a key that has never been tried.
+            if (saved) credentialFailures.clear()
+            saved
         }
 
     /**
@@ -337,6 +359,9 @@ class OpenAiSettingsViewModel(
             remove(OpenAiPreferences.KEY_API_KEY_VERIFIED)
             // Likewise its origin: a stale one would decide where the *next* key may be sent.
             remove(OpenAiPreferences.KEY_API_KEY_URL)
+            // Same reasoning: the refusal described the key being removed.
+            remove(OpenAiPreferences.KEY_CREDENTIAL_FAILURE)
+            remove(OpenAiPreferences.KEY_CREDENTIAL_FAILURE_KEY_STAMP)
             apply()
         }
     }
