@@ -1,4 +1,4 @@
-# ai-literacy-course
+# AI Literacy Course
 
 A Code On The Go plugin that bundles Learn AI Anywhere's offline
 **"Introduction to AI"** course and plays it full-screen, fully offline.
@@ -37,8 +37,8 @@ the plugin's own data dir, and everything renders offline.
 ## Build
 
 ```bash
-./gradlew downloadAssets      # fetches + verifies the ~110 MB course ZIP
-./gradlew assemblePlugin      # -> build/plugin/ai-literacy-course.cgp (~119 MB)
+../../gradlew downloadAssets      # fetches + verifies the ~110 MB course ZIP
+../../gradlew assemblePlugin      # -> build/plugin/ai-literacy-course.cgp (~119 MB)
 ```
 
 `scripts/update-libs.sh` runs `downloadAssets` automatically before
@@ -47,7 +47,7 @@ the plugin's own data dir, and everything renders offline.
 ## Source layout
 
 ```
-ai-literacy-course/
+plugins/AI-Literacy-Course/
 ├── build.gradle.kts                  ← deps + downloadAssets (Drive fetch + MD5)
 └── src/main/
     ├── AndroidManifest.xml
