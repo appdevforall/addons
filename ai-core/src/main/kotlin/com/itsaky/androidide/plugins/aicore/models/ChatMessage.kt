@@ -39,5 +39,11 @@ data class ChatMessage(
     val sender: Sender,
     var status: MessageStatus = MessageStatus.SENT,
     val timestamp: Long = System.currentTimeMillis(),
-    val durationMs: Long? = null
+    val durationMs: Long? = null,
+    /**
+     * What the model actually wrote, when that differs from [text] (which holds the rendered
+     * bubble, e.g. a localized "the action failed"). Null on a message stored before this
+     * existed, and on every turn the two agree on.
+     */
+    val historyText: String? = null
 )

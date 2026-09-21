@@ -110,6 +110,18 @@ class ChatViewModel(
         private const val MAX_CONTEXT_OPEN_FILES = 8
 
         /**
+         * How many of a restored transcript's messages the model is given back; one exchange
+         * spends two. See [rebuildHistoryFrom].
+         */
+        private const val MAX_RESTORED_HISTORY = 40
+
+        /**
+         * Character budget for the same restore, since 40 messages carrying code blocks would
+         * otherwise push the next send past a small local model's created context.
+         */
+        private const val MAX_RESTORED_HISTORY_CHARS = 8_000
+
+        /**
          * Path used in the tool-call examples when the IDE has nothing open, so there is no real one
          * to show. A concrete path is what a small model needs to copy the *shape* from — a
          * placeholder like "path/to/File.ext" measurably degrades its calls — so this is the
@@ -1350,7 +1362,9 @@ class ChatViewModel(
                             text = displayText,
                             sender = Sender.AGENT,
                             status = MessageStatus.COMPLETED,
-                            durationMs = durationMs
+                            durationMs = durationMs,
+                            // Only when it differs, so a turn is not stored twice over.
+                            historyText = reply.historyText.takeIf { it != displayText }
                         )
                         _messages.value = _messages.value.map { if (it.id == agentMessageId) finalMsg else it }
                         syncMessageToSession(finalMsg)
@@ -1527,24 +1541,6 @@ class ChatViewModel(
         getContext()?.androidContext?.resources?.getQuantityString(resId, quantity, *args).orEmpty()
 
     /**
-     * Appends an AGENT message to the chat (terminal state, no streaming dots).
-     * @param text the message text.
-     */
-    private suspend fun addAgentMessage(text: String) {
-        val message = ChatMessage(
-            id = UUID.randomUUID().toString(),
-            text = text,
-            sender = Sender.AGENT,
-            status = MessageStatus.COMPLETED,
-            durationMs = 0L
-        )
-        withContext(Dispatchers.Main) {
-            _messages.value = _messages.value + message
-            syncMessageToSession(message)
-        }
-    }
-
-    /**
      * Logs to the IDE's plugin log, which is where a plugin's output is expected to land.
      * @param message the line to log.
      */
@@ -1603,26 +1599,38 @@ class ChatViewModel(
      */
     fun clearMessages() {
         // Clear Chat must also stop any in-flight run, not just wipe the list.
-        AgentTrace.stage(
-            "CANCEL",
-            "reason=clear chat wasRunning=${_agentState.value.isRunning}"
-        )
+        cancelActiveRun("clear chat")
+        _messages.value = emptyList()
+        _history.value = emptyList()
+        // Without this the session keeps its messages and the cleared chat returns on the next sync.
+        replaceCurrentSessionMessages(emptyList())
+        forgetRetryPoint()
+        setState(AgentState.Idle)
+        // Written now rather than debounced: a clear is deliberate and must survive a force-stop.
+        persistState()
+    }
+
+    /**
+     * Stops any in-flight run, so the transcript it is streaming into cannot be swapped out from
+     * under it: without the epoch bump the stale run's callbacks keep writing, and its reply lands
+     * in the conversation that replaced the one it was asked for.
+     */
+    private fun cancelActiveRun(reason: String) {
+        AgentTrace.stage("CANCEL", "reason=$reason wasRunning=${_agentState.value.isRunning}")
         generationEpoch.incrementAndGet()
         approvalManager.cancelPendingApproval()
         generationJob?.cancel()
         generationJob = null
         getLlmService()?.cancelGeneration()
         stopStateTimer()
-        _messages.value = emptyList()
-        _history.value = emptyList()
-        forgetRetryPoint()
-        setState(AgentState.Idle)
     }
 
     /**
      * Create a new chat session.
      */
     fun createNewSession() {
+        cancelActiveRun("new session")
+        setState(AgentState.Idle)
         val newSession = ChatSession(projectKey = activeProjectKey)
         _sessions.value = _sessions.value + newSession
         _currentSessionId.value = newSession.id
@@ -1641,10 +1649,12 @@ class ChatViewModel(
             logWarn("switchToSession: no session $sessionId")
             return
         }
+        cancelActiveRun("switch session")
         _currentSessionId.value = sessionId
         // Use immutable snapshot to ensure StateFlow emits on mutations
         _messages.value = session.messages.toList()
-        _history.value = emptyList()
+        // Emptying this is what had the model forget a conversation the user was looking at.
+        _history.value = rebuildHistoryFrom(session.messages)
         forgetRetryPoint()
         persistState()
     }
@@ -1659,14 +1669,79 @@ class ChatViewModel(
     }
 
     /**
+     * Rebuilds the LLM context from a restored transcript, so the model remembers what the user is
+     * looking at. Lossy on purpose: attached file bodies and tool scaffolding never reached the
+     * saved messages, so they are not reconstructed here.
+     *
+     * @param messages the session's transcript, oldest first.
+     * @return the eligible messages that fit both budgets, oldest first; the newest one is
+     *   always kept, truncated to the character budget when it alone exceeds it.
+     */
+    private fun rebuildHistoryFrom(
+        messages: List<ChatMessage>
+    ): List<LlmInferenceService.ChatMessage> {
+        val eligible = messages.filter {
+            // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
+            (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
+                // Only a finished agent turn carries a duration: null is a bubble process death
+                // cut mid sentence, zero the marker Stop leaves; neither was finished saying.
+                (it.sender == Sender.USER || (it.durationMs ?: 0L) > 0L) &&
+                // Blank means the model wrote nothing, which AgentLoop skips live too, so the
+                // bubble must not stand in for it: that bubble is "the action failed".
+                (it.historyText ?: it.text).isNotBlank()
+        }
+        // Newest-first, so both budgets are spent on the turns nearest the next message.
+        val kept = ArrayDeque<LlmInferenceService.ChatMessage>()
+        var chars = 0
+        for (message in eligible.asReversed()) {
+            // What the model wrote, not the bubble: a turn whose tool call failed renders as
+            // "the action failed" in the IDE's language, a sentence the model never produced.
+            var text = message.historyText ?: message.text
+            // The newest eligible turn is never dropped — breaking on it would restore nothing at
+            // all — but it is truncated, since nothing upstream bounds what a user can paste.
+            if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
+                    chars + text.length > MAX_RESTORED_HISTORY_CHARS)
+            ) break
+            if (text.length > MAX_RESTORED_HISTORY_CHARS) {
+                text = text.takeLast(MAX_RESTORED_HISTORY_CHARS)
+            }
+            chars += text.length
+            val role = if (message.sender == Sender.USER) {
+                LlmInferenceService.ChatMessage.Role.USER
+            } else {
+                LlmInferenceService.ChatMessage.Role.ASSISTANT
+            }
+            // Starting on an ASSISTANT turn is left alone: every backend here flattens the array,
+            // and trimming back to a USER turn would drop one the user can still see.
+            kept.addFirst(LlmInferenceService.ChatMessage(role, text))
+        }
+        AgentTrace.detail(
+            "RESTORE",
+            "retained=${kept.size} discarded=${messages.size - eligible.size} " +
+                "capped=${eligible.size - kept.size}"
+        )
+        return kept.toList()
+    }
+
+    /**
      * Delete a chat session.
      */
     fun deleteSession(sessionId: String) {
         _sessions.value = _sessions.value.filter { it.id != sessionId }
         if (_currentSessionId.value == sessionId) {
             val remaining = _sessions.value.firstOrNull()
-            _currentSessionId.value = remaining?.id
-            _messages.value = remaining?.messages ?: emptyList()
+            if (remaining == null) {
+                // A null current session drops every later message on the floor; it also cancels.
+                createNewSession()
+                return
+            }
+            cancelActiveRun("delete session")
+            _currentSessionId.value = remaining.id
+            _messages.value = remaining.messages
+            // Left alone, the deleted conversation's context stays live under the surviving one.
+            _history.value = rebuildHistoryFrom(remaining.messages)
+            // The rewind point names a run this transcript does not have, and would truncate it.
+            forgetRetryPoint()
         }
         persistState()
     }
