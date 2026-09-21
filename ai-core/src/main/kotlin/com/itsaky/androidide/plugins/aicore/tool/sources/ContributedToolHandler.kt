@@ -74,8 +74,8 @@ class ContributedToolHandler(
     val readOnly: Boolean get() = tool.readOnly
 
     /**
-     * From the provider's own declaration, never [requiresApproval], which is forced true above and
-     * would make every contributed tool, read-only ones included, look like a change to the run.
+     * From the provider's own declaration: a contributed tool that is not read-only may write
+     * anywhere, so the run has to count it as a change.
      */
     override val mutatesProject: Boolean get() = !readOnly
 

@@ -26,6 +26,9 @@ class BuiltInHandlerApprovalTest {
             "generate_from_template",
         )
 
+        /** The subset that rewrites a project file, which is what the progress guard counts. */
+        val WRITING_TOOLS = setOf("create_file", "update_file", "edit_file", "add_dependency")
+
         /**
          * Built-ins that only read. `open_file` belongs here despite opening an editor tab: it
          * shows the user a file rather than changing one, and asking to read is noise.
@@ -72,6 +75,15 @@ class BuiltInHandlerApprovalTest {
         assertTrue(
             "these ask the user for a read: ${overGuarded.map { it.toolName }}",
             overGuarded.isEmpty(),
+        )
+    }
+
+    @Test
+    fun givenEveryBuiltIn_whenItIsRegistered_thenOnlyTheWritersCountAsChangingTheProject() {
+        // A build tool asks first without writing, so approval is not the signal the guard reads.
+        assertEquals(
+            WRITING_TOOLS,
+            builtIns.filter { it.mutatesProject }.mapTo(mutableSetOf()) { it.toolName },
         )
     }
 }

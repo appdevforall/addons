@@ -31,12 +31,12 @@ interface ToolHandler {
         get() = false
 
     /**
-     * Whether this tool changes the project, which is what the progress guard reads. Defaults to
-     * [requiresApproval], true of exactly the built-ins that act on the project; a source whose
-     * approval flag is forced true overrides this instead.
+     * Whether this tool rewrites project files, which is what the progress guard reads. Declared by
+     * the handlers that write; needing approval is not the same thing, as a build tool asks first
+     * without changing a file.
      */
     val mutatesProject: Boolean
-        get() = requiresApproval
+        get() = false
 
     /**
      * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means

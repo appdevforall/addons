@@ -31,6 +31,7 @@ class AddDependencyHandler(
     )
     override val description = "Add a Maven dependency to the project build file"
     override val requiresApproval = true
+    override val mutatesProject = true
 
     override val pathArgs = listOf("build_file")
     override val pathDefaults = mapOf("build_file" to DEFAULT_BUILD_FILE)

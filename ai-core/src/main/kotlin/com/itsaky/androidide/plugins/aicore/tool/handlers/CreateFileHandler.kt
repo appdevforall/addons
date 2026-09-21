@@ -23,6 +23,7 @@ class CreateFileHandler(
     )
     override val description = "Create a new file with given content"
     override val requiresApproval = true  // Requires approval for file creation
+    override val mutatesProject = true
     override val pathArgs = listOf("file_path")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
