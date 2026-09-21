@@ -74,6 +74,12 @@ class ContributedToolHandler(
     val readOnly: Boolean get() = tool.readOnly
 
     /**
+     * From the provider's own declaration: a contributed tool that is not read-only may write
+     * anywhere, so the run has to count it as a change.
+     */
+    override val mutatesProject: Boolean get() = !readOnly
+
+    /**
      * Checks the schema's required properties before an approval dialog is spent on a call that
      * cannot succeed.
      * @param args the normalized call arguments.

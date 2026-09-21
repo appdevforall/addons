@@ -30,19 +30,10 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
+import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
-import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.GenerateFromTemplateHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.GradleSyncHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.ListFilesHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.OpenFileHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
-import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadBuildOutputHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadFileHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.SearchProjectHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.UpdateFileHandler
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -336,31 +327,7 @@ class ChatViewModel(
     fun isStorageInitialized(): Boolean = ::storageManager.isInitialized
 
     init {
-        // Initialize tool handlers
-        val context = getContext()
-        builtInHandlers = if (context != null) {
-            listOf(
-                // Read-only tools
-                ReadFileHandler(context),
-                ListFilesHandler(context),
-                SearchProjectHandler(context),
-                OpenFileHandler(context),
-                ReadBuildOutputHandler(context),
-                // Write tools
-                CreateFileHandler(context),
-                UpdateFileHandler(context),
-                EditFileHandler(context),
-                AddDependencyHandler(context),
-                // Build tools
-                com.itsaky.androidide.plugins.aicore.tool.handlers.RunAppHandler(context),
-                GradleSyncHandler(context),
-                // Template tool
-                GenerateFromTemplateHandler(context)
-            )
-        } else {
-            emptyList()
-        }
-
+        builtInHandlers = getContext()?.let(BuiltInToolHandlers::create).orEmpty()
         agentTools = buildAgentTools()
         ToolSourceStore.shared.addChangeListener(toolSourcesChanged)
     }
@@ -1116,82 +1083,15 @@ class ChatViewModel(
                             runModelTurn(llmService, turns, config, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
-                        events = object : AgentLoop.Events {
-                            // Numbers the turn between its reply and the tools it runs, so the step
-                            // budget a run spent on one tool is counted off the trace, not guessed.
-                            override suspend fun onModelTurn(turn: Int, text: String) {
-                                AgentTrace.stage("TURN", "turn=$turn chars=${text.length}")
-                            }
-
-                            override suspend fun onToolResults(
-                                turn: Int,
-                                calls: List<ToolCall>,
-                                results: List<ToolResult>,
-                            ) {
-                                calls.forEachIndexed { index, call ->
-                                    val result = results.getOrNull(index)
-                                    AgentTrace.stage(
-                                        "RESULT",
-                                        "turn=$turn ${call.name} success=${result?.success}",
-                                        AgentTrace.preview(result?.message),
-                                    )
-                                }
-                            }
-
-                            override suspend fun onFinalAnswer(turn: Int, message: String) {
-                                AgentTrace.stage(
-                                    "ANSWER",
-                                    "turn=$turn chars=${message.length}",
-                                    AgentTrace.preview(message),
-                                )
-                            }
-
-                            override suspend fun onMaxIterationsReached(turns: Int) {
-                                AgentTrace.refusal("LOOP", "turns=$turns", "iteration cap reached")
-                                addSystemMessage(
-                                    str(R.string.agent_max_steps_reached, turns),
-                                    MessageStatus.SENT
-                                )
-                            }
-
-                            override suspend fun onUnparsedReply(
-                                turn: Int,
-                                reason: ToolCallExtractor.UnparsedReply,
-                            ) {
-                                // No system message: AgentReplyRenderer already puts this same
-                                // advice in the turn's own bubble, in place of the raw envelope.
-                                AgentTrace.refusal(
-                                    "PARSE",
-                                    "turn=$turn reason=$reason",
-                                    "reply carried no readable tool call",
-                                )
-                            }
-
-                            override suspend fun onAbandonedAfterFailure(turn: Int) {
-                                // No system message: the reply itself already carries the model's
-                                // account of the failure, rendered as such by AgentReplyRenderer.
-                                AgentTrace.refusal(
-                                    "LOOP",
-                                    "turn=$turn",
-                                    "stopped with a failed tool unaddressed",
-                                )
-                            }
-
-                            override suspend fun onRepeatAfterSuccess(turn: Int) {
-                                AgentTrace.stage(
-                                    "LOOP",
-                                    "turn=$turn assumed-complete=repeat-after-success",
-                                )
-                            }
-
-                            override suspend fun onRepeatedToolCalls(turns: Int) {
-                                AgentTrace.refusal("LOOP", "turns=$turns", "identical tool calls repeated")
-                                addSystemMessage(
-                                    str(R.string.agent_repeated_calls),
-                                    MessageStatus.SENT
-                                )
-                            }
-                        }
+                        // Read through the handler, so a path spelled `path` or left to a default
+                        // still names the file a re-read of it should count as new again.
+                        pathsOf = { call ->
+                            tools.router.getHandler(call.name)?.pathsIn(call.args).orEmpty()
+                        },
+                        changesPaths = { call ->
+                            tools.router.getHandler(call.name)?.mutatesProject == true
+                        },
+                        events = AgentRunReporter(runNotices),
                     )
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
                 } finally {
@@ -1595,6 +1495,19 @@ class ChatViewModel(
             _messages.value = _messages.value + message
             syncMessageToSession(message)
         }
+    }
+
+    /** Wording for the stops [AgentRunReporter] reports; the reporter holds no resource ids. */
+    private val runNotices = object : AgentRunReporter.Notices {
+
+        override suspend fun stepBudgetExhausted(turns: Int) =
+            addSystemMessage(str(R.string.agent_max_steps_reached, turns), MessageStatus.SENT)
+
+        override suspend fun repeatedCalls() =
+            addSystemMessage(str(R.string.agent_repeated_calls), MessageStatus.SENT)
+
+        override suspend fun noProgress() =
+            addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)
     }
 
     /**

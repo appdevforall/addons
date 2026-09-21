@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -207,33 +208,34 @@ class ToolSourceStoreTest {
     }
 
     @Test
-    fun givenAToolNamedLikeAnAutoApprovedTool_whenHandlersAreBuilt_thenItIsDropped() {
-        // `ensureApproved` exempts the name ahead of `requiresApproval`, so this would run unprompted.
+    fun givenAToolNamedLikeABuiltIn_whenHandlersAreBuilt_thenItIsDropped() {
+        // Shadowing a built-in would route the model's `read_file` at a remote server instead.
         val store = ToolSourceStore()
-        store.register(FakeToolSource(MCP, tools = listOf(contributedTool(MCP, "gradle_sync"))))
+        store.register(FakeToolSource(MCP, tools = listOf(contributedTool(MCP, "read_file"))))
 
         val tools = toolsFrom(store)
 
         assertTrue(tools.contributedHandlers.isEmpty())
-        assertNull(tools.router.getHandler("gradle_sync"))
-        assertNull("no suffix match may resolve it either", tools.router.getHandler("aiagentmcp_gradle_sync"))
+        assertSame(
+            "the built-in must still own the name",
+            builtIns.first { it.toolName == "read_file" },
+            tools.router.getHandler("read_file"),
+        )
+        assertNull("no suffix match may resolve it either", tools.router.getHandler("aiagentmcp_read_file"))
     }
 
     @Test
-    fun givenAToolForEveryAutoApprovedName_whenHandlersAreBuilt_thenNoneOfThemRegister() {
-        // The invariant, so drift between the two lists fails the build rather than the dialog.
+    fun givenAToolForEveryReservedName_whenHandlersAreBuilt_thenNoneOfThemRegister() {
+        // The invariant that survives the approval gate keying off the handler alone: what is
+        // reserved is the built-ins plus the terminal tool, and nothing may claim one of them.
         val store = ToolSourceStore()
-        store.register(
-            FakeToolSource(
-                MCP,
-                tools = ToolApprovalManager.AUTO_APPROVED_TOOLS.map { contributedTool(MCP, it) },
-            )
-        )
+        val reserved = builtIns.map { it.toolName } + TERMINAL_TOOL
+        store.register(FakeToolSource(MCP, tools = reserved.map { contributedTool(MCP, it) }))
 
         val tools = toolsFrom(store)
 
         assertTrue(
-            "every auto-approved name must be reserved: ${tools.contributedHandlers.map { it.toolName }}",
+            "every reserved name must be refused: ${tools.contributedHandlers.map { it.toolName }}",
             tools.contributedHandlers.isEmpty(),
         )
     }

@@ -46,6 +46,49 @@ class ToolApprovalManagerTest {
     }
 
     @Test
+    fun givenAToolDeclaringNoApproval_whenApprovalIsRequested_thenItRunsWithNoDialog() = runBlocking {
+        // The handler's own declaration is the whole gate now; no name list is consulted.
+        val manager = ToolApprovalManager()
+        val readOnly = object : ToolHandler {
+            override val toolName = "read_file"
+            override val description = "fake read"
+            override val requiresApproval = false
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ok")
+        }
+
+        val response = manager.ensureApproved(readOnly.toolName, readOnly, mapOf("file_path" to "A.kt"))
+
+        assertTrue(response.approved)
+        assertFalse("no dialog may be raised for a read", manager.hasPendingApproval())
+    }
+
+    @Test
+    fun givenAToolDeclaringApproval_whenItIsNamedLikeAFormerlyExemptTool_thenTheUserIsStillAsked() {
+        // `gradle_sync` and `generate_from_template` were exempted by name ahead of what their
+        // handlers asked for, which is how the two tools that act on the project ran unprompted.
+        val manager = ToolApprovalManager()
+        val syncing = object : ToolHandler {
+            override val toolName = "gradle_sync"
+            override val description = "fake sync"
+            override val requiresApproval = true
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ok")
+        }
+
+        val response = runBlocking {
+            val pending = async(Dispatchers.Default) {
+                manager.ensureApproved(syncing.toolName, syncing, emptyMap())
+            }
+            withTimeout(5_000) {
+                while (!manager.hasPendingApproval()) delay(5)
+                manager.submitApproval(ApprovalResult.DENIED)
+                pending.await()
+            }
+        }
+
+        assertFalse("the name may no longer skip the dialog", response.approved)
+    }
+
+    @Test
     fun givenACorrection_whenApprovalIsRequested_thenItIsNotApprovedAndTheInstructionIsRelayed() {
         val manager = ToolApprovalManager()
 
@@ -178,6 +221,14 @@ class ToolApprovalManagerTest {
             }
         }
         assertFalse("a contributed tool must be prompt-every-time", second.approved)
+
+        // The other downgrade, on the same manager: both are consulted only after the gate has
+        // returned, so simplifying the gate to the handler's declaration must not have moved them.
+        assertTrue(decideWith(manager, ApprovalResult.APPROVED_FOR_SESSION).approved)
+        assertFalse(
+            "edit_file must still be re-confirmed every time",
+            decideWith(manager, ApprovalResult.DENIED).approved,
+        )
     }
 
     @Test

@@ -14,6 +14,7 @@ class AgentLoop(
     private val maxIterations: Int = DEFAULT_MAX_ITERATIONS,
     private val toolOutputCharLimit: Int = DEFAULT_TOOL_OUTPUT_CHAR_LIMIT,
     private val maxConsecutiveRepeats: Int = DEFAULT_MAX_CONSECUTIVE_REPEATS,
+    private val maxTurnsWithoutProgress: Int = DEFAULT_MAX_TURNS_WITHOUT_PROGRESS,
     private val extractToolCalls: (String) -> List<ToolCall> = ToolCallExtractor::extractToolCalls,
     private val diagnoseUnparsedReply: (String) -> ToolCallExtractor.UnparsedReply? =
         ToolCallExtractor::diagnoseUnparsedReply,
@@ -36,6 +37,14 @@ class AgentLoop(
          * [StopReason.REPEATED]; a truncated result can make one repeat legitimate.
          */
         const val DEFAULT_MAX_CONSECUTIVE_REPEATS = 2
+
+        /**
+         * Turns that may introduce no tool-call signature the run has not already used, before
+         * aborting as [StopReason.CYCLING]. Rotating between a handful of reads is the shape this
+         * catches; [DEFAULT_MAX_CONSECUTIVE_REPEATS] only ever compares a turn against the one
+         * before it, so a rotation runs the step budget out instead.
+         */
+        const val DEFAULT_MAX_TURNS_WITHOUT_PROGRESS = 3
     }
 
     /**
@@ -81,6 +90,15 @@ class AgentLoop(
          * @param turns total turns run.
          */
         suspend fun onRepeatedToolCalls(turns: Int) {}
+
+        /**
+         * The loop stopped because several turns in a row introduced no action the run had not
+         * already taken — a rotation the consecutive-repeat guard cannot see.
+         * @param turns total turns run.
+         * @param staleLimit the configured no-progress limit the run hit; the same number every
+         *   time, since the guard stops the moment the count reaches it.
+         */
+        suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) {}
 
         /**
          * The model re-issued the batch it had just run successfully, which the loop reads as the
@@ -129,6 +147,9 @@ class AgentLoop(
         /** The model kept re-issuing a batch that was not working. */
         REPEATED,
 
+        /** The model kept re-using actions it had already taken, without introducing a new one. */
+        CYCLING,
+
         /** A reply meant to call a tool and no call could be read out of it. */
         UNPARSABLE,
 
@@ -154,6 +175,9 @@ class AgentLoop(
      *   emit one turn per message; flattening callers can use [renderTranscript]. Returns a
      *   [ModelReply], whose two texts a natively-calling caller sets apart.
      * @param executeTools runs a batch of tool calls.
+     * @param pathsOf the project paths a call names; the progress guard counts an earlier look at
+     *   one a later call rewrote as a new action again rather than as a repeat.
+     * @param changesPaths whether a call rewrites what it names.
      * @param events UI/state callbacks.
      * @return the run [Result].
      */
@@ -161,13 +185,17 @@ class AgentLoop(
         history: MutableList<ChatMessage>,
         generate: suspend (turns: List<ChatMessage>) -> ModelReply,
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
+        pathsOf: (ToolCall) -> Set<String> = { emptySet() },
+        changesPaths: (ToolCall) -> Boolean = { false },
         events: Events = object : Events {},
     ): Result {
         var turn = 0
-        var previousSignature: String? = null
-        var consecutiveRepeats = 0
-        // Null until a batch has run: "no tools yet" and "the tools failed" end a run differently.
-        var previousBatchSucceeded: Boolean? = null
+        val progress = ToolCallProgressGuard(
+            maxConsecutiveRepeats,
+            maxTurnsWithoutProgress,
+            pathsOf,
+            changesPaths,
+        )
         while (turn < maxIterations) {
             turn++
 
@@ -192,7 +220,7 @@ class AgentLoop(
                 }
                 // Prose after a failed batch is the model giving up, not finishing: the run ends
                 // with the user's request unmet, so reporting it COMPLETED overstates the outcome.
-                if (previousBatchSucceeded == false) {
+                if (progress.lastBatchFailed) {
                     events.onAbandonedAfterFailure(turn)
                     return Result(turn, StopReason.ABANDONED)
                 }
@@ -211,24 +239,24 @@ class AgentLoop(
                 }
             }
 
-            val signature = signatureOf(realCalls)
-            if (signature == previousSignature) {
-                if (previousBatchSucceeded == true) {
+            when (progress.inspect(realCalls)) {
+                ToolCallProgressGuard.Verdict.CYCLING -> {
+                    events.onNoProgressCycle(turn, progress.staleTurns)
+                    return Result(turn, StopReason.CYCLING)
+                }
+                ToolCallProgressGuard.Verdict.ASSUME_COMPLETE -> {
                     events.onRepeatAfterSuccess(turn)
                     return Result(turn, StopReason.COMPLETED)
                 }
-                consecutiveRepeats++
-                if (consecutiveRepeats >= maxConsecutiveRepeats) {
+                ToolCallProgressGuard.Verdict.REPEATED -> {
                     events.onRepeatedToolCalls(turn)
                     return Result(turn, StopReason.REPEATED)
                 }
-            } else {
-                consecutiveRepeats = 0
+                ToolCallProgressGuard.Verdict.PROCEED -> Unit
             }
-            previousSignature = signature
 
             val results = executeTools(realCalls)
-            previousBatchSucceeded = results.isNotEmpty() && results.all { it.success }
+            progress.recordResults(results)
             events.onToolResults(turn, realCalls, results)
             history.add(ChatMessage(Role.USER, formatToolResults(realCalls, results)))
         }
@@ -236,16 +264,6 @@ class AgentLoop(
         events.onMaxIterationsReached(turn)
         return Result(turn, StopReason.MAX_ITERATIONS)
     }
-
-    /**
-     * Builds a stable, order-sensitive fingerprint of a tool-call batch (name + args).
-     * @param calls the batch to fingerprint.
-     * @return the fingerprint string.
-     */
-    private fun signatureOf(calls: List<ToolCall>): String =
-        calls.joinToString("|") { call ->
-            call.name + "(" + call.args.toSortedMap().entries.joinToString(",") { "${it.key}=${it.value}" } + ")"
-        }
 
     /**
      * Flattens the transcript into one prompt string, with no trailing "Assistant:" cue, which the

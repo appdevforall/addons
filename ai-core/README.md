@@ -88,12 +88,13 @@ Four rules the store applies, each of which was a bug before it was a rule:
   `edit_file`. A tool colliding with a *reserved* name is dropped outright, never
   qualified: published as `<alias>_respond` it stays reachable through the
   router's suffix pass, which would hand a model's final answer to a remote
-  server. Reserved means the built-ins, the terminal tool *and* every name in
-  `ToolApprovalManager.AUTO_APPROVED_TOOLS` — that gate exempts a name rather than
-  a handler, so a name it lists with no built-in behind it would let a contributed
-  tool run with no dialog at all. A tool colliding with another *contributed* tool
-  is qualified rather than dropped — prefixing *everything* unconditionally cost
-  the model the one name a tool's own description talks about.
+  server. Reserved means the built-ins and the terminal tool. A name no longer
+  buys anything at the approval gate either — `ToolApprovalManager` reads the
+  handler's own `requiresApproval`, and `ContributedToolHandler` hard-codes it to
+  `true`, so a contributed tool cannot skip the dialog whatever it is called. A
+  tool colliding with another *contributed* tool is qualified rather than dropped
+  — prefixing *everything* unconditionally cost the model the one name a tool's
+  own description talks about.
 - **Router, executor, grammar and the prompt's tool list are rebuilt together**,
   behind one `@Volatile` reference. Replacing the router alone leaves the local
   backend's token mask forbidding every newly contributed tool — a green build

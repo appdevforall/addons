@@ -19,26 +19,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 class ToolApprovalManager {
     private val TAG = "$LOG_PREFIX.ToolApprovalManager"
 
-    // Approval request timeout: 5 minutes
-    private val APPROVAL_TIMEOUT_MS = 5 * 60 * 1000L
-
-    companion object {
-        /**
-         * Tools that run with no approval dialog, because they only read state.
-         *
-         * [ensureApproved] exempts a *name*, ahead of the handler's own `requiresApproval`, so
-         * `AgentTools.build` reserves this whole set against contributed tools claiming one.
-         */
-        val AUTO_APPROVED_TOOLS = setOf(
-            "read_file",
-            "list_files",
-            "search_project",
-            "open_file",
-            "read_build_output",
-            "gradle_sync",
-            "generate_from_template",
-        )
-    }
+    // One source for the wait and the wording, so the message cannot outlive the number.
+    private val APPROVAL_TIMEOUT_MINUTES = 5L
+    private val APPROVAL_TIMEOUT_MS = APPROVAL_TIMEOUT_MINUTES * 60 * 1000L
 
     /**
      * Built-in tools that can never be blanket-approved for the session, however the user answers.
@@ -79,7 +62,6 @@ class ToolApprovalManager {
      */
     val currentApprovalRequest: StateFlow<ApprovalRequest?> = _currentApprovalRequest.asStateFlow()
 
-
     /**
      * Check if a tool needs approval and request it if needed.
      * @return ApprovalResponse with approved status and optional denial message
@@ -89,9 +71,9 @@ class ToolApprovalManager {
         handler: ToolHandler,
         args: Map<String, Any?>
     ): ApprovalResponse {
-        // Check if tool doesn't require approval
-        if (!handler.requiresApproval || AUTO_APPROVED_TOOLS.contains(toolName)) {
-            AgentTrace.detail("APPROVAL", "$toolName skipped=auto-approved")
+        // The handler's own declaration is the whole gate; a name list beside it once overrode it.
+        if (!handler.requiresApproval) {
+            AgentTrace.detail("APPROVAL", "$toolName skipped=declared-no-approval")
             return ApprovalResponse(approved = true)
         }
 
@@ -132,51 +114,69 @@ class ToolApprovalManager {
             }
         }
         AgentTrace.stage("APPROVAL", "$toolName choice=${result?.result ?: "TIMEOUT"}")
+        return responseTo(result, toolName, handler)
+    }
 
-        // Handle timeout or decision
-        return when (result?.result) {
-            ApprovalResult.APPROVED_ONCE -> {
-                Log.d(TAG, "Approval granted (once) for $toolName")
-                ApprovalResponse(approved = true)
+    /**
+     * Turns what the user chose into what the caller runs, recording a session grant on the way.
+     * @param decision the user's choice, or null when the request timed out.
+     * @param toolName the tool being approved.
+     * @param handler its handler.
+     * @return the response for this call.
+     */
+    private fun responseTo(
+        decision: ApprovalDecision?,
+        toolName: String,
+        handler: ToolHandler
+    ): ApprovalResponse = when (decision?.result) {
+        ApprovalResult.APPROVED_ONCE -> {
+            Log.d(TAG, "Approval granted (once) for $toolName")
+            ApprovalResponse(approved = true)
+        }
+        ApprovalResult.APPROVED_FOR_SESSION -> {
+            if (isNeverSessionApproved(toolName, handler)) {
+                Log.d(TAG, "Approval granted (once; $toolName is never session-approved)")
+            } else {
+                Log.d(TAG, "Approval granted (session) for $toolName")
+                sessionApprovedTools.add(toolName)
             }
-            ApprovalResult.APPROVED_FOR_SESSION -> {
-                if (isNeverSessionApproved(toolName, handler)) {
-                    Log.d(TAG, "Approval granted (once; $toolName is never session-approved)")
-                } else {
-                    Log.d(TAG, "Approval granted (session) for $toolName")
-                    sessionApprovedTools.add(toolName)
-                }
-                ApprovalResponse(approved = true)
-            }
-            ApprovalResult.CORRECTED -> {
-                // Only this attempt is denied; a tool failure is the channel the loop re-feeds.
-                val correction = result.correction?.trim().orEmpty()
-                Log.d(TAG, "User requested a correction for $toolName")
-                ApprovalResponse(
-                    approved = false,
-                    denialMessage = if (correction.isEmpty()) {
-                        "User rejected this $toolName call and asked you to revise it."
-                    } else {
-                        "User rejected this $toolName call and asked you to revise it: " +
-                            "\"$correction\". Apply that instruction and try again."
-                    }
-                )
-            }
-            ApprovalResult.DENIED -> {
-                Log.d(TAG, "Approval denied for $toolName")
-                ApprovalResponse(
-                    approved = false,
-                    denialMessage = "User denied permission to execute $toolName"
-                )
-            }
-            null -> {
-                // Timeout occurred
-                Log.w(TAG, "Approval request timed out after ${APPROVAL_TIMEOUT_MS}ms for $toolName")
-                ApprovalResponse(
-                    approved = false,
-                    denialMessage = "Approval request timed out (no response within 5 minutes). Please try again."
-                )
-            }
+            ApprovalResponse(approved = true)
+        }
+        ApprovalResult.CORRECTED -> {
+            Log.d(TAG, "User requested a correction for $toolName")
+            // Only this attempt is denied; a tool failure is the channel the loop re-feeds.
+            ApprovalResponse(approved = false, denialMessage = correctionMessage(toolName, decision.correction))
+        }
+        ApprovalResult.DENIED -> {
+            Log.d(TAG, "Approval denied for $toolName")
+            ApprovalResponse(
+                approved = false,
+                denialMessage = "User denied permission to execute $toolName"
+            )
+        }
+        null -> {
+            Log.w(TAG, "Approval request timed out after ${APPROVAL_TIMEOUT_MS}ms for $toolName")
+            ApprovalResponse(
+                approved = false,
+                denialMessage = "Approval request timed out (no response within " +
+                    "$APPROVAL_TIMEOUT_MINUTES minutes). Please try again."
+            )
+        }
+    }
+
+    /**
+     * Phrases a correction back to the model as the instruction to apply on the retry.
+     * @param toolName the tool the user rejected.
+     * @param correction what the user typed, if anything.
+     * @return the denial message the loop feeds back.
+     */
+    private fun correctionMessage(toolName: String, correction: String?): String {
+        val instruction = correction?.trim().orEmpty()
+        val rejected = "User rejected this $toolName call and asked you to revise it"
+        return if (instruction.isEmpty()) {
+            "$rejected."
+        } else {
+            "$rejected: \"$instruction\". Apply that instruction and try again."
         }
     }
     

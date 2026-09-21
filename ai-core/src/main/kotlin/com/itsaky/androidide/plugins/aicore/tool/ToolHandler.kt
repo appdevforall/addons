@@ -31,6 +31,14 @@ interface ToolHandler {
         get() = false
 
     /**
+     * Whether this tool rewrites project files, which is what the progress guard reads. Declared by
+     * the handlers that write; needing approval is not the same thing, as a build tool asks first
+     * without changing a file.
+     */
+    val mutatesProject: Boolean
+        get() = false
+
+    /**
      * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means
      * untyped, flat string arguments, which is what the tool-call protocol supports today.
      */
@@ -70,6 +78,13 @@ interface ToolHandler {
 
     val resolvesPathsInternally: Boolean
         get() = false
+
+    /**
+     * Values a [pathArgs] key falls back to when the call omits it, keyed the same way. Declared
+     * here so the progress guard sees the file a defaulted write actually touches.
+     */
+    val pathDefaults: Map<String, String>
+        get() = emptyMap()
 
     /**
      * Alternative argument names, alias → canonical. Small models reliably invent near-miss keys

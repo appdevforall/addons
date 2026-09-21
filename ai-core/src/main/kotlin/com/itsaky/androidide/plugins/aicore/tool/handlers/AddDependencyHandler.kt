@@ -10,6 +10,9 @@ import com.itsaky.androidide.plugins.services.IdeProjectManipulationService
 
 private const val TAG = "$LOG_PREFIX.AddDependencyHandler"
 
+/** Where a call that names no build file adds the dependency. */
+private const val DEFAULT_BUILD_FILE = "app/build.gradle.kts"
+
 /**
  * Handler for adding dependencies to the project build file.
  */
@@ -28,8 +31,10 @@ class AddDependencyHandler(
     )
     override val description = "Add a Maven dependency to the project build file"
     override val requiresApproval = true
+    override val mutatesProject = true
 
     override val pathArgs = listOf("build_file")
+    override val pathDefaults = mapOf("build_file" to DEFAULT_BUILD_FILE)
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val dependency = args["dependency"]?.toString()?.trim()
@@ -37,8 +42,7 @@ class AddDependencyHandler(
             return ToolResult.failure("dependency is required (e.g., 'com.squareup.retrofit2:retrofit:2.9.0')")
         }
 
-        val buildFile = args["build_file"]?.toString()?.trim()
-            ?: "app/build.gradle.kts"  // Default to app module
+        val buildFile = args["build_file"]?.toString()?.trim() ?: DEFAULT_BUILD_FILE
 
         Log.d(TAG, "Adding dependency: $dependency to $buildFile")
 

@@ -54,6 +54,7 @@ class EditFileHandler(
             "replacement; empty deletes it). old_string must match exactly once unless " +
             "replace_all is true. Prefer this over update_file for changing a file."
     override val requiresApproval = true
+    override val mutatesProject = true
     override val pathArgs = listOf(ARG_PATH)
     override val argAliases = mapOf(
         "old" to ARG_OLD,

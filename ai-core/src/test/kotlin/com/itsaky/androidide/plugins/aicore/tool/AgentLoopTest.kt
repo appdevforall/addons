@@ -29,6 +29,10 @@ class AgentLoopTest {
 
     private fun toolCall(name: String) = """<tool_call>{"tool":"$name","args":{}}</tool_call>"""
 
+    /** A call whose argument sets its signature apart from the same tool called on another path. */
+    private fun toolCall(name: String, path: String) =
+        """<tool_call>{"tool":"$name","args":{"path":"$path"}}</tool_call>"""
+
     @Test
     fun givenAModelThatCallsNoTools_whenTheLoopRuns_thenItStopsAfterOneTurn() = runTest {
         val model = ScriptedModel(listOf("All done — here is your answer."))
@@ -556,5 +560,148 @@ class AgentLoopTest {
         assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
         assertTrue(result.completed)
         assertFalse(abandoned)
+    }
+
+    @Test
+    fun givenAModelRotatingBetweenSeenActions_whenTheLoopRuns_thenItStopsAsCyclingBeforeTheStepCap() = runTest {
+        // Three reads in a cycle: never two identical turns in a row, so the repeat guard — which
+        // only compares a turn against the one before it — never sees anything wrong.
+        val model = ScriptedModel(
+            listOf(
+                toolCall("open_file"),
+                toolCall("read_build_output"),
+                toolCall("search_project"),
+                toolCall("open_file"),
+                toolCall("read_build_output"),
+                toolCall("search_project"),
+            )
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "fix the build"))
+        var cycledTurns = -1
+        var maxReachedTurns = -1
+        var toolBatches = 0
+
+        val result = AgentLoop(maxIterations = 16).run(
+            history = history,
+            generate = model::generate,
+            executeTools = { toolBatches++; listOf(ToolResult.success("ok")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
+                override suspend fun onMaxIterationsReached(turns: Int) { maxReachedTurns = turns }
+            }
+        )
+
+        assertFalse(result.completed)
+        assertEquals(AgentLoop.StopReason.CYCLING, result.reason)
+        assertEquals(6, result.turns)            // three new signatures, then three stale ones
+        assertEquals(6, cycledTurns)
+        assertEquals(-1, maxReachedTurns)        // the step budget is never reached
+        assertEquals(5, toolBatches)             // the aborting turn runs nothing
+    }
+
+    @Test
+    fun givenANewSignatureAfterTwoStaleTurns_whenTheLoopRuns_thenTheCounterResets() = runTest {
+        // A run that is still finding new things to do must not be aborted for revisiting one.
+        val model = ScriptedModel(
+            listOf(
+                toolCall("read_file", "A.kt"),
+                toolCall("read_file", "B.kt"),
+                toolCall("read_file", "A.kt"),
+                toolCall("read_file", "B.kt"),
+                toolCall("read_file", "C.kt"),   // genuinely new: the counter goes back to zero
+                toolCall("read_file", "A.kt"),
+                toolCall("read_file", "B.kt"),
+                toolCall("read_file", "A.kt"),
+            )
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "read the sources"))
+
+        val result = AgentLoop(maxIterations = 16).run(
+            history = history,
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("ok")) }
+        )
+
+        assertEquals(AgentLoop.StopReason.CYCLING, result.reason)
+        // Turn 5 would have been the third stale turn had the new call not reset the counter.
+        assertEquals(8, result.turns)
+    }
+
+    @Test
+    fun givenAFailedCallRepeatedIdentically_whenTheLoopRuns_thenTheRepeatGuardStillFiresFirst() = runTest {
+        // Both guards count the same turns; the tighter one must win, or REPEATED never reports.
+        val model = ScriptedModel(listOf(toolCall("list_files")))
+        val history = mutableListOf(ChatMessage(Role.USER, "go"))
+        var cycledTurns = -1
+
+        val result = AgentLoop(maxIterations = 16).run(
+            history = history,
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.failure("nope")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.REPEATED, result.reason)
+        assertEquals(3, result.turns)
+        assertEquals(-1, cycledTurns)
+    }
+
+    @Test
+    fun givenALongRunThatKeepsIntroducingNewActions_whenTheLoopRuns_thenItNeverAbortsAsCycling() = runTest {
+        // Signatures carry arguments, so reading twelve different files is twelve distinct actions.
+        val model = ScriptedModel(
+            (1..12).map { toolCall("read_file", "File$it.kt") } + "Here is the summary."
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "summarise the sources"))
+        var cycledTurns = -1
+
+        val result = AgentLoop(maxIterations = 16).run(
+            history = history,
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("ok")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(13, result.turns)
+        assertEquals("a productive run must never be reported as cycling", -1, cycledTurns)
+    }
+
+    @Test
+    fun givenARotatingRunThatEndsByRepeatingASuccessfulBatch_whenBothGuardsWouldFire_thenCyclingWins() = runTest {
+        // The last turn repeats a batch that succeeded, which alone reads as "the work is done".
+        // After three turns of circling it is not done, and reporting COMPLETED would say nothing
+        // to the user at all — so the cycling check is evaluated first.
+        val model = ScriptedModel(
+            listOf(
+                toolCall("read_file", "A.kt"),
+                toolCall("read_file", "B.kt"),
+                toolCall("read_file", "A.kt"),
+                toolCall("read_file", "B.kt"),
+                toolCall("read_file", "B.kt"),
+            )
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "go"))
+        var repeatAfterSuccessTurn = -1
+        var cycledTurns = -1
+
+        val result = AgentLoop(maxIterations = 16).run(
+            history = history,
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("ok")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onRepeatAfterSuccess(turn: Int) { repeatAfterSuccessTurn = turn }
+                override suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) { cycledTurns = turns }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.CYCLING, result.reason)
+        assertEquals(5, result.turns)
+        assertEquals(5, cycledTurns)
+        assertEquals("a circling run must not be reported as completed", -1, repeatAfterSuccessTurn)
     }
 }
