@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The sidebar's fill plus the 1dp edge that separates it from the transcript behind it. The panel
+  is drawn over the chat rather than beside it, so without that edge a surface-coloured sidebar and
+  a surface-coloured transcript run into each other wherever the scrim does not reach.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/plugin_outline_variant" />
+        </shape>
+    </item>
+    <item android:start="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/plugin_surface_variant" />
+        </shape>
+    </item>
+</layer-list>

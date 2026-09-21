@@ -15,6 +15,7 @@ import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
+import com.itsaky.androidide.plugins.aicore.models.newestFirst
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
@@ -99,6 +100,18 @@ class ChatViewModel(
 
         /** Max open files named in the prompt's IDE-context block. */
         private const val MAX_CONTEXT_OPEN_FILES = 8
+
+        /**
+         * How many of a restored transcript's messages the model is given back; one exchange
+         * spends two. See [rebuildHistoryFrom].
+         */
+        private const val MAX_RESTORED_HISTORY = 40
+
+        /**
+         * Character budget for the same restore, since 40 messages carrying code blocks would
+         * otherwise push the next send past a small local model's created context.
+         */
+        private const val MAX_RESTORED_HISTORY_CHARS = 8_000
 
         /**
          * Path used in the tool-call examples when the IDE has nothing open, so there is no real one
@@ -393,7 +406,9 @@ class ChatViewModel(
         } else {
             _sessions.value = loaded
             val currentId = storageManager.loadCurrentSessionId()
-            val session = loaded.firstOrNull { it.id == currentId } ?: loaded.first()
+            // Newest when nothing points anywhere — a stored id naming a session since deleted, or
+            // a first read. The stored list is in append order, so `first()` is the oldest chat.
+            val session = loaded.firstOrNull { it.id == currentId } ?: loaded.newestFirst().first()
             switchToSession(session.id)
         }
     }
@@ -1250,7 +1265,9 @@ class ChatViewModel(
                             text = displayText,
                             sender = Sender.AGENT,
                             status = MessageStatus.COMPLETED,
-                            durationMs = durationMs
+                            durationMs = durationMs,
+                            // Only when it differs, so a turn is not stored twice over.
+                            historyText = reply.historyText.takeIf { it != displayText }
                         )
                         _messages.value = _messages.value.map { if (it.id == agentMessageId) finalMsg else it }
                         syncMessageToSession(finalMsg)
@@ -1427,24 +1444,6 @@ class ChatViewModel(
         getContext()?.androidContext?.resources?.getQuantityString(resId, quantity, *args).orEmpty()
 
     /**
-     * Appends an AGENT message to the chat (terminal state, no streaming dots).
-     * @param text the message text.
-     */
-    private suspend fun addAgentMessage(text: String) {
-        val message = ChatMessage(
-            id = UUID.randomUUID().toString(),
-            text = text,
-            sender = Sender.AGENT,
-            status = MessageStatus.COMPLETED,
-            durationMs = 0L
-        )
-        withContext(Dispatchers.Main) {
-            _messages.value = _messages.value + message
-            syncMessageToSession(message)
-        }
-    }
-
-    /**
      * Logs to the IDE's plugin log, which is where a plugin's output is expected to land.
      * @param message the line to log.
      */
@@ -1516,33 +1515,42 @@ class ChatViewModel(
      */
     fun clearMessages() {
         // Clear Chat must also stop any in-flight run, not just wipe the list.
-        AgentTrace.stage(
-            "CANCEL",
-            "reason=clear chat wasRunning=${_agentState.value.isRunning}"
-        )
+        cancelActiveRun("clear chat")
+        _messages.value = emptyList()
+        _history.value = emptyList()
+        // Without this the session keeps its messages and the cleared chat returns on the next sync.
+        replaceCurrentSessionMessages(emptyList())
+        forgetRetryPoint()
+        setState(AgentState.Idle)
+        // Written now rather than debounced: a clear is deliberate and must survive a force-stop.
+        persistState()
+    }
+
+    /**
+     * Stops any in-flight run, so the transcript it is streaming into cannot be swapped out from
+     * under it: without the epoch bump the stale run's callbacks keep writing, and its reply lands
+     * in the conversation that replaced the one it was asked for.
+     */
+    private fun cancelActiveRun(reason: String) {
+        AgentTrace.stage("CANCEL", "reason=$reason wasRunning=${_agentState.value.isRunning}")
         generationEpoch.incrementAndGet()
         approvalManager.cancelPendingApproval()
         generationJob?.cancel()
         generationJob = null
         getLlmService()?.cancelGeneration()
         stopStateTimer()
-        _messages.value = emptyList()
-        _history.value = emptyList()
-        forgetRetryPoint()
-        setState(AgentState.Idle)
     }
 
     /**
      * Create a new chat session.
      */
     fun createNewSession() {
+        endRunBeforeSessionChange("new chat")
+        // Unconditional: isRunning above skips Thinking and Error, which a fresh chat must not open in.
+        setState(AgentState.Idle)
         val newSession = ChatSession(projectKey = activeProjectKey)
         _sessions.value = _sessions.value + newSession
-        _currentSessionId.value = newSession.id
-        _messages.value = emptyList()
-        _history.value = emptyList()
-        forgetRetryPoint()
-        persistState()
+        adoptSession(newSession)
     }
 
     /**
@@ -1554,11 +1562,70 @@ class ChatViewModel(
             logWarn("switchToSession: no session $sessionId")
             return
         }
-        _currentSessionId.value = sessionId
-        // Use immutable snapshot to ensure StateFlow emits on mutations
+        if (sessionId == _currentSessionId.value) return
+        endRunBeforeSessionChange("session switched")
+        adoptSession(session)
+    }
+
+    /**
+     * Makes [session] the live conversation: what the screen shows, what the model is given and
+     * what the next message is appended to.
+     *
+     * The one place those three move together. They were being set side by side at each of the
+     * three call sites, which is how restoring a transcript to the screen while handing the model
+     * an empty array (ADFA-5584) could be fixed in one of them and not the others.
+     *
+     * @param session the conversation to make current; it must already be in [_sessions].
+     */
+    private fun adoptSession(session: ChatSession) {
+        _currentSessionId.value = session.id
+        // Immutable snapshot, so a later mutation cannot reach collectors behind the StateFlow.
         _messages.value = session.messages.toList()
-        _history.value = emptyList()
+        // Emptying this is what had the model forget a conversation the user was looking at.
+        _history.value = rebuildHistoryFrom(session.messages)
+        // The rewind point names a run this transcript does not have, and would truncate it.
         forgetRetryPoint()
+        persistState()
+    }
+
+    /**
+     * Ends a run in flight before the conversation under it is replaced.
+     *
+     * Every write a run makes — its streamed bubble, its tool notices, the finalization Stop
+     * performs — lands on whichever session is current *at the time of the write*, so a run left
+     * alive across a switch finishes by appending its remaining turns to the conversation the user
+     * moved to. Called before [_currentSessionId] moves, so the cancellation itself still settles
+     * into the transcript the run belongs to.
+     *
+     * A no-op when nothing is running, so restoring stored sessions at startup stays silent.
+     *
+     * @param reason what caused the change, for the CANCEL trace line.
+     */
+    private fun endRunBeforeSessionChange(reason: String) {
+        if (!_agentState.value.isRunning) return
+        stopProcessing(reason = reason)
+    }
+
+    /**
+     * Gives a session the name the user typed for it, or takes that name away again.
+     *
+     * @param sessionId the session to rename; an unknown id is a no-op.
+     * @param name the new name. Blank clears it, so the session falls back to naming itself after
+     *   its first user turn — that is the only way back from a rename the user regrets.
+     */
+    fun renameSession(sessionId: String, name: String?) {
+        val trimmed = name?.trim()?.takeIf { it.isNotEmpty() }
+        val session = _sessions.value.firstOrNull { it.id == sessionId }
+        if (session == null) {
+            logWarn("renameSession: no session $sessionId")
+            return
+        }
+        if (session.name == trimmed) return
+        _sessions.value = _sessions.value.map {
+            if (it.id == sessionId) it.copy(name = trimmed) else it
+        }
+        // Written now rather than debounced: a rename is deliberate and may be the last thing the
+        // user does before leaving the tab, where no streamed token follows to flush it.
         persistState()
     }
 
@@ -1572,16 +1639,122 @@ class ChatViewModel(
     }
 
     /**
-     * Delete a chat session.
+     * Rebuilds the LLM context from a restored transcript, so the model remembers what the user is
+     * looking at. Lossy on purpose: attached file bodies and tool scaffolding never reached the
+     * saved messages, so they are not reconstructed here.
+     *
+     * @param messages the session's transcript, oldest first.
+     * @return the eligible messages that fit both budgets, oldest first; the newest one is
+     *   always kept, truncated to the character budget when it alone exceeds it.
      */
-    fun deleteSession(sessionId: String) {
-        _sessions.value = _sessions.value.filter { it.id != sessionId }
-        if (_currentSessionId.value == sessionId) {
-            val remaining = _sessions.value.firstOrNull()
-            _currentSessionId.value = remaining?.id
-            _messages.value = remaining?.messages ?: emptyList()
+    private fun rebuildHistoryFrom(
+        messages: List<ChatMessage>
+    ): List<LlmInferenceService.ChatMessage> {
+        // A new chat restores nothing; without this every one of them traces an empty restore.
+        if (messages.isEmpty()) return emptyList()
+        val eligible = messages.filter {
+            // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
+            (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
+                // Only a finished agent turn carries a duration: null is a bubble process death
+                // cut mid sentence, zero the marker Stop leaves; neither was finished saying.
+                (it.sender == Sender.USER || (it.durationMs ?: 0L) > 0L) &&
+                // Blank means the model wrote nothing, which AgentLoop skips live too, so the
+                // bubble must not stand in for it: that bubble is "the action failed".
+                (it.historyText ?: it.text).isNotBlank()
         }
-        persistState()
+        // Newest-first, so both budgets are spent on the turns nearest the next message.
+        val kept = ArrayDeque<LlmInferenceService.ChatMessage>()
+        var chars = 0
+        for (message in eligible.asReversed()) {
+            // What the model wrote, not the bubble: a turn whose tool call failed renders as
+            // "the action failed" in the IDE's language, a sentence the model never produced.
+            var text = message.historyText ?: message.text
+            // The newest eligible turn is never dropped — breaking on it would restore nothing at
+            // all — but it is truncated, since nothing upstream bounds what a user can paste.
+            if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
+                    chars + text.length > MAX_RESTORED_HISTORY_CHARS)
+            ) break
+            if (text.length > MAX_RESTORED_HISTORY_CHARS) {
+                text = text.takeLast(MAX_RESTORED_HISTORY_CHARS)
+            }
+            chars += text.length
+            val role = if (message.sender == Sender.USER) {
+                LlmInferenceService.ChatMessage.Role.USER
+            } else {
+                LlmInferenceService.ChatMessage.Role.ASSISTANT
+            }
+            // Starting on an ASSISTANT turn is left alone: every backend here flattens the array,
+            // and trimming back to a USER turn would drop one the user can still see.
+            kept.addFirst(LlmInferenceService.ChatMessage(role, text))
+        }
+        AgentTrace.detail(
+            "RESTORE",
+            "retained=${kept.size} discarded=${messages.size - eligible.size} " +
+                "capped=${eligible.size - kept.size}"
+        )
+        return kept.toList()
+    }
+
+    /**
+     * Deletes a chat session, leaving the project with a conversation to carry on in either way.
+     *
+     * Deleting the last one does not leave the project with none: an empty session takes its
+     * place, since the transcript on screen, every message the user sends next and the whole
+     * persistence path all address the *current* session, and there being none would quietly
+     * discard all of it.
+     *
+     * @param sessionId the session to delete; an unknown id still leaves the invariant above true.
+     */
+    fun deleteSession(sessionId: String) = deleteSessions(setOf(sessionId))
+
+    /**
+     * Deletes several chat sessions at once, under the same guarantee as [deleteSession]: the
+     * project is never left without a conversation to carry on in.
+     *
+     * One pass, not a [deleteSession] per id: that would write the history once per session, and
+     * would pick a successor from a list still holding the rest of the doomed ones — landing the
+     * user in a conversation that is about to go.
+     *
+     * @param sessionIds the sessions to delete. An empty set is a no-op, and an id naming nothing
+     *   is ignored rather than treated as a deletion.
+     */
+    fun deleteSessions(sessionIds: Set<String>) {
+        if (sessionIds.isEmpty()) return
+        val deletingCurrent = _currentSessionId.value in sessionIds
+        // Before the list moves, so a run in flight finalizes into the session being deleted rather
+        // than appending its last turns to whichever one replaces it.
+        if (deletingCurrent) endRunBeforeSessionChange("sessions deleted")
+        // Resolved against the list as it still stands, which is what makes "the row next to this
+        // one" answerable at all.
+        val successor = if (deletingCurrent) successorTo(sessionIds) else null
+        _sessions.value = _sessions.value.filterNot { it.id in sessionIds }
+        when {
+            // Persists on its own, and binds the replacement to this project.
+            _sessions.value.isEmpty() -> createNewSession()
+            // Left alone, the deleted conversations' context stays live under the surviving one.
+            successor != null -> adoptSession(successor)
+            else -> persistState()
+        }
+    }
+
+    /**
+     * Which conversation to land on when the live one is among those being deleted: the nearest
+     * survivor to it in the order the history list shows, [newestFirst] — the next older, or the
+     * next newer when everything below it is going too.
+     *
+     * The neighbour rather than simply the newest, so deleting leaves the user where they were in
+     * the list instead of at the top of it.
+     *
+     * @param deletedIds the sessions about to go, all still present in [_sessions].
+     * @return the session to make current, or null when none of them survives.
+     */
+    private fun successorTo(deletedIds: Set<String>): ChatSession? {
+        val ordered = _sessions.value.newestFirst()
+        val survives = { session: ChatSession -> session.id !in deletedIds }
+        val index = ordered.indexOfFirst { it.id == _currentSessionId.value }
+        if (index < 0) return ordered.firstOrNull(survives)
+        return ordered.drop(index + 1).firstOrNull(survives)
+            ?: ordered.take(index).lastOrNull(survives)
     }
 
     /**

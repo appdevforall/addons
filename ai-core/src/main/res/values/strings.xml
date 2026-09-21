@@ -13,14 +13,51 @@
     <string name="desc_stop_agent">Stop the agent</string>
     <string name="desc_show_composer">Show the message box</string>
     <string name="desc_hide_composer">Hide the message box</string>
-    <string name="desc_overflow_menu">More options</string>
+    <string name="desc_chat_sidebar">Chats, settings and a new chat</string>
 
-    <!-- Menu Items -->
-    <string name="menu_clear_chat">Clear chat</string>
+    <!-- Sidebar actions -->
     <string name="menu_settings">Settings</string>
     <string name="menu_new_chat">New chat</string>
-    <string name="menu_chat_history">Chat history</string>
     <string name="menu_copy_chat">Copy chat</string>
+    <string name="sidebar_recent">Recent</string>
+    <string name="desc_sidebar_close">Close the sidebar</string>
+    <string name="sidebar_clear_chat">Clear this chat</string>
+    <string name="sidebar_history_empty">Your chats in this project will appear here.</string>
+
+    <!-- Chat history: the per-project session list (see ChatSidebarController) -->
+    <string name="session_untitled">New chat</string>
+    <string name="session_rename">Rename</string>
+    <string name="session_delete">Delete</string>
+    <string name="session_current">Current chat</string>
+    <string name="session_rename_title">Rename chat</string>
+    <string name="session_rename_hint">Chat name</string>
+    <string name="session_rename_help">Leave it empty to name the chat after its first message again.</string>
+    <string name="session_rename_save">Rename</string>
+    <string name="session_clear_title">Clear this chat?</string>
+    <string name="session_clear_message">Everything said in this conversation is removed and you stay in it, empty. No copy is kept, so use “New chat” instead if you may want it back. This can\'t be undone.</string>
+    <string name="session_clear_confirm">Clear</string>
+    <string name="session_delete_title">Delete this chat?</string>
+    <string name="session_delete_message">“%1$s” and everything said in it are removed from this project. This can\'t be undone.</string>
+    <string name="session_deleted">Chat deleted</string>
+    <!-- Row subtitle: the date the chat was started, then how much is in it. -->
+    <string name="session_subtitle">%1$s · %2$s</string>
+    <plurals name="session_message_count">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
+    <string name="desc_session_row_menu">Rename or delete this chat</string>
+    <string name="desc_session_current">This is the chat you are in</string>
+
+    <!-- Chat history: picking several conversations at once, entered by long-pressing a row -->
+    <string name="session_selection_cancel">Cancel</string>
+    <plurals name="session_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="session_delete_many_message">
+        <item quantity="one">This chat and everything said in it will be removed from this project. This can\'t be undone.</item>
+        <item quantity="other">These %1$d chats and everything said in them will be removed from this project. This can\'t be undone.</item>
+    </plurals>
 
     <!-- Agent States -->
     <string name="state_ready">Ready</string>

@@ -1,11 +1,14 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
@@ -63,6 +66,18 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private val contextFiles = mutableListOf<File>()
 
     private var composer: ComposerAutoHideController? = null
+    private var sidebar: ChatSidebarController? = null
+
+    /**
+     * Closes the sidebar on Back rather than letting the press reach the host, which would shut the
+     * whole bottom sheet with the panel still open over it. Enabled only while the panel is open —
+     * the controller toggles it through onOpenChanged — so Back otherwise means what it always did.
+     */
+    private val sidebarBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            sidebar?.close()
+        }
+    }
 
     /** The message list's layout-declared padding, before any cutout inset is added. */
     private val basePadding = Rect()
@@ -136,6 +151,8 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         }
         composer?.detach()
         composer = null
+        sidebar?.detach()
+        sidebar = null
         _binding = null
     }
 
@@ -162,7 +179,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         initializeMarkwon()
         initializeViewModel()
         syncStorageToCurrentProject()
-        setupToolbar()
+        setupSidebar()
         setupRecyclerView()
         setupInputArea()
         restoreContextChips()
@@ -298,29 +315,43 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         }
     }
 
-    private fun setupToolbar() {
-        binding.btnOverflowMenu.setOnClickListener { view ->
-            // The anchor's Context is theme-aware, so the menu follows the IDE day/night theme.
-            val popup = android.widget.PopupMenu(view.context, view)
-            popup.menuInflater.inflate(com.itsaky.androidide.plugins.aicore.R.menu.chat_overflow_menu, popup.menu)
+    /**
+     * Stands the sidebar up: the panel that replaced the toolbar overflow menu and the chat-history
+     * dialog behind it. Everything it does lives in [ChatSidebarController]; this only hands it
+     * what the fragment owns.
+     */
+    private fun setupSidebar() {
+        val controller = ChatSidebarController(
+            binding = binding,
+            viewModel = viewModel,
+            scope = viewLifecycleOwner.lifecycleScope,
+            wireTooltip = ::wireTooltip,
+            dialogContext = { if (isAdded) themedDialogContext() else null },
+            onOpenSettings = ::openSettingsFragment,
+            onOpenChanged = { open ->
+                sidebarBackCallback.isEnabled = open
+                // A panel over the chat with the keyboard still up leaves the list two rows tall.
+                if (open) composer?.hideKeyboard()
+            },
+        )
+        controller.attach()
+        sidebar = controller
 
-            popup.setOnMenuItemClickListener { menuItem ->
-                when (menuItem.itemId) {
-                    com.itsaky.androidide.plugins.aicore.R.id.menu_settings -> {
-                        openSettingsFragment()
-                        true
-                    }
-                    com.itsaky.androidide.plugins.aicore.R.id.menu_clear_chat -> {
-                        viewModel.createNewSession()
-                        true
-                    }
-                    else -> false
-                }
-            }
-            popup.show()
-        }
-        wireTooltip(binding.btnOverflowMenu, AiCorePlugin.TOOLTIP_TAG_CHAT_MENU)
+        requireActivity().onBackPressedDispatcher
+            .addCallback(viewLifecycleOwner, sidebarBackCallback)
     }
+
+    /**
+     * The Context the sidebar's rename and delete prompts are built against.
+     *
+     * Activity-backed, through [requireContext]: a Dialog takes its window token from its Context,
+     * and the plugin Context behind `PluginFragmentHelper.getPluginInflater` is application-scoped
+     * with a package name no PackageManager knows — showing a Dialog on it throws BadTokenException
+     * and takes the IDE down. Plugin layouts, strings and colors resolve through this one anyway,
+     * which is why the plugin's other dialogs are built exactly this way.
+     */
+    private fun themedDialogContext(): Context =
+        ContextThemeWrapper(requireContext(), R.style.PluginTheme)
 
     private fun setupInputArea() {
         binding.sendButton.setOnClickListener {
@@ -404,9 +435,10 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         super.onConfigurationChanged(newConfig)
         val binding = _binding ?: return
         composer?.onConfigurationChanged(newConfig)
-        // Posted so the window has published the rotated cutout before it is read back.
+        // Posted so the window has published the rotated cutout and width before they are read back.
         binding.root.post {
             val root = _binding?.root ?: return@post
+            sidebar?.onConfigurationChanged()
             ViewCompat.getRootWindowInsets(root)?.let(::applyCutoutPadding)
         }
     }

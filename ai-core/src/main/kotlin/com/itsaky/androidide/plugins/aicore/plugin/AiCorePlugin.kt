@@ -47,7 +47,14 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_CONTEXT_FILES = "agent_context_files"
         const val TOOLTIP_TAG_CHAT_INPUT = "agent_chat_input"
         const val TOOLTIP_TAG_CHAT_SEND = "agent_chat_send"
+        /** The toolbar button that opens the sidebar; it took the overflow menu's place and tag. */
         const val TOOLTIP_TAG_CHAT_MENU = "agent_chat_menu"
+        const val TOOLTIP_TAG_CHAT_SESSIONS = "agent_chat_sessions"
+
+        // Tags for the sidebar's own actions (see ChatSidebarController).
+        const val TOOLTIP_TAG_SIDEBAR_NEW_CHAT = "agent_sidebar_new_chat"
+        const val TOOLTIP_TAG_SIDEBAR_CLEAR_CHAT = "agent_sidebar_clear_chat"
+        const val TOOLTIP_TAG_SIDEBAR_SETTINGS = "agent_sidebar_settings"
 
         // Tags for the approval dialog: the consent gate, so every button carries its own help.
         const val TOOLTIP_TAG_APPROVAL_ACCEPT = "agent_approval_accept"
@@ -303,17 +310,101 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_CHAT_MENU,
-            summary = "Agent menu: open the Agent settings or start a new chat session.",
+            summary = "Opens the sidebar: a new chat, every chat in this project, and Settings.",
             detail = """
-                <p>Opens the Agent's overflow menu:</p>
+                <p>Slides a panel in over the conversation. It has three parts,
+                and only the middle one scrolls:</p>
                 <ul>
-                  <li><b>Settings</b> — a shortcut to the same screen as
-                      <b>Preferences &rarr; Configuration &rarr; Agent</b>: choose
-                      the backend (Local or Gemini), pick a model and manage your
-                      Gemini API key.</li>
-                  <li><b>Clear chat</b> — starts a fresh session. The previous
-                      conversation stays on disk in the plugin's own storage.</li>
+                  <li><b>New chat</b>, at the top — starts a fresh conversation.
+                      The one you were in is kept and appears in the list below.</li>
+                  <li><b>Recent</b>, in the middle — every conversation you have
+                      had in this project, newest first, loading more as you
+                      scroll. Tap one to carry on where it stopped.</li>
+                  <li><b>Clear this chat</b> and <b>Settings</b>, at the bottom.
+                      Clearing empties the conversation you are in and keeps you
+                      in it, without keeping a copy. Settings is a shortcut to the
+                      same screen as <b>Preferences &rarr; Configuration &rarr;
+                      Agent</b>.</li>
                 </ul>
+                <p>The button on the left of the panel's top row closes it again,
+                as does tapping the dimmed chat beside it or pressing <b>Back</b>.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SIDEBAR_NEW_CHAT,
+            summary = "Start a fresh conversation; the one you are in is kept in the list below.",
+            detail = """
+                <p>Opens an empty conversation and closes the sidebar, so the next
+                thing you send starts a new thread with nothing behind it.</p>
+                <p>Nothing is lost: the chat you were in keeps its transcript and
+                moves into <b>Recent</b> below, named after its first message.
+                Tap it there to go back to it.</p>
+                <p>This is not <b>Clear this chat</b> at the bottom of the panel —
+                that one empties the conversation you are in without keeping a
+                copy of it.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SIDEBAR_CLEAR_CHAT,
+            summary = "Empties the conversation you are in. No copy is kept — this cannot be undone.",
+            detail = """
+                <p>Throws away everything said in the current conversation and
+                leaves you in it, empty. The agent forgets it too, so the next
+                message starts from nothing. It asks you to confirm first, since
+                there is nothing to undo it with.</p>
+                <p><b>There is no copy.</b> If you might want the conversation
+                back, use <b>New chat</b> at the top of the panel instead — that
+                keeps this one in <b>Recent</b> and gives you a fresh thread.</p>
+                <p>A run still in progress is stopped first.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SIDEBAR_SETTINGS,
+            summary = "Choose the AI backend, pick a model and manage your API key.",
+            detail = """
+                <p>Opens the same screen as <b>Preferences &rarr; Configuration
+                &rarr; Agent</b>, so there is one place these settings live.</p>
+                <p>There you choose which installed backend plugin answers your
+                messages, pick the model it uses, and enter or clear the API key a
+                network backend needs. A backend says on its own panel whether it
+                runs on the device or sends your prompts to a service.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_SESSIONS,
+            summary = "Every chat you have had in this project — tap one to carry on with it.",
+            detail = """
+                <p>Chats belong to the project they were started in, so this list
+                shows only the project you have open. Each row is named after its
+                first message, or after whatever you renamed it to, and dated from
+                when it began.</p>
+                <p>Tapping a row makes it the conversation you are in and reloads
+                it into the agent, so the next thing you send follows on from what
+                was already said there — including after closing and reopening the
+                IDE.</p>
+                <p>The list holds the newest conversations to begin with and
+                loads more as you scroll, so a project with a long history still
+                opens at once.</p>
+                <p>The <b>⋮</b> button on a row renames or deletes that chat.
+                Renaming it empty gives it its first message back as a name.
+                Deleting cannot be undone, and deleting the last chat leaves you an
+                empty one to carry on in.</p>
+                <p><b>Long-press</b> a row to pick several at once: every row gets
+                a checkbox, tapping a row ticks it rather than opening it, and the
+                bin at the top of the panel removes everything ticked in one go.
+                The <b>✕</b> beside it goes back to the ordinary list.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
