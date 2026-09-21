@@ -5,27 +5,29 @@ plugins {
 }
 
 pluginBuilder {
-    pluginName = "ai-agent-mcp"
+    pluginName = "ai-core"
 }
 
 android {
-    namespace = "com.itsaky.androidide.plugins.aiagentmcp"
+    namespace = "com.itsaky.androidide.plugins.aicore"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.itsaky.androidide.plugins.aiagentmcp"
+        applicationId = "com.itsaky.androidide.plugins.aicore"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 4
+        versionName = "3.0.0"
     }
 
     buildFeatures {
-        viewBinding = false
+        viewBinding = true
+        buildConfig = true
     }
 
     buildTypes {
         release {
+            // Disable minification to prevent JNI method stripping (IntVar.getValue)
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
@@ -63,29 +65,34 @@ android {
 }
 
 dependencies {
-    compileOnly(files("../libs/plugin-api.jar"))
+    compileOnly(files("../../libs/plugin-api.jar"))
 
     // 'implementation' (not 'compileOnly') for the androidx/Material libraries: AAPT2 needs them
-    // at compile time to process the settings pane's layouts, as in every CoGo plugin with XML.
+    // at compile time to process this plugin's layouts, as in every CoGo plugin with XML.
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("com.google.android.material:material:1.10.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    testImplementation(files("../libs/plugin-api.jar"))
+    // Markdown rendering for the chat transcript
+    implementation("io.noties.markwon:core:4.6.2")
+
+    // JSON serialization for session persistence
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    testImplementation(files("../../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
 }
 
-// No MCP SDK dependency on purpose: the official Kotlin SDK is KMP with no stated Android target,
-// ships no HTTP engine, and needed Kotlin 2.4.10 when it was tried (ADFA-5083) against the 2.3.0
-// these plugins standardise on. The transport here is HttpURLConnection and org.json, both of
-// which the platform already provides — and never OkHttp, which resolves to the host's older copy.
-
-// AAR metadata checks are disabled by convention for these application-as-library plugins.
+// AAR metadata checks are disabled by convention for these application-as-library
+// plugins: the `application`-as-library packaging trips them.
 tasks.matching {
     it.name.contains("checkDebugAarMetadata") ||
     it.name.contains("checkReleaseAarMetadata")

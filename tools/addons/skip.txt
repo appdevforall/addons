@@ -8,15 +8,13 @@
 # from compile coverage as well.
 #
 # NOTE: skipping an addon stops it building, being packaged, and reaching the
-# catalog. The five remaining AI addons are here by decision: other pull
-# requests are in flight against them, so they are not touched in any way and
-# will be migrated into the gallery later, as AI-Literacy-Course was in
-# ADFA-6142. Do not "fix" this by adding them back.
+# catalog. Every name below is here by decision, with its own reason; none of
+# them is a leftover. Read the reason before removing a line.
 !pebble-custom-function-template-installer  ships stale copies of the shared jars; never built on main either
 cotg-ndk  held until the contributor confirms the name and the credit
-ai-agent-gemini  other pull requests in flight; migrate later, do not touch
-ai-agent-local  other pull requests in flight; migrate later, do not touch
-ai-agent-mcp  other pull requests in flight; migrate later, do not touch
-ai-agent-openai  other pull requests in flight; migrate later, do not touch
-ai-core  other pull requests in flight; migrate later, do not touch
-AI-Code-Suggestions  needs ai-core, which is held back; publish the pair together
+AI-Core  no addon.json, so it has no gallery card yet (ADFA-6167 moved it, it did not publish it)
+AI-Agent-Gemini  no addon.json, so it has no gallery card yet
+AI-Agent-Local  no addon.json, so it has no gallery card yet
+AI-Agent-MCP  no addon.json, so it has no gallery card yet
+AI-Agent-OpenAI  no addon.json, so it has no gallery card yet
+AI-Code-Suggestions  needs AI-Core, which is held back; publish the pair together

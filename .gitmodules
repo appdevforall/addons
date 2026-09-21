@@ -1,4 +1,4 @@
 [submodule "ai-agent-local/subprojects/llama.cpp"]
-	path = ai-agent-local/subprojects/llama.cpp
+	path = plugins/AI-Agent-Local/subprojects/llama.cpp
 	url = https://github.com/appdevforall/llama.cpp.git
 	branch = androidide-custom

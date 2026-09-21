@@ -16,8 +16,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath(files("../libs/plugin-api.jar"))
-        classpath(files("../libs/gradle-plugin.jar"))
+        classpath(files("../../libs/plugin-api.jar"))
+        classpath(files("../../libs/gradle-plugin.jar"))
         classpath("com.android.tools.build:gradle:8.11.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
     }
@@ -32,7 +32,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ai-core"
-
-// No subprojects: the llama.cpp native modules and the prebuilt AAR moved to
-// ai-agent-local along with the local backend itself.
+rootProject.name = "ai-agent-gemini"

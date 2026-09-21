@@ -1,4 +1,4 @@
-# Version catalog for ai-core and its subprojects.
+# Version catalog for AI Agent Local and its subprojects.
 #
 # This file was originally copied wholesale from the CodeOnTheGo app repo and
 # carried 281 entries, of which 4 were ever referenced. The dead bulk had drifted
@@ -7,9 +7,9 @@
 # it is the number a reader greps for. It has been pruned to what is actually
 # used -- ADFA-4907.
 #
-# Only ai-core/llama-api and ai-core/llama-impl consume this catalog, and
-# ai-core/settings.gradle.kts includes them only when the llama.cpp submodule is
-# checked out. ai-core's own build.gradle.kts uses literals, not aliases.
+# Only this plugin's llama-api and llama-impl subprojects consume this catalog,
+# and its settings.gradle.kts includes them only when the llama.cpp submodule is
+# checked out. The plugin's own build.gradle.kts uses literals, not aliases.
 #
 # agp/kotlin must match the classpath pinned in settings.gradle.kts; that
 # agreement is enforced by scripts/check-toolchain.sh.
@@ -19,13 +19,13 @@ agp = "8.11.0"
 kotlin = "2.3.0"
 
 # appcompat tracks the repo majority (21 modules) and matches the literal in
-# ai-core/build.gradle.kts. Declaring 1.7.1 here while the parent module pinned
+# this plugin's build.gradle.kts. Declaring 1.7.1 here while the parent module pinned
 # 1.6.1 put two versions of one library in a single build.
 appcompat = "1.6.1"
 coreKtx = "1.13.1"
 
 # One version for the whole kotlinx-coroutines family. llama-api pulled
-# coroutines-core 1.10.2 while ai-core/build.gradle.kts pulled
+# coroutines-core 1.10.2 while this plugin's build.gradle.kts pulled
 # coroutines-android 1.8.1 -- the two artifacts are released as a set and must
 # not be split across one build.
 coroutines = "1.8.1"

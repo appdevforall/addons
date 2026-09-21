@@ -6,9 +6,9 @@ Two things in one plugin, and **mandatory for every AI feature**:
    the open project behind an approval gate, contributed as an editor tab plus a
    settings screen.
 2. The **LLM inference router** — publishes `LlmInferenceService` through
-   `SharedServices`, which [`Code-Suggestions`](../plugins/Code-Suggestions/),
-   [`Speech-to-Text`](../plugins/Speech-to-Text/) and
-   [`Vector-Search`](../plugins/Vector-Search/) consume at runtime.
+   `SharedServices`, which [`Code-Suggestions`](../AI-Code-Suggestions/),
+   [`Speech-to-Text`](../Speech-to-Text/) and
+   [`Vector-Search`](../Vector-Search/) consume at runtime.
 
 The Agent and the router shipped as separate `ai-assistant` and `ai-core` plugins
 until they were merged here; an existing install's settings and chat history are
@@ -17,9 +17,9 @@ adopted on first activation.
 **AI Core ships no backend of its own.** Backends are separate plugins that
 register themselves with it on activation:
 
-- [`ai-agent-local`](../ai-agent-local/) — on-device GGUF inference through a
+- [`ai-agent-local`](../AI-Agent-Local/) — on-device GGUF inference through a
   bundled, prebuilt **llama.cpp** AAR. Registers as `local`.
-- [`ai-agent-gemini`](../ai-agent-gemini/) — the Gemini REST API over
+- [`ai-agent-gemini`](../AI-Agent-Gemini/) — the Gemini REST API over
   `HttpURLConnection` (no third-party SDK), so it is unaffected by the host IDE's
   OkHttp version. Registers as `gemini`.
 
@@ -28,7 +28,7 @@ Install AI Core **plus at least one backend**, or every request fails with
 
 **Other plugins can add agent tools.** AI Core also publishes `ToolSourceRegistry`
 through `SharedServices`; any plugin may register a tool source and its tools join
-the agent's tool list. [`ai-agent-mcp`](../ai-agent-mcp/) uses it to offer the
+the agent's tool list. [`ai-agent-mcp`](../AI-Agent-MCP/) uses it to offer the
 tools of remote Model Context Protocol servers. Unlike a backend, a tool provider
 is entirely optional — with none installed the agent has exactly its own tools.
 
@@ -36,15 +36,15 @@ is entirely optional — with none installed the agent has exactly its own tools
 
 Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. No NDK, submodule or CMake — those moved to `ai-agent-local`
-with the native code.
+with the native code. This plugin uses the shared wrapper at the repo root:
 
 ```bash
-cd ai-core
-./gradlew assemblePlugin          # release  -> build/plugin/ai-core.cgp
-./gradlew assemblePluginDebug     # debug variant
+cd plugins/AI-Core
+../../gradlew assemblePlugin          # release  -> build/plugin/ai-core.cgp
+../../gradlew assemblePluginDebug     # debug variant
 ```
 
-The build resolves `plugin-api.jar` from the repo-root `../libs/`.
+The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 ## Backend registration and load order
 

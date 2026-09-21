@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-# Run from the ai-agent-local/ project root regardless of where it's invoked.
-# The wrapper lives at the repo root, so gradle is invoked as ../gradlew.
+# Run from the plugin's project root regardless of where it's invoked. The
+# wrapper lives at the repo root, two levels up, so gradle is ../../gradlew.
 cd "$(dirname "$0")/.."
 
 # Destinations must match the paths build.gradle.kts declares as dependencies.
@@ -25,7 +25,7 @@ echo "==> Initializing the llama.cpp submodule (source for the native build)"
 git submodule update --init --recursive
 
 echo "==> Building :llama-impl (native lib) and :llama-api (interface jar)"
-../gradlew :llama-impl:assembleRelease :llama-api:jar
+../../gradlew :llama-impl:assembleRelease :llama-api:jar
 
 # Fail loudly rather than copying a stale artifact from a previous run.
 for src in "$AAR_SRC" "$API_SRC"; do

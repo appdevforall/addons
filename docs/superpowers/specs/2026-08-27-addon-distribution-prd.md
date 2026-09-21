@@ -260,6 +260,8 @@ Verified against Cloudflare documentation on 2026-08-27. These bound any design 
 
 **Frozen in place (6):** the AI plugins — `ai-agent-gemini`, `ai-agent-local`, `ai-agent-mcp`, `ai-agent-openai`, `ai-core`, `ai-literacy-course` — because other work is in flight against them. They must continue to build and publish unchanged.
 
+> Superseded by ADFA-6167: five of those six moved to `plugins/AI-Agent-Gemini`, `plugins/AI-Agent-Local`, `plugins/AI-Agent-MCP`, `plugins/AI-Agent-OpenAI` and `plugins/AI-Core` and took the MixedCase directory names. Only `ai-literacy-course` is still frozen at the root. All six remain out of the gallery — see `tools/addons/skip.txt`.
+
 **Held out of the build (2):** `pebble-custom-function-template-installer` is excluded permanently — never ships, no real name or description. `cotg-ndk` is held **temporarily** pending Q1 (§8.3). Both are skipped by the build and neither appears in the catalog.
 
 ### 8.1 Names

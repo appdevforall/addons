@@ -202,7 +202,7 @@ The single implementation of the build-file predicate and the skip list. Scans b
 
 `scripts/update-libs.sh` and `.githooks/pre-push` call it instead of carrying their own copies. The skip list moves into `tools/addons/skip.txt`, one name per line with a required reason comment — today's single entry has no recorded reason, which is how it came to look published while never being built.
 
-`scripts/check-toolchain.sh` keeps its own broader module walk. Its header explains why: subprojects such as `ai-core/llama-api` are invisible to a top-level-directory rule yet must still obey the toolchain. **Do not unify these two.**
+`scripts/check-toolchain.sh` keeps its own broader module walk. Its header explains why: subprojects such as `plugins/AI-Agent-Local/llama-api` are invisible to a top-level-directory rule yet must still obey the toolchain. **Do not unify these two.**
 
 ### 8.2 `addons check`
 
