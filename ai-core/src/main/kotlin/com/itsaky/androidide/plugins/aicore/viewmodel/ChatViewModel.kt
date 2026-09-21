@@ -1544,24 +1544,6 @@ class ChatViewModel(
         getContext()?.androidContext?.resources?.getQuantityString(resId, quantity, *args).orEmpty()
 
     /**
-     * Appends an AGENT message to the chat (terminal state, no streaming dots).
-     * @param text the message text.
-     */
-    private suspend fun addAgentMessage(text: String) {
-        val message = ChatMessage(
-            id = UUID.randomUUID().toString(),
-            text = text,
-            sender = Sender.AGENT,
-            status = MessageStatus.COMPLETED,
-            durationMs = 0L
-        )
-        withContext(Dispatchers.Main) {
-            _messages.value = _messages.value + message
-            syncMessageToSession(message)
-        }
-    }
-
-    /**
      * Logs to the IDE's plugin log, which is where a plugin's output is expected to land.
      * @param message the line to log.
      */
@@ -1750,7 +1732,7 @@ class ChatViewModel(
      *
      * @param messages the session's transcript, oldest first.
      * @return the eligible messages that fit both budgets, oldest first; the newest one is
-     *   always kept, however long it is.
+     *   always kept, truncated to the character budget when it alone exceeds it.
      */
     private fun rebuildHistoryFrom(
         messages: List<ChatMessage>
@@ -1763,8 +1745,9 @@ class ChatViewModel(
                 // Only a finished agent turn carries a duration: null is a bubble process death
                 // cut mid sentence, zero the marker Stop leaves; neither was finished saying.
                 (it.sender == Sender.USER || (it.durationMs ?: 0L) > 0L) &&
-                // Gemini rejects an empty content part, and AgentLoop never stores a blank turn.
-                it.text.isNotBlank()
+                // Blank means the model wrote nothing, which AgentLoop skips live too, so the
+                // bubble must not stand in for it: that bubble is "the action failed".
+                (it.historyText ?: it.text).isNotBlank()
         }
         // Newest-first, so both budgets are spent on the turns nearest the next message.
         val kept = ArrayDeque<LlmInferenceService.ChatMessage>()
@@ -1772,13 +1755,15 @@ class ChatViewModel(
         for (message in eligible.asReversed()) {
             // What the model wrote, not the bubble: a turn whose tool call failed renders as
             // "the action failed" in the IDE's language, a sentence the model never produced.
-            // Blank when a native respond call carried no text part, where the bubble is the answer.
-            val text = message.historyText?.takeIf { it.isNotBlank() } ?: message.text
-            // The newest eligible turn is kept whatever it costs: breaking on it would restore
-            // nothing at all, which is the regression this rebuild exists to remove.
+            var text = message.historyText ?: message.text
+            // The newest eligible turn is never dropped — breaking on it would restore nothing at
+            // all — but it is truncated, since nothing upstream bounds what a user can paste.
             if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
                     chars + text.length > MAX_RESTORED_HISTORY_CHARS)
             ) break
+            if (text.length > MAX_RESTORED_HISTORY_CHARS) {
+                text = text.takeLast(MAX_RESTORED_HISTORY_CHARS)
+            }
             chars += text.length
             val role = if (message.sender == Sender.USER) {
                 LlmInferenceService.ChatMessage.Role.USER
