@@ -48,8 +48,9 @@
   <h2>Where the settings live</h2>
   <p>The backend, the model and your Gemini API key are all configured on one
   screen, reached from <b>Preferences → Configuration → Agent</b>. The same screen
-  opens from the Agent tab's overflow menu (<b>Settings</b>), so you do not have to
-  leave the chat to change something. Every setting saves as you change it.</p>
+  opens from the Agent tab's sidebar (<b>Settings</b>, at the bottom), so you do
+  not have to leave the chat to change something. Every setting saves as you change
+  it.</p>
 
   <h2>Choosing a backend</h2>
   <p>The <b>AI Backend</b> list on the settings screen shows every backend plugin
@@ -217,6 +218,50 @@
     <li>Long-press a message to copy its text, or to edit and re-send one of
       your own.</li>
   </ul>
+
+  <h2>Keeping several chats</h2>
+  <p>Chats belong to the project they were started in. Opening a project shows
+  that project's chats and no one else's, and you can keep as many as you want —
+  one for a build failure, one for a refactor, one for the feature you are adding
+  — instead of letting a single conversation collect all three.</p>
+  <p>The button at the top right of the Agent tab slides a <b>sidebar</b> in over
+  the conversation. Its three parts are fixed in place except the middle one, which
+  is the only part that scrolls:</p>
+  <ul>
+    <li><b>New chat</b>, at the top, starts a fresh conversation. The one you were
+      in is kept, and you can go back to it whenever you like.</li>
+    <li><b>Recent</b>, in the middle, lists this project's conversations, newest
+      first, each named after its first message and dated from when it began, with
+      a tick on the one you are in. It holds the newest to begin with and loads
+      more as you scroll, so a project with a long history still opens at once.
+      Tap a row to carry on with it: the agent reloads that conversation, so the
+      next thing you send follows on from what was already said there — including
+      after closing and reopening the IDE. If the agent is working when you
+      switch, that run is stopped first, and whatever it had already done stays in
+      the chat it belonged to.</li>
+    <li><b>Clear this chat</b>, at the bottom, empties the conversation you are in
+      and keeps you in it. This one does not keep a copy, so it asks you to
+      confirm — and use <b>New chat</b> instead if you may want the old thread
+      back.</li>
+    <li><b>Settings</b>, beside it, opens the Agent settings screen.</li>
+  </ul>
+  <p><b>New chat</b> sits at the right of the panel's top row; the button at the
+  left of that row closes the sidebar, as does tapping the dimmed conversation
+  beside it or pressing <b>Back</b>.</p>
+  <p>The <b>⋮</b> button on a row in <b>Recent</b> renames or deletes that chat. A
+  name you give it replaces the first-message title; clearing the name gives the
+  first-message title back. Deleting cannot be undone — and deleting the last chat
+  leaves you an empty one to carry on in, rather than nothing.</p>
+  <p>To clear out several at once, <b>long-press</b> a row. Every row gets a
+  checkbox, tapping a row ticks it instead of opening it, and the bin at the top of
+  the sidebar removes everything ticked in one step — with the same warning, since
+  it cannot be undone either. The <b>✕</b> beside it returns to the ordinary list.
+  Deleting every chat still leaves you one empty conversation to carry on in.</p>
+
+  <p>Only what you and the agent said is restored into a reopened conversation:
+  attached file contents and the agent's internal tool steps are not, and a very
+  long conversation is restored from its most recent turns so it still fits a
+  small local model's context window.</p>
 
   <h2>Troubleshooting</h2>
   <ul>

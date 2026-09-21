@@ -9,4 +9,14 @@
     <integer name="chat_composer_compact_height_dp">480</integer>
     <!-- Idle time before the composer folds away on a short screen. -->
     <integer name="chat_composer_auto_hide_ms">5000</integer>
+
+    <!--
+      Chat sidebar. Rows are built a page at a time as the list is scrolled: every session of every
+      project is already in memory, so this is not paging the store, it is keeping a project with
+      hundreds of conversations from inflating hundreds of rows the moment the panel opens.
+    -->
+    <integer name="chat_sidebar_page_size">20</integer>
+    <!-- Rows still ahead of the last visible one before the next page is appended. -->
+    <integer name="chat_sidebar_page_lookahead">8</integer>
+    <integer name="chat_sidebar_animation_ms">200</integer>
 </resources>

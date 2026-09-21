@@ -22,7 +22,7 @@ class ChatViewModelSessionTest {
 
         assertEquals(1, sessions.size)
         assertNotNull(session1.id)
-        assertEquals("New Chat", session1.title)
+        assertNull(session1.displayTitle)
     }
 
     @Test
@@ -133,12 +133,12 @@ class ChatViewModelSessionTest {
         )
         val session = ChatSession(messages = messages)
 
-        assertEquals("First message", session.title)
+        assertEquals("First message", session.displayTitle)
 
         // Add more messages
         messages.add(ChatMessage(text = "Second message", sender = Sender.AGENT))
 
         // Title should still be the first user message
-        assertEquals("First message", session.title)
+        assertEquals("First message", session.displayTitle)
     }
 }
