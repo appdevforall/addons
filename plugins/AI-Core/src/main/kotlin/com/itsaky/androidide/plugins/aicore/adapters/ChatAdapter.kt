@@ -1,21 +1,18 @@
 package com.itsaky.androidide.plugins.aicore.adapters
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.snackbar.Snackbar
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
@@ -34,10 +31,16 @@ private const val TAG = "$LOG_PREFIX.ChatAdapter"
  * @param wireTooltip attaches this plugin's long-press help for a tag to a view. Supplied by
  *   ChatFragment, which owns the [com.itsaky.androidide.plugins.services.IdeTooltipService]
  *   lookup, so the adapter stays free of service plumbing. Defaults to a no-op for tests.
+ * @param isUserMessageExpanded whether a user bubble is unfolded; the state lives in ChatViewModel,
+ *   so a fold outlives this adapter. Defaults to always folded for tests.
+ * @param toggleUserMessageExpanded unfolds or folds a user bubble, returning its new state.
+ * @param onMessageAction runs one of the `ACTION_*` constants for a message, in ChatFragment.
  */
 class ChatAdapter(
     private val markwon: Markwon,
     private val wireTooltip: (View, String) -> Unit = { _, _ -> },
+    private val isUserMessageExpanded: (messageId: String) -> Boolean = { false },
+    private val toggleUserMessageExpanded: (messageId: String) -> Boolean = { false },
     private val onMessageAction: (action: String, message: ChatMessage) -> Unit
 ) : ListAdapter<ChatMessage, RecyclerView.ViewHolder>(DiffCallback) {
 
@@ -49,9 +52,10 @@ class ChatAdapter(
     companion object {
         private const val VIEW_TYPE_DEFAULT = 0
         private const val VIEW_TYPE_SYSTEM = 1
+        private const val VIEW_TYPE_USER = 2
 
-        const val ACTION_EDIT = "edit"
         const val ACTION_RETRY = "retry"
+        const val ACTION_COPY = "copy"
         const val ACTION_OPEN_SETTINGS = "open_settings"
     }
 
@@ -66,6 +70,10 @@ class ChatAdapter(
         val generatingDots: TextView = view.findViewById(R.id.generating_dots)
         val messageDuration: TextView = view.findViewById(R.id.message_duration)
         val btnRetry: Button = view.findViewById(R.id.btn_retry)
+        /** Fold toggle; only the user bubble layout has one. */
+        val btnToggleExpand: ImageButton? = view.findViewById(R.id.btn_toggle_expand)
+        val messageActions: LinearLayout = view.findViewById(R.id.message_actions)
+        val btnCopyMessage: ImageButton = view.findViewById(R.id.btn_copy_message)
 
         /**
          * Queued next step of the "..." animation, or null when it isn't running. Retained so
@@ -94,6 +102,8 @@ class ChatAdapter(
             VIEW_TYPE_DEFAULT
         } else if (message.sender == Sender.SYSTEM) {
             VIEW_TYPE_SYSTEM
+        } else if (message.sender == Sender.USER) {
+            VIEW_TYPE_USER
         } else {
             VIEW_TYPE_DEFAULT
         }
@@ -108,9 +118,23 @@ class ChatAdapter(
                 val view = inflater.inflate(R.layout.list_item_chat_system_message, parent, false)
                 SystemMessageViewHolder(view)
             }
+            // Own view type, so a recycled row never carries the bubble over to an agent message.
+            VIEW_TYPE_USER -> {
+                val view = inflater.inflate(R.layout.list_item_chat_user_message, parent, false)
+                DefaultMessageViewHolder(view).also(::wireMessageActions).apply {
+                    // The bubble is the sender cue, so the label would only repeat it.
+                    messageSender.visibility = View.GONE
+                    // A match_parent child can't widen a wrap_content bubble; it stays one word wide.
+                    messageContent.layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                    // Line count is only known once the text is laid out at its final width.
+                    messageContent.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                        updateExpandToggleVisibility(this)
+                    }
+                }
+            }
             else -> {
                 val view = inflater.inflate(R.layout.list_item_chat_message, parent, false)
-                DefaultMessageViewHolder(view)
+                DefaultMessageViewHolder(view).also(::wireMessageActions)
             }
         }
     }
@@ -164,6 +188,7 @@ class ChatAdapter(
                         holder.messageContent.text = payload.text
                     }
                 }
+                updateMessageActions(holder, message)
             } else if (payload is TextUpdatePayload && holder is SystemMessageViewHolder) {
                 markwon.setMarkdown(holder.messageContent, payload.text)
                 updateSystemMessageExpansion(holder, getItem(position))
@@ -178,12 +203,8 @@ class ChatAdapter(
         holder.messageSender.text = message.sender.name.lowercase(Locale.getDefault())
             .replaceFirstChar { it.titlecase(Locale.getDefault()) }
 
-        holder.itemView.setOnLongClickListener { view ->
-            if (message.status == MessageStatus.SENT) {
-                showContextMenu(view, message)
-            }
-            true
-        }
+        updateMessageActions(holder, message)
+        holder.btnToggleExpand?.let { bindExpandToggle(holder, it, message) }
 
         when (message.status) {
             MessageStatus.LOADING -> {
@@ -239,6 +260,86 @@ class ChatAdapter(
                 }
                 updateMessageMetadata(holder, message)
             }
+        }
+    }
+
+    /** Wired once per holder: a streamed reply grows via payloads, so the tap reads the current item. */
+    private fun wireMessageActions(holder: DefaultMessageViewHolder) {
+        holder.btnCopyMessage.setOnClickListener {
+            val pos = holder.bindingAdapterPosition
+            if (pos != RecyclerView.NO_POSITION) onMessageAction(ACTION_COPY, getItem(pos))
+        }
+        wireTooltip(holder.btnCopyMessage, AiCorePlugin.TOOLTIP_TAG_MESSAGE_COPY)
+    }
+
+    /**
+     * Shows the actions under user and agent messages once their text is final: not while loading,
+     * nor while a reply is still streaming. System error rows share this layout but get none.
+     */
+    private fun updateMessageActions(holder: DefaultMessageViewHolder, message: ChatMessage) {
+        val streaming = message.sender == Sender.AGENT &&
+            message.status == MessageStatus.SENT && message.durationMs == null
+        val show = message.sender != Sender.SYSTEM && message.status != MessageStatus.LOADING && !streaming
+        holder.messageActions.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun bindExpandToggle(holder: DefaultMessageViewHolder, toggle: ImageButton, message: ChatMessage) {
+        applyUserMessageExpansion(holder, toggle, isUserMessageExpanded(message.id))
+        toggle.setOnClickListener {
+            val expanded = toggleUserMessageExpanded(message.id)
+            val rowTop = holder.itemView.top
+            applyUserMessageExpansion(holder, toggle, expanded)
+            keepRowTopInPlace(holder.itemView, rowTop)
+        }
+        wireTooltip(toggle, AiCorePlugin.TOOLTIP_TAG_USER_MESSAGE_EXPAND)
+    }
+
+    /**
+     * Folds the bubble to `R.integer.user_message_collapsed_lines` or unfolds it, and turns the arrow and its
+     * spoken label to match: down/"show the whole message" while folded, up/"show less" once open.
+     */
+    private fun applyUserMessageExpansion(holder: DefaultMessageViewHolder, toggle: ImageButton, expanded: Boolean) {
+        holder.messageContent.maxLines = if (expanded) Int.MAX_VALUE else collapsedLines(holder)
+        toggle.setImageResource(if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more)
+        toggle.contentDescription = toggle.context.getString(
+            if (expanded) R.string.desc_collapse_user_message else R.string.desc_expand_user_message
+        )
+    }
+
+    private fun collapsedLines(holder: DefaultMessageViewHolder): Int =
+        holder.messageContent.resources.getInteger(R.integer.user_message_collapsed_lines)
+
+    /**
+     * Scrolls [row] back to [rowTop] after its next layout, before that frame draws. The list stacks
+     * from the end, so a row that changes height moves its top: unfolding would push the start of
+     * the message off screen.
+     */
+    private fun keepRowTopInPlace(row: View, rowTop: Int) {
+        val list = row.parent as? RecyclerView ?: return
+        list.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                list.viewTreeObserver.removeOnPreDrawListener(this)
+                if (row.parent !== list) return true
+                val drift = row.top - rowTop
+                if (drift == 0) return true
+                list.scrollBy(0, drift)
+                // Skip this frame: it was laid out before the correction.
+                return false
+            }
+        })
+    }
+
+    /**
+     * Shows the toggle only when the text runs past the fold. lineCount counts every line even while
+     * maxLines hides some (no ellipsize is set), so this holds folded or not. Posted, since it runs
+     * mid-layout and a visibility change there would be deferred with a warning anyway.
+     */
+    private fun updateExpandToggleVisibility(holder: DefaultMessageViewHolder) {
+        val toggle = holder.btnToggleExpand ?: return
+        toggle.post {
+            val overflows = holder.messageContent.lineCount > collapsedLines(holder)
+            val visibility = if (overflows) View.VISIBLE else View.GONE
+            if (toggle.visibility != visibility) toggle.visibility = visibility
         }
     }
 
@@ -324,7 +425,11 @@ class ChatAdapter(
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
-        if (holder is DefaultMessageViewHolder) hideGeneratingDots(holder)
+        if (holder is DefaultMessageViewHolder) {
+            hideGeneratingDots(holder)
+            // Here, not in bind: a rebind of the same row would flash its toggle off for a frame.
+            holder.btnToggleExpand?.visibility = View.GONE
+        }
     }
 
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
@@ -385,34 +490,6 @@ class ChatAdapter(
             val minutes = seconds / 60.0
             "took ${decimalSecondsFormatter.format(minutes)}m"
         }
-    }
-
-    private fun showContextMenu(view: View, message: ChatMessage) {
-        val context = view.context
-        val popup = PopupMenu(context, view)
-
-        popup.menu.add(0, 1, 0, "Copy Text")
-        if (message.sender == Sender.USER) {
-            popup.menu.add(0, 2, 0, "Edit Message")
-        }
-
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("chat_message", message.text)
-                    clipboard.setPrimaryClip(clip)
-                    Snackbar.make(view, view.context.getString(R.string.msg_copied), Snackbar.LENGTH_SHORT).show()
-                    true
-                }
-                2 -> {
-                    onMessageAction(ACTION_EDIT, message)
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
     }
 
     override fun onCurrentListChanged(previousList: MutableList<ChatMessage>, currentList: MutableList<ChatMessage>) {

@@ -11,6 +11,9 @@
     <dimen name="space_lg">16dp</dimen>
     <dimen name="space_xl">24dp</dimen>
 
+    <dimen name="divider_thickness">1dp</dimen>
+    <dimen name="button_stroke_width">1dp</dimen>
+
     <dimen name="radius_md">8dp</dimen>
 
     <dimen name="text_micro">11sp</dimen>

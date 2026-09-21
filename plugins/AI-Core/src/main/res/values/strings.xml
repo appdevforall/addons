@@ -13,6 +13,9 @@
     <string name="desc_stop_agent">Stop the agent</string>
     <string name="desc_show_composer">Show the message box</string>
     <string name="desc_hide_composer">Hide the message box</string>
+    <string name="desc_expand_user_message">Show the whole message</string>
+    <string name="desc_collapse_user_message">Show less of the message</string>
+    <string name="desc_copy_message">Copy message</string>
     <string name="desc_chat_sidebar">Chats, settings and a new chat</string>
 
     <!-- Sidebar actions -->
@@ -26,12 +29,13 @@
 
     <!-- Chat history: the per-project session list (see ChatSidebarController) -->
     <string name="session_untitled">New chat</string>
+    <string name="session_title_generating">Naming chat…</string>
     <string name="session_rename">Rename</string>
     <string name="session_delete">Delete</string>
     <string name="session_current">Current chat</string>
     <string name="session_rename_title">Rename chat</string>
     <string name="session_rename_hint">Chat name</string>
-    <string name="session_rename_help">Leave it empty to name the chat after its first message again.</string>
+    <string name="session_rename_help">Leave it empty to use the automatic title again.</string>
     <string name="session_rename_save">Rename</string>
     <string name="session_clear_title">Clear this chat?</string>
     <string name="session_clear_message">Everything said in this conversation is removed and you stay in it, empty. No copy is kept, so use “New chat” instead if you may want it back. This can\'t be undone.</string>
@@ -80,7 +84,6 @@
 
     <!-- Message Actions -->
     <string name="action_copy_text">Copy Text</string>
-    <string name="action_edit_message">Edit Message</string>
     <string name="action_retry">Retry</string>
     <string name="action_open_settings">Open AI Settings</string>
 
@@ -160,7 +163,6 @@
     <string name="settings_max_tokens">Max Tokens</string>
 
     <!-- Task 4 - Chat Layout -->
-    <string name="ai_agent">AI Agent</string>
     <string name="new_chat">New Chat</string>
     <string name="add_context_file">Add context file</string>
     <string name="type_a_message_or_prompt">Type a message or prompt…</string>

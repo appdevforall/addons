@@ -35,6 +35,20 @@ class ChatSessionRowsTest {
     }
 
     @Test
+    fun givenASessionWhoseTitleIsBeingWritten_whenBuildingRows_thenItShowsThePlaceholderAsUntitled() {
+        val rows = ChatSessionRows.from(
+            listOf(session("s1", userText = "why does the build fail")),
+            currentSessionId = null,
+            untitledTitle = UNTITLED,
+            titlePending = setOf("s1"),
+            pendingTitle = "Naming chat…",
+        )
+
+        assertEquals("Naming chat…", rows.single().title)
+        assertTrue(rows.single().isUntitled)
+    }
+
+    @Test
     fun givenARenamedSession_whenBuildingRows_thenTheNameWins() {
         val rows = ChatSessionRows.from(
             listOf(session("s1", userText = "why does the build fail", name = "Build failure")),

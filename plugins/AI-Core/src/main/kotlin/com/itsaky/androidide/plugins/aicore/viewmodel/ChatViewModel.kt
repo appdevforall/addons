@@ -58,11 +58,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
 private const val TAG = "$LOG_PREFIX.ChatViewModel"
@@ -169,6 +171,14 @@ class ChatViewModel(
     private val _history = MutableStateFlow<List<LlmInferenceService.ChatMessage>>(emptyList())
     val history: StateFlow<List<LlmInferenceService.ChatMessage>> = _history.asStateFlow()
 
+    private val _titlePending = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * Sessions whose title is being written: from their first message until the backend's title
+     * lands or the attempt ends. The UI shows a loading title for these instead of the raw prompt.
+     */
+    val titlePending: StateFlow<Set<String>> = _titlePending.asStateFlow()
+
     val currentSession: StateFlow<ChatSession?> = combine(_sessions, _currentSessionId) { sessions, id ->
         sessions.firstOrNull { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
@@ -234,6 +244,25 @@ class ChatViewModel(
 
     /** The in-flight agent run (streaming + tool loop), so it can be cancelled. */
     private var generationJob: Job? = null
+
+    /**
+     * The in-flight chat title request. The next run waits for it before generating: backends keep
+     * per-request state process-wide (Gemini's current job, the local model's token cap).
+     */
+    @Volatile
+    private var titleRequest: TitleRequest? = null
+
+    /** A title being written, and the session it is for. */
+    private class TitleRequest(val sessionId: String, val job: Job)
+
+    /** Sessions asked for a title this process; a failing backend is not re-asked every run. */
+    private val titleRequested = mutableSetOf<String>()
+
+    /**
+     * User messages the reader unfolded, kept here so a fold survives the chat view being rebuilt.
+     * Main only. Never pruned: it grows by one id per tap, and message ids are never reused.
+     */
+    private val expandedUserMessageIds = mutableSetOf<String>()
 
     /** The in-flight backend availability check, so a resume can supersede the previous one. */
     private var backendCheckJob: Job? = null
@@ -505,9 +534,36 @@ class ChatViewModel(
      * @param messageId the message to remove; an unknown id is a no-op.
      */
     private fun removeMessageFromSession(messageId: String) {
-        _messages.value = _messages.value.filter { it.id != messageId }
-        val session = currentSessionOrNull() ?: return
-        replaceCurrentSessionMessages(session.messages.filter { it.id != messageId })
+        removeMessages { it.id == messageId }
+    }
+
+    /**
+     * Drops every message [doomed] accepts, from the transcript and from the session behind it.
+     *
+     * @param doomed picks the messages to remove; the two lists mirror each other, so the
+     *   transcript is what decides whether anything matched.
+     * @return true when at least one message was removed.
+     */
+    private fun removeMessages(doomed: (ChatMessage) -> Boolean): Boolean {
+        val remaining = _messages.value.filterNot(doomed)
+        if (remaining.size == _messages.value.size) return false
+        _messages.value = remaining
+        val session = currentSessionOrNull() ?: return true
+        replaceCurrentSessionMessages(session.messages.filterNot(doomed))
+        return true
+    }
+
+    /**
+     * Removes the "backend is not ready" notices, which a ready backend has made wrong.
+     *
+     * Called from [publishBackendStatus] on the edge into readiness, and from [adoptSession] for a
+     * transcript that was not on screen when that edge passed — between them, no conversation in
+     * the project keeps a warning about a backend that now works. Main thread only.
+     */
+    internal fun clearBackendSetupNotices() {
+        if (!removeMessages { it.isSetupError }) return
+        AgentTrace.detail("UI", "backend configured; dropped the setup notices")
+        schedulePersist()
     }
 
     /**
@@ -557,6 +613,9 @@ class ChatViewModel(
      * Surfaces a setup problem both ways: a persistent SYSTEM bubble and [AgentState.Error] for the
      * fragment's Snackbar. Used by [sendMessage]'s pre-flight guards, which reject before any backend
      * runs, so the downstream `onError`/UserFeedback path never fires.
+     *
+     * Flagged as a setup error, which is what [clearBackendSetupNotices] removes it by once the
+     * backend is configured.
      * @param text the error text to show.
      */
     private fun emitSystemError(text: String) {
@@ -564,7 +623,8 @@ class ChatViewModel(
             id = UUID.randomUUID().toString(),
             text = text,
             sender = Sender.SYSTEM,
-            status = MessageStatus.ERROR
+            status = MessageStatus.ERROR,
+            isSetupError = true
         )
         _messages.value = _messages.value + errorMessage
         syncMessageToSession(errorMessage)
@@ -976,18 +1036,26 @@ class ChatViewModel(
         transform: (BackendStatus) -> BackendStatus,
     ): Boolean = withContext(Dispatchers.Main.immediate) {
         if (sequence != backendCheckSequence) return@withContext false
-        _backendStatus.value = transform(_backendStatus.value)
+        val previous = _backendStatus.value
+        _backendStatus.value = transform(previous)
+        // Only on the edge into readiness: that is the moment a stored notice became wrong, and
+        // the guard keeps every later check off the transcript.
+        if (_backendStatus.value.isAvailable && !previous.isAvailable) clearBackendSetupNotices()
         true
     }
 
     /**
      * Send a user message and get agent response.
+     *
+     * @param userMessage the prompt to send.
+     * @return true once a run has been started; false when a pre-flight guard rejected the prompt,
+     *   which is what keeps the composer's text in place for an unconfigured backend.
      */
-    fun sendMessage(userMessage: String) {
+    fun sendMessage(userMessage: String): Boolean {
         val llmService = getLlmService()
         if (llmService == null) {
             emitSystemError(str(R.string.error_llm_service_not_available))
-            return
+            return false
         }
 
         if (!_backendStatus.value.isAvailable) {
@@ -1003,16 +1071,16 @@ class ChatViewModel(
                     SelectedBackend.None -> str(R.string.backend_none_installed)
                 }
             )
-            return
+            return false
         }
 
         if (userMessage.isBlank()) {
-            return
+            return false
         }
 
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) {
-            return
+            return false
         }
 
         AgentTrace.beginRun(currentBackendId, userMessage, contextFiles.size)
@@ -1027,6 +1095,9 @@ class ChatViewModel(
         val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
+            // The session this run may title, and whether a title request took that job over.
+            var titleSessionId: String? = null
+            var titleRequestStarted = false
             try {
                 // Add user message to the UI.
                 val userChatMessage = ChatMessage(
@@ -1036,10 +1107,15 @@ class ChatViewModel(
                     status = MessageStatus.SENT
                 )
                 withContext(Dispatchers.Main) {
+                    // Before the message lands, so the header never shows it as the title first.
+                    titleSessionId = currentSessionOrNull()?.takeIf { needsTitle(it) }?.id
+                    titleSessionId?.let { id -> _titlePending.value = _titlePending.value + id }
                     _messages.value = _messages.value + userChatMessage
                     syncMessageToSession(userChatMessage)
                     setState(AgentState.Processing(str(R.string.msg_generating)))
                 }
+                // Queued behind a title still being written; the prompt shows as generating meanwhile.
+                awaitTitleRequest()
 
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
                     // The grammar shapes a local tool call but not its values, so paths get sampled.
@@ -1094,6 +1170,11 @@ class ChatViewModel(
                         events = AgentRunReporter(runNotices),
                     )
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
+                    if (loopResult.completed && generationEpoch.get() == epoch) {
+                        titleRequestStarted = withContext(Dispatchers.Main) {
+                            requestTitleIfUntitled(llmService)
+                        }
+                    }
                 } finally {
                     // Persist history only if this run wasn't superseded (epoch bumped).
                     if (generationEpoch.get() == epoch) {
@@ -1122,9 +1203,113 @@ class ChatViewModel(
                 withContext(NonCancellable + Dispatchers.Main) {
                     finishActivity()
                     persistState()
+                    // No title is coming for a run that failed or stopped; the header shows the prompt.
+                    if (!titleRequestStarted) titleSessionId?.let(::settleTitle)
                 }
             }
         }
+        return true
+    }
+
+    /**
+     * Asks the selected backend to name the current chat, once, after its first completed reply.
+     * Leaves chats the user named, or that already have a title, alone. Main-thread only; the
+     * request itself runs on IO as [titleRequest], which the next run waits out before generating.
+     *
+     * @param llmService the inference service the run just used.
+     * @return whether a request was started; it then settles [titlePending] itself when it ends.
+     */
+    internal fun requestTitleIfUntitled(llmService: LlmInferenceService): Boolean {
+        val session = currentSessionOrNull() ?: return false
+        if (!needsTitle(session)) return false
+        val userText = session.messages.firstOrNull { it.sender == Sender.USER }?.text ?: return false
+        val replyText = session.messages.lastOrNull { it.sender == Sender.AGENT && it.text.isNotBlank() }
+            ?.text ?: return false
+        titleRequested.add(session.id)
+        val sessionId = session.id
+        val job = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                generateTitle(llmService, sessionId, userText, replyText)
+            } finally {
+                withContext(NonCancellable + Dispatchers.Main) { settleTitle(sessionId) }
+            }
+        }
+        titleRequest = TitleRequest(sessionId, job)
+        return true
+    }
+
+    /**
+     * Holds a new prompt until a title still being written has finished, so the two never generate
+     * at once. Bounded by the title's own [ChatTitle.TIMEOUT_MS]; the title job settles itself.
+     */
+    internal suspend fun awaitTitleRequest() {
+        val request = titleRequest?.takeIf { it.job.isActive } ?: return
+        AgentTrace.stage("TITLE", "session=${request.sessionId} holding a queued prompt")
+        request.job.join()
+    }
+
+    /** Whether [session] is still to be titled: not named by the user, untitled, and not yet asked. */
+    private fun needsTitle(session: ChatSession): Boolean =
+        session.name == null && session.generatedTitle == null && session.id !in titleRequested
+
+    /** Ends [sessionId]'s loading title; it now shows its generated title or its clamped prompt. */
+    private fun settleTitle(sessionId: String) {
+        _titlePending.value = _titlePending.value - sessionId
+    }
+
+    /**
+     * Asks for a title and stores it. Every way out short of a title leaves the chat on its prompt,
+     * so failures are logged, not surfaced: nothing about the conversation itself went wrong.
+     */
+    private suspend fun generateTitle(
+        llmService: LlmInferenceService,
+        sessionId: String,
+        userText: String,
+        replyText: String,
+    ) {
+        val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
+            temperature = ChatTitle.TEMPERATURE
+            maxTokens = ChatTitle.MAX_TOKENS
+            systemPrompt = ChatTitle.SYSTEM_PROMPT
+        }
+        val response = try {
+            withTimeoutOrNull(ChatTitle.TIMEOUT_MS) {
+                llmService.generateCompletion(ChatTitle.prompt(userText, replyText), config).await()
+            }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            logWarn("title request failed for session $sessionId", e)
+            return
+        }
+        if (response == null) {
+            // Safe to cancel globally: no run starts until this job has finished.
+            logWarn("title request timed out for session $sessionId")
+            llmService.cancelGeneration()
+            return
+        }
+        if (!response.success) {
+            logWarn("title request refused for session $sessionId: ${response.error}")
+            return
+        }
+        val title = ChatTitle.sanitize(response.text.orEmpty()) ?: return
+        withContext(Dispatchers.Main) { applyGeneratedTitle(sessionId, title) }
+    }
+
+    /**
+     * Stores [title] on the session, unless the user renamed it or it got a title meanwhile.
+     *
+     * @param sessionId the session the title was written for; it may have been deleted since.
+     * @param title the cleaned title.
+     */
+    private fun applyGeneratedTitle(sessionId: String, title: String) {
+        val session = _sessions.value.firstOrNull { it.id == sessionId } ?: return
+        if (session.name != null || session.generatedTitle != null) return
+        _sessions.value = _sessions.value.map {
+            if (it.id == sessionId) it.copy(generatedTitle = title) else it
+        }
+        AgentTrace.stage("TITLE", "session=$sessionId chars=${title.length}")
+        persistState()
     }
 
     /**
@@ -1510,6 +1695,20 @@ class ChatViewModel(
             addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)
     }
 
+    /** Whether the user message [messageId] is shown unfolded. Main only. */
+    fun isUserMessageExpanded(messageId: String): Boolean = messageId in expandedUserMessageIds
+
+    /**
+     * Unfolds the user message [messageId], or folds it back. Main only.
+     *
+     * @return whether it is unfolded now.
+     */
+    fun toggleUserMessageExpanded(messageId: String): Boolean {
+        if (expandedUserMessageIds.add(messageId)) return true
+        expandedUserMessageIds.remove(messageId)
+        return false
+    }
+
     /**
      * Clear all messages from the conversation.
      */
@@ -1520,6 +1719,14 @@ class ChatViewModel(
         _history.value = emptyList()
         // Without this the session keeps its messages and the cleared chat returns on the next sync.
         replaceCurrentSessionMessages(emptyList())
+        // The title described the conversation just cleared; the next first reply writes a new one.
+        _currentSessionId.value?.let { sessionId ->
+            titleRequested.remove(sessionId)
+            settleTitle(sessionId)
+            _sessions.value = _sessions.value.map {
+                if (it.id == sessionId) it.copy(generatedTitle = null) else it
+            }
+        }
         forgetRetryPoint()
         setState(AgentState.Idle)
         // Written now rather than debounced: a clear is deliberate and must survive a force-stop.
@@ -1583,6 +1790,8 @@ class ChatViewModel(
         _messages.value = session.messages.toList()
         // Emptying this is what had the model forget a conversation the user was looking at.
         _history.value = rebuildHistoryFrom(session.messages)
+        // Also dropped here: the readiness edge may have fired while another chat was current.
+        if (_backendStatus.value.isAvailable) clearBackendSetupNotices()
         // The rewind point names a run this transcript does not have, and would truncate it.
         forgetRetryPoint()
         persistState()
@@ -1610,8 +1819,8 @@ class ChatViewModel(
      * Gives a session the name the user typed for it, or takes that name away again.
      *
      * @param sessionId the session to rename; an unknown id is a no-op.
-     * @param name the new name. Blank clears it, so the session falls back to naming itself after
-     *   its first user turn — that is the only way back from a rename the user regrets.
+     * @param name the new name. Blank clears it, so the session falls back to its generated title,
+     *   or its first user turn — that is the only way back from a rename the user regrets.
      */
     fun renameSession(sessionId: String, name: String?) {
         val trimmed = name?.trim()?.takeIf { it.isNotEmpty() }
