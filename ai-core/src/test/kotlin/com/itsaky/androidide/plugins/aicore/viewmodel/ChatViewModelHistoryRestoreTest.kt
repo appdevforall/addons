@@ -154,26 +154,24 @@ class ChatViewModelHistoryRestoreTest {
     }
 
     @Test
-    fun givenABlankHistoryText_whenRestoring_thenTheRenderedAnswerIsUsed() {
+    fun givenABlankHistoryText_whenRestoring_thenTheTurnIsExcludedFromHistory() {
         seed(
             session(
                 "s1",
-                message("m1", "what does this do", "USER"),
-                // A native respond call carries no text part, so the stored history text is empty.
-                message("m2", "it applies the plugin builder", "AGENT", historyText = ""),
+                message("m1", "delete the file", "USER"),
+                // A native respond call after a failed tool: no text part, so the bubble is the
+                // localized placeholder and the model's own text is empty.
+                message("m2", "The action failed", "AGENT", historyText = ""),
             )
         )
 
         val history = restoredViewModel().history.value
 
-        assertEquals(
-            listOf("what does this do", "it applies the plugin builder"),
-            history.map { it.content },
-        )
+        assertEquals(listOf("delete the file"), history.map { it.content })
     }
 
     @Test
-    fun givenANewestTurnOverTheWholeBudget_whenRestoring_thenItIsStillRestored() {
+    fun givenANewestTurnOverTheWholeBudget_whenRestoring_thenItIsTruncatedToTheBudget() {
         seed(
             session(
                 "s1",
@@ -184,9 +182,11 @@ class ChatViewModelHistoryRestoreTest {
 
         val history = restoredViewModel().history.value
 
-        // Dropping it would hand the model nothing at all, the regression this restore removes.
+        // Dropping it would hand the model nothing at all, the regression this restore removes;
+        // exempting it whole would leave every later send over the budget.
         assertEquals(1, history.size)
         assertEquals(Role.ASSISTANT, history.single().role)
+        assertEquals(8_000, history.single().content.length)
     }
 
     @Test
