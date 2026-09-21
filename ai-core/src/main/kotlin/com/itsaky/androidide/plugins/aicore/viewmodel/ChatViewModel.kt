@@ -29,6 +29,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
+import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
@@ -1067,11 +1068,13 @@ class ChatViewModel(
                             runModelTurn(llmService, turns, config, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
-                        // The paths a changing call rewrites, so a re-read of one counts as new.
-                        mutatedPathsOf = { call ->
-                            val handler = tools.router.getHandler(call.name)
-                            if (handler?.mutatesProject != true) emptySet()
-                            else handler.pathArgs.mapNotNull { call.args[it]?.toString() }.toSet()
+                        // Read through the handler, so a path spelled `path` or left to a default
+                        // still names the file a re-read of it should count as new again.
+                        pathsOf = { call ->
+                            tools.router.getHandler(call.name)?.pathsIn(call.args).orEmpty()
+                        },
+                        changesPaths = { call ->
+                            tools.router.getHandler(call.name)?.mutatesProject == true
                         },
                         events = AgentRunReporter(runNotices),
                     )

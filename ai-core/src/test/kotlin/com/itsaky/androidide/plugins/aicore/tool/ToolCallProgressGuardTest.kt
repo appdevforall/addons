@@ -1,6 +1,9 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
+import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,12 +19,24 @@ class ToolCallProgressGuardTest {
         ToolCallProgressGuard(
             maxConsecutiveRepeats = repeats,
             maxTurnsWithoutProgress = stale,
-            mutatedPathsOf = { call ->
-                if (call.name in mutating) setOfNotNull(call.args["path"]?.toString()) else emptySet()
-            },
+            pathsOf = { call -> setOfNotNull(call.args["file_path"]?.toString()) },
+            changesPaths = { call -> call.name in mutating },
         )
 
-    private fun call(name: String, path: String = "A.kt") = listOf(ToolCall(name, mapOf("path" to path)))
+    /** The guard wired the way the chat wires it, from the handlers' own argument declarations. */
+    private fun realGuard(stale: Int = 3): ToolCallProgressGuard {
+        val builtIns = BuiltInToolHandlers.create(mockk<PluginContext>(relaxed = true))
+            .associateBy { it.toolName }
+        return ToolCallProgressGuard(
+            maxConsecutiveRepeats = 2,
+            maxTurnsWithoutProgress = stale,
+            pathsOf = { call -> builtIns[call.name]?.pathsIn(call.args).orEmpty() },
+            changesPaths = { call -> builtIns[call.name]?.mutatesProject == true },
+        )
+    }
+
+    private fun call(name: String, path: String = "A.kt") =
+        listOf(ToolCall(name, mapOf("file_path" to path)))
 
     private val ok = listOf(ToolResult.success("ok"))
     private val failed = listOf(ToolResult.failure("nope"))
@@ -46,10 +61,10 @@ class ToolCallProgressGuardTest {
     @Test
     fun givenArgumentsInAnotherOrder_whenInspected_thenTheBatchIsStillTheSameAction() {
         val guard = guard()
-        guard.inspect(listOf(ToolCall("read_file", linkedMapOf("path" to "A.kt", "limit" to 10))))
+        guard.inspect(listOf(ToolCall("read_file", linkedMapOf("file_path" to "A.kt", "limit" to 10))))
         guard.recordResults(ok)
 
-        val reordered = listOf(ToolCall("read_file", linkedMapOf("limit" to 10, "path" to "A.kt")))
+        val reordered = listOf(ToolCall("read_file", linkedMapOf("limit" to 10, "file_path" to "A.kt")))
         assertEquals(ToolCallProgressGuard.Verdict.ASSUME_COMPLETE, guard.inspect(reordered))
     }
 
@@ -111,8 +126,8 @@ class ToolCallProgressGuardTest {
     @Test
     fun givenOneFileRewrittenBackAndForth_whenInspected_thenItStopsAsCycling() {
         val guard = guard(stale = 3)
-        val x = listOf(ToolCall("edit_file", mapOf("path" to "A.kt", "content" to "X")))
-        val y = listOf(ToolCall("edit_file", mapOf("path" to "A.kt", "content" to "Y")))
+        val x = listOf(ToolCall("edit_file", mapOf("file_path" to "A.kt", "content" to "X")))
+        val y = listOf(ToolCall("edit_file", mapOf("file_path" to "A.kt", "content" to "Y")))
         listOf(x, y, x, y).forEach { guard.inspect(it); guard.recordResults(ok) }
 
         // Each edit invalidates reads of A.kt, but never the other edit of it.
@@ -169,5 +184,32 @@ class ToolCallProgressGuardTest {
         guard.recordResults(listOf(ToolResult.success("ok"), ToolResult.failure("nope")))
 
         assertTrue(guard.lastBatchFailed)
+    }
+
+    @Test
+    fun givenAnEditSpellingThePathArgPath_whenInspected_thenItStillInvalidatesTheReadOfThatFile() {
+        val guard = realGuard()
+        val read = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+        guard.inspect(read)
+        guard.recordResults(ok)
+        // The near-miss key the executor remaps: the guard has to read the call the same way.
+        val edit = mapOf("path" to "A.kt", "old_string" to "a", "new_string" to "b")
+        guard.inspect(listOf(ToolCall("edit_file", edit)))
+        guard.recordResults(ok)
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(read))
+    }
+
+    @Test
+    fun givenADependencyAddedWithNoBuildFile_whenInspected_thenItInvalidatesTheReadOfTheDefault() {
+        val guard = realGuard()
+        val read = listOf(ToolCall("read_file", mapOf("file_path" to "app/build.gradle.kts")))
+        guard.inspect(read)
+        guard.recordResults(ok)
+        // build_file is optional; the handler defaults it, so the write still names a path.
+        guard.inspect(listOf(ToolCall("add_dependency", mapOf("dependency" to "a:b:1"))))
+        guard.recordResults(ok)
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(read))
     }
 }

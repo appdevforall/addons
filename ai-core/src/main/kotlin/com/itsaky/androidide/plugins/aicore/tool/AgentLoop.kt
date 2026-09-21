@@ -175,8 +175,9 @@ class AgentLoop(
      *   emit one turn per message; flattening callers can use [renderTranscript]. Returns a
      *   [ModelReply], whose two texts a natively-calling caller sets apart.
      * @param executeTools runs a batch of tool calls.
-     * @param mutatedPathsOf the project paths a call changes; the progress guard counts an earlier
-     *   read of one of them as a new action again rather than as a repeat.
+     * @param pathsOf the project paths a call names; the progress guard counts an earlier look at
+     *   one a later call rewrote as a new action again rather than as a repeat.
+     * @param changesPaths whether a call rewrites what it names.
      * @param events UI/state callbacks.
      * @return the run [Result].
      */
@@ -184,12 +185,17 @@ class AgentLoop(
         history: MutableList<ChatMessage>,
         generate: suspend (turns: List<ChatMessage>) -> ModelReply,
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
-        mutatedPathsOf: (ToolCall) -> Set<String> = { emptySet() },
+        pathsOf: (ToolCall) -> Set<String> = { emptySet() },
+        changesPaths: (ToolCall) -> Boolean = { false },
         events: Events = object : Events {},
     ): Result {
         var turn = 0
-        val progress =
-            ToolCallProgressGuard(maxConsecutiveRepeats, maxTurnsWithoutProgress, mutatedPathsOf)
+        val progress = ToolCallProgressGuard(
+            maxConsecutiveRepeats,
+            maxTurnsWithoutProgress,
+            pathsOf,
+            changesPaths,
+        )
         while (turn < maxIterations) {
             turn++
 

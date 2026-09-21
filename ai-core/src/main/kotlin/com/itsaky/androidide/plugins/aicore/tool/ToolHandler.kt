@@ -80,6 +80,13 @@ interface ToolHandler {
         get() = false
 
     /**
+     * Values a [pathArgs] key falls back to when the call omits it, keyed the same way. Declared
+     * here so the progress guard sees the file a defaulted write actually touches.
+     */
+    val pathDefaults: Map<String, String>
+        get() = emptyMap()
+
+    /**
      * Alternative argument names, alias → canonical. Small models reliably invent near-miss keys
      * ("old" for "old_string") and the grammar constrains none of them, so the choice is remapping
      * or burning a turn. Applied before the required-argument check; a supplied canonical key wins.

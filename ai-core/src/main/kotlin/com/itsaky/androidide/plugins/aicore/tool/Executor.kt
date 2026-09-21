@@ -152,24 +152,11 @@ class Executor(
         // check, approval key and log line below has to mean the tool that will actually run.
         val toolName = handler.toolName
 
-        // Alias "path" → "file_path" for any tool that requires "file_path".
-        val normalizedArgs = args.toMutableMap()
-        if ("file_path" in requiredArgsForTool(toolName) &&
-            normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")
-        ) {
-            normalizedArgs["path"]?.let { normalizedArgs["file_path"] = it }
-            if (normalizedArgs.containsKey("file_path")) {
-                Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for $toolName tool")
-            }
-        }
-
-        // Handler-declared aliases; a canonical key the model did supply always wins.
-        handler.argAliases.forEach { (alias, canonical) ->
-            if (!normalizedArgs.containsKey(canonical) && normalizedArgs.containsKey(alias)) {
-                normalizedArgs[canonical] = normalizedArgs[alias]
-                Log.d(TAG, "($executionMode): Remapped '$alias' → '$canonical' for $toolName tool")
-                AgentTrace.detail("ARGS", "$toolName remapped $alias→$canonical")
-            }
+        // Shared with the progress guard, so it derives a call's paths from the keys that will run.
+        val normalizedArgs = normalizeToolArgs(handler, args)
+        (normalizedArgs.keys - args.keys).forEach { canonical ->
+            Log.d(TAG, "($executionMode): Filled '$canonical' from an alias for $toolName tool")
+            AgentTrace.detail("ARGS", "$toolName remapped →$canonical")
         }
 
         // Check required arguments

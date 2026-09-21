@@ -9,13 +9,15 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
  *
  * @param maxConsecutiveRepeats identical unsuccessful batches tolerated back to back.
  * @param maxTurnsWithoutProgress turns tolerated introducing no batch the run has not already run.
- * @param mutatedPathsOf the project paths one call changes, empty when it changes nothing, so a
- *   run is not judged on novelty for a file it has just rewritten.
+ * @param pathsOf the project paths one call names, whether it reads them or rewrites them.
+ * @param changesPaths whether a call rewrites what it names, so a run is not judged on novelty
+ *   for a file it has just rewritten.
  */
 internal class ToolCallProgressGuard(
     private val maxConsecutiveRepeats: Int,
     private val maxTurnsWithoutProgress: Int,
-    private val mutatedPathsOf: (ToolCall) -> Set<String> = { emptySet() },
+    private val pathsOf: (ToolCall) -> Set<String> = { emptySet() },
+    private val changesPaths: (ToolCall) -> Boolean = { false },
 ) {
 
     /** What [AgentLoop] should do with the batch just inspected. */
@@ -33,8 +35,9 @@ internal class ToolCallProgressGuard(
         CYCLING,
     }
 
-    // Every signature this run has issued, so a rotation is visible and not just a repeat.
-    private val seenSignatures = mutableSetOf<String>()
+    // Every signature this run has issued against the paths it named, so a rotation is visible and
+    // an edit invalidates the earlier looks at that file rather than whatever mentions its name.
+    private val seenSignatures = mutableMapOf<String, Set<String>>()
     private var previousSignature: String? = null
     private var consecutiveRepeats = 0
     private var turnsWithoutNewSignature = 0
@@ -43,6 +46,8 @@ internal class ToolCallProgressGuard(
     // file back and forth still runs out of novelty.
     private val changingSignatures = mutableSetOf<String>()
     private var currentBatchPaths = emptySet<String>()
+    private var currentBatchWrites = emptySet<String>()
+    private var currentBatchChanges = false
     private var currentBatchIsNew = false
 
     // Null until a batch has run: "no tools yet" and "the tools failed" end a run differently.
@@ -61,11 +66,13 @@ internal class ToolCallProgressGuard(
      */
     fun inspect(calls: List<ToolCall>): Verdict {
         val signature = signatureOf(calls)
+        currentBatchPaths = pathsNamedBy(calls)
+        currentBatchWrites = pathsNamedBy(calls.filter(changesPaths))
+        currentBatchChanges = calls.any(changesPaths)
         val verdict = verdictFor(signature)
         if (verdict == Verdict.PROCEED) {
             previousSignature = signature
-            currentBatchPaths = calls.flatMap(mutatedPathsOf).filter { it.isNotBlank() }.toSet()
-            if (currentBatchPaths.isNotEmpty()) changingSignatures.add(signature)
+            if (currentBatchChanges) changingSignatures.add(signature)
         }
         return verdict
     }
@@ -76,17 +83,29 @@ internal class ToolCallProgressGuard(
      */
     fun recordResults(results: List<ToolResult>) {
         previousBatchSucceeded = results.isNotEmpty() && results.all { it.success }
-        // A change the run had not made before makes an earlier read of the paths it touched a new
+        // A change the run had not made before makes an earlier look at the paths it rewrote a new
         // action again, so a run that edits and then verifies is not judged as going in circles.
-        if (previousBatchSucceeded == true && currentBatchIsNew && currentBatchPaths.isNotEmpty()) {
-            seenSignatures.removeAll { seen ->
-                seen !in changingSignatures && currentBatchPaths.any { seen.contains(it) }
-            }
+        // A change whose handler names no path invalidates every read: there is no way to tell
+        // which ones it stood for.
+        if (previousBatchSucceeded != true || !currentBatchIsNew || !currentBatchChanges) return
+        val invalidated = seenSignatures.filter { (seen, paths) ->
+            seen !in changingSignatures &&
+                (currentBatchWrites.isEmpty() || paths.any { it in currentBatchWrites })
         }
+        seenSignatures.keys.removeAll(invalidated.keys)
     }
 
+    /**
+     * The paths a batch names, blanks dropped.
+     * @param calls the calls to read.
+     * @return their paths, as one set.
+     */
+    private fun pathsNamedBy(calls: List<ToolCall>): Set<String> =
+        calls.flatMapTo(mutableSetOf(), pathsOf).filterTo(mutableSetOf()) { it.isNotBlank() }
+
     private fun verdictFor(signature: String): Verdict {
-        currentBatchIsNew = seenSignatures.add(signature)
+        currentBatchIsNew = signature !in seenSignatures
+        seenSignatures[signature] = currentBatchPaths
         if (currentBatchIsNew) {
             turnsWithoutNewSignature = 0
         } else {
