@@ -60,11 +60,20 @@ jobs:
           # scripts/update-libs.sh, so nothing here knows which CodeOnTheGo commit
           # produced libs/. "Update libs from CodeOnTheGo" records it in the subject
           # of the commit it pushes, which is the last one to touch libs/.
+          # These are the artifacts the gallery serves, so an unreadable subject fails
+          # the run: a warning is only legible after the publish, and an empty export
+          # makes the builder omit the key and verify-provenance.sh skip its check, so
+          # the pairing would be lost on a green run. The subject is hand-writable, so
+          # the sha is validated rather than taken on trust, and truncated to the 12
+          # characters update-libs.sh records for the same commit so the two compare equal.
           subject="$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=libs/&sha=${GITHUB_SHA}&per_page=1" --jq '.[0].commit.message' | head -n1)"
-          case "$subject" in
-            *CodeOnTheGo@*) echo "revision=${subject##*CodeOnTheGo@}" >> "$GITHUB_OUTPUT" ;;
-            *) echo "::warning::Could not read a libs revision from '$subject'; the published .cgp files will record no libs_revision." ;;
-          esac
+          revision="${subject##*CodeOnTheGo@}"
+          if [[ "$subject" != *CodeOnTheGo@* || ! "$revision" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "Could not read a libs revision from '$subject'." >&2
+            echo "The last commit to touch libs/ must name it as 'CodeOnTheGo@<sha>'." >&2
+            exit 1
+          fi
+          echo "revision=${revision:0:12}" >> "$GITHUB_OUTPUT"
 
       - name: Build, package, and stage
         id: stage
