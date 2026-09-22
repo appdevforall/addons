@@ -41,12 +41,14 @@ private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 private const val SEMANTIC_RESULTS_TITLE = "Semantic Results"
 
 /**
- * How long a search waits for an in-flight index build before answering from what exists.
+ * How long one search may spend waiting, across every wait it makes.
  *
- * Under the host's own 10-second budget for a project search, so a first query on a large project
- * returns the partial index it has rather than being cut off mid-wait with nothing to show.
+ * Under the host's own 10-second budget for a project search, and shared between embedding the
+ * query and awaiting an in-flight build: either can hang on a slow server, so a ceiling on one of
+ * them alone is not a ceiling. A first query on a large project answers from the partial index it
+ * has rather than being cut off mid-wait with nothing to show.
  */
-private const val INDEXING_WAIT_MS = 8_000L
+private const val SEARCH_BUDGET_MS = 8_000L
 
 /**
  * Vector Search Plugin provides semantic code search capabilities.
@@ -163,6 +165,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         topK: Int = 10,
     ): List<CodeEmbedding> {
         return try {
+            val deadline = System.nanoTime() + SEARCH_BUDGET_MS * 1_000_000
             val embedder = EmbedderResolver.resolve(inferenceService())
             if (embedder !is EmbedderResolution.Ready) {
                 logUnresolved(embedder)
@@ -171,22 +174,25 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
 
             // The query is embedded first because its vector is what reports the width: only a
             // vector the backend actually produced can say what space the index must be built in.
-            val queryEmbedding = embed(embedder.backend, listOf(query)).firstOrNull()
-                ?: return emptyList()
+            val queryEmbedding = withTimeoutOrNull(remainingMs(deadline)) {
+                embed(embedder.backend, listOf(query)).firstOrNull()
+            }
+            if (queryEmbedding == null) {
+                log?.warn("$TAG: no query vector within ${SEARCH_BUDGET_MS}ms; no semantic results")
+                return emptyList()
+            }
             val identity = EmbedderIdentity(embedder.key, queryEmbedding.size)
 
-            if (roots.isNotEmpty()) {
+            val rootsKey = if (roots.isEmpty()) null else rootsKeyOf(roots)
+            if (rootsKey != null) {
                 // Wait for an in-flight build so the first query returns real results, not empty.
-                val job = startIndexingIfNeeded(roots, embedder.backend, identity)
-                if (job != null && withTimeoutOrNull(INDEXING_WAIT_MS) { job.join() } == null) {
-                    log?.warn(
-                        "$TAG: indexing still running after ${INDEXING_WAIT_MS}ms; " +
-                            "using partial index"
-                    )
+                val job = startIndexingIfNeeded(rootsKey, roots, embedder.backend, identity)
+                if (job != null && withTimeoutOrNull(remainingMs(deadline)) { job.join() } == null) {
+                    log?.warn("$TAG: indexing outlasted the search budget; using partial index")
                 }
             }
 
-            val comparable = indexingService.getAllEmbeddings(identity)
+            val comparable = indexingService.getAllEmbeddings(identity, rootsKey)
             if (comparable.isEmpty()) {
                 log?.warn("$TAG: no embeddings from $identity yet; no semantic results for now")
                 return emptyList()
@@ -205,8 +211,12 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         }
     }
 
+    /** What is left of the search budget, floored at zero so an expired budget waits no longer. */
+    private fun remainingMs(deadline: Long): Long =
+        ((deadline - System.nanoTime()) / 1_000_000).coerceAtLeast(0)
+
     /**
-     * Clears the index (e.g., for reindexing after project changes).
+     * Clears the index of every project (e.g., for reindexing after project changes).
      */
     fun clearIndex() {
         indexingService.clearIndex()
@@ -216,6 +226,9 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
 
     /**
      * AI Core's inference service, however this host publishes it.
+     *
+     * `context.services` is deliberately not a third fallback: it is this plugin's own registry
+     * and holds only the host's own `Ide*Service`s, so a cross-plugin lookup there never answers.
      *
      * @return the service, or null when AI Core is absent or has not published it yet
      */
@@ -263,6 +276,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
      * Starts (or reuses) a background index build for [roots], returning its [Job] so the caller
      * can await it, or null when the index already answers for these roots and this embedder.
      *
+     * @param rootsKey the roots being indexed, as one value
      * @param roots project root directories to index
      * @param backend the embedder to build with
      * @param identity what that embedder produces, as the query has just demonstrated
@@ -270,20 +284,24 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
      */
     @Synchronized
     private fun startIndexingIfNeeded(
+        rootsKey: String,
         roots: List<File>,
         backend: EmbeddingBackend,
         identity: EmbedderIdentity,
     ): Job? {
-        val target = IndexTarget(rootsKeyOf(roots), identity)
-        val rootsKey = target.rootsKey
+        val target = IndexTarget(rootsKey, identity)
         val running = indexingJob
         if (running != null && running.isActive && indexingTarget == target) {
             return running
         }
-        if (running?.isActive != true &&
-            ReindexDecision.isReusable(indexedState, rootsKey, identity)
-        ) {
-            return null
+        if (running?.isActive != true) {
+            // The marker is per-session but the rows are not: ask before re-embedding, or a
+            // restart and a project switch each pay for the whole project again.
+            if (!ReindexDecision.isReusable(indexedState, rootsKey, identity)) {
+                val stored = indexingService.countEmbeddings(rootsKey, identity)
+                if (stored > 0) indexedState = IndexState(rootsKey, identity, stored)
+            }
+            if (ReindexDecision.isReusable(indexedState, rootsKey, identity)) return null
         }
 
         // Cancel a build for another target and wait for it to unwind, so builds never
@@ -332,7 +350,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
     ) {
         // Reset the marker up front so a mid-build failure doesn't leave a stale "indexed" flag.
         indexedState = null
-        indexingService.clearIndex()
+        indexingService.clearIndex(rootsKey)
 
         val pending = collectChunks(roots)
         var stored = 0
@@ -340,7 +358,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
             for (batch in EmbeddingBatches.split(pending) { it.chunkText.length }) {
                 coroutineContext.ensureActive()
                 val vectors = embed(backend, batch.map { it.chunkText })
-                indexingService.storeEmbeddings(toEmbeddings(batch, vectors, identity))
+                indexingService.storeEmbeddings(rootsKey, toEmbeddings(batch, vectors, identity))
                 stored += batch.size
             }
         } catch (e: CancellationException) {
@@ -348,7 +366,10 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         } catch (e: Exception) {
             // Emptied, not left partial: a half-built index answers with whatever it happened to
             // reach first, which reads as bad ranking rather than as a failed build.
-            indexingService.clearIndex()
+            indexingService.clearIndex(rootsKey)
+            // Recorded as an attempt: a backend that refuses every call — a revoked key, an
+            // exhausted quota — must not be re-tried, and re-billed, by every later search.
+            indexedState = IndexState(rootsKey, identity, chunkCount = 0)
             log?.error("$TAG: indexing aborted after $stored of ${pending.size} chunks", e)
             return
         }

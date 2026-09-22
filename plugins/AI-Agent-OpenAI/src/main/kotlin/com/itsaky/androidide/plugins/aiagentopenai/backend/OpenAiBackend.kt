@@ -225,6 +225,7 @@ class OpenAiBackend(
             coroutineContext.ensureActive()
             val response = http.post(
                 url = getBaseUrl() + EMBEDDINGS_PATH,
+                // Blank is legitimate, unlike Gemini: a local server takes no key, as chat too.
                 apiKey = readApiKeyOrBlank(),
                 body = OpenAiEmbeddingProtocol.body(model, batch),
                 tag = NetworkTags.EMBEDDING,

@@ -52,10 +52,12 @@ class ReindexDecisionTest {
     }
 
     @Test
-    fun givenABuildThatProducedNothing_whenDeciding_thenTheIndexIsBuilt() {
+    fun givenABuildThatProducedNothing_whenDeciding_thenItIsNotAttemptedAgain() {
+        // A backend that refuses every call would otherwise have a full project walk and a billed
+        // embedding attempt launched by every search the user types.
         val state = IndexState(ROOTS, OPENAI_SMALL, chunkCount = 0)
 
-        assertFalse(ReindexDecision.isReusable(state, ROOTS, OPENAI_SMALL))
+        assertTrue(ReindexDecision.isReusable(state, ROOTS, OPENAI_SMALL))
     }
 
     private companion object {

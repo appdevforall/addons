@@ -159,13 +159,17 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
      *
      * Embedding is an optional capability, so the resolved backend is asked for it by type: a
      * backend that does not implement [EmbeddingBackend] — which is the local one's permanent
-     * answer — is a miss, not a failure. Every miss returns the empty vector and nothing throws,
-     * because the caller is another `.cgp` across a plugin boundary and an exception crossing it
-     * would surface as a crash in whichever plugin happened to ask.
+     * answer — is a miss, not a failure, and answers the empty vector. A backend that does embed
+     * and then fails completes the future exceptionally instead, because "this backend has no
+     * embeddings" and "your key was refused" are different things for the caller to report.
+     *
+     * Nothing is thrown from the call itself: the caller is another `.cgp`, and an exception
+     * crossing that boundary would surface as a crash in whichever plugin happened to ask.
      *
      * @param text the text to embed
      * @param backendId the backend to route to, or [AiBackend.AUTO] for the user's selection
-     * @return the vector, or an empty one when no embedding-capable backend answered
+     * @return the vector, an empty one when no embedding-capable backend answered, or a future
+     *   completed exceptionally when one tried and failed
      */
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {
         val effectiveId = effectiveBackendId(backendId)
@@ -184,15 +188,10 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
             backend.embed(listOf(text))
         } catch (e: Throwable) {
             logger?.error("Backend '$effectiveId' failed to start embedding", e)
-            return noEmbedding()
+            return CompletableFuture<FloatArray>().apply { completeExceptionally(e) }
         }
 
-        return embedded
-            .thenApply { vectors -> vectors.firstOrNull() ?: FloatArray(0) }
-            .exceptionally { error ->
-                logger?.error("Backend '$effectiveId' failed to embed", error)
-                FloatArray(0)
-            }
+        return embedded.thenApply { vectors -> vectors.firstOrNull() ?: FloatArray(0) }
     }
 
     /** The "no embedding available" answer, which is a completed future rather than a failure. */

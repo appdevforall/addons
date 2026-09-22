@@ -17,11 +17,11 @@ private const val TAG = "EmbeddingIndexing"
 /**
  * Schema version.
  *
- * Bumped to 2 by ADFA-6054, which added the provenance columns. Bump it again for any change to
- * the columns below — [EmbeddingsDbHelper.onUpgrade] rebuilds from scratch, so forgetting leaves
- * every existing install querying a table that no longer matches the code reading it.
+ * Bumped to 3 by ADFA-6054, which added the provenance and roots columns. Bump it again for any
+ * change to the columns below — [EmbeddingsDbHelper.onUpgrade] rebuilds from scratch, so forgetting
+ * leaves every existing install querying a table that no longer matches the code reading it.
  */
-private const val DB_VERSION = 2
+private const val DB_VERSION = 3
 
 /** Table holding one row per indexed chunk. */
 private const val TABLE = "embeddings"
@@ -31,6 +31,10 @@ private val COLUMNS = arrayOf(
     "key", "file_path", "chunk_text", "language", "chunk_index", "start_line", "end_line",
     "embedding", "embedder_backend", "embedder_model", "embedder_dimensions",
 )
+
+/** Selects one embedder's rows within one project's index. */
+private const val IDENTITY_WHERE =
+    "embedder_backend = ? AND embedder_model = ? AND embedder_dimensions = ?"
 
 /**
  * SQLite helper for embeddings storage.
@@ -55,14 +59,16 @@ class EmbeddingsDbHelper(context: Context, private val logger: PluginLogger?) :
                 embedding BLOB,
                 embedder_backend TEXT NOT NULL,
                 embedder_model TEXT NOT NULL,
-                embedder_dimensions INTEGER NOT NULL
+                embedder_dimensions INTEGER NOT NULL,
+                roots_key TEXT NOT NULL
             )
         """.trimIndent())
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_file_path ON $TABLE(file_path)")
-        // Every query filters on the whole identity, so it is one index rather than three.
+        // Every query filters on the roots and the whole identity, so it is one index rather
+        // than four.
         db.execSQL(
-            "CREATE INDEX IF NOT EXISTS idx_embedder ON " +
-                "$TABLE(embedder_backend, embedder_model, embedder_dimensions)"
+            "CREATE INDEX IF NOT EXISTS idx_scope ON " +
+                "$TABLE(roots_key, embedder_backend, embedder_model, embedder_dimensions)"
         )
     }
 
@@ -119,14 +125,15 @@ class EmbeddingIndexingService(
      * transaction per row is the difference between seconds and minutes on a device. The batch is
      * all-or-nothing, so a failure mid-write cannot leave the index holding half a batch.
      *
+     * @param rootsKey the project roots these chunks were collected from
      * @param embeddings the chunks to store, already embedded
      */
-    fun storeEmbeddings(embeddings: List<CodeEmbedding>) {
+    fun storeEmbeddings(rootsKey: String, embeddings: List<CodeEmbedding>) {
         if (embeddings.isEmpty()) return
         val db = dbHelper.writableDatabase
         db.beginTransaction()
         try {
-            embeddings.forEach { storeEmbedding(db, it) }
+            embeddings.forEach { storeEmbedding(db, rootsKey, it) }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -157,17 +164,21 @@ class EmbeddingIndexingService(
      * memory only to be discarded.
      *
      * @param identity the embedder whose vectors the caller can compare against
+     * @param rootsKey the project whose rows to read, or null to read every project's
      * @return the matching embeddings, empty when the index holds none from that embedder
      */
-    fun getAllEmbeddings(identity: EmbedderIdentity): List<CodeEmbedding> {
+    fun getAllEmbeddings(
+        identity: EmbedderIdentity,
+        rootsKey: String? = null,
+    ): List<CodeEmbedding> {
         val db = dbHelper.readableDatabase
         val embeddings = mutableListOf<CodeEmbedding>()
 
         db.query(
             TABLE,
             COLUMNS,
-            "embedder_backend = ? AND embedder_model = ? AND embedder_dimensions = ?",
-            arrayOf(identity.backendId, identity.modelId, identity.dimensions.toString()),
+            whereFor(rootsKey),
+            argsFor(identity, rootsKey),
             null, null, null
         ).use { cursor ->
             while (cursor.moveToNext()) {
@@ -179,6 +190,21 @@ class EmbeddingIndexingService(
     }
 
     /**
+     * How many rows [identity] holds for [rootsKey], without reading any of them.
+     *
+     * This is what lets a restart reuse the index a previous session paid for: the in-memory
+     * build marker is gone, but the rows are not, and re-embedding a whole project is billed. A
+     * build the process died inside is reused as it stands — partial ranking is the cheaper wrong.
+     *
+     * @return the row count, zero when this project was never indexed by this embedder
+     */
+    fun countEmbeddings(rootsKey: String, identity: EmbedderIdentity): Int =
+        dbHelper.readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM $TABLE WHERE ${whereFor(rootsKey)}",
+            argsFor(identity, rootsKey),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
+    /**
      * Releases the SQLite connection. Call from the plugin's dispose() so the open
      * database handle doesn't outlive the plugin when it is unloaded/reloaded.
      */
@@ -188,12 +214,31 @@ class EmbeddingIndexingService(
     }
 
     /**
-     * Clears all embeddings from the database (useful for reindexing).
+     * Clears the embeddings of one project, or of every project.
+     *
+     * Scoped by default because one database holds every project a user searched: an unscoped
+     * delete before rebuilding project B would discard the index — and the embedding spend —
+     * of project A, and switching back and forth would re-embed both in turn.
+     *
+     * @param rootsKey the project to clear, or null to clear the whole database
      */
-    fun clearIndex() {
+    fun clearIndex(rootsKey: String? = null) {
         val db = dbHelper.writableDatabase
-        db.delete(TABLE, null, null)
-        logger?.info("$TAG: index cleared")
+        val deleted =
+            if (rootsKey == null) db.delete(TABLE, null, null)
+            else db.delete(TABLE, "roots_key = ?", arrayOf(rootsKey))
+        logger?.info("$TAG: cleared $deleted rows from the index")
+    }
+
+    /** The identity filter, narrowed to one project when [rootsKey] names one. */
+    private fun whereFor(rootsKey: String?): String =
+        if (rootsKey == null) IDENTITY_WHERE else "roots_key = ? AND $IDENTITY_WHERE"
+
+    /** The arguments [whereFor] expects, in its order. */
+    private fun argsFor(identity: EmbedderIdentity, rootsKey: String?): Array<String> {
+        val identityArgs =
+            arrayOf(identity.backendId, identity.modelId, identity.dimensions.toString())
+        return if (rootsKey == null) identityArgs else arrayOf(rootsKey) + identityArgs
     }
 
     /** Reads one row in [COLUMNS] order. */
@@ -221,7 +266,7 @@ class EmbeddingIndexingService(
         )
     }
 
-    private fun storeEmbedding(db: SQLiteDatabase, embedding: CodeEmbedding) {
+    private fun storeEmbedding(db: SQLiteDatabase, rootsKey: String, embedding: CodeEmbedding) {
         val buffer = ByteBuffer.allocate(embedding.embedding.size * Float.SIZE_BYTES)
         for (f in embedding.embedding) {
             buffer.putFloat(f)
@@ -239,6 +284,7 @@ class EmbeddingIndexingService(
             put("embedder_backend", embedding.identity.backendId)
             put("embedder_model", embedding.identity.modelId)
             put("embedder_dimensions", embedding.identity.dimensions)
+            put("roots_key", rootsKey)
         }
 
         db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE)

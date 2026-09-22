@@ -97,6 +97,16 @@ class ModelCatalogFilterTest {
     }
 
     @Test
+    fun givenLocalServerEmbeddingModels_whenFiltered_thenTheyAreOffered() {
+        // Ollama and LM Studio serve these under ids that say nothing about embedding, so an
+        // allowlist of "embed" alone hid them from the embedding picker and offered them for chat.
+        listOf("bge-m3", "all-minilm", "gte-large", "e5-base-v2").forEach {
+            assertTrue("$it should be offered", ModelCatalogFilter.isPlausibleEmbeddingModel(it))
+            assertFalse("$it should not be a chat model", ModelCatalogFilter.isPlausibleChatModel(it))
+        }
+    }
+
+    @Test
     fun givenAnUppercaseEmbeddingId_whenFiltered_thenItIsOffered() {
         assertTrue(ModelCatalogFilter.isPlausibleEmbeddingModel("TEXT-EMBEDDING-3-LARGE"))
     }

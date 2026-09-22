@@ -9,6 +9,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import java.io.IOException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -352,8 +353,9 @@ class LlmInferenceServiceImplTest {
     }
 
     @Test
-    fun givenABackendThatThrowsSynchronously_whenEmbedding_thenNoExceptionReachesTheCaller() {
-        // Thrown before the future exists: this crosses a plugin boundary, so it must not escape.
+    fun givenABackendThatThrowsSynchronously_whenEmbedding_thenTheFutureCarriesTheFailure() {
+        // Thrown before the future exists: this crosses a plugin boundary, so it must not escape
+        // the call — it is reported through the future instead.
         service.registerBackend(object : RecordingBackend("local"), EmbeddingBackend {
             override fun getEmbeddingModelId(): String = "broken"
             override fun getEmbeddingDimensions(): Int = 0
@@ -361,13 +363,15 @@ class LlmInferenceServiceImplTest {
                 throw IllegalStateException("backend is wedged")
         })
 
-        val vector = service.getEmbeddings("chunk", "local").get()
+        val future = service.getEmbeddings("chunk", "local")
 
-        assertEquals(0, vector.size)
+        assertTrue(future.isCompletedExceptionally)
     }
 
     @Test
-    fun givenABackendWhoseFutureFails_whenEmbedding_thenNoExceptionReachesTheCaller() {
+    fun givenABackendWhoseFutureFails_whenEmbedding_thenTheFailureIsNotAnEmptyVector() {
+        // An empty vector is what a backend without embeddings answers. A refused key reported the
+        // same way tells the caller the backend has no embeddings, which is not what happened.
         service.registerBackend(object : RecordingBackend("local"), EmbeddingBackend {
             override fun getEmbeddingModelId(): String = "broken"
             override fun getEmbeddingDimensions(): Int = 0
@@ -377,9 +381,11 @@ class LlmInferenceServiceImplTest {
                 }
         })
 
-        val vector = service.getEmbeddings("chunk", "local").get()
+        val failure = assertThrows(ExecutionException::class.java) {
+            service.getEmbeddings("chunk", "local").get()
+        }
 
-        assertEquals(0, vector.size)
+        assertEquals("HTTP 401", failure.cause?.message)
     }
 
     @Test

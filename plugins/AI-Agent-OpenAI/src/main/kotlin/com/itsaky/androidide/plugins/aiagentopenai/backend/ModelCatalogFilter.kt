@@ -15,9 +15,13 @@ internal object ModelCatalogFilter {
      * Substrings that mark an embedding model.
      *
      * The embedding picker is an allowlist over these — a model it wrongly omits can still be
-     * typed in, and one it wrongly offers fails once with a clear server error.
+     * typed in, and one it wrongly offers fails once with a clear server error. The families
+     * after the generic markers are the local-server ones whose ids say nothing about embedding:
+     * `bge-m3`, `all-minilm`, `gte-large` and `e5-base` would otherwise be missing from the
+     * embedding picker and offered in the chat one.
      */
-    private val EMBEDDING_MARKERS = listOf("embed", "embedding")
+    private val EMBEDDING_MARKERS =
+        listOf("embed", "embedding", "bge-", "minilm", "gte-", "e5-")
 
     /**
      * Substrings that mark a non-chat model, embedding markers included.

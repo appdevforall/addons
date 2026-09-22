@@ -39,7 +39,8 @@ via `ProjectSearchExtension`.
 - Provenance per vector (backend, model, width); a search only ranks vectors of
   the same origin, and changing either builds the index again
 - Chunk-level results with file, line range, and a preview snippet
-- Local SQLite embedding store; on-demand indexing per searched root
+- Local SQLite embedding store, scoped per project and kept across restarts, so a
+  project is embedded — and paid for — once rather than on every launch
 
 ## Permissions
 
