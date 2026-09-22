@@ -31,7 +31,9 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeFileService
 import com.itsaky.androidide.plugins.services.IdeProjectService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MarkdownPreviewFragment : Fragment() {
@@ -145,7 +147,9 @@ class MarkdownPreviewFragment : Fragment() {
 
     private fun setupWebView() {
         webView.settings.apply {
-            javaScriptEnabled = false
+            javaScriptEnabled = true
+            allowFileAccess = false
+            allowContentAccess = false
             loadWithOverviewMode = true
             useWideViewPort = true
             builtInZoomControls = true
@@ -238,20 +242,33 @@ class MarkdownPreviewFragment : Fragment() {
     }
 
     private fun showProjectFilePicker() {
-        val project = projectService?.getCurrentProject() ?: return
+        val project = projectService?.getCurrentProject()
+        if (project == null) {
+            showMessage(R.string.no_project)
+            return
+        }
+        val rootDir = project.rootDir
         viewLifecycleOwner.lifecycleScope.launch {
-            val files = findSupportedFiles(project.rootDir)
-            if (files.isEmpty()) return@launch
-            showFileSelectionDialog(files, project.rootDir)
+            val files = withContext(Dispatchers.IO) { findSupportedFiles(rootDir) }
+            if (files.isEmpty()) showMessage(R.string.no_files_found)
+            else showFileSelectionDialog(files, rootDir)
         }
     }
 
     private fun findSupportedFiles(rootDir: File): List<File> {
         return rootDir.walkTopDown()
+            .onEnter { it == rootDir || (it.name != "build" && !it.name.startsWith(".")) }
             .filter { it.isFile && MarkdownPreviewerPlugin.isSupportedFile(it) }
-            .filter { !it.absolutePath.contains("/build/") && !it.absolutePath.contains("/.") }
             .sortedBy { it.name.lowercase() }
             .toList()
+    }
+
+    private fun showMessage(messageRes: Int) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.select_from_project)
+            .setMessage(messageRes)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun showFileSelectionDialog(files: List<File>, rootDir: File) {
