@@ -133,6 +133,19 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
+# The plugin builder records this in each .cgp's assets/cgp-build.properties as
+# libs_revision. It cannot resolve the value itself -- the CodeOnTheGo checkout is
+# outside the plugin build -- so without this a released plugin's own revision does
+# not identify the plugin-api/gradle-plugin jars it was compiled against. Left unset
+# when the sha is unknown, so the field is omitted rather than recorded as a guess.
+# Re-resolved at 12 characters rather than reusing $CODEONTHEGO_SHA, which is abbreviated
+# to git's default length: the builder records `revision` at 12, and two differently
+# shaped shas in one properties file are needlessly hard to compare at a glance.
+LIBS_REVISION="$(git -C "$CODEONTHEGO_PATH" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+if [ "$LIBS_REVISION" != "unknown" ]; then
+    export PLUGIN_LIBS_REVISION="$LIBS_REVISION"
+fi
+
 # One discovery rule for the whole repository. The tool applies the skip
 # list in tools/addons/skip.txt. Do not use mapfile here: macOS ships
 # bash 3.2, which does not have it.
@@ -185,6 +198,7 @@ for plugin in "${PLUGINS[@]}"; do
         fi
         "$gradlew" --console=plain assemblePlugin
     )
+    "$REPO_ROOT/scripts/verify-provenance.sh" "$plugin"
 done
 echo ""
 echo "All plugins built successfully."

@@ -27,3 +27,8 @@ Thumbs.db
 
 # Test outputs
 test-results/
+
+# Fetched at build time by the downloadAssets task — never commit it. A tracked
+# copy here would be overwritten by every download, leaving the plugin directory
+# permanently dirty and stamping `+dirty` into the provenance of every .cgp.
+src/main/assets/ndk-cmake.tar.xz

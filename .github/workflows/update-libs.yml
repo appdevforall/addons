@@ -77,7 +77,10 @@ jobs:
       - name: Commit updated jars
         id: commit
         run: |
-          sha=$(git -C .cache/CodeOnTheGo rev-parse --short HEAD)
+          # 12 characters, matching what update-libs.sh records as libs_revision and
+          # what publish-addons.yml parses back out of this subject, so the same jars
+          # yield one comparable sha everywhere.
+          sha=$(git -C .cache/CodeOnTheGo rev-parse --short=12 HEAD)
           git config user.name "ADFA"
           git config user.email "dev-team@appdevforall.org"
           git add libs/

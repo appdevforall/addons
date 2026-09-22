@@ -33,6 +33,25 @@ A desktop build needs `local.properties` beside this file, with one line:
 
 On a phone you do not need that file: Code on the Go puts `ANDROID_HOME` and
 `ANDROID_SDK_ROOT` in the build environment.
+{caveats}"""
+
+# Two build-time requirements that only some addons carry, and that a reader
+# otherwise meets as an unexplained failure: the manifest merger rejecting a
+# placeholder the older on-device builder does not define, and an asset merge
+# refusing to package an addon whose downloads were never fetched.
+PROVENANCE_NOTE = """
+Building this addon on a phone needs Code on the Go 26.37 or newer. Older
+releases ship a plugin builder that does not define the build-provenance
+placeholders this addon's manifest names, and the build stops in the manifest
+merger.
+"""
+
+DOWNLOAD_NOTE = """
+This addon downloads assets at build time. Fetch them first, as its own
+invocation -- `assemblePlugin` does not run the task, and combining the two in
+one command fails:
+
+    ./gradlew downloadAssets
 """
 
 # Every shared jar is referenced as "../libs/x.jar" (or "../../libs/x.jar")
@@ -123,8 +142,19 @@ def _stage(root: Path, addon: Path, out: Path, meta: dict) -> Path:
     if licence_file.exists():
         shutil.copy2(licence_file, _claim(top, "LICENSE", addon.name))
 
+    def mentions(relative: str, text: str) -> bool:
+        f = addon / relative
+        return f.exists() and text in f.read_text()
+
+    caveats = ""
+    if mentions("src/main/AndroidManifest.xml", "${pluginVcsRevision}"):
+        caveats += PROVENANCE_NOTE
+    if mentions("build.gradle.kts", "downloadAssets"):
+        caveats += DOWNLOAD_NOTE
+
     author = meta.get("author") or {}
     _claim(top, "BUILDING.md", addon.name).write_text(NOTES.format(
+        caveats=caveats,
         name=model.display_name(addon.name), directory=inside,
         origin="Community contribution" if meta.get("origin") == "community"
                else "App Dev for All",

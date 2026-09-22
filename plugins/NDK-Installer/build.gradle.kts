@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.net.URL
 import java.security.MessageDigest
 import java.net.HttpURLConnection
+import com.android.build.gradle.tasks.MergeSourceSetFolders
 
 
 plugins {
@@ -23,8 +24,8 @@ android {
         applicationId = "org.appdevforall.ndkinstaller"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -164,9 +165,17 @@ val downloadAssets by tasks.registering {
     }
 }
 
-
-
-
-
-
-
+// The archive is never committed, so fail loudly instead of packaging an NDK-less .cgp.
+// Matched by type, not by name: a name filter that stops matching would silently
+// unwire this guard, which is the regression it exists to prevent.
+val ndkArchiveFile = project.file("src/main/assets/ndk-cmake.tar.xz")
+tasks.withType<MergeSourceSetFolders>().configureEach {
+    doFirst {
+        if (!ndkArchiveFile.isFile) {
+            throw GradleException(
+                "Missing src/main/assets/ndk-cmake.tar.xz. It is fetched at build time and " +
+                    "never committed, so run './gradlew downloadAssets' before assembling."
+            )
+        }
+    }
+}

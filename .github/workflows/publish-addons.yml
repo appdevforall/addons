@@ -51,10 +51,47 @@ jobs:
       - name: Check names and metadata
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
 
+      - name: Resolve the libs revision
+        id: libs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # This workflow builds the addons itself instead of going through
+          # scripts/update-libs.sh, so nothing here knows which CodeOnTheGo commit
+          # produced libs/. "Update libs from CodeOnTheGo" records it in the subject
+          # of the commit it pushes, so the newest libs/ commit that names one wins.
+          # Ordinary commits touch libs/ too (a missing jar, a pipeline change), and
+          # keying on the single most recent one would let any of them block the whole
+          # release path until someone dispatched Update libs, which also bumps the
+          # toolchain as a side effect. Only "none of the recent ones names a sha"
+          # fails the run: these are the artifacts the gallery serves, and an empty
+          # export makes the builder omit the key and verify-provenance.sh skip its
+          # check, so the pairing would be lost on a green run. The subject is
+          # hand-writable, so the sha is validated rather than taken on trust, and
+          # capped at the 12 characters update-libs.sh records, so the two forms of
+          # one commit compare by prefix (subjects written before the --short=12
+          # change carry 9).
+          subjects="$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=libs/&sha=${GITHUB_SHA}&per_page=50" --jq '.[].commit.message | split("\n")[0]')"
+          revision=""
+          while IFS= read -r subject; do
+            candidate="${subject##*CodeOnTheGo@}"
+            if [[ "$subject" == *CodeOnTheGo@* && "$candidate" =~ ^[0-9a-f]{7,40}$ ]]; then
+              revision="${candidate:0:12}"
+              break
+            fi
+          done <<< "$subjects"
+          if [ -z "$revision" ]; then
+            echo "No recent commit touching libs/ names a CodeOnTheGo revision." >&2
+            echo "One of them must carry 'CodeOnTheGo@<sha>' in its subject." >&2
+            exit 1
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
       - name: Build, package, and stage
         id: stage
         env:
           ADDON: ${{ inputs.addon }}
+          PLUGIN_LIBS_REVISION: ${{ steps.libs.outputs.revision }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -83,6 +120,7 @@ jobs:
                 "$gradlew" --console=plain downloadAssets
               fi
               "$gradlew" --console=plain assemblePlugin )
+            "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
             slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
             src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
             cp "$src" "dist/${slug}.cgp"
