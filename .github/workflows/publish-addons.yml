@@ -51,10 +51,26 @@ jobs:
       - name: Check names and metadata
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
 
+      - name: Resolve the libs revision
+        id: libs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # This workflow builds the addons itself instead of going through
+          # scripts/update-libs.sh, so nothing here knows which CodeOnTheGo commit
+          # produced libs/. "Update libs from CodeOnTheGo" records it in the subject
+          # of the commit it pushes, which is the last one to touch libs/.
+          subject="$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=libs/&sha=${GITHUB_SHA}&per_page=1" --jq '.[0].commit.message' | head -n1)"
+          case "$subject" in
+            *CodeOnTheGo@*) echo "revision=${subject##*CodeOnTheGo@}" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::warning::Could not read a libs revision from '$subject'; the published .cgp files will record no libs_revision." ;;
+          esac
+
       - name: Build, package, and stage
         id: stage
         env:
           ADDON: ${{ inputs.addon }}
+          PLUGIN_LIBS_REVISION: ${{ steps.libs.outputs.revision }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -83,6 +99,7 @@ jobs:
                 "$gradlew" --console=plain downloadAssets
               fi
               "$gradlew" --console=plain assemblePlugin )
+            "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
             slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
             src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
             cp "$src" "dist/${slug}.cgp"

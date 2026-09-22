@@ -1,5 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+import com.android.build.gradle.tasks.MergeSourceSetFolders
+
 import java.net.URL
 import java.net.HttpURLConnection
 import java.security.MessageDigest
@@ -25,8 +27,8 @@ android {
         applicationId = "org.appdevforall.ailiteracycourse"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -253,4 +255,23 @@ val downloadPdfjs by tasks.registering {
 // Aggregator: scripts/update-libs.sh runs `downloadAssets` before assemblePlugin.
 val downloadAssets by tasks.registering {
     dependsOn(downloadCourse, downloadPdfjs)
+}
+
+// Neither archive is committed, so fail loudly instead of packaging a course
+// .cgp with no lessons and no PDF viewer. Matched by type, not by name: a name
+// filter that stops matching would silently unwire this guard.
+val downloadedAssets = listOf("ai-literacy-course.zip", "pdfjs.zip").map {
+    project.file("src/main/assets/$it")
+}
+tasks.withType<MergeSourceSetFolders>().configureEach {
+    doFirst {
+        val missing = downloadedAssets.filterNot { it.isFile }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "Missing ${missing.joinToString { it.name }} under src/main/assets/. They are " +
+                    "fetched at build time and never committed, so run './gradlew downloadAssets' " +
+                    "before assembling."
+            )
+        }
+    }
 }
