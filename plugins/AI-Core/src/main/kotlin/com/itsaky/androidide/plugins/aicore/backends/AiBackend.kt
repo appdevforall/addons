@@ -72,4 +72,17 @@ object AiBackend {
         if (storedId != null) return storedId.takeIf { it in installedIds }
         return DEFAULT_ID.takeIf { it in installedIds } ?: installedIds.firstOrNull()
     }
+
+    /**
+     * The backend to persist when the user configured the one settings shows but never stored, so
+     * consumers honouring only a stored selection (Vector Search) see it. Configuring is the
+     * choice; merely looking is not, and an existing selection is never replaced.
+     *
+     * @param storedId the persisted selection, or null when nothing has been chosen
+     * @param shownId the backend whose pane the screen shows, or null when it shows none
+     * @param shownIsConfigured whether that backend reports itself available
+     * @return the id to persist, or null when nothing should be written
+     */
+    fun adoptableId(storedId: String?, shownId: String?, shownIsConfigured: Boolean): String? =
+        shownId.takeIf { storedId == null && shownIsConfigured }
 }

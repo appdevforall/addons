@@ -150,6 +150,15 @@ class AiSettingsFragment : Fragment() {
         setupBackendSelector(restoring = false)
     }
 
+    /**
+     * Stores the shown backend as the selection if the user configured it here without ever
+     * touching the selector; otherwise the screen names a backend nothing else sees as chosen.
+     */
+    override fun onPause() {
+        BackendRegistry.adoptIfConfigured(shownBackendId)
+        super.onPause()
+    }
+
     override fun onStart() {
         super.onStart()
         applySystemBarAppearance()
@@ -228,7 +237,7 @@ class AiSettingsFragment : Fragment() {
 
         // Nothing stored, or a stored selection whose backend was uninstalled, resolves the same way
         // the chat does — and without persisting anything, so opening this screen cannot enrol the
-        // user in a backend they never picked.
+        // user in a backend they never picked. Configuring it does: see onPause.
         val selected = BackendRegistry.preferred(backends) ?: backends.first()
 
         if (restoring && childFragmentManager.findFragmentByTag(TAG_BACKEND_PANE) != null) {

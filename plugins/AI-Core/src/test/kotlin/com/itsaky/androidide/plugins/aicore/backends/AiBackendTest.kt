@@ -45,4 +45,24 @@ class AiBackendTest {
     fun givenNothingInstalled_whenResolving_thenThereIsNoBackend() {
         assertNull(AiBackend.preferredId("local", emptyList()))
     }
+
+    @Test
+    fun givenNothingStoredAndTheShownBackendConfigured_whenAdopting_thenItIsAdopted() {
+        assertEquals("gemini", AiBackend.adoptableId(null, "gemini", shownIsConfigured = true))
+    }
+
+    @Test
+    fun givenNothingStoredAndTheShownBackendUnconfigured_whenAdopting_thenNothingIsAdopted() {
+        assertNull(AiBackend.adoptableId(null, "gemini", shownIsConfigured = false))
+    }
+
+    @Test
+    fun givenAStoredSelection_whenAdopting_thenItIsNeverReplaced() {
+        assertNull(AiBackend.adoptableId("openai", "gemini", shownIsConfigured = true))
+    }
+
+    @Test
+    fun givenNoBackendShown_whenAdopting_thenNothingIsAdopted() {
+        assertNull(AiBackend.adoptableId(null, null, shownIsConfigured = true))
+    }
 }

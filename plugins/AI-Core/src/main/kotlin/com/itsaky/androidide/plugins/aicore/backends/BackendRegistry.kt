@@ -159,6 +159,27 @@ object BackendRegistry {
     }
 
     /**
+     * Persists [shownId] as the selection when nothing is stored and the user configured it — see
+     * [AiBackend.adoptableId]. Availability is asked of the backend itself, since only it knows
+     * what "configured" means for it.
+     *
+     * @param shownId the backend the settings screen shows, or null when it shows none
+     */
+    fun adoptIfConfigured(shownId: String?) {
+        val storedId = selectedId()
+        if (storedId != null || shownId == null) return
+        val configured = try {
+            service()?.isBackendAvailable(shownId) == true
+        } catch (e: Throwable) {
+            logError("backend '$shownId' could not report whether it is configured", e)
+            false
+        }
+        val adopted = AiBackend.adoptableId(storedId, shownId, configured) ?: return
+        select(adopted)
+        AiCorePlugin.getContext()?.logger?.info("$TAG: adopted configured backend '$adopted'")
+    }
+
+    /**
      * Describes one backend, tolerating a backend that throws from its own accessors: one bad
      * `.cgp` must cost the user that entry in the list, not the whole settings screen.
      */
