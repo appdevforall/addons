@@ -3,9 +3,6 @@ import java.io.FileInputStream
 
 plugins {
 id("com.android.application") version "${{AGP_VERSION}}" 
-${% if LANGUAGE == 'kotlin' %}
-        kotlin("android") version "${{KOTLIN_VERSION}}"
-${% endif %} 
 }
 
 val keystorePropsFile = rootProject.file("release.properties")
@@ -136,10 +133,10 @@ android {
     
     configurations.all {
         resolutionStrategy {
-            // Force the use of Kotlin stdlib 1.9.22 for all modules
-            force("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
-            force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22")
-            force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22")
+            // Force the use of Kotlin stdlib for all modules
+            force("org.jetbrains.kotlin:kotlin-stdlib:${{KOTLIN_VERSION}}")
+            force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:${{KOTLIN_VERSION}}")
+            force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${{KOTLIN_VERSION}}")
     
             // Force specific AndroidX versions to avoid conflicts
             force("androidx.collection:collection:1.4.2")
@@ -157,9 +154,11 @@ tasks.withType<JavaCompile> {
 
 
 ${% if LANGUAGE == 'kotlin' %}
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-      kotlinOptions.jvmTarget = "${{JAVA_TARGET}}"
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${{JAVA_TARGET}}"))
     }
+}
 ${% endif %}
 
 dependencies {
