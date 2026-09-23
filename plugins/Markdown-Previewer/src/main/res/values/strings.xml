@@ -18,8 +18,8 @@
 
     <!-- Status Messages -->
     <string name="loading">Loading…</string>
-    <string name="no_project">No project available</string>
-    <string name="no_files_found">No supported files found</string>
+    <string name="no_project">No project is open. Open a project, or use Storage to pick a file.</string>
+    <string name="no_files_found">This project has no Markdown or HTML files. Files under build/ and hidden folders are skipped; use Storage to open one of those.</string>
     <string name="file_not_found">File not found</string>
     <string name="cannot_read_file">Cannot read file</string>
 
