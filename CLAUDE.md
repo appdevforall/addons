@@ -86,7 +86,7 @@ say so in a comment.
 
 A plugin is an Android *application* module (despite installing as a library) with:
 
-1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../../libs/plugin-api.jar"))` — never `implementation`.
+1. **`build.gradle.kts`** applies `com.android.application` and `com.itsaky.androidide.plugins.build`. It must **not** apply `org.jetbrains.kotlin.android` — AGP 9 compiles Kotlin itself and refuses that plugin ("already on the classpath with an unknown version"); the Kotlin version is pinned on the buildscript classpath in `settings.gradle.kts` instead, which is where AGP 9 takes its compiler from. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../../libs/plugin-api.jar"))` — never `implementation`.
 2. **`settings.gradle.kts`** declares the jars it needs on the buildscript classpath plus AGP and Kotlin.
 3. **`src/main/AndroidManifest.xml`** declares plugin identity as `<meta-data>` entries on `<application>`: `plugin.id`, `plugin.name`, `plugin.version` (resolved from `${pluginVersion}`), `plugin.description`, `plugin.author`, `plugin.main_class`, `plugin.min_ide_version`, and optional `plugin.permissions`. Optionally `plugin.vcs_revision` / `plugin.build_timestamp` — see **Build provenance** below.
 4. **Main class** implements `com.itsaky.androidide.plugins.IPlugin`. Lifecycle: `initialize(PluginContext) → activate() → deactivate() → dispose()`. Services are obtained via `context.services.get(SomeService::class.java)` (e.g. `IdeBuildService` for build hooks). Android `Context` is `context.androidContext`.
