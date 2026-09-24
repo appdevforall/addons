@@ -8,13 +8,20 @@
 #
 # WHY THESE NUMBERS: they are not "latest". They track the toolchain that Code
 # On The Go itself ships on-device, because these plugins are meant to be built
-# *with* Code on the Go (ADFA-4693). Verified against CoGo build C-d-0727-1613:
+# *with* Code on the Go (ADFA-4693). Verified against CoGo stage c263653bcf:
 #
-#   * android-36 is the ONLY installed platform in CoGo's bundled SDK
-#   * AGP 8.11.0 is the ONLY AGP in CoGo's Gradle caches
-#   * Gradle 8.14.3 is CoGo's Gradle
-#   * CoGo pins no Kotlin version (it fetches per project); 2.3.0 is our standard
-#   * Java 17 was already uniform across every plugin
+#   * org.adfa.constants pins AGP 9.3.1, Gradle 9.6.1, Kotlin 2.3.21, Java 17
+#   * the localMvnRepository asset onboarding installs carries exactly one AGP
+#     (9.3.1) and one kotlin-gradle-plugin (2.3.21), so a plugin pinned to any
+#     other version cannot resolve its own buildscript offline
+#   * the bundled Gradle 9.6.1 is what runs on device by default, not the
+#     project wrapper (BuildPreferences.gradleInstallationDir)
+#   * android-36 is still the only installed platform in CoGo's bundled SDK
+#
+# AGP 9 compiles Kotlin itself and refuses org.jetbrains.kotlin.android, so no
+# module here applies it. Kotlin is pinned on the buildscript classpath in
+# settings.gradle.kts instead, which is where AGP 9 takes its compiler from
+# (ADFA-6246).
 #
 # Bumping any value below therefore means re-verifying against a real CoGo
 # build first -- not just picking something newer.
@@ -40,9 +47,9 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 EXPECTED_COMPILE_SDK="36"
 EXPECTED_TARGET_SDK="36"
-EXPECTED_AGP="8.11.0"
-EXPECTED_KOTLIN="2.3.0"
-EXPECTED_GRADLE="8.14.3"
+EXPECTED_AGP="9.3.1"
+EXPECTED_KOTLIN="2.3.21"
+EXPECTED_GRADLE="9.6.1"
 EXPECTED_GRADLE_DIST="bin"        # gradle-<ver>-bin.zip, not -all.zip
 EXPECTED_JAVA="JavaVersion.VERSION_17"
 EXPECTED_JVM_TARGET="JVM_17"
@@ -206,6 +213,10 @@ check_catalog_file() {
 # ---------------------------------------------------------------------------
 # Walk
 #
+# .cache/ holds the CodeOnTheGo clone that scripts/update-libs.sh makes. It is
+# gitignored and is not ours to hold to this standard; CI never sees it, so
+# without this a local run reports dozens of failures CI does not.
+#
 # Files under src/main/assets/ are shipped project *templates* -- skeletons that
 # Code on the Go stamps out for the user's own app. They are not our builds and
 # must not be held to our toolchain.
@@ -223,6 +234,7 @@ done < <(find . \
      -o -name gradle-wrapper.properties \
      -o -name libs.versions.toml \) \
   -not -path './.git/*' \
+  -not -path './.cache/*' \
   -not -path '*/build/*' \
   -not -path '*/src/main/assets/*' \
   -print0)

@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -51,13 +50,13 @@ dependencies {
     // supplies a color palette, so plugin-api + the Kotlin stdlib is all it needs.
     compileOnly(files("../../libs/plugin-api.jar"))
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
 
     testImplementation("junit:junit:4.13.2")
 }
 
 tasks.wrapper {
-    gradleVersion = "8.14.3"
+    gradleVersion = "9.6.1"
     distributionType = Wrapper.DistributionType.BIN
 }
 

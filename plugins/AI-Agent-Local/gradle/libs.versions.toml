@@ -15,8 +15,8 @@
 # agreement is enforced by scripts/check-toolchain.sh.
 
 [versions]
-agp = "8.11.0"
-kotlin = "2.3.0"
+agp = "9.3.1"
+kotlin = "2.3.21"
 
 # appcompat tracks the repo majority (21 modules) and matches the literal in
 # this plugin's build.gradle.kts. Declaring 1.7.1 here while the parent module pinned

@@ -8,7 +8,6 @@ import com.android.build.gradle.tasks.MergeSourceSetFolders
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -56,7 +55,7 @@ dependencies {
     compileOnly(files("../../libs/plugin-api.jar"))
 
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 
