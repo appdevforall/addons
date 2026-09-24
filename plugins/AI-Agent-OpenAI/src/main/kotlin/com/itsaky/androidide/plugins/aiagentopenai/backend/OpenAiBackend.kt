@@ -59,7 +59,8 @@ private const val TAG = "$LOG_PREFIX.AgentTrace"
  */
 class OpenAiBackend(
     private val context: PluginContext
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
+    EmbeddingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -86,6 +87,17 @@ class OpenAiBackend(
     @Volatile
     private var toolsRejectedBy: String? = null
 
+    /**
+     * Vector length this server actually returned, as (embedding model -> dimensions).
+     *
+     * Observed rather than tabulated: a compatible server can serve any model under any name, and
+     * `text-embedding-3-small` and `text-embedding-ada-002` are both 1536-d, so a hardcoded table
+     * would be both incomplete and unable to tell those two apart. Keyed by model so switching the
+     * setting cannot report the previous model's width.
+     */
+    @Volatile
+    private var observedDimensions: Pair<String, Int>? = null
+
     companion object {
         /** Backend id, as persisted by AI Core when the user selects this backend. */
         const val BACKEND_ID = "openai"
@@ -93,8 +105,17 @@ class OpenAiBackend(
         /** Default model, matching the default base URL. Editable on this backend's settings pane. */
         const val DEFAULT_MODEL = "gpt-5"
 
+        /**
+         * Default embedding model. Separate from [DEFAULT_MODEL] because the two pickers offer
+         * disjoint halves of the same catalog — see [ModelCatalogFilter].
+         */
+        const val DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+
         /** Chat endpoint, appended to the configured base URL. */
         private const val CHAT_COMPLETIONS_PATH = "/chat/completions"
+
+        /** Embeddings endpoint, appended to the configured base URL. */
+        private const val EMBEDDINGS_PATH = "/embeddings"
 
         /** Model-catalog endpoint. Optional: many compatible servers do not implement it. */
         private const val MODELS_PATH = "/models"
@@ -125,6 +146,99 @@ class OpenAiBackend(
         openAiPrefs()?.getString(OpenAiPreferences.KEY_MODEL, DEFAULT_MODEL)
             ?.trim()?.takeIf { it.isNotEmpty() }
             ?: DEFAULT_MODEL
+
+    /**
+     * The embedding model this server is configured to use.
+     *
+     * Read at call time, like the chat model: a consumer holds this backend for the life of the
+     * IDE, so a cached value would keep embedding with a model the user has already replaced.
+     */
+    override fun getEmbeddingModelId(): String =
+        openAiPrefs()?.getString(OpenAiPreferences.KEY_EMBEDDING_MODEL, DEFAULT_EMBEDDING_MODEL)
+            ?.trim()?.takeIf { it.isNotEmpty() }
+            ?: DEFAULT_EMBEDDING_MODEL
+
+    /**
+     * Vector length this server last produced for the configured embedding model.
+     *
+     * @return the observed width, or 0 before the first successful response — the honest answer,
+     *   since only the server knows what a given id produces. Consumers that record provenance
+     *   should take the width from the vectors themselves.
+     */
+    override fun getEmbeddingDimensions(): Int {
+        val (model, dimensions) = observedDimensions ?: return 0
+        return if (model == getEmbeddingModelId()) dimensions else 0
+    }
+
+    /**
+     * Embeds [texts] in request order, splitting into as many requests as the API's limits need.
+     *
+     * @param texts the batch to embed; an empty list completes with an empty list and no request
+     * @return the vectors, one per input and in the same order; completed exceptionally with the
+     *   formatted failure when any request fails, so a caller indexing a project can abort rather
+     *   than store a partial space
+     */
+    override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> {
+        val future = CompletableFuture<List<FloatArray>>()
+        if (texts.isEmpty()) {
+            future.complete(emptyList())
+            return future
+        }
+        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
+        if (!scope.isActive) {
+            future.completeExceptionally(IllegalStateException("OpenAI backend is closed"))
+            return future
+        }
+
+        val job = scope.launch {
+            val keyStamp = storedKeyStamp()
+            try {
+                future.complete(embedBatches(texts))
+            } catch (e: CancellationException) {
+                future.cancel(true)
+                throw e
+            } catch (e: Exception) {
+                context.logger.error("OpenAiBackend: embedding ${texts.size} texts failed", e)
+                // The formatted sentence, not the raw body: this message reaches the user through
+                // whichever consumer asked, exactly as a refused chat turn's does.
+                future.completeExceptionally(IOException(formatErrorMessage(e, keyStamp), e))
+            }
+        }
+        future.cancelJobOnCancel(job)
+
+        return future
+    }
+
+    /**
+     * Issues one request per batch and concatenates the answers.
+     *
+     * Sequential rather than parallel: the batches of one index build are the same rate-limit
+     * bucket, so firing them at once buys a 429 instead of throughput.
+     *
+     * @param texts the whole batch, in the caller's order
+     * @return the vectors, in the caller's order
+     */
+    private suspend fun embedBatches(texts: List<String>): List<FloatArray> {
+        val model = getEmbeddingModelId()
+        val vectors = ArrayList<FloatArray>(texts.size)
+        for (batch in OpenAiEmbeddingProtocol.batches(texts)) {
+            coroutineContext.ensureActive()
+            val response = http.post(
+                url = getBaseUrl() + EMBEDDINGS_PATH,
+                // Blank is legitimate, unlike Gemini: a local server takes no key, as chat too.
+                apiKey = readApiKeyOrBlank(),
+                body = OpenAiEmbeddingProtocol.body(model, batch),
+                tag = NetworkTags.EMBEDDING,
+            ) { reader -> JSONObject(reader.readText()) }
+            vectors.addAll(OpenAiEmbeddingProtocol.vectors(response, batch.size))
+        }
+        vectors.firstOrNull()?.let { observedDimensions = model to it.size }
+        context.logger.info(
+            "OpenAiBackend: embedded ${texts.size} texts with $model " +
+                "(${vectors.firstOrNull()?.size ?: 0} dimensions)"
+        )
+        return vectors
+    }
 
     /**
      * Decrypt the stored key off-thread now, so a main-thread [isAvailable] can't report "no key"
@@ -666,25 +780,28 @@ class OpenAiBackend(
     )
 
     /**
-     * List the models the configured server offers, filtered to plausible chat models.
+     * List what the configured server offers, split into the models each picker may show.
      *
-     * Completes with an empty list when the server answered with none, and exceptionally on a
+     * Completes with an empty catalog when the server answered with none, and exceptionally on a
      * network/API failure — an HTTP one as an [OpenAiHttpException], so the caller can tell a
      * refused key from an unreachable server.
      */
-    fun listModels(): CompletableFuture<List<String>> = listModels(readApiKeyOrBlank(), getBaseUrl())
+    internal fun listCatalog(): CompletableFuture<ModelCatalog> = listCatalog(readApiKeyOrBlank(), getBaseUrl())
 
     /**
-     * List the models reachable with a caller-supplied credential and server.
+     * List what a caller-supplied credential and server offer.
      *
      * Lets the settings pane check a just-typed key or URL *before* either is persisted; the no-arg
-     * [listModels] reads what is on disk. Nothing here touches the stored key or its cache.
+     * [listCatalog] reads what is on disk. Nothing here touches the stored key or its cache.
+     *
+     * One request answers both pickers: a second round trip would let the chat and embedding lists
+     * disagree about what the server offers.
      *
      * @param apiKey the candidate key, or blank for a server that needs none; never logged
      * @param baseUrl the candidate server, normalized by the caller
      */
-    fun listModels(apiKey: String, baseUrl: String): CompletableFuture<List<String>> {
-        val future = CompletableFuture<List<String>>()
+    internal fun listCatalog(apiKey: String, baseUrl: String): CompletableFuture<ModelCatalog> {
+        val future = CompletableFuture<ModelCatalog>()
         // close() cancels the scope, making launch a silent no-op; fail loudly instead.
         if (!scope.isActive) {
             future.completeExceptionally(IllegalStateException("OpenAI backend is closed"))
@@ -693,9 +810,12 @@ class OpenAiBackend(
 
         val job = scope.launch {
             try {
-                val models = fetchAvailableModels(apiKey.trim(), baseUrl)
-                context.logger.info("OpenAiBackend: ${models.size} chat models offered by $baseUrl")
-                future.complete(models)
+                val catalog = fetchAvailableModels(apiKey.trim(), baseUrl)
+                context.logger.info(
+                    "OpenAiBackend: $baseUrl offers ${catalog.chat.size} chat and " +
+                        "${catalog.embedding.size} embedding models"
+                )
+                future.complete(catalog)
             } catch (e: CancellationException) {
                 future.cancel(true)
                 throw e
@@ -735,14 +855,17 @@ class OpenAiBackend(
         return keyCache.read().orEmpty()
     }
 
-    /** Fetch and filter `GET {baseUrl}/models`. Runs on the caller's (IO) coroutine. */
-    private fun fetchAvailableModels(apiKey: String, baseUrl: String): List<String> {
+    /** Fetch and split `GET {baseUrl}/models`. Runs on the caller's (IO) coroutine. */
+    private fun fetchAvailableModels(apiKey: String, baseUrl: String): ModelCatalog {
         val body = http.get(baseUrl + MODELS_PATH, apiKey)
-        val data = JSONObject(body).optJSONArray("data") ?: return emptyList()
+        val data = JSONObject(body).optJSONArray("data") ?: return ModelCatalog.EMPTY
         val ids = (0 until data.length()).mapNotNull { index ->
             data.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }
         }
-        return ChatModelFilter.chatModels(ids)
+        return ModelCatalog(
+            chat = ModelCatalogFilter.chatModels(ids),
+            embedding = ModelCatalogFilter.embeddingModels(ids),
+        )
     }
 
     /** Cancel any in-flight generation (user pressed Stop). */

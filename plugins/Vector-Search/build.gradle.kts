@@ -34,6 +34,12 @@ android {
     buildFeatures {
         viewBinding = false
     }
+
+    // The ranking maths and the reindex decision are pure Kotlin, but they sit beside classes that
+    // touch android.util.Log; this keeps a stubbed call returning rather than throwing.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
@@ -54,6 +60,10 @@ dependencies {
     // Material Design
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.10.0")
+
+    testImplementation(files("../../libs/plugin-api.jar"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.8")
 }
 
 tasks.matching {

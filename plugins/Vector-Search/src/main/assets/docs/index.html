@@ -46,30 +46,53 @@
     <li>Project files are split into chunks and turned into embedding vectors.</li>
     <li>Your query is embedded the same way and compared by cosine similarity;
       the closest chunks are returned.</li>
-    <li>Embeddings come from <b>AI Core</b> when it's installed. Without it, the
-      plugin falls back to a lightweight lexical embedding so search still works
-      (with lower quality).</li>
+    <li>Embeddings come from the AI backend you selected in <b>AI settings</b>,
+      using that backend's own embedding-model setting. The backend must be one
+      that produces embeddings, which today means a cloud one.</li>
   </ul>
+
+  <h2>What you need</h2>
+  <ul>
+    <li>The <b>AI Core</b> plugin, which publishes the inference service.</li>
+    <li>An agent plugin whose backend can embed &mdash; <b>OpenAI</b> or
+      <b>Gemini</b> &mdash; selected in AI settings and configured with a key.</li>
+  </ul>
+  <p>With none selected, Vector Search contributes no results at all. It does
+  not fall back to matching on words: word matches presented as semantic ones
+  look like the feature working badly rather than not running.</p>
 
   <h2>Using it</h2>
   <p>Open the project search screen and run a query as usual. When Vector Search
   is active, results include a <b>Semantic Results</b> section alongside the
   normal text matches. Indexing happens on demand for the searched roots.</p>
 
+  <h2>Changing provider or model</h2>
+  <p>Every stored vector records which backend, model and vector width produced
+  it, and a search only ever ranks vectors from the embedder it is querying
+  with. Switching provider, or changing the embedding model on the one you have,
+  therefore builds the index again from scratch &mdash; vectors from two
+  different models cannot be compared, and comparing them anyway returns
+  plausible-looking nonsense rather than an error.</p>
+
   <h2>Privacy</h2>
   <div class="note">
-    Indexing reads files in the current project only. Embeddings are stored in a
-    local database on the device. Semantic embeddings always use AI Core's
-    <b>Local</b> on-device backend, and fall back to a lexical embedding when it
-    is unavailable, so chunk text never leaves the device.
+    Indexing reads files in the current project only, and the vectors are stored
+    in a local database on the device. The chunk text itself is sent to the
+    backend you selected in order to be embedded, so indexing a project sends
+    its source to that provider. That is why Vector Search never picks a backend
+    for you: with nothing selected, nothing is sent and nothing is indexed.
   </div>
 
   <h2>Troubleshooting</h2>
   <ul>
-    <li><b>Results look weak</b> — install/activate AI Core so real model
-      embeddings are used instead of the lexical fallback.</li>
-    <li><b>No semantic results</b> — the roots may not be indexed yet; run the
-      search again after indexing completes.</li>
+    <li><b>No semantic results at all</b> &mdash; check AI settings: AI Core must
+      be installed, a backend selected, and that backend must be one that
+      embeds. The on-device backend does not.</li>
+    <li><b>No results on the first search</b> &mdash; the roots may still be
+      indexing; run the search again once it completes.</li>
+    <li><b>Results stopped appearing after a settings change</b> &mdash; changing
+      the embedding model empties the index and builds it again; the first
+      search afterwards pays for that.</li>
   </ul>
 </body>
 </html>

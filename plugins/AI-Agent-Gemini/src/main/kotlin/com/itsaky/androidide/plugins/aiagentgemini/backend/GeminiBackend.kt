@@ -53,7 +53,8 @@ private const val TAG = "$LOG_PREFIX.AgentTrace"
  */
 class GeminiBackend(
     private val context: PluginContext
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
+    EmbeddingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -74,9 +75,25 @@ class GeminiBackend(
      */
     private val credentialFailures = CredentialFailureLog(::agentPrefs)
 
+    /**
+     * Vector length the API actually returned, as (embedding model -> dimensions).
+     *
+     * Reported rather than assumed: `gemini-embedding-001` accepts an output dimensionality and
+     * several models share a default width, so a tabulated value could name a size the API is not
+     * producing. Keyed by model so switching the setting cannot report the previous model's width.
+     */
+    @Volatile
+    private var observedDimensions: Pair<String, Int>? = null
+
     companion object {
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
+
+        /**
+         * Current default embedding model. Separate from [DEFAULT_MODEL] because no model here
+         * advertises both `generateContent` and `embedContent`.
+         */
+        const val DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
 
         /** Base URL for the v1beta models API (ListModels, generateContent, streaming). */
         private const val MODELS_BASE_URL =
@@ -84,6 +101,12 @@ class GeminiBackend(
 
         /** Generation method for chat; also the flag ListModels advertises for chat-capable models. */
         private const val METHOD_GENERATE_CONTENT = "generateContent"
+
+        /** The flag ListModels advertises for embedding-capable models. */
+        private const val METHOD_EMBED_CONTENT = "embedContent"
+
+        /** Batch embedding method, the only one this backend calls to produce vectors. */
+        private const val METHOD_BATCH_EMBED_CONTENTS = "batchEmbedContents"
 
         /** Server-sent-events streaming variant of [METHOD_GENERATE_CONTENT]. */
         private const val METHOD_STREAM_GENERATE_CONTENT = "streamGenerateContent"
@@ -114,6 +137,107 @@ class GeminiBackend(
      */
     private fun storedKeyStamp(): Long =
         agentPrefs()?.getLong(GeminiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
+
+    /**
+     * The embedding model this key is configured to use.
+     *
+     * Read at call time, like the chat model: a consumer holds this backend for the life of the
+     * IDE, so a cached value would keep embedding with a model the user has already replaced.
+     */
+    override fun getEmbeddingModelId(): String =
+        agentPrefs()?.getString(GeminiPreferences.KEY_EMBEDDING_MODEL, DEFAULT_EMBEDDING_MODEL)
+            ?.trim()?.takeIf { it.isNotEmpty() }
+            ?: DEFAULT_EMBEDDING_MODEL
+
+    /**
+     * Vector length the API last produced for the configured embedding model.
+     *
+     * @return the width reported by the last successful call, or 0 before there has been one. The
+     *   reported value is used rather than the model's documented default precisely because a
+     *   model that accepts an output dimensionality can answer with a different one.
+     */
+    override fun getEmbeddingDimensions(): Int {
+        val (model, dimensions) = observedDimensions ?: return 0
+        return if (model == getEmbeddingModelId()) dimensions else 0
+    }
+
+    /**
+     * Embeds [texts] in request order, splitting into as many calls as the API's per-call cap needs.
+     *
+     * @param texts the batch to embed; an empty list completes with an empty list and no request
+     * @return the vectors, one per input and in the same order; completed exceptionally with the
+     *   formatted failure when any call fails, so a caller indexing a project can abort rather than
+     *   store a partial space
+     */
+    override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> {
+        val future = CompletableFuture<List<FloatArray>>()
+        if (texts.isEmpty()) {
+            future.complete(emptyList())
+            return future
+        }
+        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
+        if (!scope.isActive) {
+            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
+            return future
+        }
+
+        val job = scope.launch {
+            val keyStamp = storedKeyStamp()
+            try {
+                val apiKey = readGeminiApiKey()
+                if (apiKey.isNullOrBlank()) {
+                    // The same refusal a chat turn reports, through the same formatter.
+                    future.completeExceptionally(
+                        IOException(userMessage(GeminiFailure.KeyInvalid))
+                    )
+                    return@launch
+                }
+                future.complete(embedBatches(texts, apiKey))
+            } catch (e: CancellationException) {
+                future.cancel(true)
+                throw e
+            } catch (e: Exception) {
+                context.logger.error("GeminiBackend: embedding ${texts.size} texts failed", e)
+                // The formatted sentence, not the raw body: this message reaches the user through
+                // whichever consumer asked, exactly as a refused chat turn's does.
+                future.completeExceptionally(IOException(formatErrorMessage(e, keyStamp), e))
+            }
+        }
+        future.cancelJobOnCancel(job)
+
+        return future
+    }
+
+    /**
+     * Issues one call per batch and concatenates the answers.
+     *
+     * Sequential rather than parallel: the calls of one index build share a rate-limit bucket, so
+     * firing them at once buys a 429 instead of throughput.
+     *
+     * @param texts the whole batch, in the caller's order
+     * @param apiKey the key to authenticate every call with
+     * @return the vectors, in the caller's order
+     */
+    private suspend fun embedBatches(texts: List<String>, apiKey: String): List<FloatArray> {
+        val model = getEmbeddingModelId()
+        val vectors = ArrayList<FloatArray>(texts.size)
+        for (batch in GeminiEmbeddingProtocol.batches(texts)) {
+            coroutineContext.ensureActive()
+            val response = requestJson(
+                model = model,
+                method = METHOD_BATCH_EMBED_CONTENTS,
+                apiKey = apiKey,
+                body = GeminiEmbeddingProtocol.body(model, batch),
+            )
+            vectors.addAll(GeminiEmbeddingProtocol.vectors(response, batch.size))
+        }
+        vectors.firstOrNull()?.let { observedDimensions = model to it.size }
+        context.logger.info(
+            "GeminiBackend: embedded ${texts.size} texts with $model " +
+                "(${vectors.firstOrNull()?.size ?: 0} dimensions)"
+        )
+        return vectors
+    }
 
     /**
      * Read the saved Gemini API key from AI Core's shared prefs, or null.
@@ -488,17 +612,16 @@ class GeminiBackend(
     }
 
     /**
-     * List the Gemini models currently available to the saved API key that support chat
-     * (i.e. advertise the `generateContent` method). The result reflects the live v1beta
-     * catalog, so any name returned here is safe to pass to [generate] / [generateStreaming]
+     * List what the saved API key can reach, split by the capability each model declares. The
+     * result reflects the live v1beta catalog, so any name returned here is safe to request
      * without a 404 for a retired model.
      *
-     * Returns an empty list when no key is configured and completes exceptionally on a
+     * Returns an empty catalog when no key is configured and completes exceptionally on a
      * network/API failure, so the caller can fall back to a current-models-only list and
      * never advertise a dead model.
      */
-    fun listModels(): CompletableFuture<List<String>> {
-        val future = CompletableFuture<List<String>>()
+    internal fun listCatalog(): CompletableFuture<ModelCatalog> {
+        val future = CompletableFuture<ModelCatalog>()
         // close() cancels the scope, making launch a silent no-op; fail loudly instead, or the
         // gateway's blocking get() would sit at "Loading" for its full 60-second timeout.
         if (!scope.isActive) {
@@ -511,17 +634,15 @@ class GeminiBackend(
                 val key = readGeminiApiKey()
                 if (key.isNullOrBlank()) {
                     context.logger.warn("GeminiBackend: no API key configured; cannot list live models")
-                    future.complete(emptyList())
+                    future.complete(ModelCatalog.EMPTY)
                     return@launch
                 }
-                val models = fetchAvailableModels(key)
-                context.logger.info("GeminiBackend: ${models.size} models support $METHOD_GENERATE_CONTENT")
-                future.complete(models)
+                future.complete(describeCatalog(key))
             } catch (e: CancellationException) {
                 future.cancel(true)
                 throw e
             } catch (e: Exception) {
-                context.logger.error("GeminiBackend: Error in listModels", e)
+                context.logger.error("GeminiBackend: Error in listCatalog", e)
                 future.completeExceptionally(e)
             }
         }
@@ -533,16 +654,16 @@ class GeminiBackend(
     /**
      * List the models a caller-supplied [apiKey] can use, instead of the one saved on disk.
      *
-     * Lets the settings pane check a just-typed key *before* it is persisted; the no-arg [listModels]
-     * reads the stored key. Nothing here touches the stored key or [keyCache].
+     * Lets the settings pane check a just-typed key *before* it is persisted; the no-arg
+     * [listCatalog] reads the stored key. Nothing here touches the stored key or [keyCache].
      *
      * @param apiKey the candidate key to authenticate the request with; never logged
-     * @return the chat-capable catalog for [apiKey], or a future completed exceptionally with the
+     * @return the catalog for [apiKey], or a future completed exceptionally with the
      *   `ListModels HTTP <code>` [IOException] from [fetchAvailableModels] — the caller reads the
      *   status code out of that message to tell a refused key from an unreachable network
      */
-    fun listModels(apiKey: String): CompletableFuture<List<String>> {
-        val future = CompletableFuture<List<String>>()
+    internal fun listCatalog(apiKey: String): CompletableFuture<ModelCatalog> {
+        val future = CompletableFuture<ModelCatalog>()
         val key = apiKey.trim()
         if (key.isEmpty()) {
             future.completeExceptionally(IllegalArgumentException("Gemini API key is blank"))
@@ -556,9 +677,7 @@ class GeminiBackend(
 
         val job = scope.launch {
             try {
-                val models = fetchAvailableModels(key)
-                context.logger.info("GeminiBackend: candidate key lists ${models.size} chat models")
-                future.complete(models)
+                future.complete(describeCatalog(key))
             } catch (e: CancellationException) {
                 future.cancel(true)
                 throw e
@@ -573,13 +692,32 @@ class GeminiBackend(
     }
 
     /**
-     * Fetch and parse the ListModels catalog, following pagination, keeping only models that
-     * support [METHOD_GENERATE_CONTENT]. Runs on the caller's (IO) coroutine, sockets tagged
+     * Fetches the catalog for [apiKey] and logs what each picker got.
+     *
+     * One walk answers both pickers: a second would pay for pagination twice and let the chat and
+     * embedding lists describe different snapshots of the same key.
+     *
+     * @param apiKey the key to authenticate the walk with; never logged
+     * @return the models each picker may offer
+     */
+    private fun describeCatalog(apiKey: String): ModelCatalog {
+        val catalog = fetchAvailableModels(apiKey)
+        context.logger.info(
+            "GeminiBackend: ${catalog.chat.size} models support $METHOD_GENERATE_CONTENT and " +
+                "${catalog.embedding.size} support $METHOD_EMBED_CONTENT"
+        )
+        return catalog
+    }
+
+    /**
+     * Fetch and parse the ListModels catalog, following pagination, splitting it by the methods
+     * each model advertises. Runs on the caller's (IO) coroutine, sockets tagged
      * [NetworkTags.CATALOG] across every page. The
      * `ListModels HTTP <code>` message is a cross-plugin contract — keep that shape if you reword.
      */
-    private fun fetchAvailableModels(apiKey: String): List<String> {
-        val names = mutableListOf<String>()
+    private fun fetchAvailableModels(apiKey: String): ModelCatalog {
+        val chat = mutableListOf<String>()
+        val embedding = mutableListOf<String>()
         withTrafficTag(NetworkTags.CATALOG) {
             var pageToken: String? = null
 
@@ -616,18 +754,20 @@ class GeminiBackend(
                     for (i in 0 until models.length()) {
                         val model = models.getJSONObject(i)
                         val methods = model.optJSONArray("supportedGenerationMethods") ?: continue
-                        val supportsChat = (0 until methods.length())
-                            .any { methods.optString(it) == METHOD_GENERATE_CONTENT }
-                        if (!supportsChat) continue
                         val name = model.optString("name").removePrefix("models/")
-                        if (name.isNotBlank()) names.add(name)
+                        if (name.isBlank()) continue
+                        val declared = (0 until methods.length()).map { methods.optString(it) }
+                        // By declared capability, not by name: the same question the chat picker
+                        // asks, asked of the other method, so neither picker guesses.
+                        if (declared.contains(METHOD_GENERATE_CONTENT)) chat.add(name)
+                        if (declared.contains(METHOD_EMBED_CONTENT)) embedding.add(name)
                     }
                 }
                 pageToken = json.optString("nextPageToken").takeIf { it.isNotBlank() }
             } while (pageToken != null)
         }
 
-        return names.distinct()
+        return ModelCatalog(chat = chat.distinct(), embedding = embedding.distinct())
     }
 
     /**
@@ -713,16 +853,42 @@ User: $userPrompt"""
      * @return the response text, or "" when the API returned no candidates/parts
      */
     private fun requestText(model: String, apiKey: String, body: JSONObject): String =
-        withTrafficTag(NetworkTags.INFERENCE) {
-            val conn = openConnection(model, METHOD_GENERATE_CONTENT, sse = false, apiKey = apiKey)
+        extractText(requestJson(model, METHOD_GENERATE_CONTENT, apiKey, body))
+
+    /**
+     * POST [body] to a model method and return the parsed response.
+     *
+     * The socket is tagged by method: embedding traffic is neither generation nor the catalog, and
+     * a shared tag makes `dumpsys netstats` unable to tell an index build from a chat.
+     *
+     * @param model model name (without the `models/` prefix)
+     * @param method the method to call on it, e.g. [METHOD_GENERATE_CONTENT]
+     * @param apiKey Gemini API key
+     * @param body the request payload
+     * @return the parsed response body
+     */
+    private fun requestJson(
+        model: String,
+        method: String,
+        apiKey: String,
+        body: JSONObject,
+    ): JSONObject {
+        val tag = if (method == METHOD_BATCH_EMBED_CONTENTS) {
+            NetworkTags.EMBEDDING
+        } else {
+            NetworkTags.INFERENCE
+        }
+        return withTrafficTag(tag) {
+            val conn = openConnection(model, method, sse = false, apiKey = apiKey)
             try {
                 writeBody(conn, body)
                 checkResponse(conn)
-                extractText(JSONObject(conn.inputStream.bufferedReader().use { it.readText() }))
+                JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
             } finally {
                 conn.disconnect()
             }
         }
+    }
 
     /**
      * Open a POST connection to `.../models/{model}:{method}`.

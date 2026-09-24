@@ -14,6 +14,9 @@ internal object NetworkTags {
 
     /** The model catalog — `"OACT"`. */
     const val CATALOG = 0x4F414354
+
+    /** Embeddings — `"OAEM"`. */
+    const val EMBEDDING = 0x4F41454D
 }
 
 /**

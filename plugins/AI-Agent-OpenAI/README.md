@@ -134,7 +134,8 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `backend/OpenAiRequestBuilder.kt` — `messages[]` mapping and request JSON (pure)
 - `backend/RequestTuning.kt` — reasoning-model parameters and the 400-retry rule (pure)
 - `backend/SseChunk.kt` — one line of the token stream (pure)
-- `backend/ChatModelFilter.kt` — keeps non-chat models out of the picker (pure)
+- `backend/ModelCatalogFilter.kt` — splits one catalog into the chat and embedding pickers (pure)
+- `backend/OpenAiEmbeddingProtocol.kt` — the `/v1/embeddings` body, batching and index-ordered reply (pure)
 - `errors/OpenAiErrorFormatter.kt` — turns a failure into one translated sentence
 - `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 - `preferences/OpenAiPreferences.kt` — this plugin's settings store
@@ -146,7 +147,7 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `logging/` — `LOG_PREFIX` (`AiAgentOpenAi`), prefixing every logcat tag
 
 The pure units carry the logic that would otherwise only fail on a device; they
-are covered by 118 JVM tests.
+are covered by 177 JVM tests.
 
 ## License
 

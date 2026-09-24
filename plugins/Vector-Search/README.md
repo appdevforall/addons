@@ -5,30 +5,42 @@ vectors; a query is embedded the same way and ranked by cosine similarity. The
 plugin contributes a **"Semantic Results"** section to the project search screen
 via `ProjectSearchExtension`.
 
-> Embeddings come from the `ai-core` plugin at runtime (no compile-time
-> dependency). Install **`ai-core` first** for real model embeddings. Without
-> it, a lightweight **lexical** embedding fallback keeps search working at lower
-> quality.
+> Embeddings come from the backend you selected in **AI settings**, resolved at
+> runtime through `ai-core` (no compile-time dependency). That backend has to be
+> one that embeds, which today means `ai-agent-openai` or `ai-agent-gemini`.
+> With none selected, this plugin contributes **no results at all** — it has no
+> lexical fallback, because word matches presented as semantic ones look like
+> the feature working badly rather than not running.
 
 ## Architecture
 
 ```
 ┌──────────────────────────┐
-│  vector-search (this)    │  ← chunk, embed, cosine-similarity ranking, project search
+│  vector-search (this)    │  ← chunk, batch, cosine-similarity ranking, project search
 └────────────┬─────────────┘
-             │ SharedServices (runtime) → LlmInferenceService (embeddings)
+             │ SharedServices (runtime) → LlmInferenceService
              ▼
 ┌──────────────────────────┐
-│  ai-core                 │  ← embedding generation (falls back to lexical if absent)
+│  ai-core                 │  ← resolves the backend the user selected
+└────────────┬─────────────┘
+             │ LlmInferenceService.EmbeddingBackend (a host type, from plugin-api)
+             ▼
+┌──────────────────────────┐
+│  ai-agent-openai         │  ← POST /v1/embeddings
+│  ai-agent-gemini         │  ← models/{model}:batchEmbedContents
 └──────────────────────────┘
 ```
 
 ## Features
 
 - Semantic search over the current project via `ProjectSearchExtension`
-- On-device embeddings through `ai-core`, with a lexical fallback
+- Embeds through whichever backend the user selected; names no provider itself
+- Batched indexing, so a project costs a handful of calls rather than one per chunk
+- Provenance per vector (backend, model, width); a search only ranks vectors of
+  the same origin, and changing either builds the index again
 - Chunk-level results with file, line range, and a preview snippet
-- Local SQLite embedding store; on-demand indexing per searched root
+- Local SQLite embedding store, scoped per project and kept across restarts, so a
+  project is embedded — and paid for — once rather than on every launch
 
 ## Permissions
 
@@ -39,10 +51,11 @@ Declared in `plugin.permissions`:
 | `filesystem.read` | read project files to chunk and embed |
 | `project.structure` | enumerate the project's source roots |
 
-Indexing reads files in the current project only. Embeddings are stored in a
-local database on the device. Semantic embeddings always use `ai-core`'s
-**Local** on-device backend, and fall back to a lexical embedding when it is
-unavailable, so chunk text never leaves the device.
+No `network.access`: this plugin opens no sockets. The HTTP call belongs to the
+backend plugin, which declares it. Indexing reads files in the current project
+only and the index is a local database, but the chunk text **is** sent to the
+selected backend to be embedded — which is why nothing is indexed until a
+backend has been chosen.
 
 ## Building
 
@@ -53,23 +66,29 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 cd Vector-Search
 ../gradlew assemblePlugin          # release  -> build/plugin/vector-search.cgp
 ../gradlew assemblePluginDebug     # debug variant
+../gradlew testDebugUnitTest       # ranking maths and the reindex decision
 ```
 
 The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## Installation
 
-1. Build and install **`ai-core` first** for quality embeddings (see
-   [`../ai-core/README.md`](../ai-core/README.md)).
+1. Install **`ai-core`** and an agent plugin whose backend embeds
+   (`ai-agent-openai` or `ai-agent-gemini`), select it in AI settings and give
+   it a key.
 2. Build this plugin, install `build/plugin/vector-search.cgp` via
    Code on the Go's Plugin Manager, and restart the IDE.
 3. Run a query from the project search screen; look for the **Semantic
-   Results** section.
+   Results** section. The first query on a project builds the index.
 
 ## Key classes
 
 - `VectorSearchPlugin.kt` — lifecycle, `ProjectSearchExtension`, search flow
-- `EmbeddingIndexingService.kt` — file collection, embedding storage (SQLite)
+- `EmbedderResolver.kt` — which embedder may be used, and why not when not
+- `EmbedderIdentity.kt` — the provenance stamped onto every stored vector
+- `ReindexDecision.kt` — whether the existing index can answer the query
+- `EmbeddingBatches.kt` — how many chunks go into one call
+- `EmbeddingIndexingService.kt` — file collection, schema, embedding storage (SQLite)
 - `CodeChunker.kt` — splits files into embeddable chunks
 - `VectorSearchService.kt` / `VectorMath.kt` — similarity ranking
 

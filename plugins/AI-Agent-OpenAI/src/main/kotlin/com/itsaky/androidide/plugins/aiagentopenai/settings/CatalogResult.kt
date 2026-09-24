@@ -8,8 +8,19 @@ package com.itsaky.androidide.plugins.aiagentopenai.settings
  */
 sealed interface CatalogResult {
 
-    /** The server answered. [models] may be empty, which many compatible servers do. */
-    data class Success(val models: List<String>) : CatalogResult
+    /**
+     * The server answered. Either list may be empty, which many compatible servers do.
+     *
+     * Both halves come from one listing, so they describe the same snapshot of the same server —
+     * see `ModelCatalogFilter` for how one raw catalog splits into two pickers.
+     *
+     * @param models the chat models the server offers
+     * @param embeddingModels the embedding models the server offers
+     */
+    data class Success(
+        val models: List<String>,
+        val embeddingModels: List<String>,
+    ) : CatalogResult
 
     /** No backend was resolvable — this plugin is not active, or was disposed. */
     data object NoBackend : CatalogResult

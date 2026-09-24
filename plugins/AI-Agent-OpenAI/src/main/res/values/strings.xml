@@ -104,6 +104,14 @@
     <string name="msg_model_switched">This server doesn\'t offer your previous model. Switched to %1$s — pick another if you prefer.</string>
     <string name="loading">Checking…</string>
 
+    <!-- Settings pane: embedding model. Same control as the chat model, other half of the catalog. -->
+    <string name="label_openai_embedding_model">Embedding Model</string>
+    <string name="hint_openai_embedding_model">text-embedding-3-small, nomic-embed-text, …</string>
+    <string name="cd_show_embedding_models">Show the embedding model list</string>
+    <string name="hint_openai_embedding_model_help">Used by semantic search, never for chat. Test the connection below to list what this server offers.</string>
+    <string name="hint_openai_embedding_model_live">Tap to pick from the embedding models this server reported, or type another name.</string>
+    <string name="msg_embedding_model_switched">This server doesn\'t offer your previous embedding model. Switched to %1$s — anything already indexed will be built again.</string>
+
     <!-- Settings pane: connection test, which also fills the model list -->
     <string name="btn_test_connection">Test Connection &amp; List Models</string>
     <string name="msg_testing_connection">Contacting the server…</string>

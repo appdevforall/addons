@@ -13,8 +13,9 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Backend-agnostic: it knows no concrete backend type. Backends are contributed by separate plugins
  * (ai-agent-local, ai-agent-gemini, …) that call [registerBackend] on activation, and each optional
- * behaviour — [ToolCallingBackend], [HistoryCapableBackend], [CancellableBackend] — is declared by
- * the interface a backend implements, which this asks for by type before calling.
+ * behaviour — [ToolCallingBackend], [HistoryCapableBackend], [CancellableBackend],
+ * [EmbeddingBackend] — is declared by the interface a backend implements, which this asks for by
+ * type before calling.
  *
  * @param logger the owning plugin's log, or null in unit tests
  */
@@ -153,10 +154,49 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         override fun onError(error: String) = this@asStream.onError(error)
     }
 
+    /**
+     * Embeds [text] with the backend [backendId] names, resolved exactly as a chat turn is.
+     *
+     * Embedding is an optional capability, so the resolved backend is asked for it by type: a
+     * backend that does not implement [EmbeddingBackend] — which is the local one's permanent
+     * answer — is a miss, not a failure, and answers the empty vector. A backend that does embed
+     * and then fails completes the future exceptionally instead, because "this backend has no
+     * embeddings" and "your key was refused" are different things for the caller to report.
+     *
+     * Nothing is thrown from the call itself: the caller is another `.cgp`, and an exception
+     * crossing that boundary would surface as a crash in whichever plugin happened to ask.
+     *
+     * @param text the text to embed
+     * @param backendId the backend to route to, or [AiBackend.AUTO] for the user's selection
+     * @return the vector, an empty one when no embedding-capable backend answered, or a future
+     *   completed exceptionally when one tried and failed
+     */
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {
-        // Stub implementation - embeddings not needed for Phase 3
-        return CompletableFuture.completedFuture(FloatArray(0))
+        val effectiveId = effectiveBackendId(backendId)
+        val backend = backends[effectiveId]
+        if (backend == null) {
+            logger?.warn("Embeddings requested from backend '$effectiveId', which is not registered")
+            return noEmbedding()
+        }
+        if (backend !is EmbeddingBackend) {
+            logger?.info("Backend '$effectiveId' does not produce embeddings; returning none")
+            return noEmbedding()
+        }
+
+        // Thrown rather than reported through the future by a backend that fails before it starts.
+        val embedded = try {
+            backend.embed(listOf(text))
+        } catch (e: Throwable) {
+            logger?.error("Backend '$effectiveId' failed to start embedding", e)
+            return CompletableFuture<FloatArray>().apply { completeExceptionally(e) }
+        }
+
+        return embedded.thenApply { vectors -> vectors.firstOrNull() ?: FloatArray(0) }
     }
+
+    /** The "no embedding available" answer, which is a completed future rather than a failure. */
+    private fun noEmbedding(): CompletableFuture<FloatArray> =
+        CompletableFuture.completedFuture(FloatArray(0))
 
     /**
      * Resolves where a request routes and writes that id back into [config], so every entry point

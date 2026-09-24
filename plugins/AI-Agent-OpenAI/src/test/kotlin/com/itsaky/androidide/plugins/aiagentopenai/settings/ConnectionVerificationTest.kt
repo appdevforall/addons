@@ -19,7 +19,7 @@ class ConnectionVerificationTest {
 
     @Test
     fun givenModelsCameBack_whenInterpreted_thenTheConnectionIsVerified() {
-        val verdict = CatalogResult.Success(listOf("gpt-5", "gpt-4o")).toConnectionVerification()
+        val verdict = CatalogResult.Success(listOf("gpt-5", "gpt-4o"), listOf("text-embedding-3-small")).toConnectionVerification()
         assertEquals(ConnectionVerification.Verified(2), verdict)
         assertTrue(verdict.isConfirmedValid)
     }
@@ -27,7 +27,7 @@ class ConnectionVerificationTest {
     @Test
     fun givenAnEmptyCatalog_whenInterpreted_thenTheServerHasNoModels() {
         // Actionable and common: an Ollama install with nothing pulled yet.
-        val verdict = CatalogResult.Success(emptyList()).toConnectionVerification()
+        val verdict = CatalogResult.Success(emptyList(), emptyList()).toConnectionVerification()
         assertEquals(ConnectionVerification.NoModels, verdict)
     }
 

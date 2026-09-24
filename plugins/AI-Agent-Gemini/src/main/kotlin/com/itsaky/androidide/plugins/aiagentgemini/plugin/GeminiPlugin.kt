@@ -54,6 +54,7 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         // Tags for the controls on this backend's settings pane (see GeminiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_GEMINI_KEY = "ai_gemini_key"
         const val TOOLTIP_TAG_SETTINGS_GEMINI_MODEL = "ai_gemini_model"
+        const val TOOLTIP_TAG_SETTINGS_GEMINI_EMBEDDING_MODEL = "ai_gemini_embedding_model"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_gemini_get_free_key"
 
         @Volatile
@@ -266,6 +267,22 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
                 saved key can actually use, so the list never offers a model that
                 would fail with a 404. Without a key, or offline, a short list of
                 current models is shown instead.</p>
+            """.trimIndent(),
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_GEMINI_EMBEDDING_MODEL,
+            summary = "Which model turns your code into vectors for semantic search. Never used for chat.",
+            detail = """
+                <p>Semantic search compares meaning rather than words, which it
+                does by embedding every chunk of the project with this model. It
+                is a separate setting because no Gemini model does both: this list
+                holds the models that advertise <code>embedContent</code>, and the
+                <b>Gemini Model</b> list above holds those that advertise
+                <code>generateContent</code>.</p>
+                <p>Changing it changes the vector space, so the project is indexed
+                again from scratch. Vectors from two different models are not
+                comparable, and mixing them would quietly return worse results
+                rather than fail.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(

@@ -21,6 +21,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.fragment.app.Fragment
+import androidx.annotation.StringRes
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -181,8 +183,11 @@ class GeminiSettingsFragment : Fragment() {
         // is otherwise unreachable.
         wireTooltip(statusTextView, GeminiPlugin.TOOLTIP_TAG_PLUGIN)
 
-        // Create model selection container
-        val modelContainer = createModelSelectionUi(view)
+        // Create the two model selection containers: chat first, embedding beneath it.
+        val chatPicker = chatModelPicker()
+        val embeddingPicker = embeddingModelPicker()
+        val chatModelContainer = createModelSelectionUi(view, chatPicker)
+        val embeddingModelContainer = createModelSelectionUi(view, embeddingPicker)
 
         /**
          * Show the outcome of (or progress of) the live key check.
@@ -500,7 +505,9 @@ class GeminiSettingsFragment : Fragment() {
         }
 
         // Setup model selection
-        setupModelSelection(modelContainer)
+        setupModelSelection(chatModelContainer, chatPicker)
+        setupModelSelection(embeddingModelContainer, embeddingPicker)
+        fetchModelsIfNeeded()
     }
 
     /**
@@ -588,7 +595,56 @@ class GeminiSettingsFragment : Fragment() {
      */
     private fun dp(dp: Int): Int = (dp * resources.displayMetrics.density).roundToInt()
 
-    private fun createModelSelectionUi(parent: View): LinearLayout {
+    /**
+     * Everything one model spinner needs, so the chat and embedding pickers are one implementation
+     * rather than two that drift.
+     *
+     * @param tagPrefix namespaces this picker's view tags inside the shared container
+     * @param titleRes the section heading
+     * @param tooltipTag long-press help shared by the spinner and its Refresh button
+     * @param read the currently saved model
+     * @param write persists a model the user picked
+     * @param options the catalog to offer
+     */
+    private class ModelPicker(
+        val tagPrefix: String,
+        @StringRes val titleRes: Int,
+        val tooltipTag: String,
+        val read: () -> String,
+        val write: (String) -> Unit,
+        val options: LiveData<GeminiModelOptions>,
+    )
+
+    /** The chat model: what a turn is generated with. */
+    private fun chatModelPicker() = ModelPicker(
+        tagPrefix = "chat_model",
+        titleRes = R.string.label_gemini_model,
+        tooltipTag = GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL,
+        read = viewModel::getGeminiModel,
+        write = viewModel::saveGeminiModel,
+        options = viewModel.geminiModels,
+    )
+
+    /** The embedding model: what semantic search indexes and queries with. */
+    private fun embeddingModelPicker() = ModelPicker(
+        tagPrefix = "embedding_model",
+        titleRes = R.string.label_gemini_embedding_model,
+        tooltipTag = GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_EMBEDDING_MODEL,
+        read = viewModel::getGeminiEmbeddingModel,
+        write = viewModel::saveGeminiEmbeddingModel,
+        options = viewModel.geminiEmbeddingModels,
+    )
+
+    /**
+     * Builds one picker's views into [parent].
+     *
+     * Built in code rather than inflated because this pane's layout predates having two of them;
+     * the views are tagged, not given ids, so two pickers can share one container without a second
+     * set of resource ids.
+     *
+     * @return the container holding this picker's views
+     */
+    private fun createModelSelectionUi(parent: View, picker: ModelPicker): LinearLayout {
         val context = requireContext()
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -596,7 +652,7 @@ class GeminiSettingsFragment : Fragment() {
         }
 
         val titleText = TextView(context).apply {
-            text = getString(R.string.label_gemini_model)
+            text = getString(picker.titleRes)
             textSize = 16f
             setPadding(0, 0, 0, dp(16))
         }
@@ -604,7 +660,7 @@ class GeminiSettingsFragment : Fragment() {
 
         val currentModelText = TextView(context).apply {
             id = View.generateViewId()
-            text = getString(R.string.current_model, viewModel.getGeminiModel())
+            text = getString(R.string.current_model, picker.read())
             setPadding(0, 0, 0, dp(8))
         }
         container.addView(currentModelText)
@@ -622,25 +678,26 @@ class GeminiSettingsFragment : Fragment() {
             parent.addView(container)
         }
 
-        // Tag the views for later reference
-        container.tag = "model_container"
-        currentModelText.tag = "current_model_text"
-        modelSpinner.tag = "model_spinner"
-        refreshButton.tag = "refresh_button"
+        // Tag the views for later reference, namespaced so both pickers can share one parent.
+        container.tag = "${picker.tagPrefix}_container"
+        currentModelText.tag = "${picker.tagPrefix}_current_text"
+        modelSpinner.tag = "${picker.tagPrefix}_spinner"
+        refreshButton.tag = "${picker.tagPrefix}_refresh"
 
         return container
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun setupModelSelection(container: View) {
-        val currentModelText = container.findViewWithTag<TextView>("current_model_text")
-        val modelSpinner = container.findViewWithTag<Spinner>("model_spinner")
-        val refreshButton = container.findViewWithTag<Button>("refresh_button")
+    private fun setupModelSelection(container: View, picker: ModelPicker) {
+        val currentModelText =
+            container.findViewWithTag<TextView>("${picker.tagPrefix}_current_text")
+        val modelSpinner = container.findViewWithTag<Spinner>("${picker.tagPrefix}_spinner")
+        val refreshButton = container.findViewWithTag<Button>("${picker.tagPrefix}_refresh")
 
         if (modelSpinner == null || refreshButton == null) return
 
-        wireTooltip(modelSpinner, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
-        wireTooltip(refreshButton, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
+        wireTooltip(modelSpinner, picker.tooltipTag)
+        wireTooltip(refreshButton, picker.tooltipTag)
 
         // Track real user taps so programmatic selection changes never persist a model.
         var userTouchedSpinner = false
@@ -655,20 +712,20 @@ class GeminiSettingsFragment : Fragment() {
             modelSpinner.adapter = adapter
 
             // Migrate off a retired saved model only for a live catalog, never for the fallback.
-            val currentModel = viewModel.getGeminiModel()
+            val currentModel = picker.read()
             val currentIndex = models.indexOf(currentModel)
             when {
                 currentIndex >= 0 -> modelSpinner.setSelection(currentIndex)
                 isLive && models.isNotEmpty() -> {
                     modelSpinner.setSelection(0)
                     val migrated = models[0]
-                    viewModel.saveGeminiModel(migrated)
+                    picker.write(migrated)
                     currentModelText?.text = getString(R.string.current_model, migrated)
                 }
             }
         }
 
-        viewModel.geminiModels.observe(viewLifecycleOwner) { options ->
+        picker.options.observe(viewLifecycleOwner) { options ->
             if (options.models.isNotEmpty()) {
                 updateModelSpinner(options.models, options.isLive)
             }
@@ -690,8 +747,8 @@ class GeminiSettingsFragment : Fragment() {
                 // Ignore programmatic selections; only a real user pick persists the model.
                 if (!userTouchedSpinner) return
                 val selectedModel = parent?.getItemAtPosition(position) as? String
-                if (selectedModel != null && selectedModel != viewModel.getGeminiModel()) {
-                    viewModel.saveGeminiModel(selectedModel)
+                if (selectedModel != null && selectedModel != picker.read()) {
+                    picker.write(selectedModel)
                     currentModelText?.text = getString(R.string.current_model, selectedModel)
                     Toast.makeText(
                         requireContext(),
@@ -705,8 +762,15 @@ class GeminiSettingsFragment : Fragment() {
         }
 
         refreshButton.setOnClickListener { viewModel.fetchGeminiModels() }
+    }
 
-        // Initial fetch
+    /**
+     * Fetches the catalog once for both pickers, since one walk answers them both.
+     *
+     * Guarded on the chat picker alone: the two are published together, so a non-empty chat list
+     * means the fetch has already happened.
+     */
+    private fun fetchModelsIfNeeded() {
         if (viewModel.geminiModels.value?.models.isNullOrEmpty()) {
             viewModel.fetchGeminiModels()
         }

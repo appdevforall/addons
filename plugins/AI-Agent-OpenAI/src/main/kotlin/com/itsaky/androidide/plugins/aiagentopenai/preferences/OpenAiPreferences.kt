@@ -47,6 +47,18 @@ internal object OpenAiPreferences {
      */
     const val KEY_MODEL_URL = "openai_model_url"
 
+    /** Embedding model id to request, e.g. `text-embedding-3-small`. */
+    const val KEY_EMBEDDING_MODEL = "openai_embedding_model"
+
+    /**
+     * The base URL [KEY_EMBEDDING_MODEL] was chosen for.
+     *
+     * Stored alongside for the same reason as [KEY_MODEL_URL], and it matters more here: an
+     * embedding model carried over to another server produces vectors in a different space, which
+     * does not 404 — it silently ranks against the index built by the previous one.
+     */
+    const val KEY_EMBEDDING_MODEL_URL = "openai_embedding_model_url"
+
     /** Set once the user has been warned about a cleartext URL, so the warning shows once. */
     const val KEY_CLEARTEXT_ACKNOWLEDGED = "openai_cleartext_acknowledged"
 
@@ -63,6 +75,14 @@ internal object OpenAiPreferences {
      * pointed at OpenAI — the two catalogs have nothing in common.
      */
     const val KEY_REMEMBERED_MODELS_URL = "openai_remembered_models_url"
+
+    /**
+     * The embedding half of the last model list a server returned, remembered under its own key so
+     * reopening the settings pane offers both pickers without another request. Encoded by
+     * `RememberedModels`, and guarded by the same [KEY_REMEMBERED_MODELS_URL]: both halves come
+     * from one listing, so one origin describes them both.
+     */
+    const val KEY_REMEMBERED_EMBEDDING_MODELS = "openai_remembered_embedding_models"
 
     /**
      * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a

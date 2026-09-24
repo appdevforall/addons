@@ -35,11 +35,11 @@ internal class OpenAiHttpClient(
     /**
      * POST [body] to [url] and hand the response's reader to [readResponse].
      *
-     * The connection is closed before this returns, whatever [readResponse] did with it. Its
-     * socket is tagged [NetworkTags.INFERENCE].
+     * The connection is closed before this returns, whatever [readResponse] did with it.
      *
      * @param apiKey bearer token, or blank for a server that needs none
      * @param sse true to ask for the server-sent-events stream
+     * @param tag the [NetworkTags] value to tag this request's socket with
      * @param onConnected receives the live connection, so a caller can disconnect it on cancellation
      * @param onAccepted called once the status line says 2xx, before a byte of the body is read
      * @return whatever [readResponse] produced
@@ -50,10 +50,11 @@ internal class OpenAiHttpClient(
         apiKey: String,
         body: JSONObject,
         sse: Boolean = false,
+        tag: Int = NetworkTags.INFERENCE,
         onConnected: (HttpURLConnection) -> Unit = {},
         onAccepted: () -> Unit = {},
         readResponse: (BufferedReader) -> T,
-    ): T = withTrafficTag(NetworkTags.INFERENCE) {
+    ): T = withTrafficTag(tag) {
         val conn = open(url, "POST", apiKey).apply {
             readTimeout = readTimeoutMs
             doOutput = true
