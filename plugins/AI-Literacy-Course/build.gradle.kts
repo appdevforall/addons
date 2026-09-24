@@ -262,6 +262,12 @@ val downloadAssets by tasks.registering {
 val downloadedAssets = listOf("ai-literacy-course.zip", "pdfjs.zip").map {
     project.file("src/main/assets/$it")
 }
+tasks.configureEach {
+    if (name != "downloadCourse" && name != "downloadPdfjs" && name != "downloadAssets") {
+        mustRunAfter(downloadCourse, downloadPdfjs)
+    }
+}
+
 tasks.withType<MergeSourceSetFolders>().configureEach {
     doFirst {
         val missing = downloadedAssets.filterNot { it.isFile }

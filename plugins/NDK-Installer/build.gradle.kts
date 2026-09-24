@@ -168,6 +168,12 @@ val downloadAssets by tasks.registering {
 // Matched by type, not by name: a name filter that stops matching would silently
 // unwire this guard, which is the regression it exists to prevent.
 val ndkArchiveFile = project.file("src/main/assets/ndk-cmake.tar.xz")
+tasks.configureEach {
+    if (name != "downloadAssets") {
+        mustRunAfter(downloadAssets)
+    }
+}
+
 tasks.withType<MergeSourceSetFolders>().configureEach {
     doFirst {
         if (!ndkArchiveFile.isFile) {

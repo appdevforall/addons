@@ -91,7 +91,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("me.xdrop:fuzzywuzzy:1.4.0")
     implementation("com.google.ai.edge.litert:litert:1.0.1")
-    implementation("com.google.ai.edge.litert:litert-support:1.0.1")
+    implementation("com.google.ai.edge.litert:litert-support-api:1.0.1")
     implementation("com.google.ai.edge.litert:litert-gpu:1.0.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0")
