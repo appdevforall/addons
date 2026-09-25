@@ -16,7 +16,7 @@
     <string name="gemini_error_failed_reason">The Gemini request failed. %1$s</string>
 
     <!-- Settings pane this backend contributes (see GeminiSettingsFragment) -->
-    <string name="label_gemini_api_key">Gemini API Key</string>
+    <string name="label_gemini_api_key">API Key</string>
     <string name="hint_gemini_api_key">Enter your Gemini API key</string>
     <!-- Reveal toggle on the masked credential field. Deliberately the same wording in
          every AI plugin: one control, one announcement, whatever the field holds. -->
@@ -51,9 +51,16 @@
     <string name="msg_key_hint_edit_first">Copied a new key? Tap Edit, then paste it into the field.</string>
     <string name="msg_no_browser_for_key">No browser available. The link was copied — open it on another device: %s</string>
     <string name="msg_key_link_copy_failed">Couldn\'t open a browser. Get your key at %s</string>
-    <string name="label_gemini_model">Gemini Model</string>
-    <string name="label_gemini_embedding_model">Gemini Embedding Model</string>
-    <string name="current_model">Current: %s</string>
+    <string name="label_gemini_model">Model</string>
+    <string name="hint_gemini_model">Gemini model</string>
+    <string name="cd_show_models">Show the model list</string>
+    <string name="hint_gemini_model_help">Refresh to list the models your key can reach.</string>
+    <string name="hint_gemini_model_live">Tap to pick from the models this key can reach.</string>
+    <string name="label_gemini_embedding_model">Embedding Model</string>
+    <string name="hint_gemini_embedding_model">Gemini embedding model</string>
+    <string name="cd_show_embedding_models">Show the embedding model list</string>
+    <string name="hint_gemini_embedding_model_help">Used by semantic search, never for chat. Refresh to list the embedding models your key can reach.</string>
+    <string name="hint_gemini_embedding_model_live">Tap to pick from the embedding models this key can reach.</string>
     <string name="refresh_models">Refresh Models</string>
     <string name="loading">Loading…</string>
     <string name="model_changed">Model changed to %s</string>

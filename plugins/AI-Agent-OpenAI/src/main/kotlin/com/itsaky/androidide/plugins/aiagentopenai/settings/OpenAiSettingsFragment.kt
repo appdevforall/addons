@@ -159,8 +159,9 @@ class OpenAiSettingsFragment : Fragment() {
      * Long-press on [box]'s end icon shows [tag]'s tooltip.
      *
      * Separate from [wireTooltip] because the end icon is a clickable child that consumes the
-     * long-press before the box sees it — without this the reveal control would be the one
-     * contributed element with no tooltip of its own.
+     * long-press before the box sees it — without this every end icon on the pane, the reveal
+     * control and the dropdown chevrons alike, would be a contributed element with no tooltip of
+     * its own.
      */
     private fun wireEndIconTooltip(box: TextInputLayout, tag: String) {
         box.setEndIconOnLongClickListener { icon ->
@@ -198,6 +199,24 @@ class OpenAiSettingsFragment : Fragment() {
         target.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
     }
 
+    /**
+     * Put the dropdown chevron on [box]'s end icon.
+     *
+     * The drawable is set here rather than in the layout because an end icon declared as
+     * `app:endIconDrawable` draws blank inside the host — the same reason [SecretRevealController]
+     * sets the reveal icon in code. Without a visible chevron the field
+     * reads as a plain, read-only text box rather than a list to open.
+     */
+    private fun setupDropdownEndIcon(box: TextInputLayout) {
+        // Already the mode declared in the layout; set again so the drawable below cannot be the
+        // one a later mode switch discards.
+        box.endIconMode = TextInputLayout.END_ICON_CUSTOM
+        box.setEndIconDrawable(R.drawable.ic_dropdown)
+        // Nothing ever moves the icon's checked state, so TalkBack would read "not checked" over
+        // a control that is not a toggle.
+        box.isEndIconCheckable = false
+    }
+
     // --- Server -------------------------------------------------------------------------------
 
     private fun setupServerUi(view: View) {
@@ -207,6 +226,8 @@ class OpenAiSettingsFragment : Fragment() {
         val saveButton = view.findViewById<Button>(R.id.btn_save_server)
         val statusText = view.findViewById<TextView>(R.id.openai_server_status_text)
         val serverLabel = view.findViewById<TextView>(R.id.openai_server_label)
+
+        setupDropdownEndIcon(presetBox)
 
         listOf<View>(urlInput, saveButton, serverLabel, statusText)
             .forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_SERVER) }
@@ -236,6 +257,7 @@ class OpenAiSettingsFragment : Fragment() {
         // Tapping anywhere in the field opens the list; the end icon is only a second way in.
         presetInput.setOnClickListener { presetInput.showDropDown() }
         presetBox.setEndIconOnClickListener { presetInput.showDropDown() }
+        wireEndIconTooltip(presetBox, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_PRESET)
         presetInput.setOnItemClickListener { _, _, position, _ ->
             // A preset only fills the field; the user still has to save it.
             ServerPresets.ALL.getOrNull(position)?.url?.let { urlInput.setText(it) }
@@ -779,6 +801,8 @@ class OpenAiSettingsFragment : Fragment() {
         val modelLabel = view.findViewById<TextView>(picker.labelId)
         val modelHint = view.findViewById<TextView>(picker.hintId)
 
+        setupDropdownEndIcon(modelBox)
+
         listOf<View>(modelLabel, modelInput, modelHint)
             .forEach { wireTooltip(it, picker.tooltipTag) }
 
@@ -806,6 +830,7 @@ class OpenAiSettingsFragment : Fragment() {
         // Tapping the field opens the list; completionThreshold=0 alone waits for a keystroke.
         modelInput.setOnClickListener { modelInput.showDropDown() }
         modelBox.setEndIconOnClickListener { modelInput.showDropDown() }
+        wireEndIconTooltip(modelBox, picker.tooltipTag)
         modelInput.setOnItemClickListener { _, _, _, _ -> commitTypedModel() }
 
         // A server that does not offer the saved model retires it; the field must show what will

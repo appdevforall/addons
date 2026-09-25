@@ -202,6 +202,9 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
     override fun dispose() {
         context.logger.info("OpenAiPlugin: Disposing plugin")
 
+        // deactivate() removes this too; a dispose without one would leave the host holding this.
+        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
+
         releaseBackend()
         pluginContext = null
         context.logger.info("OpenAiPlugin: Released OpenAI backend")

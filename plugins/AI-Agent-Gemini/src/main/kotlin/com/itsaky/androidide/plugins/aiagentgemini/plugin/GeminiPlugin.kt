@@ -277,7 +277,7 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
                 does by embedding every chunk of the project with this model. It
                 is a separate setting because no Gemini model does both: this list
                 holds the models that advertise <code>embedContent</code>, and the
-                <b>Gemini Model</b> list above holds those that advertise
+                <b>Model</b> list above holds those that advertise
                 <code>generateContent</code>.</p>
                 <p>Changing it changes the vector space, so the project is indexed
                 again from scratch. Vectors from two different models are not

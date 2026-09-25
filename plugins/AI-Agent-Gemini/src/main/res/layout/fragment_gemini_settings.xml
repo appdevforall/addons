@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material fields and buttons throughout, on the shared house spacing scale, so this pane and the
+  OpenAI one read as the same screen with a different backend behind it. The root android:theme is
+  what guarantees the plugin's own button/input styles win over whatever theme the host builds the
+  inflation Context from.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:theme="@style/ThemeOverlay.Plugin">
+
+    <!-- API key. Collapses to the status line once a key is stored. -->
 
     <TextView
         android:id="@+id/gemini_api_key_status_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:textAppearance="?android:attr/textAppearanceMedium"
-        android:textColor="?android:attr/textColorSecondary"
+        android:layout_marginBottom="@dimen/space_sm"
+        android:textAppearance="@style/Plugin.Text.Body"
         android:visibility="gone" />
 
     <LinearLayout
@@ -20,19 +29,18 @@
         android:orientation="vertical">
 
         <TextView
+            android:id="@+id/gemini_api_key_label"
+            style="@style/Plugin.SectionHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/label_gemini_api_key"
-            android:textAppearance="?android:attr/textAppearanceSmall"
-            android:paddingBottom="4dp"/>
+            android:text="@string/label_gemini_api_key" />
 
         <!--
           The reveal toggle is the box's own end icon rather than the loose ImageButton that used to
           sit beside the field: the icon has a real touch target, and it is the same control the
           other AI plugins' credential fields carry. Nothing endIcon-related is declared here —
           SecretRevealController sets the mode, drawable, description and listener in code, because
-          Material 1.10 never reads app:endIconDrawable and a custom icon declared in XML draws
-          blank.
+          an end icon declared as app:endIconDrawable here draws blank inside the host.
         -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/gemini_api_key_box"
@@ -53,40 +61,40 @@
 
     <TextView
         android:id="@+id/gemini_key_verification_text"
+        style="@style/Plugin.StatusLine"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:drawablePadding="6dp"
-        android:gravity="center_vertical"
-        android:textAppearance="?android:attr/textAppearanceSmall"
-        android:textColor="?android:attr/textColorSecondary"
+        android:layout_marginTop="@dimen/space_sm"
         android:visibility="gone" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_md"
         android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_clear_api_key"
+            style="@style/PluginButton.Filled"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/btn_clear_api_key"
             android:visibility="gone" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_edit_api_key"
+            style="@style/PluginButton.Filled"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="@dimen/space_sm"
             android:layout_weight="1"
             android:text="@string/btn_edit_api_key"
             android:visibility="gone" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_save_api_key"
+            style="@style/PluginButton.Filled"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -94,11 +102,99 @@
 
     </LinearLayout>
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_get_free_key"
+        style="@style/PluginButton.Filled"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="@dimen/space_sm"
         android:text="@string/btn_get_free_key" />
+
+    <!-- Model. One dropdown, the same control the OpenAI pane uses: the catalog is whatever the
+         key can reach, so the list is the only way to change it. The chevron is not declared here —
+         declared as app:endIconDrawable it draws blank inside the host, so
+         setupDropdownEndIcon() sets it on every box in code. -->
+
+    <TextView
+        android:id="@+id/gemini_model_label"
+        style="@style/Plugin.SectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:text="@string/label_gemini_model" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/gemini_model_box"
+        style="@style/PluginTextInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_gemini_model"
+        app:endIconContentDescription="@string/cd_show_models"
+        app:endIconMode="custom">
+
+        <AutoCompleteTextView
+            android:id="@+id/gemini_model_input"
+            style="@style/PluginTextInputEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:completionThreshold="0"
+            android:inputType="none"
+            android:popupBackground="@color/plugin_surface" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/gemini_model_hint_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:text="@string/hint_gemini_model_help"
+        android:textAppearance="@style/Plugin.Text.Small" />
+
+    <!-- Embedding model. The other half of the same catalog: semantic search embeds with this one,
+         never with the chat model above. -->
+
+    <TextView
+        android:id="@+id/gemini_embedding_model_label"
+        style="@style/Plugin.SectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:text="@string/label_gemini_embedding_model" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/gemini_embedding_model_box"
+        style="@style/PluginTextInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_gemini_embedding_model"
+        app:endIconContentDescription="@string/cd_show_embedding_models"
+        app:endIconMode="custom">
+
+        <AutoCompleteTextView
+            android:id="@+id/gemini_embedding_model_input"
+            style="@style/PluginTextInputEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:completionThreshold="0"
+            android:inputType="none"
+            android:popupBackground="@color/plugin_surface" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/gemini_embedding_model_hint_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:text="@string/hint_gemini_embedding_model_help"
+        android:textAppearance="@style/Plugin.Text.Small" />
+
+    <!-- One Refresh for both pickers: a single catalog walk fills both lists. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_refresh_models"
+        style="@style/PluginButton.Filled"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_md"
+        android:text="@string/refresh_models" />
 
 </LinearLayout>

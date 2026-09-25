@@ -11,17 +11,18 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Filter
 import android.widget.LinearLayout
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DrawableRes
-import androidx.fragment.app.Fragment
+import androidx.annotation.IdRes
 import androidx.annotation.StringRes
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -38,7 +39,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.roundToInt
 
 /**
  * This backend's settings pane, mounted by whichever screen offers a backend selector.
@@ -109,6 +109,9 @@ class GeminiSettingsFragment : Fragment() {
         )[GeminiSettingsViewModel::class.java]
 
         setupApiKeyUi(view)
+        setupModelPicker(view, chatModelPicker())
+        setupModelPicker(view, embeddingModelPicker())
+        setupModelRefresh(view)
     }
 
     override fun onResume() {
@@ -149,8 +152,9 @@ class GeminiSettingsFragment : Fragment() {
      * Long-press on [box]'s end icon shows [tag]'s tooltip.
      *
      * Separate from [wireTooltip] because the end icon is a clickable child that consumes the
-     * long-press before the box sees it — without this the reveal control would be the one
-     * contributed element with no tooltip of its own.
+     * long-press before the box sees it — without this every end icon on the pane, the reveal
+     * control and the dropdown chevrons alike, would be a contributed element with no tooltip of
+     * its own.
      */
     private fun wireEndIconTooltip(box: TextInputLayout, tag: String) {
         box.setEndIconOnLongClickListener { icon ->
@@ -163,6 +167,7 @@ class GeminiSettingsFragment : Fragment() {
     @SuppressLint("SetTextI18n")
     private fun setupApiKeyUi(view: View) {
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.gemini_api_key_layout)
+        val apiKeyLabel = view.findViewById<TextView>(R.id.gemini_api_key_label)
         val apiKeyBox = view.findViewById<TextInputLayout>(R.id.gemini_api_key_box)
         val apiKeyInput = view.findViewById<EditText>(R.id.gemini_api_key_input)
         val saveButton = view.findViewById<Button>(R.id.btn_save_api_key)
@@ -174,7 +179,7 @@ class GeminiSettingsFragment : Fragment() {
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
         listOf<View>(
-            apiKeyBox, saveButton, editButton, clearButton, verificationText
+            apiKeyLabel, apiKeyBox, saveButton, editButton, clearButton, verificationText
         ).forEach { wireTooltip(it, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
         wireTooltip(getKeyButton, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
 
@@ -182,12 +187,6 @@ class GeminiSettingsFragment : Fragment() {
         // this pane is the only UI this plugin draws, so the guide button that hangs off that entry
         // is otherwise unreachable.
         wireTooltip(statusTextView, GeminiPlugin.TOOLTIP_TAG_PLUGIN)
-
-        // Create the two model selection containers: chat first, embedding beneath it.
-        val chatPicker = chatModelPicker()
-        val embeddingPicker = embeddingModelPicker()
-        val chatModelContainer = createModelSelectionUi(view, chatPicker)
-        val embeddingModelContainer = createModelSelectionUi(view, embeddingPicker)
 
         /**
          * Show the outcome of (or progress of) the live key check.
@@ -503,11 +502,6 @@ class GeminiSettingsFragment : Fragment() {
             updateUiState(isEditing = true)
             apiKeyInput.setText("")
         }
-
-        // Setup model selection
-        setupModelSelection(chatModelContainer, chatPicker)
-        setupModelSelection(embeddingModelContainer, embeddingPicker)
-        fetchModelsIfNeeded()
     }
 
     /**
@@ -587,29 +581,44 @@ class GeminiSettingsFragment : Fragment() {
     }
 
     /**
-     * Density-independent [dp] as whole pixels, for the views this pane builds in code. The
-     * `setPadding` family takes raw pixels, so a literal shrinks as screen density rises.
+     * Put the dropdown chevron on [box]'s end icon.
      *
-     * @param dp the density-independent size to convert
-     * @return the equivalent size in device pixels
+     * The drawable is set here rather than in the layout because an end icon declared as
+     * `app:endIconDrawable` draws blank inside the host — the same reason [SecretRevealController]
+     * sets the reveal icon in code. Without a visible chevron the field
+     * reads as a plain, read-only text box rather than a list to open.
      */
-    private fun dp(dp: Int): Int = (dp * resources.displayMetrics.density).roundToInt()
+    private fun setupDropdownEndIcon(box: TextInputLayout) {
+        // Already the mode declared in the layout; set again so the drawable below cannot be the
+        // one a later mode switch discards.
+        box.endIconMode = TextInputLayout.END_ICON_CUSTOM
+        box.setEndIconDrawable(R.drawable.ic_dropdown)
+        // Nothing ever moves the icon's checked state, so TalkBack would read "not checked" over
+        // a control that is not a toggle.
+        box.isEndIconCheckable = false
+    }
+
+    // --- Model pickers -------------------------------------------------------------------------
 
     /**
-     * Everything one model spinner needs, so the chat and embedding pickers are one implementation
-     * rather than two that drift.
+     * Everything one model dropdown needs, so the chat and embedding pickers are one
+     * implementation rather than two that drift.
      *
-     * @param tagPrefix namespaces this picker's view tags inside the shared container
-     * @param titleRes the section heading
-     * @param tooltipTag long-press help shared by the spinner and its Refresh button
+     * @param tooltipTag long-press help shared by the picker's label, field, hint and chevron
+     * @param helpHint hint shown while no catalog is offered
+     * @param liveHint hint shown once there is a list to tap
      * @param read the currently saved model
      * @param write persists a model the user picked
      * @param options the catalog to offer
      */
     private class ModelPicker(
-        val tagPrefix: String,
-        @StringRes val titleRes: Int,
+        @IdRes val boxId: Int,
+        @IdRes val inputId: Int,
+        @IdRes val labelId: Int,
+        @IdRes val hintId: Int,
         val tooltipTag: String,
+        @StringRes val helpHint: Int,
+        @StringRes val liveHint: Int,
         val read: () -> String,
         val write: (String) -> Unit,
         val options: LiveData<GeminiModelOptions>,
@@ -617,9 +626,13 @@ class GeminiSettingsFragment : Fragment() {
 
     /** The chat model: what a turn is generated with. */
     private fun chatModelPicker() = ModelPicker(
-        tagPrefix = "chat_model",
-        titleRes = R.string.label_gemini_model,
+        boxId = R.id.gemini_model_box,
+        inputId = R.id.gemini_model_input,
+        labelId = R.id.gemini_model_label,
+        hintId = R.id.gemini_model_hint_text,
         tooltipTag = GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL,
+        helpHint = R.string.hint_gemini_model_help,
+        liveHint = R.string.hint_gemini_model_live,
         read = viewModel::getGeminiModel,
         write = viewModel::saveGeminiModel,
         options = viewModel.geminiModels,
@@ -627,109 +640,97 @@ class GeminiSettingsFragment : Fragment() {
 
     /** The embedding model: what semantic search indexes and queries with. */
     private fun embeddingModelPicker() = ModelPicker(
-        tagPrefix = "embedding_model",
-        titleRes = R.string.label_gemini_embedding_model,
+        boxId = R.id.gemini_embedding_model_box,
+        inputId = R.id.gemini_embedding_model_input,
+        labelId = R.id.gemini_embedding_model_label,
+        hintId = R.id.gemini_embedding_model_hint_text,
         tooltipTag = GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_EMBEDDING_MODEL,
+        helpHint = R.string.hint_gemini_embedding_model_help,
+        liveHint = R.string.hint_gemini_embedding_model_live,
         read = viewModel::getGeminiEmbeddingModel,
         write = viewModel::saveGeminiEmbeddingModel,
         options = viewModel.geminiEmbeddingModels,
     )
 
     /**
-     * Builds one picker's views into [parent].
+     * One model dropdown, built as the same control the OpenAI pane carries rather than a
+     * framework Spinner: one box, one chevron, one list.
      *
-     * Built in code rather than inflated because this pane's layout predates having two of them;
-     * the views are tagged, not given ids, so two pickers can share one container without a second
-     * set of resource ids.
-     *
-     * @return the container holding this picker's views
+     * Pick-only — `keyListener = null` — because the catalog is whatever the key can reach, so
+     * unlike the OpenAI pane there is no free-text model to type. The field itself is what shows
+     * the model in use, which is why there is no separate "current model" line any more.
      */
-    private fun createModelSelectionUi(parent: View, picker: ModelPicker): LinearLayout {
-        val context = requireContext()
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(32), 0, 0)
-        }
+    private fun setupModelPicker(view: View, picker: ModelPicker) {
+        val modelBox = view.findViewById<TextInputLayout>(picker.boxId)
+        val modelInput = view.findViewById<AutoCompleteTextView>(picker.inputId)
+        val modelLabel = view.findViewById<TextView>(picker.labelId)
+        val modelHint = view.findViewById<TextView>(picker.hintId)
 
-        val titleText = TextView(context).apply {
-            text = getString(picker.titleRes)
-            textSize = 16f
-            setPadding(0, 0, 0, dp(16))
-        }
-        container.addView(titleText)
+        setupDropdownEndIcon(modelBox)
 
-        val currentModelText = TextView(context).apply {
-            id = View.generateViewId()
-            text = getString(R.string.current_model, picker.read())
-            setPadding(0, 0, 0, dp(8))
-        }
-        container.addView(currentModelText)
+        listOf<View>(modelLabel, modelInput, modelHint)
+            .forEach { wireTooltip(it, picker.tooltipTag) }
 
-        val modelSpinner = Spinner(context).apply { id = View.generateViewId() }
-        container.addView(modelSpinner)
+        // A picker, not a text field: the list is the only way to change it.
+        modelInput.keyListener = null
+        // The list is rebuilt from the catalog on every view creation, so there is nothing for the
+        // framework to restore — and its replayed setText() is a filtering one, which is what left
+        // the list holding only the selected entry after a day/night switch.
+        modelInput.isSaveEnabled = false
+        // The suppressing overload throughout: a filtering write would narrow the list.
+        modelInput.setText(picker.read(), false)
 
-        val refreshButton = Button(context).apply {
-            id = View.generateViewId()
-            text = getString(R.string.refresh_models)
-        }
-        container.addView(refreshButton)
-
-        if (parent is ViewGroup) {
-            parent.addView(container)
-        }
-
-        // Tag the views for later reference, namespaced so both pickers can share one parent.
-        container.tag = "${picker.tagPrefix}_container"
-        currentModelText.tag = "${picker.tagPrefix}_current_text"
-        modelSpinner.tag = "${picker.tagPrefix}_spinner"
-        refreshButton.tag = "${picker.tagPrefix}_refresh"
-
-        return container
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupModelSelection(container: View, picker: ModelPicker) {
-        val currentModelText =
-            container.findViewWithTag<TextView>("${picker.tagPrefix}_current_text")
-        val modelSpinner = container.findViewWithTag<Spinner>("${picker.tagPrefix}_spinner")
-        val refreshButton = container.findViewWithTag<Button>("${picker.tagPrefix}_refresh")
-
-        if (modelSpinner == null || refreshButton == null) return
-
-        wireTooltip(modelSpinner, picker.tooltipTag)
-        wireTooltip(refreshButton, picker.tooltipTag)
-
-        // Track real user taps so programmatic selection changes never persist a model.
-        var userTouchedSpinner = false
-
-        fun updateModelSpinner(models: List<String>, isLive: Boolean) {
-            val adapter = ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_spinner_item,
-                models
-            )
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            modelSpinner.adapter = adapter
-
-            // Migrate off a retired saved model only for a live catalog, never for the fallback.
-            val currentModel = picker.read()
-            val currentIndex = models.indexOf(currentModel)
-            when {
-                currentIndex >= 0 -> modelSpinner.setSelection(currentIndex)
-                isLive && models.isNotEmpty() -> {
-                    modelSpinner.setSelection(0)
-                    val migrated = models[0]
-                    picker.write(migrated)
-                    currentModelText?.text = getString(R.string.current_model, migrated)
-                }
+        // Tapping anywhere in the field opens the list; the end icon is only a second way in.
+        modelInput.setOnClickListener { modelInput.showDropDown() }
+        modelBox.setEndIconOnClickListener { modelInput.showDropDown() }
+        wireEndIconTooltip(modelBox, picker.tooltipTag)
+        // Only a real pick reaches here, so unlike the Spinner this replaced there is no
+        // programmatic selection to tell apart from a user's.
+        modelInput.setOnItemClickListener { parent, _, position, _ ->
+            val selected = parent.getItemAtPosition(position) as? String
+            if (selected == null || selected == picker.read()) {
+                return@setOnItemClickListener
             }
+            picker.write(selected)
+            Toast.makeText(
+                requireContext(),
+                getString(R.string.model_changed, selected),
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         picker.options.observe(viewLifecycleOwner) { options ->
-            if (options.models.isNotEmpty()) {
-                updateModelSpinner(options.models, options.isLive)
+            // Cleared, not left stale: an empty list means there is no catalog to offer, and a
+            // remembered one would suggest models this key may no longer reach.
+            modelInput.setAdapter(
+                if (options.models.isEmpty()) {
+                    null
+                } else {
+                    DropdownAdapter(modelInput.context, options.models)
+                }
+            )
+            modelHint.setText(if (options.models.isEmpty()) picker.helpHint else picker.liveHint)
+
+            // Migrate off a retired saved model only for a live catalog, never for the fallback:
+            // the field has to show what will actually be requested.
+            if (!options.isLive || options.models.contains(picker.read())) {
+                return@observe
             }
+            val migrated = options.models.firstOrNull() ?: return@observe
+            picker.write(migrated)
+            modelInput.setText(migrated, false)
         }
+    }
+
+    /**
+     * The one Refresh button, shared by both pickers since one catalog walk answers them both.
+     *
+     * The initial fetch is guarded on the chat picker alone: the two are published together, so a
+     * non-empty chat list means the fetch has already happened.
+     */
+    private fun setupModelRefresh(view: View) {
+        val refreshButton = view.findViewById<Button>(R.id.btn_refresh_models)
+        wireTooltip(refreshButton, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
 
         viewModel.geminiModelsLoading.observe(viewLifecycleOwner) { isLoading ->
             refreshButton.isEnabled = !isLoading
@@ -737,43 +738,57 @@ class GeminiSettingsFragment : Fragment() {
                 if (isLoading) getString(R.string.loading) else getString(R.string.refresh_models)
         }
 
-        modelSpinner.setOnTouchListener { _, _ ->
-            userTouchedSpinner = true
-            false
-        }
-
-        modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                // Ignore programmatic selections; only a real user pick persists the model.
-                if (!userTouchedSpinner) return
-                val selectedModel = parent?.getItemAtPosition(position) as? String
-                if (selectedModel != null && selectedModel != picker.read()) {
-                    picker.write(selectedModel)
-                    currentModelText?.text = getString(R.string.current_model, selectedModel)
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.model_changed, selectedModel),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
         refreshButton.setOnClickListener { viewModel.fetchGeminiModels() }
-    }
 
-    /**
-     * Fetches the catalog once for both pickers, since one walk answers them both.
-     *
-     * Guarded on the chat picker alone: the two are published together, so a non-empty chat list
-     * means the fetch has already happened.
-     */
-    private fun fetchModelsIfNeeded() {
         if (viewModel.geminiModels.value?.models.isNullOrEmpty()) {
             viewModel.fetchGeminiModels()
         }
+    }
+}
+
+/**
+ * The model dropdown's rows and, more importantly, its filter.
+ *
+ * [ArrayAdapter]'s own filter narrows the list to whatever is already in the field, so after a
+ * day/night switch — which replays the field's text — the only row left to pick is the one already
+ * chosen. Substring matching over the full list is what a picker needs; identical to the OpenAI
+ * pane's adapter so the two can be lifted into `plugin-api` together.
+ */
+private class DropdownAdapter(
+    context: Context,
+    private val items: List<String>,
+) : ArrayAdapter<String>(context, R.layout.item_dropdown, items.toMutableList()) {
+
+    private val substringFilter = object : Filter() {
+        override fun performFiltering(constraint: CharSequence?): FilterResults {
+            val query = constraint?.toString()?.trim().orEmpty()
+            val matches = if (query.isEmpty()) {
+                items
+            } else {
+                items.filter { it.contains(query, ignoreCase = true) }
+            }
+            return FilterResults().apply {
+                values = matches
+                count = matches.size
+            }
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
+            val rows = results?.values as? List<String> ?: items
+            clear()
+            addAll(rows)
+            notifyDataSetChanged()
+        }
+    }
+
+    override fun getFilter(): Filter = substringFilter
+
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val view = super.getView(position, convertView, parent)
+        // Set on every bind rather than once: these rows are recycled.
+        (view as? TextView)?.setTextColor(context.getColor(R.color.plugin_on_surface))
+        return view
     }
 }
 
