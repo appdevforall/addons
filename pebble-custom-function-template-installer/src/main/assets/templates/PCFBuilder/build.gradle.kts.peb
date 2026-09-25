@@ -13,7 +13,3 @@ plugins {
     id("com.android.application") apply false version "${{AGP_VERSION}}"
     id("com.android.library") apply false version "${{AGP_VERSION}}"
 }
-
-tasks.register<Delete>("clean") {
-    delete(rootProject.layout.buildDirectory)
-}

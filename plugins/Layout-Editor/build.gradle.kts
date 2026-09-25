@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -89,7 +88,7 @@ dependencies {
     implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))
     implementation("io.github.Rosemoe.sora-editor:editor")
     implementation("io.github.Rosemoe.sora-editor:language-textmate")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
 }
 
 // application-as-library packaging trips AAR metadata checks; disabling is intentional

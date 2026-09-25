@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -67,10 +66,11 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 // Disable AAR metadata checks that fail under the plugin-builder pipeline.

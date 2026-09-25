@@ -179,7 +179,7 @@ private fun processRootBuildGradle(projectDir: File, report: Report, dryRun: Boo
         return
     }
     val text = path.readText()
-    val (newText, n) = subFirstMatchToken(
+    val (tokenized, n) = subFirstMatchToken(
         text,
         listOf(
             """(id\("com\.android\.(?:application|library)"\)\s+apply\s+false\s+version\s+")([^"]+)(")""",
@@ -189,11 +189,36 @@ private fun processRootBuildGradle(projectDir: File, report: Report, dryRun: Boo
         "AGP_VERSION",
         spaceAfterSuffix = true,
     )
-    if (n == 0) {
+    val needsBuildscript = !tokenized.contains("kotlin-gradle-plugin")
+    val newText =
+        if (needsBuildscript) {
+            report.ok("$path: pinned the Kotlin Gradle plugin on the buildscript classpath for AGP 9")
+            kotlinBuildscriptBlock(path.name.endsWith(".kts")) + tokenized
+        } else {
+            tokenized
+        }
+    if (n == 0 && !needsBuildscript) {
         report.skip("$path: no 'apply false version' plugin lines found, no changes made")
         return
     }
     writePeb(path, newText, report, dryRun)
+}
+
+private fun kotlinBuildscriptBlock(isKts: Boolean): String {
+    val coordinate = "org.jetbrains.kotlin:kotlin-gradle-plugin:${token("KOTLIN_VERSION")}"
+    val classpath = if (isKts) "classpath(\"$coordinate\")" else "classpath '$coordinate'"
+    return buildString {
+        appendLine("buildscript {")
+        appendLine("    repositories {")
+        appendLine("        google()")
+        appendLine("        mavenCentral()")
+        appendLine("    }")
+        appendLine("    dependencies {")
+        appendLine("        $classpath")
+        appendLine("    }")
+        appendLine("}")
+        appendLine()
+    }
 }
 
 private val NAMESPACE_PATTERNS = listOf(
@@ -230,7 +255,6 @@ private fun processAppBuildGradle(
     module: String,
     report: Report,
     dryRun: Boolean,
-    wrapKotlinInLanguageConditional: Boolean,
 ): String? {
     var path = File(projectDir, "$module/build.gradle.kts")
     if (!path.exists()) path = File(projectDir, "$module/build.gradle")
@@ -258,34 +282,11 @@ private fun processAppBuildGradle(
     text = r1.first
     total += r1.second
 
-    var m = KTS_KOTLIN_PATTERN.find(text)
-    var indent: String? = null
-    var pluginLine: String? = null
+    val m = KTS_KOTLIN_PATTERN.find(text) ?: GROOVY_KOTLIN_PATTERN.find(text)
     if (m != null) {
-        indent = m.groupValues[1]
-        pluginLine = "kotlin(\"android\") version \"${token("KOTLIN_VERSION")}\" "
-    } else {
-        m = GROOVY_KOTLIN_PATTERN.find(text)
-        if (m != null) {
-            indent = m.groupValues[1]
-            val quote = m.groupValues[2]
-            pluginLine = "id $quote" + "org.jetbrains.kotlin.android$quote " +
-                "version $quote${token("KOTLIN_VERSION")}$quote "
-        }
-    }
-
-    if (m != null && indent != null && pluginLine != null) {
-        val replacement = if (wrapKotlinInLanguageConditional) {
-            "$indent\${% if LANGUAGE == 'kotlin' %} \n$indent$pluginLine\n$indent\${% endif %} \n".also {
-                report.ok("$path: wrapped Kotlin plugin declaration in LANGUAGE conditional")
-            }
-        } else {
-            "$indent$pluginLine\n".also {
-                report.ok("$path: templatized Kotlin plugin version (single-language project, no LANGUAGE conditional needed)")
-            }
-        }
-        text = text.substring(0, m.range.first) + replacement + text.substring(m.range.last + 1)
+        text = text.substring(0, m.range.first) + text.substring(m.range.last + 1)
         total += 1
+        report.ok("$path: dropped the Kotlin plugin declaration; AGP 9 compiles Kotlin itself")
     } else {
         report.skip("$path: Kotlin plugin line not found (ok for Java-only projects)")
     }
@@ -531,9 +532,8 @@ private fun runPipeline(
     processRootBuildGradle(projectDir, report, dryRun)
 
     val languages = detectSourceLanguages(projectDir, module)
-    val isMixedLanguage = languages.size > 1
 
-    val basePackage = processAppBuildGradle(projectDir, module, report, dryRun, isMixedLanguage)
+    val basePackage = processAppBuildGradle(projectDir, module, report, dryRun)
 
     processStringsXml(projectDir, module, report, dryRun)
     processJavaKtSources(projectDir, module, basePackage, report, dryRun)

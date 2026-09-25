@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -46,7 +45,7 @@ dependencies {
     compileOnly(files("../../libs/gradle-plugin.jar"))
     compileOnly(files("../../libs/plugin-api.jar"))
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
 }
 
 tasks.matching {
