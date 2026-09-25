@@ -1,5 +1,5 @@
-name: ${{APP_NAME | lower}}
-description: Flutter GetX project created by the Flutter Template plugin
+name: "${{APP_NAME | lower}}"
+description: Flutter GetX project created from a Flutter Templates starter for Code on the Go
 publish_to: 'none'
 version: 1.0.0+1
 
