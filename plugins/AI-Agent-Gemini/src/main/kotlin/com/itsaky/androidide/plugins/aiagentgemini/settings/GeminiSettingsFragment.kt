@@ -32,6 +32,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.plugin.GeminiPlugin
 import com.itsaky.androidide.plugins.aiagentgemini.R
 import com.itsaky.androidide.plugins.aiagentgemini.ui.SecretRevealController
+import com.itsaky.androidide.plugins.aiagentgemini.ui.applyPaneStyling
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -39,6 +40,14 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** The pane's secondary actions, drawn outlined; each section's Save stays filled. */
+private val OUTLINED_BUTTON_IDS = setOf(
+    R.id.btn_clear_api_key,
+    R.id.btn_edit_api_key,
+    R.id.btn_get_free_key,
+    R.id.btn_refresh_models,
+)
 
 /**
  * This backend's settings pane, mounted by whichever screen offers a backend selector.
@@ -108,6 +117,7 @@ class GeminiSettingsFragment : Fragment() {
             GeminiSettingsViewModelFactory { GeminiPlugin.getContext() }
         )[GeminiSettingsViewModel::class.java]
 
+        view.applyPaneStyling(OUTLINED_BUTTON_IDS)
         setupApiKeyUi(view)
         setupModelPicker(view, chatModelPicker())
         setupModelPicker(view, embeddingModelPicker())
@@ -579,6 +589,7 @@ class GeminiSettingsFragment : Fragment() {
             clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.gemini_clip_label), text))
         }.isSuccess
     }
+
 
     /**
      * Put the dropdown chevron on [box]'s end icon.

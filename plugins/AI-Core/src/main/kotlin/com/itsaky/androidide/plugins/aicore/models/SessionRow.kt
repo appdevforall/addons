@@ -83,6 +83,9 @@ object ChatSessionRows {
      * @param selection what the list is doing and which rows are ticked.
      * @param limit how many rows to build, applied *after* the ordering so growing it appends to
      *   what is already on screen rather than reshuffling it. See [SessionPaging].
+     * @param titlePending sessions whose title is still being written; they show [pendingTitle]
+     *   and count as untitled, so a rename started meanwhile does not keep the placeholder.
+     * @param pendingTitle the loading label, resolved from strings.xml by the caller.
      * @return one row per session in [newestFirst] order — a conversation started today is the one
      *   the user came to the list to find, and the order must not depend on which row was written
      *   last.
@@ -93,14 +96,17 @@ object ChatSessionRows {
         untitledTitle: String,
         selection: SessionSelection = SessionSelection.BROWSING,
         limit: Int = Int.MAX_VALUE,
+        titlePending: Set<String> = emptySet(),
+        pendingTitle: String = untitledTitle,
     ): List<SessionRow> = sessions
         .newestFirst()
         .take(limit.coerceAtLeast(0))
         .map { session ->
+            val pending = session.id in titlePending
             SessionRow(
                 id = session.id,
-                title = session.displayTitle ?: untitledTitle,
-                isUntitled = session.displayTitle == null,
+                title = if (pending) pendingTitle else session.displayTitle ?: untitledTitle,
+                isUntitled = pending || session.displayTitle == null,
                 date = session.formattedDate,
                 messageCount = session.messages.size,
                 isActive = session.id == currentSessionId,

@@ -53,7 +53,7 @@
                 android:contentDescription="@string/desc_sidebar_close"
                 android:padding="@dimen/chat_sidebar_button_padding"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_side_panel"
+                android:src="@drawable/ic_side_panel_close"
                 android:tint="@color/plugin_on_surface_variant" />
 
             <Space

@@ -44,6 +44,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_TAB = "agent_chat_tab"
 
         // Tags for the interactive controls on the Agent chat screen (see ChatFragment).
+        /** The toolbar title, which names the conversation that is on screen. */
+        const val TOOLTIP_TAG_CHAT_TITLE = "agent_chat_title"
         const val TOOLTIP_TAG_CONTEXT_FILES = "agent_context_files"
         const val TOOLTIP_TAG_CHAT_INPUT = "agent_chat_input"
         const val TOOLTIP_TAG_CHAT_SEND = "agent_chat_send"
@@ -68,6 +70,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_MESSAGE_RETRY = "agent_message_retry"
         const val TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS = "agent_message_open_settings"
         const val TOOLTIP_TAG_SYSTEM_LOG = "agent_system_log"
+        const val TOOLTIP_TAG_USER_MESSAGE_EXPAND = "agent_user_message_expand"
+        const val TOOLTIP_TAG_MESSAGE_COPY = "agent_message_copy"
 
         // Tags for the interactive controls on the AI Settings screen (see AiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_BACK = "ai_settings_back"
@@ -260,6 +264,21 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             )
         ),
         PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_TITLE,
+            summary = "The chat you are in — named after your first message until you rename it.",
+            detail = """
+                <p>The header names the conversation on screen, so switching
+                chats from the sidebar says which one you landed in.</p>
+                <p>A new chat is named after the first message you send in it,
+                shortened to one line here; <b>Rename</b> on its row in the
+                sidebar gives it a name of your own, and emptying that name puts
+                it back to the first message.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
             tag = TOOLTIP_TAG_CONTEXT_FILES,
             summary = "Attach project files so the agent sees their contents with your next message.",
             detail = """
@@ -289,6 +308,9 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>Anything that writes to the project asks for your approval
                 first, as does starting a Gradle sync or generating from a
                 template.</p>
+                <p>The field scrolls on its own once the prompt outgrows it, and
+                with a hardware keyboard attached <b>Shift+Enter</b> sends while
+                <b>Enter</b> starts a new line.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -552,6 +574,32 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>They stay collapsed to keep the conversation readable — tap the
                 header to expand or collapse one. They are part of the saved
                 session, not messages sent to the model.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_USER_MESSAGE_EXPAND,
+            summary = "Show the rest of your message, or fold it back to four lines.",
+            detail = """
+                <p>A message of yours longer than four lines is shown folded, so a
+                long prompt doesn't push the agent's reply off screen.</p>
+                <p>The arrow points down while folded: tap it to show the whole
+                message. It points up once expanded: tap it again to fold it. The
+                whole message is always sent to the model, folded or not.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MESSAGE_COPY,
+            summary = "Copy this message's text to the clipboard.",
+            detail = """
+                <p>Copies the whole message, including any lines folded out of
+                view, so you can paste it into a file or send it again.</p>
+                <p>More actions for a message will appear beside this one.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
