@@ -14,7 +14,7 @@ Replace hyphens with spaces (APK-Analyzer → "APK Analyzer"). The display name 
 
 The published name on the site
 
-The name in the Code on the Go manager that installs it — the Plugin Manager for a plugin, the Templates manager for a template
+The name in the Code on the Go Extensions Manager — on its Plugins tab for a plugin, its Templates tab for a template
 
 The title/heading in the documentation HTML page
 
@@ -44,7 +44,7 @@ Published name on site
 
 APK Analyzer
 
-Name in the Code on the Go Plugin Manager
+Name in the Extensions Manager, Plugins tab
 
 APK Analyzer
 
@@ -76,7 +76,7 @@ Published name on site
 
 Flutter Templates
 
-Name in the Code on the Go Templates manager
+Name in the Extensions Manager, Templates tab
 
 Flutter Templates
 

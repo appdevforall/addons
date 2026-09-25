@@ -241,12 +241,48 @@ It records the commit the bundle was built from. Your local build does not produ
 
 ## 12. Test it on a device
 
-Copy the `.cgt` to the device Downloads folder, open the Templates manager, then open New
-Project and generate a project from every template you shipped.
-
 A passing check and a clean zip prove nothing about whether the template works. The renderer
 runs with strict variables: a placeholder that no parameter declares fails **at project
 generation**, on the device, and nowhere earlier.
+
+### Install the bundle
+
+1. Copy the `.cgt` onto the device — `adb push out/my-templates.cgt /sdcard/Download/` is
+   enough.
+2. In Code on the Go, open **Preferences → Extensions Manager**. The screen is titled
+   **Plugins & Templates**.
+3. Switch to the **Templates** tab.
+4. Tap the **+** button, bottom right. The system file picker opens.
+5. Browse to your `.cgt` and select it. The picker starts in `CodeOnTheGoProjects`, so use its
+   drawer to reach Downloads.
+6. A dialog headed **Install Template Collection** lists every template in the bundle. Tap
+   **Install**.
+
+The card then reads **Installed**, and the bundle is copied into the IDE's own templates
+directory.
+
+> **Read that dialog.** It names each template, in `templates.json` order, taken from the
+> `name` field of each `template/template.json`. It is the earliest place a missing entry, a
+> wrong order or a typo in a name shows up — before you have generated anything.
+
+Copying the file into Downloads is **not** installing it. The Templates tab lists what it
+finds there as **Not installed — Imported**; step 6 is what installs it. A card marked
+**Bundled** came with the app.
+
+### Exercise it
+
+Open **New Project**. Your templates appear beside the built-in ones. Generate a project from
+every template you shipped, and check the result:
+
+- The `.peb` suffixes are gone, and no `template/` directory came with them.
+- Every placeholder is substituted — look inside the generated files, not just at their names.
+- Any file your template generates that has a strict syntax (`pubspec.yaml`, XML, JSON) still
+  parses. Run it through a real parser rather than reading it.
+
+### Re-installing after a change
+
+Rebuild, push the new file, then install it again the same way. The IDE keys the bundle on its
+file name, so a rebuilt bundle replaces the old one.
 
 ---
 
@@ -383,7 +419,7 @@ The format has no written specification. This part records what the code does.
 |---|---|
 | Format definition | `CodeOnTheGo/templates-impl/.../impl/zip/ZipTemplateConstants.kt` |
 | Project generator | `.../impl/zip/ZipTemplateReader.kt` and `.../impl/zip/ZipRecipeExecutor.kt` |
-| Templates manager reader | `CodeOnTheGo/app/.../templates/manager/parsing/CgtTemplateReader.kt` |
+| Extensions Manager reader | `CodeOnTheGo/app/.../templates/manager/parsing/CgtTemplateReader.kt` |
 | Programmatic builder | `CgtTemplateBuilder` in `libs/plugin-api.jar` |
 
 ## Bundle layout
@@ -422,7 +458,7 @@ An unrecognised entry at the archive root is ignored, which is why
 | Reader | Purpose | Method |
 |---|---|---|
 | `ZipTemplateReader` | Builds the New Project list | Reads `templates.json` by that exact bare name at the archive root, then reads `<path>/template/template.json` for each entry |
-| `CgtTemplateReader` | Shows the Templates manager list | Scans for any entry ending in `/template/template.json`, and ignores `templates.json` |
+| `CgtTemplateReader` | Fills the Extensions Manager Templates tab | Scans for any entry ending in `/template/template.json`, and ignores `templates.json` |
 
 A missing `template.json` makes `ZipTemplateReader` skip that entry with no error.
 
@@ -533,14 +569,24 @@ A bundle published to the gallery does not use it.
 
 ## How a bundle reaches the device
 
-| Path | Mechanism |
-|---|---|
-| Shipped with the app | `core.cgt` only, as an app asset |
-| A user installs one | The Templates manager scans `Environment.TEMPLATES_DIR` and the Downloads folder |
-| A plugin registers one | `IdeTemplateService.registerTemplate(file)` copies it into `TEMPLATES_DIR` under a prefixed name |
+| Path | Mechanism | Shown as |
+|---|---|---|
+| Shipped with the app | `core.cgt`, as an app asset | `Bundled` |
+| A user installs one | Preferences → Extensions Manager → Templates → **+** | `Imported` |
+| A plugin registers one | `IdeTemplateService.registerTemplate(file)` | `Imported` |
 
 The second is the path a gallery download takes. It needs no plugin, no manifest and no
 Kotlin.
+
+**Listing and installing are separate.** The Templates tab scans
+`Environment.TEMPLATES_DIR` *and* the Downloads folder, so a `.cgt` sitting in Downloads
+appears in the list — marked **Not installed**. Installing it is the explicit action behind
+the **+** button, and that is what copies the file into `TEMPLATES_DIR`. Only a bundle in
+`TEMPLATES_DIR` reaches the New Project screen.
+
+Two readers back those two states, which is why a bundle must satisfy both:
+`CgtTemplateReader` populates the list from any `*/template/template.json` it finds, and
+`ZipTemplateReader` builds the New Project entries from `templates.json`.
 
 ## How publishing is wired
 

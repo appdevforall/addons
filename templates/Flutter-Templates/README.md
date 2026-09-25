@@ -20,9 +20,9 @@ Project dialog.
 ## How it works
 
 There is no code. The bundle is a `.cgt` file: a zip of the five directories plus
-`templates.json`. Code on the Go reads it directly, so the templates appear in **New Project**
-once the file is in the Templates manager or the Downloads folder. Nothing to enable, no
-permissions.
+`templates.json`, which Code on the Go reads directly. Install it under **Preferences →
+Extensions Manager → Templates** with the **+** button, and the five templates appear in
+**New Project**. Nothing to enable, no permissions.
 
 Files ending in `.peb` are rendered by Pebble at project-creation time and lose the suffix;
 everything else is copied byte for byte. These templates use three expressions only:
