@@ -20,7 +20,7 @@
 #
 # WHY STORED AND 1980: entries are stored (-0) and every mtime is pinned, so one commit always
 # produces one archive, byte for byte. Compression happens at the HTTP layer -- Cloudflare
-# serves the gallery. This mirrors dev-assets' core.cgt build; see templates/cgt-templates.md.
+# serves the gallery. This mirrors dev-assets' core.cgt build; see templates/README.md.
 #
 set -euo pipefail
 

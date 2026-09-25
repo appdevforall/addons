@@ -1,29 +1,33 @@
 # Project templates
 
 A template adds an entry to the **New Project** screen in Code on the Go. It ships as a
-`.cgt` file: a ZIP that holds a project skeleton plus a small metadata file. One `.cgt` can
-hold several templates.
+`.cgt` file: a ZIP holding one or more project skeletons and their metadata. The IDE reads it
+directly.
 
 A template is not a plugin. It runs no code. It has no `build.gradle.kts`, no
-`AndroidManifest.xml` and no Kotlin. If your idea needs to run code, write a plugin instead —
-see `../plugins/` and the repository `CLAUDE.md`.
+`AndroidManifest.xml` and no Kotlin, and it declares no permissions. If your idea needs to run
+code, write a plugin instead — see [`../plugins/README.md`](../plugins/README.md).
 
-For the format itself, read [`cgt-templates.md`](cgt-templates.md).
+Part 1 below is how to write one. Part 2 is the format reference.
 
 ## Start from `Flutter-Templates`
 
 `templates/Flutter-Templates/` is the reference. Copy it and change what is yours. It is small
 but complete: five templates in one bundle, an `addon.json` with the `template` block, a
-gallery page, both icons, and thumbnails. Every rule below is visible in it.
+gallery page, both icons, and thumbnails. Every rule in Part 1 is visible in it.
 
 It is to a template what `plugins/Random-XKCD/` is to a plugin — the thing to copy, and the
 thing a reviewer compares your submission against.
 
+For a larger example, `core.cgt` in the `dev-assets` repository holds the nine built-in
+Android templates. It exercises parts of the format the Flutter bundle does not: the language
+chooser, user-supplied parameters, and placeholders in directory names.
+
 ---
 
-## Make a template
+# Part 1 — Make a template
 
-### 1. Make the directory
+## 1. Make the directory
 
 Name it in MixedCase with single hyphens, ASCII letters and digits only, as
 `docs/addon-naming-standards.md` describes. `Flutter-Templates`, not `flutter_templates`.
@@ -46,19 +50,19 @@ The first five files describe your addon to the gallery. They stay out of the `.
 archive holds `templates.json` and the directories it names, and nothing else — the build
 takes its file list from `templates.json`, so a file you do not list is never shipped.
 
-### 2. Put your project skeleton under `<TemplateName>/`
+## 2. Put your project skeleton under `<TemplateName>/`
 
 Start from a project that already builds. Copy it in whole, then replace the parts that
 change per project with placeholders.
 
-### 3. Mark the files that need substitution
+## 3. Mark the files that need substitution
 
 Add `.peb` to any file that contains a placeholder. Code on the Go renders it and removes the
 suffix. Every other file is copied byte for byte, so binary files are safe.
 
 `app/build.gradle.kts` becomes `app/build.gradle.kts.peb`.
 
-### 4. Write the placeholders
+## 4. Write the placeholders
 
 The delimiters carry a `$` prefix. This is not stock Pebble syntax.
 
@@ -89,7 +93,7 @@ Values you can use:
 
 You can add your own — see *Ask the user for more* below.
 
-### 5. Use placeholders in paths too
+## 5. Use placeholders in paths too
 
 A directory or a file name is substituted as well.
 
@@ -100,7 +104,7 @@ app/src/main/java/PACKAGE_NAME/MainActivity.kt.peb
 With the package `com.example.myapp` this becomes
 `app/src/main/java/com/example/myapp/MainActivity.kt`. `CLASS_NAME` works the same way.
 
-### 6. Write `<TemplateName>/template/template.json`
+## 6. Write `<TemplateName>/template/template.json`
 
 ```json
 {
@@ -142,7 +146,9 @@ With the package `com.example.myapp` this becomes
 Add `template/thumb.png` for the image on the New Project screen. It is optional, but an
 entry without one looks unfinished.
 
-### 7. Write `templates.json`
+The full field list is in Part 2.
+
+## 7. Write `templates.json`
 
 List each directory, in the order you want them shown. This file is also the build's allow
 list: a directory you leave out is not packaged.
@@ -158,7 +164,7 @@ list: a directory you leave out is not packaged.
 
 Add `"experimental": true` to an entry to hide it unless the user turns experiments on.
 
-### 8. Write `addon.json`
+## 8. Write `addon.json`
 
 This is what the gallery shows.
 
@@ -173,7 +179,7 @@ This is what the gallery shows.
   "template": {
     "id": "com.example.mytemplates",
     "version": "1.0.0",
-    "minAppVersion": "26.36"
+    "minAppVersion": "26.38"
   }
 }
 ```
@@ -187,7 +193,7 @@ template ships no source tarball — the `.cgt` is plain text throughout, so the
 already is the source. The card's Details page links back to your directory in this
 repository.
 
-### 9. Add the page and the icons
+## 9. Add the page and the icons
 
 `my-templates.html` is your gallery page. Copy the shape from
 `../plugins/Random-XKCD/random-xkcd.html`. The rules the checker enforces:
@@ -200,7 +206,7 @@ repository.
 
 `icon_day.png` and `icon_night.png` are both required.
 
-### 10. Check it
+## 10. Check it
 
 ```sh
 uv run --directory tools/addons addons --root "$PWD" check
@@ -209,7 +215,7 @@ uv run --directory tools/addons addons --root "$PWD" check
 Run it from the repository root. `--root` must be absolute. This is the same gate that runs
 on every pull request. Treat its output as the authority.
 
-### 11. Build it and look inside
+## 11. Build it and look inside
 
 ```sh
 ./scripts/build-cgt.sh templates/My-Templates out
@@ -217,8 +223,8 @@ unzip -l out/my-templates.cgt
 ```
 
 This is the same script the publish workflow runs, so a local build and a published one agree.
-It takes the file list from `templates.json`, pins every mtime, and writes a stored,
-sorted archive.
+It takes the file list from `templates.json`, pins every mtime, and writes a stored, sorted
+archive.
 
 Confirm `templates.json` appears bare at the root, with no directory in front of it. The IDE
 looks it up by that exact name and finds nothing otherwise. Confirm too that `addon.json`,
@@ -233,7 +239,7 @@ It records the commit the bundle was built from. Your local build does not produ
 **Never commit the `.cgt`.** The Action builds it on publication. Add `*.cgt` to your
 `.gitignore`.
 
-### 12. Test it on a device
+## 12. Test it on a device
 
 Copy the `.cgt` to the device Downloads folder, open the Templates manager, then open New
 Project and generate a project from every template you shipped.
@@ -366,3 +372,188 @@ Never commit these under your template directory. The checker refuses them:
 
 Keep template content plain text. Images are the exception: `thumb.png` and the two gallery
 icons are PNG.
+
+---
+
+# Part 2 — The `.cgt` format
+
+The format has no written specification. This part records what the code does.
+
+| Component | Where |
+|---|---|
+| Format definition | `CodeOnTheGo/templates-impl/.../impl/zip/ZipTemplateConstants.kt` |
+| Project generator | `.../impl/zip/ZipTemplateReader.kt` and `.../impl/zip/ZipRecipeExecutor.kt` |
+| Templates manager reader | `CodeOnTheGo/app/.../templates/manager/parsing/CgtTemplateReader.kt` |
+| Programmatic builder | `CgtTemplateBuilder` in `libs/plugin-api.jar` |
+
+## Bundle layout
+
+A `.cgt` is a plain ZIP. No custom container, no header.
+
+```
+templates.json                        <- manifest, lists the templates
+cgt-build.properties                  <- provenance, written by the publish workflow
+extensions.jar                        <- optional, custom Pebble extensions
+<TemplateName>/template/template.json <- metadata for this template
+<TemplateName>/template/thumb.png     <- thumbnail for the New Project screen
+<TemplateName>/<any path>.peb         <- a file that Pebble renders
+<TemplateName>/<any path>             <- a file that is copied without change
+```
+
+The names are fixed. `ZipTemplateConstants.kt` declares them:
+
+```kotlin
+const val ARCHIVE_JSON = "templates.json"
+const val META_FOLDER = "template"
+const val META_JSON = "template.json"
+const val META_THUMBNAIL = "thumb.png"
+const val META_EXTENSION_JAR = "extensions.jar"
+const val TEMPLATE_EXTENSION = ".peb"
+```
+
+`extensions.jar` is optional and rarely used. It supplies custom Pebble `Extension` classes,
+which the IDE dexes into `dex_opt/`. Neither `core.cgt` nor `flutter-templates.cgt` uses it.
+
+An unrecognised entry at the archive root is ignored, which is why
+`cgt-build.properties` can sit there safely.
+
+### Two readers, both of which must be satisfied
+
+| Reader | Purpose | Method |
+|---|---|---|
+| `ZipTemplateReader` | Builds the New Project list | Reads `templates.json` by that exact bare name at the archive root, then reads `<path>/template/template.json` for each entry |
+| `CgtTemplateReader` | Shows the Templates manager list | Scans for any entry ending in `/template/template.json`, and ignores `templates.json` |
+
+A missing `template.json` makes `ZipTemplateReader` skip that entry with no error.
+
+## `templates.json`
+
+The root manifest, in **strict** JSON. It names the directory of each template.
+
+```json
+{
+  "templates": [
+      { "path": "FlutterBasic" },
+      { "path": "FlutterBloc" }
+  ]
+}
+```
+
+An entry also accepts `"experimental": true`. The IDE then hides that template unless
+`FeatureFlags.isExperimentsEnabled` is set.
+
+The manifest carries no version and no schema version. The IDE checks nothing about it; the
+repository's `addons check` does, which is why a typo fails in CI rather than silently on a
+device.
+
+## `template/template.json`
+
+One file per template, in **JSON5** — unquoted keys are accepted, and `core.cgt` uses them
+(`{identifier: "APP_NAME"}`). Quote them anyway.
+
+| Field | Purpose |
+|---|---|
+| `name` | The name on the New Project screen |
+| `description` | One line under the name |
+| `version` | The template version, such as `"1.0.0"` |
+| `tooltipTag` | The in-app help tag, such as `"template.flutter.basic"` |
+| `defaultAppName` | Optional. Pre-fills the app name field |
+| `parameters.required` | `appName`, `packageName`, `saveLocation` |
+| `parameters.optional` | `language`, `minsdk` — omit one to hide that field |
+| `parameters.user.text` | Extra text fields: `label`, `identifier`, `default` |
+| `parameters.user.checkbox` | Extra checkboxes: `label`, `identifier`, `default` |
+| `system` | Values the IDE supplies: `agpVersion`, `kotlinVersion`, `gradleVersion`, `compileSdk`, `targetSdk`, `javaSourceCompat`, `javaTargetCompat`, `javaTarget` |
+
+Each entry maps a name to an `identifier`, and the identifier is the token the `.peb` files
+use.
+
+## Rendering
+
+The engine runs with `strictVariables(true)`. An identifier no parameter declares fails the
+render — on the device, at project generation, and nowhere earlier.
+
+Three identifiers are injected at render time and no `template.json` declares them:
+`CLASS_NAME`, `COGO_CGT_PATH` and `COGO_CGT_DIRECTORY`.
+
+### Path transformation
+
+`ZipRecipeExecutor.renderProject` transforms each entry path in this order:
+
+1. Entries outside `<TemplateName>/` are ignored, and `<TemplateName>/template/` is dropped.
+   The metadata never reaches the new project.
+2. If `parameters.optional.language` is declared and the user picked a language, the other
+   language is filtered out. A Kotlin project skips every `*.java` and `*.java.peb`; a Java
+   project skips every `*.kt` and `*.kt.peb`. This is why a template that offers the choice
+   ships both.
+3. A path segment matching a **checkbox identifier** acts as a flag. The segment is removed
+   when the box is checked, and the whole entry is skipped when it is not.
+4. The literal text `PACKAGE_NAME` in the path becomes the package as directories
+   (`com.foo.bar` → `com/foo/bar`). The literal `CLASS_NAME` becomes the class name.
+5. The `.peb` suffix is removed from the output name.
+6. The output path is canonicalized. An entry that escapes the project root is refused.
+
+`core.cgt` shows steps 3 and 4 together:
+
+```
+CodeOnTheGoPlugin/src/main/kotlin/PACKAGE_NAME/PLUGIN_SAMPLE/fragments/CLASS_NAMEFragment.kt.peb
+```
+
+With "Include Sample Code" checked and the package `com.foo`, this becomes
+`src/main/kotlin/com/foo/fragments/MyPluginFragment.kt`. With the box clear, it disappears.
+
+## How the archive is built
+
+`scripts/build-cgt.sh` derives its file list from `templates.json`, writes the provenance
+record, then:
+
+```bash
+export TZ=UTC
+find <files> -exec touch -t 198001010000 {} +
+find <files> | LC_ALL=C sort | zip -0 -D -X -q <slug>.cgt -@
+```
+
+| Flag | Effect |
+|---|---|
+| `-0` | Store every entry. No compression inside the ZIP |
+| `-D` | Write no directory entries |
+| `-X` | Strip uid, gid and extended attributes |
+| `LC_ALL=C sort` | Fix the entry order |
+| `touch -t 198001010000` | Fix every mtime to 1980-01-01 |
+
+One commit therefore produces one archive, byte for byte. There is no compression step:
+Cloudflare compresses on the fly for the gallery.
+
+`core.cgt` is built by the same incantation in the `dev-assets` repository, which is where
+the shape came from. It additionally produces a Brotli copy, because the app fetches it from
+a plain web host that does no content negotiation.
+
+A third producer exists: `CgtTemplateBuilder` in `plugin-api.jar` writes the same layout at
+run time through `ZipOutputStream`. It is how a plugin can register a template of its own.
+A bundle published to the gallery does not use it.
+
+## How a bundle reaches the device
+
+| Path | Mechanism |
+|---|---|
+| Shipped with the app | `core.cgt` only, as an app asset |
+| A user installs one | The Templates manager scans `Environment.TEMPLATES_DIR` and the Downloads folder |
+| A plugin registers one | `IdeTemplateService.registerTemplate(file)` copies it into `TEMPLATES_DIR` under a prefixed name |
+
+The second is the path a gallery download takes. It needs no plugin, no manifest and no
+Kotlin.
+
+## How publishing is wired
+
+A directory under `templates/` holding `templates.json` is discovered as an addon — the rule
+is deliberately separate from the plugin one, which requires a `build.gradle.kts` applying the
+plugin-builder. From there:
+
+| Stage | What happens |
+|---|---|
+| `addons check` | Structure, naming, metadata. Runs on every pull request |
+| `check-toolchain.yml` | Also lints the bundle sources and builds every `.cgt` |
+| `publish-addons.yml` | Zips the bundle and uploads `dl/<slug>.cgt` to Cloudflare R2 |
+| `catalog.json` | Gains an entry with `type: "template"` and no `sourceTarball` |
+
+The metadata a plugin keeps in its `AndroidManifest.xml` lives in `addon.json` under
+`template` instead: `id`, `version` and `minAppVersion`.

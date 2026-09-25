@@ -21,7 +21,7 @@ Read the area's own README before working in it. This file holds only what is tr
 
 Working on a plugin means reading `plugins/README.md` first: the `libs/` coupling, the credential store, the manifest shape, build provenance and the tooltip wiring all live there, and each has a failure that a green build does not catch.
 
-The format reference for `.cgt` is [`templates/cgt-templates.md`](templates/cgt-templates.md).
+`templates/README.md` is both halves: how to write a template, then the `.cgt` format reference. The format has no other written specification.
 
 ## Git workflow
 

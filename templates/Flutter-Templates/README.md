@@ -37,8 +37,7 @@ The `.cgt` is **never committed**. The publish workflow generates it. To build o
 unzip -l out/flutter-templates.cgt
 ```
 
-See [`../README.md`](../README.md) for authoring guidance and
-[`../cgt-templates.md`](../cgt-templates.md) for the format.
+See [`../README.md`](../README.md) for authoring guidance and the format reference.
 
 ## This replaces the Flutter Templates plugin
 
