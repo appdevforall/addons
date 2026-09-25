@@ -40,8 +40,7 @@
           sit beside the field: the icon has a real touch target, and it is the same control the
           other AI plugins' credential fields carry. Nothing endIcon-related is declared here —
           SecretRevealController sets the mode, drawable, description and listener in code, because
-          Material 1.10 never reads app:endIconDrawable and a custom icon declared in XML draws
-          blank.
+          an end icon declared as app:endIconDrawable here draws blank inside the host.
         -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/gemini_api_key_box"
@@ -113,7 +112,7 @@
 
     <!-- Model. One dropdown, the same control the OpenAI pane uses: the catalog is whatever the
          key can reach, so the list is the only way to change it. The chevron is not declared here —
-         Material 1.10 never reads app:endIconDrawable, so the icon a layout asks for draws blank;
+         declared as app:endIconDrawable it draws blank inside the host, so
          setupDropdownEndIcon() sets it on every box in code. -->
 
     <TextView
@@ -140,7 +139,6 @@
             android:layout_height="wrap_content"
             android:completionThreshold="0"
             android:inputType="none"
-            android:maxLines="1"
             android:popupBackground="@color/plugin_surface" />
     </com.google.android.material.textfield.TextInputLayout>
 
@@ -179,7 +177,6 @@
             android:layout_height="wrap_content"
             android:completionThreshold="0"
             android:inputType="none"
-            android:maxLines="1"
             android:popupBackground="@color/plugin_surface" />
     </com.google.android.material.textfield.TextInputLayout>
 

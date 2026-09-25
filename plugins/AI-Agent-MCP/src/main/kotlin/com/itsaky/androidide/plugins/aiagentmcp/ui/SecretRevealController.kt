@@ -37,8 +37,8 @@ internal class SecretRevealController(
     /**
      * Take over [box]'s end icon and mask the field.
      *
-     * The drawable is set here rather than in the layout because Material 1.10 never reads
-     * `app:endIconDrawable`, so a custom end icon declared in XML draws blank.
+     * The drawable is set here rather than in the layout because an end icon declared as
+     * `app:endIconDrawable` draws blank inside the host.
      */
     fun attach() {
         // The box exists only to carry the end icon: the dialog's other fields are plain EditTexts,

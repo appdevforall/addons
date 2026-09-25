@@ -202,9 +202,9 @@ class OpenAiSettingsFragment : Fragment() {
     /**
      * Put the dropdown chevron on [box]'s end icon.
      *
-     * The drawable is set here rather than in the layout because Material 1.10 never reads
-     * `app:endIconDrawable`, so a custom end icon declared in XML draws blank — the same reason
-     * [SecretRevealController] sets the reveal icon in code. Without a visible chevron the field
+     * The drawable is set here rather than in the layout because an end icon declared as
+     * `app:endIconDrawable` draws blank inside the host — the same reason [SecretRevealController]
+     * sets the reveal icon in code. Without a visible chevron the field
      * reads as a plain, read-only text box rather than a list to open.
      */
     private fun setupDropdownEndIcon(box: TextInputLayout) {

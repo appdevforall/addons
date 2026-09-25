@@ -12,7 +12,6 @@
     <dimen name="space_xl">24dp</dimen>
 
     <dimen name="radius_md">8dp</dimen>
-    <dimen name="radius_lg">12dp</dimen>
 
     <dimen name="text_micro">11sp</dimen>
     <dimen name="text_small">13sp</dimen>
