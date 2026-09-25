@@ -388,9 +388,8 @@ Already in place:
 | P02 | `catalog.TYPES` maps `templates` to the type `template`. |
 | P03 | `site/catalog.schema.json` accepts `"template"` in the `type` enum. |
 
-The `.cgt` is **never committed**. A GitHub Action generates it at publication. The plan is in
-[`flutter-cgt-migration-plan.md`](flutter-cgt-migration-plan.md); community guidance is in
-[`README.md`](README.md).
+The `.cgt` is **never committed**. A GitHub Action generates it at publication. Community
+guidance for writing a template is in [`README.md`](README.md).
 
 ---
 
@@ -415,7 +414,7 @@ applies to them.
 | `AndroidManifest.xml`, `build.gradle.kts`, `FlutterTemplate.kt`, the icons | Removed. A `.cgt` needs none of them |
 | `addon.json` | Kept, and extended to carry the values that the manifest used to hold |
 
-Settled. The detail is in [`flutter-cgt-migration-plan.md`](flutter-cgt-migration-plan.md).
+How it was settled (ADFA-6252):
 
 | Question | Answer |
 |---|---|
