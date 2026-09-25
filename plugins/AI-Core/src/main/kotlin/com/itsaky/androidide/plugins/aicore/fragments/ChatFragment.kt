@@ -1,13 +1,16 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -30,6 +33,8 @@ import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.managers.ProjectKey
 import com.itsaky.androidide.plugins.aicore.models.AgentState
+import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
+import com.itsaky.androidide.plugins.aicore.models.SessionRow
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
@@ -55,6 +60,9 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private companion object {
         /** Tag the approval dialog is shown under, so it can be found again after recreation. */
         const val APPROVAL_DIALOG_TAG = "approval_dialog"
+
+        /** Saved-state key for [pendingExportSessionId], which must outlive the picker's round trip. */
+        const val STATE_PENDING_EXPORT = "pending_export_session_id"
     }
 
     private var _binding: FragmentChatBinding? = null
@@ -79,6 +87,31 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         }
     }
 
+    /**
+     * The chat Export was picked for, held while the system file picker is up: the picker answers
+     * with a destination only, and the chat may have grown by the time it does.
+     */
+    private var pendingExportSessionId: String? = null
+
+    /**
+     * The system picker for where an exported chat goes. Registered as a field, since a launcher
+     * must exist before the fragment is started; a null Uri is the user cancelling.
+     */
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(ChatTranscript.MIME_TYPE)
+    ) { uri ->
+        val sessionId = pendingExportSessionId
+        pendingExportSessionId = null
+        if (uri != null && sessionId != null) writeExport(sessionId, uri)
+    }
+
+    /** The system picker for a transcript to import; a null Uri is the user cancelling. */
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) readImport(uri)
+    }
+
     /** The message list's layout-declared padding, before any cutout inset is added. */
     private val basePadding = Rect()
 
@@ -98,11 +131,21 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     /** Shows this plugin's tooltip for [tag] when [view] is long-pressed (Tier 1/2 + guide). */
     private fun wireTooltip(view: View, tag: String) {
-        view.setOnLongClickListener { anchor ->
-            val service = tooltipService ?: return@setOnLongClickListener false
-            service.showTooltip(anchor, AiCorePlugin.TOOLTIP_CATEGORY, tag)
-            true
-        }
+        view.setOnLongClickListener { anchor -> showTooltip(anchor, tag) }
+    }
+
+    /**
+     * Shows this plugin's tooltip for [tag] on [anchor] now.
+     *
+     * [anchor] must sit in an Activity or Dialog window: the host's tooltip is a PopupWindow, and
+     * one anchored inside another PopupWindow throws BadTokenException and takes the IDE down.
+     *
+     * @return false when the tooltip service is unavailable, so the long press is not consumed.
+     */
+    private fun showTooltip(anchor: View, tag: String): Boolean {
+        val service = tooltipService ?: return false
+        service.showTooltip(anchor, AiCorePlugin.TOOLTIP_CATEGORY, tag)
+        return true
     }
 
     /**
@@ -171,6 +214,13 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         super.onSaveInstanceState(outState)
         // The process can be killed while backgrounded even though rotation never recreates us.
         composer?.saveState(outState)
+        // The same holds while the export picker is up, which is exactly when the IDE is backgrounded.
+        outState.putString(STATE_PENDING_EXPORT, pendingExportSessionId)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        pendingExportSessionId = savedInstanceState?.getString(STATE_PENDING_EXPORT)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -326,8 +376,12 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             viewModel = viewModel,
             scope = viewLifecycleOwner.lifecycleScope,
             wireTooltip = ::wireTooltip,
+            showTooltip = ::showTooltip,
+            showMessage = ::showInfoSnackbar,
             dialogContext = { if (isAdded) themedDialogContext() else null },
             onOpenSettings = ::openSettingsFragment,
+            onExportChat = ::launchExport,
+            onImportChat = ::launchImport,
             onOpenChanged = { open ->
                 sidebarBackCallback.isEnabled = open
                 // A panel over the chat with the keyboard still up leaves the list two rows tall.
@@ -352,6 +406,70 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
      */
     private fun themedDialogContext(): Context =
         ContextThemeWrapper(requireContext(), R.style.PluginTheme)
+
+    /**
+     * Asks the system file picker where to save [row]'s chat, suggesting a name from its title.
+     *
+     * @param row the conversation to export.
+     */
+    private fun launchExport(row: SessionRow) {
+        pendingExportSessionId = row.id
+        try {
+            exportLauncher.launch(ChatTranscript.fileName(row.title))
+        } catch (e: ActivityNotFoundException) {
+            pendingExportSessionId = null
+            AiCorePlugin.getContext()?.logger?.warn("ChatFragment: no picker to export with", e)
+            showInfoSnackbar(getString(R.string.session_picker_unavailable))
+        }
+    }
+
+    /** Asks the system file picker for a transcript to read back as a new chat. */
+    private fun launchImport() {
+        try {
+            // text/* rather than text/plain alone: some providers label a .txt file text/x-log.
+            importLauncher.launch(arrayOf("text/*"))
+        } catch (e: ActivityNotFoundException) {
+            AiCorePlugin.getContext()?.logger?.warn("ChatFragment: no picker to import with", e)
+            showInfoSnackbar(getString(R.string.session_picker_unavailable))
+        }
+    }
+
+    /**
+     * Writes a chat to the file the picker returned and says how that went.
+     *
+     * On the fragment's own scope, not the view's: a tab switch mid-write must not abandon it.
+     *
+     * @param sessionId the chat to export.
+     * @param uri where the picker said to write it.
+     */
+    private fun writeExport(sessionId: String, uri: Uri) {
+        val resolver = requireContext().contentResolver
+        lifecycleScope.launch {
+            val message = when (viewModel.exportSession(sessionId, resolver, uri)) {
+                ChatViewModel.ExportResult.EXPORTED -> R.string.session_exported
+                ChatViewModel.ExportResult.MISSING -> R.string.session_export_missing
+                ChatViewModel.ExportResult.FAILED -> R.string.session_export_failed
+            }
+            showInfoSnackbar(getString(message))
+        }
+    }
+
+    /**
+     * Imports the file the picker returned as a new chat, opening it, or reports that it could not.
+     *
+     * @param uri the file the user picked.
+     */
+    private fun readImport(uri: Uri) {
+        val resolver = requireContext().contentResolver
+        lifecycleScope.launch {
+            if (!viewModel.importTranscript(resolver, uri)) {
+                showInfoSnackbar(getString(R.string.session_import_failed))
+                return@launch
+            }
+            sidebar?.close()
+            showInfoSnackbar(getString(R.string.session_imported))
+        }
+    }
 
     private fun setupInputArea() {
         binding.sendButton.setOnClickListener {

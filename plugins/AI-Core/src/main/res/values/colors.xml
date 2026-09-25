@@ -21,6 +21,8 @@
     <color name="plugin_surface_variant">#F5F5F4</color>
     <color name="plugin_on_surface_variant">#525252</color>
     <color name="plugin_surface_dim">#F0F0EE</color>
+    <!-- Raised surfaces over the sidebar: menus. -->
+    <color name="plugin_surface_container">#FFFFFF</color>
 
     <color name="plugin_outline">#A3A3A3</color>
     <color name="plugin_outline_variant">#E5E5E5</color>

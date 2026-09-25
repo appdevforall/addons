@@ -6,7 +6,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.PopupMenu
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -49,13 +48,22 @@ import kotlinx.coroutines.launch
  * @param wireTooltip attaches this plugin's long-press help for a tag to a view. Rows are the
  *   exception: long-pressing one picks it, so their help hangs off the section header and the row's
  *   own ⋮ instead.
+ * @param showTooltip shows this plugin's help for a tag on a view right away. The sidebar menus use
+ *   it to put an entry's help on the button that opened them, since their own rows cannot host it.
  * @param dialogContext an Activity-backed, plugin-themed Context for the rename and delete prompts,
  *   supplied by the fragment. A Dialog takes its window token from its Context, and the
  *   application-scoped plugin Context the panel itself is inflated with has a package name no
  *   PackageManager knows — showing a Dialog on it throws BadTokenException and takes the IDE down.
  *   Null once the fragment is detached, which is a prompt that must simply not open.
+ * @param showMessage shows a message on the chat screen, for a sidebar menu entry that is
+ *   unavailable and says why when tapped.
  * @param onOpenSettings opens the Agent settings screen, which the fragment owns because the same
  *   shortcut exists on error messages in the transcript.
+ * @param onExportChat saves a row's conversation to a .txt file. The fragment owns it, since the
+ *   system file picker reports back through an activity-result launcher only a Fragment can hold.
+ * @param onImportChat reads a .txt file back as a new conversation, for the same reason. Offered
+ *   from the header's + menu beside New chat rather than from a row: it starts a chat, it acts on
+ *   none.
  * @param onOpenChanged the panel started opening or closing. Every route out of it ends here —
  *   the scrim, Back, picking a chat, any footer action — so the fragment has one place to keep the
  *   Back handler and the soft keyboard in step with it rather than one per exit.
@@ -65,8 +73,12 @@ internal class ChatSidebarController(
     private val viewModel: ChatViewModel,
     private val scope: CoroutineScope,
     private val wireTooltip: (View, String) -> Unit,
+    showTooltip: (View, String) -> Boolean,
+    showMessage: (String) -> Unit,
     private val dialogContext: () -> Context?,
     private val onOpenSettings: () -> Unit,
+    private val onExportChat: (SessionRow) -> Unit,
+    private val onImportChat: () -> Unit,
     private val onOpenChanged: (Boolean) -> Unit,
 ) {
 
@@ -106,6 +118,12 @@ internal class ChatSidebarController(
     private var childDialog: AlertDialog? = null
 
     /**
+     * The + menu and the rows' options menus, one at a time. Dismissed with the panel's views for
+     * the same reason as [childDialog].
+     */
+    private val popupMenu = SidebarPopupMenu(showTooltip, showMessage)
+
+    /**
      * True from the moment the panel starts opening until it has finished closing. A flow rather
      * than a plain field so [observeSessions] can stand down while the panel is hidden.
      */
@@ -119,10 +137,7 @@ internal class ChatSidebarController(
         binding.btnChatSidebar.setOnClickListener { open() }
         binding.sidebarScrim.setOnClickListener { close() }
         binding.chatSidebar.btnSidebarClose.setOnClickListener { close() }
-        binding.chatSidebar.sidebarNewChat.setOnClickListener {
-            viewModel.createNewSession()
-            close()
-        }
+        binding.chatSidebar.btnSidebarAdd.setOnClickListener(::showAddMenu)
         binding.chatSidebar.sidebarClearChat.setOnClickListener { confirmClearChat() }
         binding.chatSidebar.sidebarSettings.setOnClickListener {
             onOpenSettings()
@@ -136,7 +151,7 @@ internal class ChatSidebarController(
         wireTooltip(binding.btnChatSidebar, AiCorePlugin.TOOLTIP_TAG_CHAT_MENU)
         // The same help as the toolbar button it undoes — both describe the panel as a whole.
         wireTooltip(binding.chatSidebar.btnSidebarClose, AiCorePlugin.TOOLTIP_TAG_CHAT_MENU)
-        wireTooltip(binding.chatSidebar.sidebarNewChat, AiCorePlugin.TOOLTIP_TAG_SIDEBAR_NEW_CHAT)
+        wireTooltip(binding.chatSidebar.btnSidebarAdd, AiCorePlugin.TOOLTIP_TAG_SIDEBAR_ADD)
         wireTooltip(binding.chatSidebar.sidebarClearChat, AiCorePlugin.TOOLTIP_TAG_SIDEBAR_CLEAR_CHAT)
         wireTooltip(binding.chatSidebar.sidebarSettings, AiCorePlugin.TOOLTIP_TAG_SIDEBAR_SETTINGS)
         // The rows themselves cannot carry this — long-pressing one picks it — so the header the
@@ -162,6 +177,7 @@ internal class ChatSidebarController(
         _binding?.sidebarScrim?.animate()?.cancel()
         childDialog?.dismiss()
         childDialog = null
+        popupMenu.dismiss()
         _binding = null
     }
 
@@ -398,29 +414,65 @@ internal class ChatSidebarController(
     }
 
     /**
-     * Opens a row's Rename/Delete menu.
+     * Opens the + menu: New chat, then Import chat.
+     *
+     * @param anchor the + button, which the menu hangs under.
+     */
+    private fun showAddMenu(anchor: View) {
+        if (_binding == null) return
+        popupMenu.show(
+            anchor,
+            listOf(
+                SidebarPopupMenu.Item(
+                    icon = R.drawable.ic_add_comment,
+                    label = R.string.menu_new_chat,
+                    tooltipTag = AiCorePlugin.TOOLTIP_TAG_SIDEBAR_NEW_CHAT,
+                ) {
+                    viewModel.createNewSession()
+                    close()
+                },
+                SidebarPopupMenu.Item(
+                    icon = R.drawable.ic_upload_file,
+                    label = R.string.sidebar_import_chat,
+                    tooltipTag = AiCorePlugin.TOOLTIP_TAG_CHAT_IMPORT,
+                    onClick = onImportChat,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Opens a row's options menu: Rename, Export and Delete.
      *
      * @param row the conversation the row shows.
      * @param anchor the row's overflow button, which the menu hangs under; its Context is the
      *   themed one the list was inflated with, so the menu follows the IDE's day/night setting.
      */
     private fun showRowMenu(row: SessionRow, anchor: View) {
-        val popup = PopupMenu(anchor.context, anchor)
-        popup.menuInflater.inflate(R.menu.chat_session_row_menu, popup.menu)
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.menu_session_rename -> {
-                    showRenameDialog(row)
-                    true
-                }
-                R.id.menu_session_delete -> {
-                    confirmDelete(row)
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
+        if (_binding == null) return
+        popupMenu.show(
+            anchor,
+            listOf(
+                SidebarPopupMenu.Item(
+                    icon = R.drawable.ic_edit,
+                    label = R.string.session_rename,
+                    tooltipTag = AiCorePlugin.TOOLTIP_TAG_CHAT_SESSIONS,
+                ) { showRenameDialog(row) },
+                SidebarPopupMenu.Item(
+                    icon = R.drawable.ic_download,
+                    label = R.string.session_export,
+                    tooltipTag = AiCorePlugin.TOOLTIP_TAG_CHAT_EXPORT,
+                    // An empty chat would export as a header and nothing else.
+                    unavailableReason = R.string.session_export_empty.takeIf { row.messageCount == 0 },
+                ) { onExportChat(row) },
+                SidebarPopupMenu.Item(
+                    icon = R.drawable.ic_delete,
+                    label = R.string.session_delete,
+                    tooltipTag = AiCorePlugin.TOOLTIP_TAG_CHAT_SESSIONS,
+                    tint = R.color.plugin_error,
+                ) { confirmDelete(row) },
+            ),
+        )
     }
 
     /**

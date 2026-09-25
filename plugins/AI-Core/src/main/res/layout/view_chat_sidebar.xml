@@ -35,8 +35,8 @@
 
         <!--
           The bar itself is not the button: the close icon is on the leading edge, where it lands
-          under the toolbar button that opened the panel, and New chat is pushed to the trailing
-          edge by the Space between them. Only sidebar_new_chat is clickable.
+          under the toolbar button that opened the panel, and the + button, whose menu starts a new
+          chat or imports one, is pushed to the trailing edge by the Space between them.
         -->
         <LinearLayout
             android:id="@+id/sidebar_browse_bar"
@@ -61,37 +61,18 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1" />
 
-            <LinearLayout
-                android:id="@+id/sidebar_new_chat"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:background="@drawable/bg_sidebar_action"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="@dimen/chat_sidebar_row_padding"
-                android:paddingEnd="@dimen/chat_sidebar_row_padding">
-
-                <ImageView
-                    android:layout_width="@dimen/chat_sidebar_icon_size"
-                    android:layout_height="@dimen/chat_sidebar_icon_size"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_add"
-                    android:tint="@color/plugin_primary" />
-
-                <!-- wrap_content, so a long translation pushes the group wider rather than
-                     ellipsising; the Space beside it gives up its width first. -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/chat_sidebar_row_gap"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/menu_new_chat"
-                    android:textColor="@color/plugin_on_surface"
-                    android:textStyle="bold" />
-            </LinearLayout>
+            <!-- Material icon button. Opens a menu rather than acting itself: New chat and Import
+                 chat both start a conversation, so they share this one entry point. -->
+            <ImageButton
+                android:id="@+id/btn_sidebar_add"
+                android:layout_width="@dimen/chat_sidebar_button_size"
+                android:layout_height="@dimen/chat_sidebar_button_size"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/desc_sidebar_add"
+                android:padding="@dimen/chat_sidebar_button_padding"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_add"
+                android:tint="@color/plugin_primary" />
         </LinearLayout>
 
         <!--

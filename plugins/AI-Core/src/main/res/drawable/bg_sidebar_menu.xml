@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A sidebar menu's container: Material 3's extra-small (4dp) corners on a surface-container fill.
+  Plugin colors rather than theme attributes, so it follows the IDE's day/night setting instead of
+  whatever the host theme would resolve.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/plugin_surface_container" />
+    <corners android:radius="@dimen/sidebar_menu_corner_radius" />
+</shape>
