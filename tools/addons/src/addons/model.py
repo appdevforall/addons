@@ -48,8 +48,36 @@ def manifest_value(addon: Path, key: str) -> str:
     return ""
 
 
-def plugin_id(addon: Path) -> str:
+def template_block(addon: Path) -> dict:
+    """The `template` object in a template addon's addon.json.
+
+    A template has no AndroidManifest.xml, so the three values a plugin keeps
+    there live here instead (ADFA-6252). Returns {} for a plugin, so each
+    accessor below can ask without knowing the addon kind.
+    """
+    from addons import discover
+    if not discover.is_template(addon):
+        return {}
+    try:
+        return metadata(addon).get("template") or {}
+    except RuntimeError:
+        return {}          # addon.json missing or invalid; check.py reports it
+
+
+def addon_id(addon: Path) -> str:
+    """The id the catalog publishes as `addonId`.
+
+    `plugin.id` has no meaning for a template, which declares `template.id`.
+    """
+    block = template_block(addon)
+    if block:
+        return block.get("id", "")
     return manifest_value(addon, "plugin.id")
+
+
+# The catalog field was renamed to addonId at schemaVersion 2; this alias keeps
+# the older call sites working while they are updated.
+plugin_id = addon_id
 
 
 def version(addon: Path) -> str:
@@ -59,7 +87,12 @@ def version(addon: Path) -> str:
     wins. Otherwise the builder replaces ${pluginVersion} with versionName
     plus a build-timestamp suffix; the catalog reports the semantic part,
     since the suffix changes on every build and carries no meaning.
+
+    A template declares it in addon.json: there is no manifest and no build.
     """
+    block = template_block(addon)
+    if block:
+        return block.get("version", DEFAULT_VERSION)
     declared = manifest_value(addon, "plugin.version")
     if declared and not declared.startswith("${"):
         return declared
@@ -82,7 +115,13 @@ def min_app_version(addon: Path) -> str:
     The app's release version is YY.ww. Thirteen addons still carry the
     legacy "1.0.0" placeholder, which states no real minimum, so it is
     reported as no minimum rather than invented.
+
+    A template declares it as template.minAppVersion in addon.json.
     """
+    block = template_block(addon)
+    if block:
+        declared = block.get("minAppVersion", "")
+        return "" if declared == LEGACY_MIN_VERSION else declared
     declared = manifest_value(addon, "plugin.min_ide_version")
     if not declared or declared == LEGACY_MIN_VERSION:
         return ""          # the legacy placeholder states no real minimum

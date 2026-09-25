@@ -6,6 +6,13 @@
 **/.DS_Store
 **/*.keystore
 **/*.cgp
+# Template bundles and their provenance record are generated, never committed
+# (ADFA-6252). Each template addon also ignores its own, but keep the repo-wide
+# rule beside *.cgp so a stray one anywhere cannot be added by accident.
+**/*.cgt
+**/cgt-build.properties
+# Where the publish and build workflows stage artifacts
+dist/
 **/release.properties
 **/RecentProject_database*
 **/agent/

@@ -45,16 +45,87 @@ def make(tmp_path: Path, build_extra: str = "") -> Path:
 def test_builds_a_valid_entry(tmp_path):
     dist = make(tmp_path)
     result = catalog.build(tmp_path, dist)
-    assert result["schemaVersion"] == 1
+    assert result["schemaVersion"] == 2
     entry = result["addons"][0]
     assert entry["type"] == "plugin"
     assert entry["slug"] == "keystore-generator"
     assert entry["name"] == "Keystore Generator"
-    assert entry["pluginId"] == "com.appdevforall.keygen.plugin"
+    assert entry["addonId"] == "com.appdevforall.keygen.plugin"
     assert entry["version"] == "1.0.0"
-    assert entry["download"]["url"].startswith("https://")
+    assert entry["download"]["url"].endswith("/dl/keystore-generator.cgp")
     assert entry["download"]["size"] == 3
     assert len(entry["download"]["sha256"]) == 64
+    # a plugin still ships one; only a template omits it
+    assert entry["sourceTarball"]["url"].endswith("/src/keystore-generator-src.tar.gz")
+
+
+TEMPLATE_METADATA = METADATA | {
+    "template": {
+        "id": "org.appdevforall.fluttertemplates",
+        "version": "1.0.0",
+        "minAppVersion": "26.38",
+    },
+}
+
+
+def make_template(tmp_path: Path, with_tarball: bool = False) -> Path:
+    """A template addon: no Gradle build, no manifest, metadata in addon.json."""
+    addon = tmp_path / "templates" / "Flutter-Templates"
+    (addon / "FlutterBasic" / "template").mkdir(parents=True)
+    (addon / "templates.json").write_text(
+        json.dumps({"templates": [{"path": "FlutterBasic"}]}))
+    (addon / "FlutterBasic" / "template" / "template.json").write_text(
+        json.dumps({"name": "Flutter Basic", "description": "A starter"}))
+    (addon / "addon.json").write_text(json.dumps(TEMPLATE_METADATA))
+    dist = tmp_path / "dist"
+    dist.mkdir(exist_ok=True)
+    (dist / "flutter-templates.cgt").write_bytes(b"cgt")
+    if with_tarball:
+        (dist / "flutter-templates-src.tar.gz").write_bytes(b"tar")
+    site = tmp_path / "site"
+    site.mkdir(exist_ok=True)
+    (site / "catalog.schema.json").write_text(
+        Path(__file__).parents[3].joinpath("site/catalog.schema.json").read_text())
+    return dist
+
+
+def test_a_template_entry_downloads_a_cgt(tmp_path):
+    dist = make_template(tmp_path)
+    entry = catalog.build(tmp_path, dist)["addons"][0]
+    assert entry["type"] == "template"
+    assert entry["slug"] == "flutter-templates"
+    assert entry["name"] == "Flutter Templates"
+    # from addon.json's template block, not from a manifest it does not have
+    assert entry["addonId"] == "org.appdevforall.fluttertemplates"
+    assert entry["version"] == "1.0.0"
+    assert entry["minAppVersion"] == "26.38"
+    assert entry["download"]["url"].endswith("/dl/flutter-templates.cgt")
+
+
+def test_a_template_entry_omits_the_source_tarball(tmp_path):
+    """The .cgt is plain text, so it is its own source (ADFA-6252).
+
+    The schema must also accept the omission, which catalog.build() validates,
+    so this covers site/catalog.schema.json as much as catalog.py.
+    """
+    dist = make_template(tmp_path)
+    entry = catalog.build(tmp_path, dist)["addons"][0]
+    assert "sourceTarball" not in entry
+    assert entry["sourceUrl"].endswith("/templates/Flutter-Templates")
+
+
+def test_a_template_does_not_need_a_tarball_in_dist(tmp_path):
+    """Requiring one would fail the publish for every template."""
+    dist = make_template(tmp_path)
+    assert not (dist / "flutter-templates-src.tar.gz").exists()
+    catalog.build(tmp_path, dist)          # must not raise
+
+
+def test_a_missing_cgt_still_stops_the_build(tmp_path):
+    dist = make_template(tmp_path)
+    (dist / "flutter-templates.cgt").unlink()
+    with pytest.raises(RuntimeError, match="flutter-templates.cgt"):
+        catalog.build(tmp_path, dist)
 
 
 def test_no_field_is_null(tmp_path):

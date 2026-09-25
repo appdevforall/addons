@@ -34,7 +34,12 @@ def _file(path: Path, url: str) -> dict:
     return {"url": url, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
 
 
-def entry(root: Path, addon: Path, cgp: Path, archive: Path,
+def artifact_suffix(addon: Path) -> str:
+    """What this addon downloads as: a plugin compiles, a template zips."""
+    return "cgt" if discover.is_template(addon) else "cgp"
+
+
+def entry(root: Path, addon: Path, cgp: Path, archive: Path | None,
           base: str = BASE) -> dict:
     directory = addon.name
     slug = model.slug(directory)
@@ -43,10 +48,10 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path,
     if not VERSION.match(version):
         raise RuntimeError(f"{directory}: the version '{version}' is not a number")
     relative = addon.relative_to(root).as_posix()
-    return {
+    document = {
         "type": TYPES.get(addon.parent.name, "plugin"),
         "slug": slug,
-        "pluginId": model.plugin_id(addon),
+        "addonId": model.addon_id(addon),
         "name": model.display_name(directory),
         "version": version,
         "summary": meta["summary"],
@@ -60,9 +65,16 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path,
         "iconDarkUrl": f"{base}/p/{slug}-night.png",
         "pageUrl": f"{base}/p/{slug}.html",
         "sourceUrl": f"{REPO}/tree/{REF}/{relative}",
-        "download": _file(cgp, f"{base}/dl/{slug}.cgp"),
-        "sourceTarball": _file(archive, f"{base}/src/{slug}-src.tar.gz"),
+        "download": _file(cgp, f"{base}/dl/{slug}.{artifact_suffix(addon)}"),
     }
+    # A template ships no source tarball: the .cgt is plain text throughout, so
+    # the download already is the source, and sourceUrl above points at the
+    # directory (ADFA-6252). sourceTarball is therefore optional from
+    # schemaVersion 2 on, and consumers must tolerate its absence.
+    if archive is not None:
+        document["sourceTarball"] = _file(
+            archive, f"{base}/src/{slug}-src.tar.gz")
+    return document
 
 
 def build(root: Path, dist: Path, base: str = BASE,
@@ -70,15 +82,19 @@ def build(root: Path, dist: Path, base: str = BASE,
     entries = []
     for addon in discover.find_addons(root, only):
         slug = model.slug(addon.name)
-        cgp = dist / f"{slug}.cgp"
-        archive = dist / f"{slug}-src.tar.gz"
-        for f in (cgp, archive):
+        cgp = dist / f"{slug}.{artifact_suffix(addon)}"
+        required = [cgp]
+        archive = None
+        if not discover.is_template(addon):
+            archive = dist / f"{slug}-src.tar.gz"
+            required.append(archive)
+        for f in required:
             if not f.exists():
                 raise RuntimeError(f"{addon.name}: {f.name} is missing from {dist}")
         entries.append(entry(root, addon, cgp, archive, base.rstrip('/')))
 
     document = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "addons": entries,
     }

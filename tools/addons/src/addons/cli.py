@@ -59,7 +59,13 @@ def main(argv: list[str] | None = None) -> int:
         for addon in discover.find_addons(args.root, args.only):
             meta = model.metadata(addon)
             archive = tarball.build(args.root, addon, args.out, meta)
-            print(f"built {archive.name}")
+            # None means the addon ships no source tarball; a template's .cgt
+            # is its own source. Say so rather than printing nothing, so a
+            # workflow log shows the addon was considered.
+            if archive is None:
+                print(f"skipped {addon.name}: no source tarball for a template")
+            else:
+                print(f"built {archive.name}")
         return 0
 
     if args.command == "publish":
@@ -100,15 +106,21 @@ def main(argv: list[str] | None = None) -> int:
                                 model.display_name(addon.name), template)
             page_file = dist / f"{slug}.page.html"
             page_file.write_text(with_hashed_assets(wrapped))
+            # A template keeps its icons at the addon root: src/main/assets is
+            # an Android path and it has no Android module (ADFA-6252).
+            icons = (addon if discover.is_template(addon)
+                     else addon / "src" / "main" / "assets")
+            suffix = catalog.artifact_suffix(addon)
             objects += [
                 (f"{prefix}p/{slug}.html", page_file),
-                (f"{prefix}p/{slug}.png",
-                 addon / "src" / "main" / "assets" / "icon_day.png"),
-                (f"{prefix}p/{slug}-night.png",
-                 addon / "src" / "main" / "assets" / "icon_night.png"),
-                (f"{prefix}dl/{slug}.cgp", dist / f"{slug}.cgp"),
-                (f"{prefix}src/{slug}-src.tar.gz", dist / f"{slug}-src.tar.gz"),
+                (f"{prefix}p/{slug}.png", icons / "icon_day.png"),
+                (f"{prefix}p/{slug}-night.png", icons / "icon_night.png"),
+                (f"{prefix}dl/{slug}.{suffix}", dist / f"{slug}.{suffix}"),
             ]
+            # No source tarball for a template; see tarball.build().
+            if not discover.is_template(addon):
+                objects.append((f"{prefix}src/{slug}-src.tar.gz",
+                                dist / f"{slug}-src.tar.gz"))
         objects.append((f"{prefix}v1/catalog.schema.json",
                         site / "catalog.schema.json"))
         publish.publish(publish.client_from_env(), publish.bucket_from_env(),

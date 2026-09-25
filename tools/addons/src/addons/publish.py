@@ -15,9 +15,10 @@ CONTENT_TYPES = {
     ".png": "image/png",
     ".svg": "image/svg+xml",
     ".cgp": "application/octet-stream",
+    ".cgt": "application/octet-stream",
     ".gz": "application/gzip",
 }
-ATTACHMENTS = {".cgp", ".gz"}
+ATTACHMENTS = {".cgp", ".cgt", ".gz"}
 
 
 def hashed_name(path: Path) -> str:

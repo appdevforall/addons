@@ -1,0 +1,129 @@
+name: Build addon artifacts
+
+# Builds every addon (or one) to prove the tree compiles and packages.
+# It publishes nothing and uploads no artifacts: to get a downloadable URL,
+# run "Publish addons" with staging: true.
+#
+# Two kinds of addon, two build paths (ADFA-6252). A plugin is a Gradle project
+# that compiles to a .cgp; a template is a plain-text tree that zips to a .cgt
+# and has no Gradle build at all. scripts/update-libs.sh only knows the first,
+# so templates are built here by scripts/build-cgt.sh instead.
+
+on:
+  workflow_dispatch:
+    inputs:
+      codeonthego_ref:
+        description: CodeOnTheGo branch or tag to build the libs against
+        required: false
+        default: stage
+      addon:
+        description: One addon directory name, e.g. Random-XKCD (blank builds all)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout plugin-examples
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-disabled: true
+          add-job-summary: 'never'
+
+      - name: Build libs and plugins
+        env:
+          CODEONTHEGO_REF: ${{ github.event.inputs.codeonthego_ref }}
+          ONLY_ADDON: ${{ github.event.inputs.addon }}
+        run: |
+          if [ -n "$ONLY_ADDON" ]; then
+            ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF" --plugin "$ONLY_ADDON"
+          else
+            ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
+          fi
+
+      - name: Build the template bundles
+        env:
+          ONLY_ADDON: ${{ inputs.addon }}
+        run: |
+          set -euo pipefail
+          # Templates are invisible to update-libs.sh: no build.gradle.kts, nothing
+          # to compile. Zip each one and assert its provenance record, so a broken
+          # bundle fails here rather than at publish time.
+          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover --include-skipped)"
+          templates="$(printf '%s\n' "$all" | grep '^templates/' || true)"
+          if [ -n "$ONLY_ADDON" ]; then
+            templates="$(printf '%s\n' "$templates" | awk -v want="$ONLY_ADDON" '
+              { n = $0; sub(/.*\//, "", n)
+                if (n == want || $0 == want || tolower(n) == tolower(want)) print }')"
+          fi
+          if [ -z "$templates" ]; then
+            echo "No template addon to build."
+            exit 0
+          fi
+          for dir in $templates; do
+            echo "==> $dir"
+            "$GITHUB_WORKSPACE/scripts/build-cgt.sh" "$dir" "$GITHUB_WORKSPACE/dist"
+            "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
+          done
+
+      - name: Check every addon produced its artifact
+        env:
+          ONLY_ADDON: ${{ inputs.addon }}
+        run: |
+          set -euo pipefail
+          # --include-skipped, the same list scripts/update-libs.sh builds and
+          # resolves --plugin against. An addon merely held out of the gallery
+          # is still built here and must still package, and a single-addon run
+          # naming one has to find it in this list. Only "!" entries in
+          # skip.txt are absent from both.
+          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover --include-skipped)"
+          # A single-addon run only builds that module, so the others have no
+          # artifact by design and must not be reported as missing.
+          if [ -n "$ONLY_ADDON" ]; then
+            all="$(printf '%s\n' "$all" | grep -Fx -e "$ONLY_ADDON" -e "plugins/$ONLY_ADDON" -e "templates/$ONLY_ADDON" || true)"
+            # Never let a no-match end the step on grep's bare exit 1: that
+            # reports a build that in fact succeeded as a red run, with no
+            # line saying why.
+            if [ -z "$all" ]; then
+              echo "ERROR: '${ONLY_ADDON}' is not a known addon, so nothing was checked." >&2
+              exit 1
+            fi
+          fi
+          missing=0
+          for dir in $all; do
+            case "$dir" in
+              templates/*)
+                # build-cgt.sh names the bundle after the directory, lowercased
+                slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
+                if [ ! -f "dist/${slug}.cgt" ]; then
+                  echo "ERROR: no ${slug}.cgt under dist/"
+                  missing=$((missing + 1))
+                fi
+                ;;
+              *)
+                if ! find "$dir/build/plugin" -name '*.cgp' ! -name '*-debug.cgp' 2>/dev/null | grep -q .; then
+                  echo "ERROR: no release .cgp under ${dir}/build/plugin/"
+                  missing=$((missing + 1))
+                fi
+                ;;
+            esac
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Every discovered addon produced its artifact."

@@ -226,3 +226,22 @@ def test_no_builder_identity_leaks_into_the_archive(tmp_path):
     with tarfile.open(build(tmp_path, addon, META)) as tar:
         for m in tar.getmembers():
             assert m.uname == "" and m.gname == "" and m.uid == 0 and m.mtime == 0
+
+
+def test_a_template_ships_no_tarball(tmp_path):
+    """build() returns None instead of raising (ADFA-6252).
+
+    Without the early exit, jars_for() raises "references no shared jar" on the
+    first line, because a template references none — so this guards the failure
+    that would block every template publish.
+    """
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    addon = tmp_path / "templates" / "Flutter-Templates"
+    (addon / "FlutterBasic" / "template").mkdir(parents=True)
+    (addon / "templates.json").write_text('{"templates": [{"path": "FlutterBasic"}]}')
+    (addon / "FlutterBasic" / "pubspec.yaml.peb").write_text("name: x\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    assert tarball.build(tmp_path, addon, out) is None
+    assert list(out.iterdir()) == []

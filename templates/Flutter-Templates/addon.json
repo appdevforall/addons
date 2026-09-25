@@ -1,0 +1,20 @@
+{
+  "summary": "Adds five Flutter starter projects to the New Project screen.",
+  "description": "Installs Flutter project templates so you can start a Flutter app from the New Project screen instead of building the structure by hand. Five starters, one for each state-management approach: plain setState, BLoC, Provider, GetX and Riverpod. Contributed to Code on the Go by RJ Ali, from an original idea by Raju Kumar.",
+  "tags": [
+    "flutter",
+    "templates",
+    "dart"
+  ],
+  "origin": "community",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "RJ Ali",
+    "url": ""
+  },
+  "template": {
+    "id": "org.appdevforall.fluttertemplates",
+    "version": "1.0.0",
+    "minAppVersion": "26.38"
+  }
+}

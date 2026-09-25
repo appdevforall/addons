@@ -1,0 +1,13 @@
+{
+    "name": "Flutter BLoC",
+    "description": "A Flutter app wired with the BLoC state-management pattern",
+    "version": "1.0.0",
+    "tooltipTag": "template.flutter.bloc",
+    "parameters": {
+        "required": {
+            "appName": { "identifier": "APP_NAME" },
+            "packageName": { "identifier": "PACKAGE_NAME" },
+            "saveLocation": { "identifier": "SAVE_LOCATION" }
+        }
+    }
+}
