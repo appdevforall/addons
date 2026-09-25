@@ -21,6 +21,7 @@
     <string name="menu_copy_chat">Copy chat</string>
     <string name="sidebar_recent">Recent</string>
     <string name="desc_sidebar_close">Close the sidebar</string>
+    <string name="desc_sidebar_add">New chat or import a chat</string>
     <string name="sidebar_clear_chat">Clear this chat</string>
     <string name="sidebar_history_empty">Your chats in this project will appear here.</string>
 
@@ -28,6 +29,17 @@
     <string name="session_untitled">New chat</string>
     <string name="session_rename">Rename</string>
     <string name="session_delete">Delete</string>
+    <string name="session_export">Export</string>
+    <string name="sidebar_import_chat">Import chat</string>
+    <!-- Export and import (ADFA-6247): a chat saved as, or read back from, a .txt file. -->
+    <string name="session_exported">Chat exported</string>
+    <string name="session_export_failed">Couldn\'t save the chat to that file. Nothing was exported.</string>
+    <string name="session_export_empty">This chat is empty, so there is nothing to export yet.</string>
+    <string name="menu_item_unavailable">Unavailable</string>
+    <string name="session_export_missing">That chat no longer exists, so there is nothing to export.</string>
+    <string name="session_imported">Chat imported</string>
+    <string name="session_import_failed">That file isn\'t a chat exported from the Agent, or it couldn\'t be read. Nothing was imported.</string>
+    <string name="session_picker_unavailable">No file picker is available on this device.</string>
     <string name="session_current">Current chat</string>
     <string name="session_rename_title">Rename chat</string>
     <string name="session_rename_hint">Chat name</string>
@@ -45,7 +57,7 @@
         <item quantity="one">%1$d message</item>
         <item quantity="other">%1$d messages</item>
     </plurals>
-    <string name="desc_session_row_menu">Rename or delete this chat</string>
+    <string name="desc_session_row_menu">Rename, export or delete this chat</string>
     <string name="desc_session_current">This is the chat you are in</string>
 
     <!-- Chat history: picking several conversations at once, entered by long-pressing a row -->

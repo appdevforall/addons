@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.viewmodel
 
+import android.content.ContentResolver
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
@@ -14,6 +16,7 @@ import com.itsaky.androidide.plugins.aicore.managers.ProjectKey
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
+import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.newestFirst
 import com.itsaky.androidide.plugins.aicore.models.Sender
@@ -38,6 +41,7 @@ import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -1627,6 +1631,76 @@ class ChatViewModel(
         // Written now rather than debounced: a rename is deliberate and may be the last thing the
         // user does before leaving the tab, where no streamed token follows to flush it.
         persistState()
+    }
+
+    /** How [exportSession] ended, which decides what the user is told. */
+    enum class ExportResult { EXPORTED, MISSING, FAILED }
+
+    /**
+     * Writes a chat to the file the picker returned. Rendered from the chat as it is now, not as it
+     * was when Export was tapped, so a reply that finished meanwhile is in it.
+     *
+     * @param sessionId the chat to export.
+     * @param resolver opens [uri]; held only for this call.
+     * @param uri where the picker said to write it.
+     */
+    suspend fun exportSession(sessionId: String, resolver: ContentResolver, uri: Uri): ExportResult {
+        // Snapshotted here, on the caller's thread; rendering it waits for the IO dispatcher.
+        val session = _sessions.value.firstOrNull { it.id == sessionId } ?: return ExportResult.MISSING
+        val result = withContext(Dispatchers.IO) {
+            try {
+                // "wt" truncates, so overwriting a longer file leaves none of its tail behind.
+                val stream = resolver.openOutputStream(uri, "wt") ?: throw IOException("no stream")
+                stream.use { ChatTranscript.write(session, it) }
+                ExportResult.EXPORTED
+            } catch (e: Exception) {
+                // Any provider can fail in its own way; none of them are suspension points.
+                logWarn("chat export failed", e)
+                ExportResult.FAILED
+            }
+        }
+        AgentTrace.stage("UI", "chat exported id=$sessionId result=$result")
+        return result
+    }
+
+    /**
+     * Reads the file the picker returned and, only if it is a transcript this plugin wrote, adds it
+     * as a new chat and opens it. Anything else adds nothing.
+     *
+     * @param resolver opens [uri]; held only for this call.
+     * @param uri the file the user picked.
+     * @return false when the file could not be read or is not a transcript.
+     */
+    suspend fun importTranscript(resolver: ContentResolver, uri: Uri): Boolean {
+        val projectKey = activeProjectKey
+        val session = withContext(Dispatchers.IO) {
+            try {
+                val stream = resolver.openInputStream(uri) ?: throw IOException("no stream")
+                ChatTranscript.parse(stream.use { ChatTranscript.read(it) }, projectKey)
+            } catch (e: Exception) {
+                // Any provider can fail in its own way; none of them are suspension points.
+                logWarn("chat import failed", e)
+                null
+            }
+        } ?: return false
+        importSession(session)
+        return true
+    }
+
+    /**
+     * Adds a chat read from an exported transcript and opens it, the way [createNewSession] opens
+     * an empty one. Appended, never merged: no existing chat is touched.
+     *
+     * @param imported the chat [ChatTranscript.parse] built; its ids are already fresh.
+     */
+    fun importSession(imported: ChatSession) {
+        endRunBeforeSessionChange("chat imported")
+        setState(AgentState.Idle)
+        // Bound to the open project, or the next restore drops it as another project's.
+        val session = imported.copy(projectKey = activeProjectKey)
+        AgentTrace.stage("UI", "chat imported id=${session.id} messages=${session.messages.size}")
+        _sessions.value = _sessions.value + session
+        adoptSession(session)
     }
 
     /**

@@ -43,6 +43,16 @@
     <dimen name="session_row_menu_size">40dp</dimen>
     <!-- Keeps the rename field off the dialog's edges; a bare EditText sits flush to them. -->
     <dimen name="session_dialog_input_inset">24dp</dimen>
+    <!-- Sidebar menus (see SidebarPopupMenu), sized to Material 3's menu spec. -->
+    <dimen name="sidebar_menu_item_height">48dp</dimen>
+    <dimen name="sidebar_menu_item_padding">12dp</dimen>
+    <dimen name="sidebar_menu_icon_size">24dp</dimen>
+    <dimen name="sidebar_menu_text_size">16sp</dimen>
+    <dimen name="sidebar_menu_padding_vertical">8dp</dimen>
+    <dimen name="sidebar_menu_corner_radius">4dp</dimen>
+    <dimen name="sidebar_menu_elevation">3dp</dimen>
+    <dimen name="sidebar_menu_min_width">112dp</dimen>
+    <dimen name="sidebar_menu_max_width">280dp</dimen>
 
     <!--
       Chat sidebar. The width is a ceiling, not the width: ChatSidebarController caps the panel at

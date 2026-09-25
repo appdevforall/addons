@@ -50,8 +50,14 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         /** The toolbar button that opens the sidebar; it took the overflow menu's place and tag. */
         const val TOOLTIP_TAG_CHAT_MENU = "agent_chat_menu"
         const val TOOLTIP_TAG_CHAT_SESSIONS = "agent_chat_sessions"
+        /** The Export entry in a chat row's options menu. */
+        const val TOOLTIP_TAG_CHAT_EXPORT = "agent_chat_export"
+        /** The Import chat entry in the header's + menu. */
+        const val TOOLTIP_TAG_CHAT_IMPORT = "agent_chat_import"
 
         // Tags for the sidebar's own actions (see ChatSidebarController).
+        /** The header's + button, whose menu holds New chat and Import chat. */
+        const val TOOLTIP_TAG_SIDEBAR_ADD = "agent_sidebar_add"
         const val TOOLTIP_TAG_SIDEBAR_NEW_CHAT = "agent_sidebar_new_chat"
         const val TOOLTIP_TAG_SIDEBAR_CLEAR_CHAT = "agent_sidebar_clear_chat"
         const val TOOLTIP_TAG_SIDEBAR_SETTINGS = "agent_sidebar_settings"
@@ -315,8 +321,11 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>Slides a panel in over the conversation. It has three parts,
                 and only the middle one scrolls:</p>
                 <ul>
-                  <li><b>New chat</b>, at the top — starts a fresh conversation.
-                      The one you were in is kept and appears in the list below.</li>
+                  <li>The <b>+</b> button, at the top — opens a menu with
+                      <b>New chat</b>, which starts a fresh conversation and keeps
+                      the one you were in in the list below, and <b>Import
+                      chat</b>, which opens a chat exported earlier from a
+                      <code>.txt</code> file.</li>
                   <li><b>Recent</b>, in the middle — every conversation you have
                       had in this project, newest first, loading more as you
                       scroll. Tap one to carry on where it stopped.</li>
@@ -328,6 +337,23 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 </ul>
                 <p>The button on the left of the panel's top row closes it again,
                 as does tapping the dimmed chat beside it or pressing <b>Back</b>.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SIDEBAR_ADD,
+            summary = "Start a chat: a new one, or one imported from a .txt file.",
+            detail = """
+                <p>Opens a menu with two ways to start a conversation:</p>
+                <ul>
+                  <li><b>New chat</b> — an empty conversation. The one you were
+                      in is kept in <b>Recent</b> below.</li>
+                  <li><b>Import chat</b> — reads a <code>.txt</code> file made
+                      with <b>Export</b> and opens it as a new chat.</li>
+                </ul>
+                <p>Long-press either entry for more about it.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -397,14 +423,51 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>The list holds the newest conversations to begin with and
                 loads more as you scroll, so a project with a long history still
                 opens at once.</p>
-                <p>The <b>⋮</b> button on a row renames or deletes that chat.
-                Renaming it empty gives it its first message back as a name.
+                <p>The <b>⋮</b> button on a row renames, exports or deletes that
+                chat. Renaming it empty gives it its first message back as a name.
                 Deleting cannot be undone, and deleting the last chat leaves you an
                 empty one to carry on in.</p>
                 <p><b>Long-press</b> a row to pick several at once: every row gets
                 a checkbox, tapping a row ticks it rather than opening it, and the
                 bin at the top of the panel removes everything ticked in one go.
                 The <b>✕</b> beside it goes back to the ordinary list.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_EXPORT,
+            summary = "Save this chat as a .txt file you choose the place for.",
+            detail = """
+                <p>Opens the system file picker with a file name taken from the
+                chat's title. Pick a folder — on the device, or a cloud drive the
+                picker offers — and the chat is written there as plain text.</p>
+                <p>Every message is listed in order under a line naming who sent
+                it: <b>USER</b>, <b>AGENT</b>, or <b>SYSTEM</b> and <b>TOOL</b> for
+                the notices in between. Anyone can read it without extra tools,
+                and <b>Import</b> reads it back as a chat.</p>
+                <p>Cancelling the picker saves nothing. Export is dimmed for a
+                chat with no messages yet, since there is nothing to save.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_IMPORT,
+            summary = "Import a chat exported earlier, as a new chat in this project.",
+            detail = """
+                <p>In the <b>+</b> menu at the top of the sidebar, after
+                <b>New chat</b>. It opens the system file picker. Choose a <code>.txt</code> file
+                made with <b>Export</b> — on this device or another — and it is
+                added to the top of <b>Recent</b> as a new chat and opened, with
+                the same messages in the same order.</p>
+                <p>It never changes a chat you already have: importing the same
+                file twice gives you two chats.</p>
+                <p>A file that was not exported from the Agent, or was edited so it
+                no longer reads as one, is refused with a message and nothing is
+                added. Cancelling the picker does nothing.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)

@@ -229,8 +229,9 @@
   the conversation. Its three parts are fixed in place except the middle one, which
   is the only part that scrolls:</p>
   <ul>
-    <li><b>New chat</b>, at the top, starts a fresh conversation. The one you were
-      in is kept, and you can go back to it whenever you like.</li>
+    <li>The <b>+</b> button, at the top, opens a menu. <b>New chat</b> starts a
+      fresh conversation — the one you were in is kept, and you can go back to it
+      whenever you like — and <b>Import chat</b> opens a chat exported earlier.</li>
     <li><b>Recent</b>, in the middle, lists this project's conversations, newest
       first, each named after its first message and dated from when it began, with
       a tick on the one you are in. It holds the newest to begin with and loads
@@ -246,13 +247,28 @@
       back.</li>
     <li><b>Settings</b>, beside it, opens the Agent settings screen.</li>
   </ul>
-  <p><b>New chat</b> sits at the right of the panel's top row; the button at the
-  left of that row closes the sidebar, as does tapping the dimmed conversation
+  <p>The <b>+</b> button at the right of the panel's top row opens a menu with
+  <b>New chat</b> and <b>Import chat</b>; the button at the left of that row closes
+  the sidebar, as does tapping the dimmed conversation
   beside it or pressing <b>Back</b>.</p>
-  <p>The <b>⋮</b> button on a row in <b>Recent</b> renames or deletes that chat. A
-  name you give it replaces the first-message title; clearing the name gives the
-  first-message title back. Deleting cannot be undone — and deleting the last chat
-  leaves you an empty one to carry on in, rather than nothing.</p>
+  <p>The <b>⋮</b> button on a row in <b>Recent</b> renames, exports or deletes that
+  chat. A name you give it replaces the first-message title;
+  clearing the name gives the first-message title back. Deleting cannot be undone —
+  and deleting the last chat leaves you an empty one to carry on in, rather than
+  nothing.</p>
+  <p><b>Export</b> saves the chat as a plain <code>.txt</code> file wherever you
+  choose in the system file picker, named after the chat. The file lists every
+  message in order, each under a line saying who sent it — <code>USER</code>,
+  <code>AGENT</code>, or <code>SYSTEM</code> and <code>TOOL</code> for the notices
+  in between — so anyone can read it without extra tools. Use it to back a chat up,
+  send it to a teammate or to support, or carry it to another device. Export is
+  dimmed for a chat with no messages yet; tapping it says so.</p>
+  <p><b>Import chat</b>, in the <b>+</b> menu at the top of the sidebar, reads such
+  a file back and opens it as a new chat at the top of
+  <b>Recent</b>, with the same messages in the same order. It never changes a chat
+  you already have. A file that was not exported from the Agent, or that was edited
+  so it no longer reads as one, is refused with a message and nothing is added.
+  Cancelling either picker does nothing.</p>
   <p>To clear out several at once, <b>long-press</b> a row. Every row gets a
   checkbox, tapping a row ticks it instead of opening it, and the bin at the top of
   the sidebar removes everything ticked in one step — with the same warning, since
