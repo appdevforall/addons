@@ -1,6 +1,6 @@
 [versions]
 # Must match the kotlin-gradle-plugin classpath pinned in settings.gradle.kts.
-kotlin = "2.3.0"
+kotlin = "2.3.21"
 coreKtx = "1.13.1"
 appcompat = "1.6.1"
 material = "1.12.0"

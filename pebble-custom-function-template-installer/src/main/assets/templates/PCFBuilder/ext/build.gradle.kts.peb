@@ -1,6 +1,5 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
 }
 
 android {
@@ -28,8 +27,12 @@ android {
         sourceCompatibility = ${{JAVA_SOURCE_COMPAT}}  
         targetCompatibility = ${{JAVA_TARGET_COMPAT}}  
     }
-    kotlinOptions {
-        jvmTarget = "17"  
+
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${{JAVA_TARGET}}"))
     }
 }
 

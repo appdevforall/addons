@@ -8,7 +8,6 @@ import com.android.build.gradle.tasks.MergeSourceSetFolders
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -56,7 +55,7 @@ dependencies {
     compileOnly(files("../../libs/plugin-api.jar"))
 
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 
@@ -169,6 +168,12 @@ val downloadAssets by tasks.registering {
 // Matched by type, not by name: a name filter that stops matching would silently
 // unwire this guard, which is the regression it exists to prevent.
 val ndkArchiveFile = project.file("src/main/assets/ndk-cmake.tar.xz")
+tasks.configureEach {
+    if (name != "downloadAssets") {
+        mustRunAfter(downloadAssets)
+    }
+}
+
 tasks.withType<MergeSourceSetFolders>().configureEach {
     doFirst {
         if (!ndkArchiveFile.isFile) {

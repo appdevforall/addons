@@ -11,7 +11,6 @@ import java.util.zip.ZipOutputStream
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -65,7 +64,7 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // WebViewAssetLoader: serves the extracted course over a virtual https
@@ -74,7 +73,7 @@ dependencies {
 }
 
 tasks.wrapper {
-    gradleVersion = "8.14.3"
+    gradleVersion = "9.6.1"
     distributionType = Wrapper.DistributionType.BIN
 }
 
@@ -263,6 +262,12 @@ val downloadAssets by tasks.registering {
 val downloadedAssets = listOf("ai-literacy-course.zip", "pdfjs.zip").map {
     project.file("src/main/assets/$it")
 }
+tasks.configureEach {
+    if (name != "downloadCourse" && name != "downloadPdfjs" && name != "downloadAssets") {
+        mustRunAfter(downloadCourse, downloadPdfjs)
+    }
+}
+
 tasks.withType<MergeSourceSetFolders>().configureEach {
     doFirst {
         val missing = downloadedAssets.filterNot { it.isFile }

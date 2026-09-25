@@ -100,4 +100,57 @@ class TemplatizerTest {
             result.report.changed.any { it.contains("build.gradle.kts.peb") },
         )
     }
+
+    @Test
+    fun `templatized project carries the AGP 9 Kotlin shape`() {
+        val project = tmp.newFolder("KtApp")
+        File(project, "settings.gradle.kts").writeText(
+            """rootProject.name = "KtApp"${"\n"}"""
+        )
+        File(project, "build.gradle.kts").writeText(
+            """
+            plugins {
+                id("com.android.application") apply false version "8.11.0"
+            }
+            """.trimIndent()
+        )
+        val app = File(project, "app").apply { mkdirs() }
+        File(app, "build.gradle.kts").writeText(
+            """
+            plugins {
+                id("com.android.application") version "8.11.0"
+                kotlin("android") version "2.0.0"
+            }
+            android {
+                namespace = "com.example.ktapp"
+                compileSdk = 36
+                defaultConfig {
+                    applicationId = "com.example.ktapp"
+                    minSdk = 26
+                    targetSdk = 36
+                }
+            }
+            """.trimIndent()
+        )
+        File(app, "src/main/java/com/example/ktapp").apply { mkdirs() }
+            .let { File(it, "MainActivity.kt").writeText("package com.example.ktapp${"\n"}") }
+
+        val bundle = createTemplateBundle(
+            projectDir = project,
+            module = "app",
+            templateName = "KtTemplate",
+        ).projectBundleDir!!
+
+        val appBuild = File(bundle, "app/build.gradle.kts.peb").readText()
+        assertFalse(
+            "AGP 9 refuses org.jetbrains.kotlin.android, so no template may declare it: $appBuild",
+            appBuild.contains("kotlin(\"android\")") || appBuild.contains("org.jetbrains.kotlin.android"),
+        )
+
+        val rootBuild = File(bundle, "build.gradle.kts.peb").readText()
+        assertTrue(
+            "AGP 9 takes its Kotlin compiler from the root buildscript classpath: $rootBuild",
+            rootBuild.contains("classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:${token("KOTLIN_VERSION")}\")"),
+        )
+    }
 }
