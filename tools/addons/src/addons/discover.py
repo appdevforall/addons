@@ -31,8 +31,32 @@ def read_skip(root: Path, only_never_build: bool = False) -> set[str]:
     return names
 
 
+def is_template(addon: Path) -> bool:
+    """A template addon is a directory under templates/ holding templates.json.
+
+    Deliberately not the plugin rule. A template has no Gradle build, nothing
+    to compile and no .cgp — it zips to a .cgt (ADFA-6252). Keying on
+    templates.json rather than on the area alone means templates/ can also hold
+    documentation without every markdown file becoming an addon.
+    """
+    return addon.parent.name == "templates" and (addon / "templates.json").is_file()
+
+
+def find_templates(root: Path, skip: set[str]) -> list[Path]:
+    return [f.parent for f in root.glob("templates/*/templates.json")
+            if f.parent.name not in skip]
+
+
 def find_addons(root: Path, only: list[str] | None = None,
-                include_skipped: bool = False) -> list[Path]:
+                include_skipped: bool = False,
+                plugins_only: bool = False) -> list[Path]:
+    """Every addon, or only the ones with a Gradle build.
+
+    plugins_only exists for callers that run Gradle over the result --
+    scripts/update-libs.sh does, and a template has no build.gradle.kts for
+    assemblePlugin to act on. Keeping the rule here rather than in a shell
+    filter means there is one definition of what a template is.
+    """
     skip = (read_skip(root, only_never_build=True) if include_skipped
             else read_skip(root))
     found = []
@@ -45,6 +69,8 @@ def find_addons(root: Path, only: list[str] | None = None,
         for f in root.glob(pattern):
             if PREDICATE in f.read_text(errors="ignore") and f.parent.name not in skip:
                 found.append(f.parent)
+    if not plugins_only:
+        found.extend(find_templates(root, skip))
     found = sorted(found, key=lambda p: p.name)
     if only is None:
         return found

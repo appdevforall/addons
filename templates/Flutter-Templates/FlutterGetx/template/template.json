@@ -1,0 +1,13 @@
+{
+    "name": "Flutter GetX",
+    "description": "A Flutter app wired with the GetX state-management pattern",
+    "version": "1.0.0",
+    "tooltipTag": "template.flutter.getx",
+    "parameters": {
+        "required": {
+            "appName": { "identifier": "APP_NAME" },
+            "packageName": { "identifier": "PACKAGE_NAME" },
+            "saveLocation": { "identifier": "SAVE_LOCATION" }
+        }
+    }
+}

@@ -1,0 +1,30 @@
+# ${{APP_NAME}}
+
+
+Generated from a Flutter Templates starter for Code on the Go.
+
+- Package: `${{PACKAGE_NAME}}`
+- Template: Riverpod
+- Flutter SDK: >=3.0.0
+
+## Getting started
+
+> **Note:** Building a Flutter project requires the Flutter SDK, which is **not**
+> installed on-device by Code on the Go. Run these on a machine with Flutter, or
+> once an on-device Flutter SDK becomes available.
+
+```sh
+flutter pub get
+flutter run
+```
+
+## Project structure
+
+```
+lib/
+  main.dart
+  providers/
+    counter_provider.dart
+pubspec.yaml
+analysis_options.yaml
+```

@@ -113,23 +113,38 @@ jobs:
           printf 'only<<EOF\n%s\nEOF\n' "$names" >> "$GITHUB_OUTPUT"
           for dir in $names; do
             echo "==> $dir"
-            ( cd "$dir"
-              gradlew="$GITHUB_WORKSPACE/gradlew"
-              if [ -x ./gradlew ]; then gradlew=./gradlew; fi
-              if grep -q downloadAssets build.gradle.kts; then
-                "$gradlew" --console=plain downloadAssets
-              fi
-              "$gradlew" --console=plain assemblePlugin )
-            "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
             slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
-            src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
-            cp "$src" "dist/${slug}.cgp"
+            # Two kinds of addon, two build paths (ADFA-6252). A template has no
+            # Gradle build and produces a .cgt; running assemblePlugin on it would
+            # fail on the missing build.gradle.kts.
+            case "$dir" in
+              templates/*)
+                "$GITHUB_WORKSPACE/scripts/build-cgt.sh" "$dir" "$GITHUB_WORKSPACE/dist"
+                "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
+                ;;
+              *)
+                ( cd "$dir"
+                  gradlew="$GITHUB_WORKSPACE/gradlew"
+                  if [ -x ./gradlew ]; then gradlew=./gradlew; fi
+                  if grep -q downloadAssets build.gradle.kts; then
+                    "$gradlew" --console=plain downloadAssets
+                  fi
+                  "$gradlew" --console=plain assemblePlugin )
+                "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
+                src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
+                cp "$src" "dist/${slug}.cgp"
+                ;;
+            esac
           done
 
       - name: Build the source tarballs
         env:
           ONLY: ${{ steps.stage.outputs.only }}
         run: |
+          # Templates are passed in with everything else and skipped inside the
+          # tool, which logs the skip: a template ships no source tarball because
+          # its .cgt is plain text and already is its source (ADFA-6252). Filtering
+          # here instead would put the rule in two places.
           # shellcheck disable=SC2086
           uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" \
             tarball --out "$GITHUB_WORKSPACE/dist" --only $ONLY

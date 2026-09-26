@@ -1,10 +1,19 @@
 # plugin-examples
 
-Reference plugins for [Code on the Go](https://github.com/appdevforall/CodeOnTheGo). Each folder is a fully self-contained Gradle project that builds to a `.cgp` installable plugin file.
+Reference add-ons for [Code on the Go](https://github.com/appdevforall/CodeOnTheGo).
+
+There are four kinds, and they are built in different ways. Read the area's own README before adding one.
+
+| Area | What it is | Artifact | How to add one |
+|---|---|---|---|
+| [`plugins/`](plugins/) | Code that runs inside the IDE. A self-contained Gradle project | `.cgp` | [`plugins/README.md`](plugins/README.md) |
+| [`templates/`](templates/) | A project skeleton on the New Project screen. Plain text, no build | `.cgt` | [`templates/README.md`](templates/README.md) |
+| [`snippets/`](snippets/) | Reusable editor snippets. Placeholder — nothing here yet | `.cgs` | [`snippets/README.md`](snippets/README.md) |
+| [`code-actions/`](code-actions/) | Editor quick-fixes. Placeholder — nothing here yet | — | [`code-actions/README.md`](code-actions/README.md) |
 
 See the official [plugin documentation](https://www.appdevforall.org/codeonthego/help/exp-plugins-top.html) for concepts, the plugin API surface, and install workflow.
 
-## Examples
+## Plugins
 
 | Plugin                                             | Purpose                                                           |
 | -------------------------------------------------- | ----------------------------------------------------------------- |
@@ -20,7 +29,6 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
 | [`plugins/AI-Core/`](plugins/AI-Core/) | The agent chat and the inference router every other AI addon needs. |
 | [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
-| [`plugins/Flutter-Templates/`](plugins/Flutter-Templates/) | Adds five Flutter starter projects to the New Project screen. |
 | [`plugins/Get-AI-Models/`](plugins/Get-AI-Models/) | Downloads small language models for on-device AI addons. |
 | [`plugins/Icons-Repository/`](plugins/Icons-Repository/) | Adds vector icons to a project from inside the editor. |
 | [`plugins/Jetpack-Compose-Preview/`](plugins/Jetpack-Compose-Preview/) | Renders Compose preview functions on the device. |
@@ -39,6 +47,14 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 
 > `cotg-ndk` and `pebble-custom-function-template-installer` are not listed. They are still at the repository root, beside `libs/` and `tools/`, until their own work lands.
 > The `AI-*` addons above build from `plugins/` like every other example but are still held out of the published gallery; `tools/addons/skip.txt` states the reason for each.
+
+## Templates
+
+| Template bundle | Purpose |
+| --- | --- |
+| [`templates/Flutter-Templates/`](templates/Flutter-Templates/) | Five Flutter starter projects, one per state-management approach. |
+
+A bundle holds one or more templates. It runs no code, so there is nothing to compile: the publish workflow zips the directory into a `.cgt` that Code on the Go reads directly. Start from `Flutter-Templates/`, which is the reference example.
 
 
 ## Building a plugin
@@ -99,7 +115,7 @@ First local run clones Code on the Go into `.cache/CodeOnTheGo/` (gitignored); s
 
 ## Adding a new plugin example
 
-1. Copy `plugins/Random-XKCD/` to a new folder under `plugins/`. Name it in MixedCase with single hyphens between words (`My-Plugin`), ASCII letters and digits only. Every other name, filename, and URL is derived from this one — see [`docs/plugin-naming-standards.md`](docs/plugin-naming-standards.md).
+1. Copy `plugins/Random-XKCD/` to a new folder under `plugins/`. Name it in MixedCase with single hyphens between words (`My-Plugin`), ASCII letters and digits only. Every other name, filename, and URL is derived from this one — see [`docs/addon-naming-standards.md`](docs/addon-naming-standards.md).
 
 2. Update **every** copied file that still names the template. Two values come from the folder name: the **slug** is it lowercased (`my-plugin`), and the **display name** is it with hyphens replaced by spaces (`My Plugin`).
 

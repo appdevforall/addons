@@ -5,12 +5,17 @@ name: Check toolchain
 # deliberately not restated here, so there is only one copy of the numbers.
 #
 # This is the only workflow here that runs automatically on pull requests.
-# "Build plugin artifacts" and "Update libs from CodeOnTheGo" are both
+# "Build addon artifacts" and "Update libs from CodeOnTheGo" are both
 # workflow_dispatch-only, which is why toolchain drift previously reached
 # main with no CI signal at all.
 #
 # It is pure text inspection — no JDK, no Gradle, no network — so it costs a
 # few seconds and is safe to make a required check.
+#
+# It also lints the template bundle sources (ADFA-6252). Those checks are
+# borrowed from dev-assets' lint-templates.yml, which guards core.cgt the same
+# way. They are cheap, and since this is the only workflow that runs on a pull
+# request, it is the only place a broken bundle can be caught before merge.
 
 on:
   pull_request:
@@ -53,3 +58,110 @@ jobs:
 
       - name: Check addon names and metadata
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
+
+      # From here down: the template bundle sources. `addons check` already
+      # asserts the structure (templates.json parses, every path it names
+      # exists and carries a template.json, the addon.json block is present).
+      # These add the syntax checks it does not do, on the file contents.
+      - name: Install the template lint tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxml2-utils jq zip
+          pip install --quiet json5
+
+      - name: Reject junk files committed under templates/
+        run: |
+          set -e
+          BAD=$(git ls-files templates/ | grep -E '(^|/)(\.gradle|build|local\.properties)(/|$)|\.(swp|swo|bak)$|(^|/)\.DS_Store$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::Junk files committed under templates/:"
+            echo "$BAD"
+            exit 1
+          fi
+
+      - name: Reject a committed bundle or provenance record
+        run: |
+          set -e
+          # Both are generated at publish time. A committed one goes stale
+          # silently and would ship instead of a fresh build (ADFA-6252).
+          BAD=$(git ls-files templates/ | grep -E '\.cgt$|(^|/)cgt-build\.properties$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::A .cgt or cgt-build.properties is committed; both are generated:"
+            echo "$BAD"
+            exit 1
+          fi
+
+      - name: Validate XML under templates/
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r f; do
+            if ! xmllint --noout "$f" 2>/dev/null; then
+              echo "::error file=$f::Invalid XML"
+              fail=1
+            fi
+          done < <(find templates -type f -name '*.xml')
+          exit $fail
+
+      - name: Validate each templates.json (strict JSON)
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r f; do
+            if ! jq empty "$f" 2>/dev/null; then
+              echo "::error file=$f::Invalid JSON"
+              fail=1
+            fi
+          done < <(find templates -maxdepth 2 -type f -name 'templates.json')
+          exit $fail
+
+      - name: Validate each template.json (JSON5)
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r f; do
+            if ! python3 -c "import json5,sys; json5.load(open(sys.argv[1]))" "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::Invalid JSON5"
+              fail=1
+            fi
+          done < <(find templates -type f -path '*/template/template.json')
+          exit $fail
+
+      - name: Pebble brace balance check
+        run: |
+          set -e
+          # Counts delimiters only. It cannot tell whether an identifier is
+          # declared, and the renderer runs with strictVariables(true), so an
+          # undeclared one still fails on the device at project generation.
+          fail=0
+          while IFS= read -r f; do
+            opens=$(grep -o '{{' "$f" | wc -l | tr -d ' ')
+            closes=$(grep -o '}}' "$f" | wc -l | tr -d ' ')
+            if [ "$opens" != "$closes" ]; then
+              echo "::error file=$f::Pebble brace imbalance: $opens '{{' vs $closes '}}'"
+              fail=1
+            fi
+          done < <(find templates -type f -name '*.peb')
+          exit $fail
+
+      - name: Build every template bundle
+        run: |
+          set -euo pipefail
+          # Proves the bundle packages and that templates.json names only paths
+          # that exist: build-cgt.sh derives its file list from that manifest and
+          # fails when one is missing.
+          for dir in $(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover --include-skipped | grep '^templates/' || true); do
+            echo "==> $dir"
+            ./scripts/build-cgt.sh "$dir" "$GITHUB_WORKSPACE/dist"
+            ./scripts/verify-provenance.sh "$dir"
+            slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
+            # The IDE looks templates.json up by that exact bare name, so a
+            # nested one means no template is ever found.
+            unzip -l "$GITHUB_WORKSPACE/dist/${slug}.cgt" | grep -qE '[[:space:]]templates\.json$' \
+              || { echo "::error::${slug}.cgt has no bare templates.json entry"; exit 1; }
+            # Repository metadata must not reach a user-facing download.
+            if unzip -l "$GITHUB_WORKSPACE/dist/${slug}.cgt" | grep -qE '[[:space:]](addon\.json|.*\.html|icon_(day|night)\.png)$'; then
+              echo "::error::${slug}.cgt contains gallery metadata that belongs only in the repository"
+              exit 1
+            fi
+          done

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flutter Templates</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #111111;
+    --muted: #555555;
+    --accent: #0553b1;
+    --accent-light: #eaf2fc;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: var(--muted); margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Flutter Templates</h1>
+  <p class="subtitle">Adds Flutter starter project templates to Code on the Go's New Project screen</p>
+  <div class="meta">Version 1.0.0 &middot; Author: RJ Ali &middot; Template bundle: <code>org.appdevforall.fluttertemplates</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#limitations">Limitations &amp; Scope</a></li>
+    <li><a href="#credits">Credits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Flutter Templates is a <strong>template bundle</strong> for Code on the Go. It adds
+    ready-to-use <strong>Flutter starter projects</strong> to the New Project screen, sitting
+    alongside the built-in core (Android) templates. Instead of starting from an empty folder,
+    a developer picks a Flutter template, enters an app name and package name, and the IDE
+    generates a complete, idiomatic Flutter project skeleton.
+  </p>
+  <p>
+    The bundle contributes five templates &mdash; one for a plain Flutter app and four wired to
+    popular state-management libraries &mdash; so a project starts with the chosen architecture
+    already in place.
+  </p>
+  <p>
+    It runs no code. A <code>.cgt</code> bundle is a zip archive of project skeletons and their
+    metadata, which the IDE reads directly. There is nothing to enable, no permissions to
+    grant, and no process to load.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The five templates</h3>
+  <table>
+    <thead>
+      <tr><th>Template</th><th>State management</th><th>Key dependency</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Flutter Basic</td><td>None (plain <code>setState</code>)</td><td>&mdash;</td></tr>
+      <tr><td>Flutter BLoC</td><td>BLoC pattern</td><td><code>flutter_bloc</code></td></tr>
+      <tr><td>Flutter Provider</td><td>Provider</td><td><code>provider</code></td></tr>
+      <tr><td>Flutter GetX</td><td>GetX</td><td><code>get</code></td></tr>
+      <tr><td>Flutter Riverpod</td><td>Riverpod</td><td><code>flutter_riverpod</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>What each template generates</h3>
+  <p>
+    Every template produces a small counter app so the chosen pattern is demonstrated end to end:
+  </p>
+  <ul>
+    <li><code>pubspec.yaml</code> &mdash; project name (lower-cased from the app name), the SDK
+      constraint, and the state-management dependency.</li>
+    <li><code>lib/main.dart</code> &mdash; the app entry point and home screen.</li>
+    <li>A pattern-specific source file where applicable &mdash; e.g.
+      <code>lib/blocs/counter_bloc.dart</code>, <code>lib/providers/counter_provider.dart</code>,
+      or <code>lib/controllers/counter_controller.dart</code>.</li>
+    <li><code>analysis_options.yaml</code> &mdash; a lint baseline.</li>
+    <li><code>README.md</code> &mdash; getting-started notes for the generated project.</li>
+  </ul>
+
+  <h3>Parameter substitution</h3>
+  <p>
+    The app name and package name entered in the New Project dialog are substituted into the
+    generated files. The app name also drives <code>pubspec.yaml</code>'s <code>name:</code>
+    field, lower-cased to satisfy Dart's package-name rules.
+  </p>
+</section>
+
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>What is in the archive</h3>
+  <p>
+    A <code>.cgt</code> is a zip archive. Its root holds <code>templates.json</code>, which lists
+    the templates, and one directory per template. Each of those carries
+    <code>template/template.json</code> for its name, description and parameters, and
+    <code>template/thumb.png</code> for the picture on the New Project screen.
+  </p>
+  <div class="diagram">
+  flutter-templates.cgt
+  |
+  +-- templates.json              lists the five templates
+  +-- cgt-build.properties        the commit this bundle was built from
+  |
+  +-- FlutterBasic/
+  |     +-- template/template.json
+  |     +-- template/thumb.png
+  |     +-- pubspec.yaml.peb
+  |     +-- analysis_options.yaml
+  |     +-- lib/main.dart.peb
+  |
+  +-- FlutterBloc/      ... and three more</div>
+
+  <h3>Authoring with Pebble</h3>
+  <p>
+    Files ending in <code>.peb</code> are processed by the Pebble template engine at
+    project-creation time (<code>${{APP_NAME}}</code>, <code>${{PACKAGE_NAME}}</code> and friends
+    are substituted) and the suffix is dropped; other files are copied verbatim. This is the same
+    authoring format the core Android templates use. Dart's own <code>$variable</code> string
+    interpolation passes through untouched, because it does not match Pebble's
+    <code>${{ }}</code> delimiter.
+  </p>
+
+  <h3>How the IDE finds it</h3>
+  <p>
+    Code on the Go discovers project templates by scanning its templates directory and the
+    Downloads folder for <code>.cgt</code> archives. Putting the file in either place is the whole
+    installation. Nothing registers it, because there is no code to run.
+  </p>
+
+  <h3>Provenance</h3>
+  <p>
+    Every published bundle carries <code>cgt-build.properties</code> at its archive root,
+    recording the commit it was built from and the date of that commit. Read it with
+    <code>unzip -p flutter-templates.cgt cgt-build.properties</code>. It exists so a bug report
+    can be traced to the exact source that produced the file, which matters because the download
+    URL stays the same across releases.
+  </p>
+
+  <h3>Permissions</h3>
+  <p>
+    None. A template bundle declares no permissions, because it runs no code. No network, no
+    native code, no system commands, no filesystem access of its own &mdash; the IDE writes the
+    generated project, exactly as it does for a built-in template.
+  </p>
+</section>
+
+<section id="usage">
+  <h2>4. Usage</h2>
+
+  <h3>Install</h3>
+  <ol>
+    <li>Download <code>flutter-templates.cgt</code> from the add-on gallery.</li>
+    <li>In Code on the Go, open <em>Preferences &rarr; Extensions Manager</em> and switch to the
+      <strong>Templates</strong> tab.</li>
+    <li>Tap <strong>+</strong>, browse to the downloaded <code>.cgt</code> and select it.</li>
+    <li>A dialog lists the five templates. Tap <strong>Install</strong>.</li>
+  </ol>
+  <p>
+    There is nothing to enable afterwards and no permissions to grant. The five templates
+    appear on the New Project screen straight away.
+  </p>
+
+  <div class="callout">
+    <strong>Replacing the old plugin.</strong> Earlier releases shipped these templates as a
+    plugin. If you still have <em>Flutter Templates</em> installed in the Plugin Manager, disable
+    or uninstall it before adding this bundle. Otherwise each template appears twice, once from
+    each source. Disabling the plugin removes its copies.
+  </div>
+
+  <h3>Create a project</h3>
+  <ol>
+    <li>Open <strong>New Project</strong>.</li>
+    <li>Pick one of the <strong>Flutter</strong> templates (Basic, BLoC, Provider, GetX, Riverpod).</li>
+    <li>Enter an <strong>app name</strong> (a valid Dart package identifier &mdash; lowercase, no
+      spaces; underscores are fine) and a <strong>package name</strong>.</li>
+    <li>Finish the wizard. The generated project appears in your workspace.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Building the generated project</strong> requires the Flutter SDK, which Code on the Go
+    does not yet provide on-device. Run <code>flutter pub get</code> / <code>flutter run</code> on a
+    machine with Flutter installed, or once an on-device Flutter SDK becomes available.
+  </div>
+</section>
+
+<section id="benefits">
+  <h2>5. Key Benefits</h2>
+  <ul>
+    <li><strong>First-class integration.</strong> Templates appear on the standard New Project
+      screen next to the core templates &mdash; no separate UI to learn.</li>
+    <li><strong>Architecture on day one.</strong> Pick your state-management approach up front and
+      start from working, idiomatic boilerplate.</li>
+    <li><strong>Parameterized.</strong> App name and package name flow into the generated files,
+      including a Dart-valid <code>pubspec.yaml</code> name.</li>
+    <li><strong>No code, no permissions.</strong> A data bundle the IDE reads. Nothing loads into
+      the editor's process, so there is nothing to grant and nothing to go wrong at runtime.</li>
+    <li><strong>Plain text throughout.</strong> Every template file is readable and reviewable.
+      The download is the source.</li>
+    <li><strong>Traceable.</strong> Each published bundle records the commit it was built from, so
+      a report about one download points at one commit.</li>
+  </ul>
+</section>
+
+<section id="limitations">
+  <h2>6. Limitations &amp; Scope</h2>
+  <ul>
+    <li>The bundle <strong>scaffolds project files only</strong>; it does not install the
+      Flutter/Dart SDK or build/run Flutter projects on-device.</li>
+    <li>Code on the Go's editor does not currently provide Dart syntax highlighting, completion, or
+      analysis &mdash; these templates create the files, but rich Dart editing is outside the IDE's
+      current language support.</li>
+    <li>On-device Flutter toolchain support is a separate, larger effort tracked independently.</li>
+  </ul>
+</section>
+
+<section id="credits">
+  <h2>7. Credits</h2>
+  <ul>
+    <li><strong>Original idea:</strong> Raju Kumar
+      (<a href="https://appdevforall.atlassian.net/browse/ADFA-2599">ADFA-2599</a>).</li>
+    <li><strong>Author / implementation:</strong> RJ Ali &lt;rjali3232@gmail.com&gt;, contributed via
+      the Code on the Go community submission process and rebuilt on the IDE's template system
+      (<a href="https://appdevforall.atlassian.net/browse/ADFA-3857">ADFA-3857</a>).</li>
+    <li><strong>Converted to a template bundle:</strong>
+      <a href="https://appdevforall.atlassian.net/browse/ADFA-6252">ADFA-6252</a>. The template
+      skeletons are RJ Ali's work, unchanged; only the packaging moved from a plugin to a
+      <code>.cgt</code>.</li>
+  </ul>
+</section>
+
+<footer>
+  Flutter Templates Documentation &middot; Version 1.0.0 &middot; org.appdevforall.fluttertemplates
+</footer>
+
+</body>
+</html>

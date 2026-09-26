@@ -213,7 +213,20 @@ def verify(top: Path, inside: str, jars: list[str]) -> None:
 
 
 def build(root: Path, addon: Path, out: Path,
-          meta: dict | None = None) -> Path:
+          meta: dict | None = None) -> Path | None:
+    """Stage and archive an addon's source, or None when it has none to ship.
+
+    A template returns None (ADFA-6252). Everything below exists so somebody can
+    unpack the archive and build it: the shared jars are copied in, the Gradle
+    wrapper is copied in, ../libs/ references are flattened, and BUILDING.md
+    says to run assemblePlugin. A template has no project to open and no
+    compiler to run, and its .cgt is plain text throughout, so the published
+    download already is its source. The catalog omits sourceTarball for it and
+    the gallery card drops the Source link.
+    """
+    from addons import discover
+    if discover.is_template(addon):
+        return None
     jars = jars_for(addon)
     if not jars:
         raise RuntimeError(f"{addon.name}: it references no shared jar")

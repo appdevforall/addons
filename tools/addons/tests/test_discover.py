@@ -90,3 +90,67 @@ def test_a_bang_prefix_means_never_build(tmp_path):
     # compile coverage picks up the held-back one but never the broken one
     assert [p.name for p in discover.find_addons(tmp_path, include_skipped=True)] \
         == ["Shipping", "held-back"]
+
+
+def make_template(root: Path, path: str, with_index: bool = True) -> None:
+    d = root / path
+    d.mkdir(parents=True)
+    if with_index:
+        (d / "templates.json").write_text('{"templates": [{"path": "One"}]}')
+
+
+def test_finds_a_template_with_no_gradle_build(tmp_path):
+    """A template is discovered by templates.json, not build.gradle.kts.
+
+    This is the whole point of the second rule (ADFA-6252): a template has no
+    Gradle project, so the plugin predicate can never match it.
+    """
+    make_template(tmp_path, "templates/Flutter-Templates")
+    found = discover.find_addons(tmp_path)
+    assert [p.name for p in found] == ["Flutter-Templates"]
+    assert discover.is_template(found[0])
+
+
+def test_a_templates_dir_without_the_index_is_not_an_addon(tmp_path):
+    """templates/ also holds documentation; only a bundle source is an addon."""
+    make_template(tmp_path, "templates/Notes", with_index=False)
+    assert discover.find_addons(tmp_path) == []
+
+
+def test_templates_and_plugins_are_listed_together(tmp_path):
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Templates")
+    found = discover.find_addons(tmp_path)
+    assert [p.name for p in found] == ["Flutter-Templates", "Random-XKCD"]
+    assert [discover.is_template(p) for p in found] == [True, False]
+
+
+def test_a_plugin_is_not_a_template(tmp_path):
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    assert not discover.is_template(tmp_path / "plugins" / "Random-XKCD")
+
+
+def test_skip_txt_holds_back_a_template_too(tmp_path):
+    make_template(tmp_path, "templates/Flutter-Templates")
+    (tmp_path / "tools" / "addons").mkdir(parents=True)
+    (tmp_path / "tools" / "addons" / "skip.txt").write_text(
+        "Flutter-Templates  not ready\n")
+    assert discover.find_addons(tmp_path) == []
+
+
+def test_only_resolves_a_template_by_path_or_name(tmp_path):
+    make_template(tmp_path, "templates/Flutter-Templates")
+    by_name = discover.find_addons(tmp_path, ["Flutter-Templates"])
+    by_path = discover.find_addons(tmp_path, ["templates/Flutter-Templates"])
+    assert by_name == by_path
+
+
+def test_plugins_only_excludes_templates(tmp_path):
+    """scripts/update-libs.sh runs Gradle in every entry it gets back, and a
+    template has no build.gradle.kts for assemblePlugin to act on."""
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Templates")
+    assert [p.name for p in discover.find_addons(tmp_path, plugins_only=True)] \
+        == ["Random-XKCD"]
+    assert [p.name for p in discover.find_addons(tmp_path)] \
+        == ["Flutter-Templates", "Random-XKCD"]

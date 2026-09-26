@@ -155,8 +155,11 @@ while IFS= read -r line; do
 # --include-skipped on purpose: a libs refresh must prove every module still
 # compiles, including ones held out of the gallery. main built these too, and
 # losing that check would let a jar change break them silently.
+# --plugins-only: this loop runs Gradle in every entry, and a template addon has
+# no build.gradle.kts for assemblePlugin to act on (ADFA-6252). Template bundles
+# are built by scripts/build-cgt.sh instead.
 done < <(uv run --directory "$REPO_ROOT/tools/addons" addons --root "$REPO_ROOT" \
-         discover --include-skipped)
+         discover --include-skipped --plugins-only)
 
 if [ "${#PLUGINS[@]}" -eq 0 ]; then
     echo "Error: no addons discovered. 'addons discover' returned nothing -- check that uv works and that tools/addons/skip.txt is not excluding everything." >&2
