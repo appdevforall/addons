@@ -52,10 +52,17 @@ def put(client, bucket: str, key: str, path: Path) -> None:
 
 
 def publish(client, bucket: str, objects: list[tuple[str, Path]],
-            catalog: tuple[str, Path]) -> None:
+            catalogs: list[tuple[str, Path]]) -> None:
+    """Everything a catalog references first, then the catalogs.
+
+    Ordering supplies the atomicity R2 has no transaction for (design section
+    10.6): a reader that fetches a catalog mid-publish must never find an entry
+    whose download is not there yet. One catalog per published major.
+    """
     for key, path in objects:
         put(client, bucket, key, path)
-    put(client, bucket, catalog[0], catalog[1])
+    for key, path in catalogs:
+        put(client, bucket, key, path)
 
 
 def bucket_from_env() -> str:

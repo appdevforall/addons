@@ -7,6 +7,17 @@ from addons import catalog
 
 PREDICATE = "com.itsaky.androidide.plugins.build"
 
+
+REPO = Path(__file__).parents[3]
+
+
+def copy_schemas(site: Path) -> None:
+    """Both published majors: catalog.build validates against the one it targets."""
+    site.mkdir(exist_ok=True)
+    for name in ("catalog.schema.json", "catalog.v2.schema.json"):
+        (site / name).write_text((REPO / "site" / name).read_text())
+
+
 METADATA = {
     "summary": "Creates and manages app signing keystores on the device.",
     "description": "A longer paragraph.",
@@ -37,8 +48,7 @@ def make(tmp_path: Path, build_extra: str = "") -> Path:
     (dist / "keystore-generator.cgp").write_bytes(b"cgp")
     (dist / "keystore-generator-src.tar.gz").write_bytes(b"tar")
     (tmp_path / "site").mkdir()
-    (tmp_path / "site" / "catalog.schema.json").write_text(
-        Path(__file__).parents[3].joinpath("site/catalog.schema.json").read_text())
+    copy_schemas(tmp_path / "site")
     return dist
 
 
@@ -84,8 +94,7 @@ def make_template(tmp_path: Path, with_tarball: bool = False) -> Path:
         (dist / "flutter-templates-src.tar.gz").write_bytes(b"tar")
     site = tmp_path / "site"
     site.mkdir(exist_ok=True)
-    (site / "catalog.schema.json").write_text(
-        Path(__file__).parents[3].joinpath("site/catalog.schema.json").read_text())
+    copy_schemas(site)
     return dist
 
 
@@ -170,3 +179,57 @@ def test_entry_carries_both_icon_variants(tmp_path):
     entry = catalog.build(tmp_path, dist)["addons"][0]
     assert entry["iconUrl"].endswith("/p/keystore-generator.png")
     assert entry["iconDarkUrl"].endswith("/p/keystore-generator-night.png")
+
+
+# --- the two published majors (ADFA-6252, design sections 10.2 and 10.5) -------
+#
+# v2 renames pluginId and makes sourceTarball optional. Both are changes 10.5
+# forbids within a major, so v1 keeps being published unchanged for fielded app
+# builds that cannot be updated.
+
+def test_v1_still_says_pluginId(tmp_path):
+    dist = make(tmp_path)
+    doc = catalog.build(tmp_path, dist, schema_version=1)
+    assert doc["schemaVersion"] == 1
+    entry = doc["addons"][0]
+    assert entry["pluginId"] == "com.appdevforall.keygen.plugin"
+    assert "addonId" not in entry
+
+
+def test_v1_still_requires_the_source_tarball(tmp_path):
+    dist = make(tmp_path)
+    entry = catalog.build(tmp_path, dist, schema_version=1)["addons"][0]
+    assert entry["sourceTarball"]["url"].endswith("-src.tar.gz")
+
+
+def test_v1_omits_templates(tmp_path):
+    """v1 cannot describe one: it requires sourceTarball and names its id field
+    for plugins. Removing an addon is the one thing 10.5 permits within a major,
+    so a v1 consumer sees nothing it cannot install."""
+    make(tmp_path)
+    dist = make_template(tmp_path)
+    v1 = catalog.build(tmp_path, dist, schema_version=1)
+    v2 = catalog.build(tmp_path, dist, schema_version=2)
+    assert [e["slug"] for e in v1["addons"]] == ["keystore-generator"]
+    assert [e["slug"] for e in v2["addons"]] == ["flutter-templates",
+                                                 "keystore-generator"]
+
+
+def test_both_majors_agree_on_a_plugin(tmp_path):
+    """Only the id field differs; a rename must not disturb anything else."""
+    dist = make(tmp_path)
+    v1 = catalog.build(tmp_path, dist, schema_version=1)["addons"][0]
+    v2 = catalog.build(tmp_path, dist, schema_version=2)["addons"][0]
+    assert v1.pop("pluginId") == v2.pop("addonId")
+    assert v1 == v2
+
+
+def test_each_major_validates_against_its_own_schema(tmp_path):
+    """build() validates before returning, so reaching this point is the check.
+    Guards against v2 being written against the v1 schema, which would accept it
+    and hide the rename."""
+    dist = make(tmp_path)
+    assert catalog.build(tmp_path, dist, schema_version=1)["schemaVersion"] == 1
+    assert catalog.build(tmp_path, dist, schema_version=2)["schemaVersion"] == 2
+    assert catalog.schema_file(tmp_path, 1).name == "catalog.schema.json"
+    assert catalog.schema_file(tmp_path, 2).name == "catalog.v2.schema.json"

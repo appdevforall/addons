@@ -183,7 +183,10 @@ document.getElementById("q").value = state.q;
 document.getElementById("type").value = state.type;
 document.getElementById("origin").value = state.origin;
 
-fetch("v1/catalog.json")
+// v2, not v1: this page ships with each publish, so it is never a stale consumer,
+// and only v2 carries template addons. v1 keeps being published for the app
+// (ADFA-6252, design section 10.2).
+fetch("v2/catalog.json")
   .then((response) => {
     if (!response.ok) throw new Error(response.status);
     return response.json();

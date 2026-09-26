@@ -52,10 +52,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems else 0
 
     if args.command == "catalog":
-        document = catalog.build(args.root, args.dist, args.base, args.only)
+        # One document per published major. --out names the current one; the older
+        # ones land beside it as catalog.v<N>.json, because every major keeps being
+        # written for consumers pinned to it (design section 10.2).
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(document, indent=2) + "\n")
-        print(f"wrote {args.out} with {len(document['addons'])} addons")
+        for version in (catalog.LATEST, catalog.LEGACY):
+            document = catalog.build(args.root, args.dist, args.base, args.only,
+                                     version)
+            out = (args.out if version == catalog.LATEST
+                   else args.out.with_name(f"{args.out.stem}.v{version}.json"))
+            out.write_text(json.dumps(document, indent=2) + "\n")
+            print(f"wrote {out} (v{version}) with {len(document['addons'])} addons")
         return 0
 
     if args.command == "tarball":
@@ -125,12 +132,19 @@ def main(argv: list[str] | None = None) -> int:
             if not discover.is_template(addon):
                 objects.append((f"{prefix}src/{slug}-src.tar.gz",
                                 dist / f"{slug}-src.tar.gz"))
-        objects.append((f"{prefix}v1/catalog.schema.json",
-                        site / "catalog.schema.json"))
+        # Every published major, newest last: publish.publish() writes the catalogs
+        # after everything they reference, and a consumer pinned to v1 must keep
+        # finding a v1 document (design section 10.2).
+        catalogs = []
+        for version in (catalog.LEGACY, catalog.LATEST):
+            objects.append((f"{prefix}v{version}/catalog.schema.json",
+                            catalog.schema_file(args.root, version)))
+            local = (dist / "catalog.json" if version == catalog.LATEST
+                     else dist / f"catalog.v{version}.json")
+            catalogs.append((f"{prefix}v{version}/catalog.json", local))
         publish.publish(publish.client_from_env(), publish.bucket_from_env(),
-                        objects,
-                        (f"{prefix}v1/catalog.json", dist / "catalog.json"))
-        print(f"published {len(objects) + 1} objects")
+                        objects, catalogs)
+        print(f"published {len(objects) + len(catalogs)} objects")
         return 0
     return 1
 

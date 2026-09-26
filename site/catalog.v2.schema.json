@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://addons.appdevforall.org/v1/catalog.schema.json",
+  "$id": "https://addons.appdevforall.org/v2/catalog.schema.json",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -10,7 +10,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": 1
+      "const": 2
     },
     "generated": {
       "type": "string"
@@ -29,7 +29,7 @@
       "required": [
         "type",
         "slug",
-        "pluginId",
+        "addonId",
         "name",
         "version",
         "summary",
@@ -43,8 +43,7 @@
         "iconDarkUrl",
         "pageUrl",
         "sourceUrl",
-        "download",
-        "sourceTarball"
+        "download"
       ],
       "properties": {
         "type": {
@@ -59,7 +58,7 @@
           "type": "string",
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
         },
-        "pluginId": {
+        "addonId": {
           "type": "string",
           "minLength": 1
         },
@@ -155,5 +154,5 @@
       }
     }
   },
-  "$comment": "Additive by design: section 10.5 permits new fields within a major version and requires consumers to ignore unknown ones, so this schema must not reject them. Field removal or retyping needs a new major."
+  "$comment": "Version 2 (ADFA-6252) makes two changes section 10.5 forbids within a major version, which is why it is a new major published alongside v1 rather than over it. pluginId became addonId: the catalog carries four addon types and the name fitted one. sourceTarball left the required list: a template ships none, because its .cgt is plain text throughout and the download already is the source, while sourceUrl still names the directory. A v2 consumer must treat sourceTarball as optional. Everything else is as v1, and v1 keeps being published unchanged for fielded app builds that cannot be updated."
 }

@@ -606,7 +606,14 @@ plugin-builder. From there:
 | `addons check` | Structure, naming, metadata. Runs on every pull request |
 | `check-toolchain.yml` | Also lints the bundle sources and builds every `.cgt` |
 | `publish-addons.yml` | Zips the bundle and uploads `dl/<slug>.cgt` to Cloudflare R2 |
-| `catalog.json` | Gains an entry with `type: "template"` and no `sourceTarball` |
+| `v2/catalog.json` | Gains an entry with `type: "template"` and no `sourceTarball` |
+
+The catalog is published once per major version. `v2/catalog.json` is the current
+one and the only one that can describe a template: `v1/catalog.json` requires a
+`sourceTarball`, which a template does not have, and names its id field
+`pluginId`. `v1` keeps being published, without the template entries, because the
+main consumer is a fielded app that cannot be force-updated. Nothing you write
+differs between them — the generator emits both.
 
 The metadata a plugin keeps in its `AndroidManifest.xml` lives in `addon.json` under
 `template` instead: `id`, `version` and `minAppVersion`.
