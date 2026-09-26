@@ -134,3 +134,11 @@ def test_the_addon_json_schema_rejects_a_bad_template_block(tmp_path):
     make_template(tmp_path, block=bad)
     problems = check.check_metadata(tmp_path)
     assert any("addon.json is invalid" in p for p in problems)
+
+
+def test_a_non_object_templates_json_fails_cleanly(tmp_path):
+    """A top-level array parses, so .get() would raise AttributeError and the
+    required PR gate would die with a traceback instead of a named problem."""
+    make_template(tmp_path, index="[]")
+    problems = check.check_names(tmp_path)
+    assert any("must be a JSON object" in p for p in problems)

@@ -48,7 +48,15 @@ def find_templates(root: Path, skip: set[str]) -> list[Path]:
 
 
 def find_addons(root: Path, only: list[str] | None = None,
-                include_skipped: bool = False) -> list[Path]:
+                include_skipped: bool = False,
+                plugins_only: bool = False) -> list[Path]:
+    """Every addon, or only the ones with a Gradle build.
+
+    plugins_only exists for callers that run Gradle over the result --
+    scripts/update-libs.sh does, and a template has no build.gradle.kts for
+    assemblePlugin to act on. Keeping the rule here rather than in a shell
+    filter means there is one definition of what a template is.
+    """
     skip = (read_skip(root, only_never_build=True) if include_skipped
             else read_skip(root))
     found = []
@@ -61,7 +69,8 @@ def find_addons(root: Path, only: list[str] | None = None,
         for f in root.glob(pattern):
             if PREDICATE in f.read_text(errors="ignore") and f.parent.name not in skip:
                 found.append(f.parent)
-    found.extend(find_templates(root, skip))
+    if not plugins_only:
+        found.extend(find_templates(root, skip))
     found = sorted(found, key=lambda p: p.name)
     if only is None:
         return found

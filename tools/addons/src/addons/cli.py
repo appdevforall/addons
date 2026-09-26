@@ -14,6 +14,9 @@ def main(argv: list[str] | None = None) -> int:
     discover_parser.add_argument(
         "--include-skipped", action="store_true",
         help="also list skipped addons; for compile coverage, not publishing")
+    discover_parser.add_argument(
+        "--plugins-only", action="store_true",
+        help="list only addons with a Gradle build; for callers that run Gradle")
     sub.add_parser("check")
 
     catalog_parser = sub.add_parser("catalog")
@@ -37,7 +40,8 @@ def main(argv: list[str] | None = None) -> int:
         # repo-relative, not bare names: callers cd into these and match them
         # against changed-file lists, so the location has to survive
         for path in discover.find_addons(args.root,
-                                         include_skipped=args.include_skipped):
+                                         include_skipped=args.include_skipped,
+                                         plugins_only=args.plugins_only):
             print(path.relative_to(args.root).as_posix())
         return 0
 

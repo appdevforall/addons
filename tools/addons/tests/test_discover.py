@@ -143,3 +143,14 @@ def test_only_resolves_a_template_by_path_or_name(tmp_path):
     by_name = discover.find_addons(tmp_path, ["Flutter-Templates"])
     by_path = discover.find_addons(tmp_path, ["templates/Flutter-Templates"])
     assert by_name == by_path
+
+
+def test_plugins_only_excludes_templates(tmp_path):
+    """scripts/update-libs.sh runs Gradle in every entry it gets back, and a
+    template has no build.gradle.kts for assemblePlugin to act on."""
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Templates")
+    assert [p.name for p in discover.find_addons(tmp_path, plugins_only=True)] \
+        == ["Random-XKCD"]
+    assert [p.name for p in discover.find_addons(tmp_path)] \
+        == ["Flutter-Templates", "Random-XKCD"]

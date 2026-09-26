@@ -72,12 +72,17 @@ The delimiters carry a `$` prefix. This is not stock Pebble syntax.
 | Run a statement | `${% if LANGUAGE == 'kotlin' %} ... ${% endif %}` |
 | Comment | `${# not rendered #}` |
 
-Filters work:
+Filters work, and they chain:
 
 ```
-name: "${{APP_NAME | lower}}"
+name: "${{APP_NAME | lower | replace({" ": "_", "-": "_"})}}"
 ${{PACKAGE_NAME | replace({"." : "_"})}}
 ```
+
+`APP_NAME` is whatever the user typed, spaces and all — the default is `My Application2`. Any
+file that needs an identifier rather than a label has to fold it, as the first line does. A
+bare `| lower` is not enough: it yields `my application2`, which is valid YAML and an invalid
+Dart package name.
 
 Values you can use:
 
@@ -281,8 +286,10 @@ every template you shipped, and check the result:
 
 ### Re-installing after a change
 
-Rebuild, push the new file, then install it again the same way. The IDE keys the bundle on its
-file name, so a rebuilt bundle replaces the old one.
+Rebuild, push the new file, then install it again the same way. Because a collection of that
+name is already there, the dialog changes to **Template Collection Already Installed** and
+offers **Overwrite**, **Rename & Install** and **Cancel**. Choose **Overwrite** — the other
+option installs a second copy under a new name, and you end up testing against both.
 
 ---
 

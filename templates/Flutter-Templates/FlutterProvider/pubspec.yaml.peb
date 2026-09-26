@@ -1,4 +1,4 @@
-name: "${{APP_NAME | lower}}"
+name: "${{APP_NAME | lower | replace({" ": "_", "-": "_"})}}"
 description: Flutter Provider project created from a Flutter Templates starter for Code on the Go
 publish_to: 'none'
 version: 1.0.0+1

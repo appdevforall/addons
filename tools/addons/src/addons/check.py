@@ -32,6 +32,13 @@ def check_template(path: Path, directory: str) -> list[str]:
     except json.JSONDecodeError as error:
         return [f"{directory}: templates.json is not valid JSON: {error}"]
 
+    # A top-level array or string parses fine and would then make .get() raise
+    # AttributeError, so the required PR gate would die with a bare traceback
+    # instead of the named problem this function exists to report.
+    if not isinstance(data, dict):
+        return [f"{directory}: templates.json must be a JSON object with a "
+                f"'templates' list"]
+
     listed = data.get("templates")
     if not isinstance(listed, list) or not listed:
         return [f"{directory}: templates.json lists no templates"]
