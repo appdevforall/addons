@@ -446,11 +446,13 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         val resolver = requireContext().contentResolver
         lifecycleScope.launch {
             val message = when (viewModel.exportSession(sessionId, resolver, uri)) {
-                ChatViewModel.ExportResult.EXPORTED -> R.string.session_exported
-                ChatViewModel.ExportResult.MISSING -> R.string.session_export_missing
-                ChatViewModel.ExportResult.FAILED -> R.string.session_export_failed
+                ChatViewModel.ExportResult.EXPORTED -> getString(R.string.session_exported)
+                ChatViewModel.ExportResult.TOO_LARGE_TO_IMPORT ->
+                    getString(R.string.session_exported_too_large, importLimitMegabytes())
+                ChatViewModel.ExportResult.MISSING -> getString(R.string.session_export_missing)
+                ChatViewModel.ExportResult.FAILED -> getString(R.string.session_export_failed)
             }
-            showInfoSnackbar(getString(message))
+            showInfoSnackbar(message)
         }
     }
 
@@ -462,14 +464,24 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private fun readImport(uri: Uri) {
         val resolver = requireContext().contentResolver
         lifecycleScope.launch {
-            if (!viewModel.importTranscript(resolver, uri)) {
-                showInfoSnackbar(getString(R.string.session_import_failed))
-                return@launch
+            when (viewModel.importTranscript(resolver, uri)) {
+                ChatViewModel.ImportResult.IMPORTED -> Unit
+                ChatViewModel.ImportResult.TOO_LARGE -> {
+                    showInfoSnackbar(getString(R.string.session_import_too_large, importLimitMegabytes()))
+                    return@launch
+                }
+                ChatViewModel.ImportResult.FAILED -> {
+                    showInfoSnackbar(getString(R.string.session_import_failed))
+                    return@launch
+                }
             }
             sidebar?.close()
             showInfoSnackbar(getString(R.string.session_imported))
         }
     }
+
+    /** [ChatTranscript.MAX_IMPORT_BYTES] as the user is told it. */
+    private fun importLimitMegabytes(): Int = (ChatTranscript.MAX_IMPORT_BYTES / (1024 * 1024)).toInt()
 
     private fun setupInputArea() {
         binding.sendButton.setOnClickListener {

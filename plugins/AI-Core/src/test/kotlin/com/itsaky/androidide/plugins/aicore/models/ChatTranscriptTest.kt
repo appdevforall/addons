@@ -1,6 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.models
 
-import java.io.IOException
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -221,9 +221,18 @@ class ChatTranscriptTest {
         assertEquals("héllo", text)
     }
 
-    @Test(expected = IOException::class)
+    @Test(expected = ChatTranscript.TranscriptTooLargeException::class)
     fun givenAStreamPastTheLimit_whenRead_thenItIsRefused() {
         ChatTranscript.read("héllo!".toByteArray().inputStream(), limit = 6)
+    }
+
+    @Test
+    fun givenAChat_whenWritten_thenItReturnsTheBytesItWrote() {
+        val out = ByteArrayOutputStream()
+
+        val written = ChatTranscript.write(chat(name = "Résumé"), out)
+
+        assertEquals(out.size().toLong(), written)
     }
 
     @Test

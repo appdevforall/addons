@@ -33,11 +33,13 @@
     <string name="sidebar_import_chat">Import chat</string>
     <!-- Export and import (ADFA-6247): a chat saved as, or read back from, a .txt file. -->
     <string name="session_exported">Chat exported</string>
+    <string name="session_exported_too_large">Chat exported, but it is larger than %1$d MB, so it can\'t be imported back.</string>
     <string name="session_export_failed">Couldn\'t save the chat to that file. Nothing was exported.</string>
     <string name="session_export_empty">This chat is empty, so there is nothing to export yet.</string>
     <string name="menu_item_unavailable">Unavailable</string>
     <string name="session_export_missing">That chat no longer exists, so there is nothing to export.</string>
     <string name="session_imported">Chat imported</string>
+    <string name="session_import_too_large">That file is larger than %1$d MB, so it can\'t be imported. Nothing was imported.</string>
     <string name="session_import_failed">That file isn\'t a chat exported from the Agent, or it couldn\'t be read. Nothing was imported.</string>
     <string name="session_picker_unavailable">No file picker is available on this device.</string>
     <string name="session_current">Current chat</string>

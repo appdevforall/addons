@@ -1633,8 +1633,14 @@ class ChatViewModel(
         persistState()
     }
 
-    /** How [exportSession] ended, which decides what the user is told. */
-    enum class ExportResult { EXPORTED, MISSING, FAILED }
+    /**
+     * How [exportSession] ended, which decides what the user is told. [TOO_LARGE_TO_IMPORT] is
+     * still written: the file keeps the chat, it just cannot come back through [importTranscript].
+     */
+    enum class ExportResult { EXPORTED, TOO_LARGE_TO_IMPORT, MISSING, FAILED }
+
+    /** How [importTranscript] ended, which decides what the user is told. */
+    enum class ImportResult { IMPORTED, TOO_LARGE, FAILED }
 
     /**
      * Writes a chat to the file the picker returned. Rendered from the chat as it is now, not as it
@@ -1651,8 +1657,12 @@ class ChatViewModel(
             try {
                 // "wt" truncates, so overwriting a longer file leaves none of its tail behind.
                 val stream = resolver.openOutputStream(uri, "wt") ?: throw IOException("no stream")
-                stream.use { ChatTranscript.write(session, it) }
-                ExportResult.EXPORTED
+                val written = stream.use { ChatTranscript.write(session, it) }
+                if (written > ChatTranscript.MAX_IMPORT_BYTES) {
+                    ExportResult.TOO_LARGE_TO_IMPORT
+                } else {
+                    ExportResult.EXPORTED
+                }
             } catch (e: Exception) {
                 // Any provider can fail in its own way; none of them are suspension points.
                 logWarn("chat export failed", e)
@@ -1669,22 +1679,27 @@ class ChatViewModel(
      *
      * @param resolver opens [uri]; held only for this call.
      * @param uri the file the user picked.
-     * @return false when the file could not be read or is not a transcript.
+     * @return [ImportResult.IMPORTED] only when the chat was added.
      */
-    suspend fun importTranscript(resolver: ContentResolver, uri: Uri): Boolean {
+    suspend fun importTranscript(resolver: ContentResolver, uri: Uri): ImportResult {
         val projectKey = activeProjectKey
-        val session = withContext(Dispatchers.IO) {
-            try {
+        val session = try {
+            withContext(Dispatchers.IO) {
                 val stream = resolver.openInputStream(uri) ?: throw IOException("no stream")
                 ChatTranscript.parse(stream.use { ChatTranscript.read(it) }, projectKey)
-            } catch (e: Exception) {
-                // Any provider can fail in its own way; none of them are suspension points.
-                logWarn("chat import failed", e)
-                null
             }
-        } ?: return false
+        } catch (e: ChatTranscript.TranscriptTooLargeException) {
+            logWarn("chat import refused", e)
+            return ImportResult.TOO_LARGE
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Any provider can fail in its own way.
+            logWarn("chat import failed", e)
+            return ImportResult.FAILED
+        }
         importSession(session)
-        return true
+        return ImportResult.IMPORTED
     }
 
     /**

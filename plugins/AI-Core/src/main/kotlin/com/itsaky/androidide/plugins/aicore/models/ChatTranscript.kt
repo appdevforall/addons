@@ -63,6 +63,9 @@ object ChatTranscript {
     /** The file is not a transcript this plugin can read; [message] says why, for the log. */
     class InvalidTranscriptException(message: String) : Exception(message)
 
+    /** The file is past the import limit, which a chat of about four million characters reaches. */
+    class TranscriptTooLargeException(limit: Long) : IOException("file larger than $limit bytes")
+
     /**
      * Writes [session] out as a transcript, every message in order and labeled by sender.
      *
@@ -88,16 +91,19 @@ object ChatTranscript {
      *
      * @param session the chat to export.
      * @param stream where the file goes; left open for the caller to close.
+     * @return how many bytes were written, so the caller can warn when [read] would refuse them.
      */
-    fun write(session: ChatSession, stream: OutputStream) {
-        stream.write(export(session).toByteArray(Charsets.UTF_8))
+    fun write(session: ChatSession, stream: OutputStream): Long {
+        val bytes = export(session).toByteArray(Charsets.UTF_8)
+        stream.write(bytes)
+        return bytes.size.toLong()
     }
 
     /**
      * Reads [stream] as UTF-8 text, refusing one past [limit] or not opening with [MAGIC] before
      * buffering the rest. By hand, not InputStream.readNBytes: that is API 33, the host runs on 28.
      *
-     * @throws IOException when the stream holds more than [limit] bytes.
+     * @throws TranscriptTooLargeException when the stream holds more than [limit] bytes.
      * @throws InvalidTranscriptException when the first line is not the transcript header.
      */
     fun read(stream: InputStream, limit: Long = MAX_IMPORT_BYTES): String {
@@ -107,7 +113,7 @@ object ChatTranscript {
         while (true) {
             val read = stream.read(buffer)
             if (read < 0) break
-            if (out.size().toLong() + read > limit) throw IOException("file larger than $limit bytes")
+            if (out.size().toLong() + read > limit) throw TranscriptTooLargeException(limit)
             out.write(buffer, 0, read)
             // Copies only the few KB before the header; a picked log is refused after one chunk.
             if (!headerSeen) headerSeen = opensWithMagic(out.toByteArray())
