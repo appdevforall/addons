@@ -1728,9 +1728,12 @@ class ChatViewModel(
         replaceCurrentSessionMessages(emptyList())
         // The title described the conversation just cleared; the next first reply writes a new one.
         // Its reply would name the cleared chat, and its settle would end the next run's placeholder.
-        titleRequest?.job?.cancel()
-        titleRequest = null
         _currentSessionId.value?.let { sessionId ->
+            // Another chat's request is left to finish and settle its own placeholder.
+            titleRequest?.takeIf { it.sessionId == sessionId }?.let {
+                it.job.cancel()
+                titleRequest = null
+            }
             titleRequested.remove(sessionId)
             settleTitle(sessionId)
             _sessions.value = _sessions.value.map {

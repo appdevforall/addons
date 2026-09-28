@@ -27,6 +27,7 @@ import org.junit.Test
 private const val TEST_PROJECT_KEY = "a1b2c3d4e5f60718"
 private const val SESSIONS_KEY = "chat_sessions_$TEST_PROJECT_KEY"
 private const val SESSION_ID = "s1"
+private const val OTHER_SESSION_ID = "s2"
 
 /** Holds long enough to show a prompt waiting, far short of the title's own timeout. */
 private const val HOLD_MS = 200L
@@ -118,6 +119,24 @@ class ChatViewModelTitleQueueTest {
 
         assertEquals(Unit, released)
         assertNull(viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle)
+    }
+
+    @Test
+    fun givenATitleInFlightForAnotherChat_whenThisChatIsCleared_thenThatTitleStillLands() {
+        stored[SESSIONS_KEY] = stored.getValue(SESSIONS_KEY).removeSuffix("]") +
+            """,{"id":"$OTHER_SESSION_ID","createdAt":500,"projectKey":"$TEST_PROJECT_KEY","messages":[]}]"""
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService))
+
+        viewModel.switchToSession(OTHER_SESSION_ID)
+        viewModel.clearMessages()
+        titleResponse.complete(LlmInferenceService.LlmResponse.success("Build script walkthrough", 4, 10))
+        runBlocking { viewModel.awaitTitleRequest() }
+
+        assertEquals(
+            "Build script walkthrough",
+            viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle,
+        )
     }
 
     @Test
