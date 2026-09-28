@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 import android.content.Context
 import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.services.LlmInferenceService
+import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -65,6 +66,9 @@ class ChatViewModelTitleQueueTest {
         titleResponse = CompletableFuture()
         llmService = mockk(relaxed = true)
         every { llmService.generateCompletion(any(), any()) } returns titleResponse
+        // Like the real service: the global cancel reaches whatever call is current, here the title.
+        every { llmService.cancelGeneration() } answers { titleResponse.cancel(true); Unit }
+        SharedServices.register(LlmInferenceService::class.java, llmService)
         stored[SESSIONS_KEY] =
             """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[""" +
             """{"id":"m1","text":"explain this build script","sender":"USER","status":"SENT","timestamp":1},""" +
@@ -75,6 +79,7 @@ class ChatViewModelTitleQueueTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        SharedServices.clear()
     }
 
     private fun newViewModel() = ChatViewModel { null }.apply {
@@ -137,6 +142,23 @@ class ChatViewModelTitleQueueTest {
             "Build script walkthrough",
             viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle,
         )
+        verify(exactly = 0) { llmService.cancelGeneration() }
+    }
+
+    @Test
+    fun givenATitleInFlightAndNoModelTurn_whenStopIsPressed_thenTheTitleStillLands() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService))
+
+        viewModel.stopProcessing(reason = "test")
+        titleResponse.complete(LlmInferenceService.LlmResponse.success("Build script walkthrough", 4, 10))
+        runBlocking { viewModel.awaitTitleRequest() }
+
+        assertEquals(
+            "Build script walkthrough",
+            viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle,
+        )
+        verify(exactly = 0) { llmService.cancelGeneration() }
     }
 
     @Test

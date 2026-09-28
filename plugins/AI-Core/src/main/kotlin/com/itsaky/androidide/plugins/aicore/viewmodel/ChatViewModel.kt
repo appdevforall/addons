@@ -257,6 +257,13 @@ class ChatViewModel(
     /** A title being written, and the session it is for. */
     private class TitleRequest(val sessionId: String, val job: Job)
 
+    /**
+     * Whether a chat model turn is generating. The service's cancel is global, so Stop and Clear
+     * Chat call it only then; otherwise it would cancel a title request, or another plugin's call.
+     */
+    @Volatile
+    private var modelTurnInFlight = false
+
     /** Sessions asked for a title this process; a failing backend is not re-asked every run. */
     private val titleRequested = mutableSetOf<String>()
 
@@ -1482,6 +1489,12 @@ class ChatViewModel(
                 }
             }
 
+        modelTurnInFlight = true
+        // After the flag: Stop bumps the epoch before reading it, so one of the two sees the other.
+        if (isStale()) {
+            modelTurnInFlight = false
+            throw CancellationException("stopped")
+        }
         try {
             // Every backend takes the structured form: the last turn as the prompt, the rest as
             // history. A backend that reports no native calls simply never calls onToolCall, and
@@ -1523,7 +1536,11 @@ class ChatViewModel(
             if (!deferred.isCompleted) deferred.completeExceptionally(e)
         }
 
-        return deferred.await()
+        return try {
+            deferred.await()
+        } finally {
+            modelTurnInFlight = false
+        }
     }
 
     /**
@@ -1755,10 +1772,20 @@ class ChatViewModel(
         AgentTrace.stage("CANCEL", "reason=$reason wasRunning=${_agentState.value.isRunning}")
         generationEpoch.incrementAndGet()
         approvalManager.cancelPendingApproval()
+        cancelGenerationJob()
+        stopStateTimer()
+    }
+
+    /**
+     * Cancels the run's job and, only while one of its model turns is generating, the backend
+     * stream too. A prompt still queued behind a title leaves that title running.
+     */
+    private fun cancelGenerationJob() {
+        // Read before the cancel: the turn's finally may clear it as soon as the job is cancelled.
+        val turnInFlight = modelTurnInFlight
         generationJob?.cancel()
         generationJob = null
-        getLlmService()?.cancelGeneration()
-        stopStateTimer()
+        if (turnInFlight) getLlmService()?.cancelGeneration()
     }
 
     /**
@@ -2008,9 +2035,7 @@ class ChatViewModel(
         setState(AgentState.Cancelling)
         // Cancelling the job alone would strand an open approval dialog with nothing awaiting it.
         approvalManager.cancelPendingApproval()
-        generationJob?.cancel()
-        generationJob = null
-        getLlmService()?.cancelGeneration()
+        cancelGenerationJob()
         stopStateTimer()
         finalizeInProgressMessages()
         setState(AgentState.Idle)
