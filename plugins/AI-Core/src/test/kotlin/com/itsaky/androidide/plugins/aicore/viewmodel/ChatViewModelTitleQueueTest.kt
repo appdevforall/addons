@@ -108,6 +108,19 @@ class ChatViewModelTitleQueueTest {
     }
 
     @Test
+    fun givenATitleInFlight_whenTheChatIsCleared_thenTheRequestIsDroppedAndItsTitleNeverLands() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService))
+
+        viewModel.clearMessages()
+        titleResponse.complete(LlmInferenceService.LlmResponse.success("Build script walkthrough", 4, 10))
+        val released = runBlocking { withTimeoutOrNull(HOLD_MS) { viewModel.awaitTitleRequest() } }
+
+        assertEquals(Unit, released)
+        assertNull(viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle)
+    }
+
+    @Test
     fun givenNoTitleInFlight_whenAPromptIsSent_thenItRunsAtOnceAndNothingIsCancelled() {
         val viewModel = newViewModel()
 

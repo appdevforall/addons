@@ -274,12 +274,14 @@ class ChatAdapter(
 
     /**
      * Shows the actions under user and agent messages once their text is final: not while loading,
-     * nor while a reply is still streaming. System error rows share this layout but get none.
+     * nor while a reply is still streaming. System error and tool-activity rows share this layout
+     * but get none.
      */
     private fun updateMessageActions(holder: DefaultMessageViewHolder, message: ChatMessage) {
         val streaming = message.sender == Sender.AGENT &&
             message.status == MessageStatus.SENT && message.durationMs == null
-        val show = message.sender != Sender.SYSTEM && message.status != MessageStatus.LOADING && !streaming
+        val copyable = message.sender == Sender.USER || message.sender == Sender.AGENT
+        val show = copyable && message.status != MessageStatus.LOADING && !streaming
         holder.messageActions.visibility = if (show) View.VISIBLE else View.GONE
     }
 

@@ -46,6 +46,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -60,6 +61,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -1227,14 +1229,20 @@ class ChatViewModel(
             ?.text ?: return false
         titleRequested.add(session.id)
         val sessionId = session.id
-        val job = viewModelScope.launch(Dispatchers.IO) {
+        // Lazy, so titleRequest is set before the finally below can compare against it.
+        val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            val self = coroutineContext.job
             try {
                 generateTitle(llmService, sessionId, userText, replyText)
             } finally {
-                withContext(NonCancellable + Dispatchers.Main) { settleTitle(sessionId) }
+                // A request clearMessages() dropped must not end the placeholder of the run after it.
+                withContext(NonCancellable + Dispatchers.Main) {
+                    if (titleRequest?.job === self) settleTitle(sessionId)
+                }
             }
         }
         titleRequest = TitleRequest(sessionId, job)
+        job.start()
         return true
     }
 
@@ -1283,9 +1291,8 @@ class ChatViewModel(
             return
         }
         if (response == null) {
-            // Safe to cancel globally: no run starts until this job has finished.
+            // The timeout already cancelled this future; cancelGeneration() would hit other plugins'.
             logWarn("title request timed out for session $sessionId")
-            llmService.cancelGeneration()
             return
         }
         if (!response.success) {
@@ -1720,6 +1727,9 @@ class ChatViewModel(
         // Without this the session keeps its messages and the cleared chat returns on the next sync.
         replaceCurrentSessionMessages(emptyList())
         // The title described the conversation just cleared; the next first reply writes a new one.
+        // Its reply would name the cleared chat, and its settle would end the next run's placeholder.
+        titleRequest?.job?.cancel()
+        titleRequest = null
         _currentSessionId.value?.let { sessionId ->
             titleRequested.remove(sessionId)
             settleTitle(sessionId)
@@ -1833,6 +1843,8 @@ class ChatViewModel(
         _sessions.value = _sessions.value.map {
             if (it.id == sessionId) it.copy(name = trimmed) else it
         }
+        // A user name outranks the title being written, so its placeholder must not outlast it.
+        if (trimmed != null) settleTitle(sessionId)
         // Written now rather than debounced: a rename is deliberate and may be the last thing the
         // user does before leaving the tab, where no streamed token follows to flush it.
         persistState()
