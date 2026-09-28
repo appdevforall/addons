@@ -38,9 +38,12 @@ object ChatTranscript {
     const val MIME_TYPE = "text/plain"
 
     /** A file larger than this is not a transcript this plugin wrote, and is not read in whole. */
-    const val MAX_IMPORT_BYTES = 20L * 1024 * 1024
+    const val MAX_IMPORT_BYTES = 4L * 1024 * 1024
 
     private const val MAGIC = "# Code on the Go AI Agent chat"
+    /** How far [read] looks for [MAGIC] before refusing the file, blank lines before it included. */
+    private const val MAX_MAGIC_SEARCH_BYTES = 4 * 1024
+    private const val BOM = "\uFEFF"
     private const val FORMAT_VERSION = "1"
     private const val HEADER_PREFIX = "--- "
     private const val HISTORY_MARKER = "--- MODEL WROTE"
@@ -91,19 +94,23 @@ object ChatTranscript {
     }
 
     /**
-     * Reads [stream] as UTF-8 text, refusing one past [limit] before buffering the excess.
-     * By hand, not InputStream.readNBytes: that is API 33, and the host still runs on API 28.
+     * Reads [stream] as UTF-8 text, refusing one past [limit] or not opening with [MAGIC] before
+     * buffering the rest. By hand, not InputStream.readNBytes: that is API 33, the host runs on 28.
      *
      * @throws IOException when the stream holds more than [limit] bytes.
+     * @throws InvalidTranscriptException when the first line is not the transcript header.
      */
     fun read(stream: InputStream, limit: Long = MAX_IMPORT_BYTES): String {
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var headerSeen = false
         while (true) {
             val read = stream.read(buffer)
             if (read < 0) break
             if (out.size().toLong() + read > limit) throw IOException("file larger than $limit bytes")
             out.write(buffer, 0, read)
+            // Copies only the few KB before the header; a picked log is refused after one chunk.
+            if (!headerSeen) headerSeen = opensWithMagic(out.toByteArray())
         }
         return out.toString(Charsets.UTF_8.name())
     }
@@ -119,7 +126,7 @@ object ChatTranscript {
      * @throws InvalidTranscriptException when [text] is not a transcript this plugin wrote.
      */
     fun parse(text: String, projectKey: String?, now: Long = System.currentTimeMillis()): ChatSession {
-        val lines = text.removePrefix("﻿").replace("\r\n", "\n").split('\n')
+        val lines = text.removePrefix(BOM).replace("\r\n", "\n").split('\n')
         val firstLine = lines.indexOfFirst { it.isNotBlank() }
         if (firstLine < 0 || lines[firstLine].trim() != MAGIC) {
             throw InvalidTranscriptException("missing the transcript header")
@@ -181,6 +188,25 @@ object ChatTranscript {
     private fun capFileName(base: String): String =
         if (base.codePointCount(0, base.length) <= MAX_FILE_NAME_LENGTH) base
         else base.substring(0, base.offsetByCodePoints(0, MAX_FILE_NAME_LENGTH))
+
+    /**
+     * Whether [prefix] holds the whole first non-blank line and it is [MAGIC]; false while that
+     * line is still incomplete. The same test [parse] applies, run before the file is buffered.
+     *
+     * @throws InvalidTranscriptException once that line is complete and is not [MAGIC], or none
+     *   has ended within [MAX_MAGIC_SEARCH_BYTES].
+     */
+    private fun opensWithMagic(prefix: ByteArray): Boolean {
+        val text = String(prefix, Charsets.UTF_8).removePrefix(BOM)
+        val start = text.indexOfFirst { !it.isWhitespace() }
+        val end = if (start < 0) -1 else text.indexOf('\n', start)
+        if (end < 0) {
+            if (prefix.size > MAX_MAGIC_SEARCH_BYTES) throw InvalidTranscriptException("missing the transcript header")
+            return false
+        }
+        if (text.substring(start, end).trim() != MAGIC) throw InvalidTranscriptException("missing the transcript header")
+        return true
+    }
 
     /** Trailing whitespace is ignored, since an editor may add it to a line this wrote without. */
     private fun matchHeader(line: String): MatchResult? = HEADER.matchEntire(line.trimEnd())

@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.models
 
 import java.io.IOException
+import java.io.InputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -223,6 +224,28 @@ class ChatTranscriptTest {
     @Test(expected = IOException::class)
     fun givenAStreamPastTheLimit_whenRead_thenItIsRefused() {
         ChatTranscript.read("héllo!".toByteArray().inputStream(), limit = 6)
+    }
+
+    @Test
+    fun givenAnExportPrecededByABomAndBlankLines_whenRead_thenItIsReadWhole() {
+        val export = ChatTranscript.export(chat())
+        val text = "\uFEFF\n  \n$export"
+
+        assertEquals(text, ChatTranscript.read(text.toByteArray().inputStream()))
+    }
+
+    @Test(expected = ChatTranscript.InvalidTranscriptException::class)
+    fun givenAFileWithoutTheHeader_whenRead_thenItIsRefusedBeforeTheRestIsBuffered() {
+        // Endless, and within no limit: only the header check can end the read.
+        val endless = object : InputStream() {
+            override fun read(): Int = 'x'.code
+        }
+        ChatTranscript.read(endless, limit = Long.MAX_VALUE)
+    }
+
+    @Test(expected = ChatTranscript.InvalidTranscriptException::class)
+    fun givenAFirstLineThatIsNotTheHeader_whenRead_thenItIsRefused() {
+        ChatTranscript.read("2026-09-24 build log\n# Code on the Go AI Agent chat\n".toByteArray().inputStream())
     }
 
     private fun assertInvalid(text: String) {
