@@ -83,6 +83,42 @@ class ChatTranscriptTest {
     }
 
     @Test
+    fun givenATurnWhoseBubbleDiffersFromWhatTheModelWrote_whenRoundTripped_thenBothAreKept() {
+        val original = ChatSession(
+            messages = listOf(
+                message("The action failed.", Sender.AGENT, durationMs = 5, historyText = "I'll read it.\n\nFirst."),
+                message("Why?", Sender.USER),
+            )
+        )
+
+        val imported = ChatTranscript.parse(ChatTranscript.export(original), null)
+
+        assertEquals(original.messages.map { it.text }, imported.messages.map { it.text })
+        assertEquals(original.messages.map { it.historyText }, imported.messages.map { it.historyText })
+    }
+
+    @Test
+    fun givenAMessageThatLooksLikeTheHistoryMarker_whenRoundTripped_thenItIsNotSplit() {
+        val tricky = "a\n--- MODEL WROTE\n\\--- MODEL WROTE \nb"
+        val original = ChatSession(messages = listOf(message(tricky, Sender.AGENT, historyText = tricky)))
+
+        val imported = ChatTranscript.parse(ChatTranscript.export(original), null).messages.single()
+
+        assertEquals(tricky, imported.text)
+        assertEquals(tricky, imported.historyText)
+    }
+
+    @Test
+    fun givenMessagesEndingInNewlines_whenRoundTripped_thenTheirTrailingNewlinesSurvive() {
+        val texts = listOf("failed: boom\n", "foo\n\n", "\n\n", "")
+        val original = ChatSession(messages = texts.map { message(it, Sender.TOOL) })
+
+        val imported = ChatTranscript.parse(ChatTranscript.export(original), null)
+
+        assertEquals(texts, imported.messages.map { it.text })
+    }
+
+    @Test
     fun givenAFileWithWindowsLineEndingsAndABom_whenImported_thenItStillReads() {
         val text = "﻿" + ChatTranscript.export(chat()).replace("\n", "\r\n")
 
@@ -217,5 +253,9 @@ class ChatTranscriptTest {
         timestamp: Long = 1_000,
         durationMs: Long? = null,
         status: MessageStatus = MessageStatus.SENT,
-    ) = ChatMessage(text = text, sender = sender, timestamp = timestamp, durationMs = durationMs, status = status)
+        historyText: String? = null,
+    ) = ChatMessage(
+        text = text, sender = sender, timestamp = timestamp, durationMs = durationMs, status = status,
+        historyText = historyText,
+    )
 }

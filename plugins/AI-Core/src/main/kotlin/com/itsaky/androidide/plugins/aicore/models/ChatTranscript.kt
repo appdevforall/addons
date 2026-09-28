@@ -23,11 +23,14 @@ import java.util.UUID
  * Why does the build fail?
  *
  * --- AGENT 2026-09-24T10:00:05Z duration=4210
- * The dependency is missing.
+ * The action failed.
+ * --- MODEL WROTE
+ * I'll read the build file first.
  * ```
  *
- * A message line that would read as a header is escaped with one leading backslash, and so is a
- * line that already starts with backslashes before one — so every line reads back as written.
+ * `--- MODEL WROTE` opens [ChatMessage.historyText], present only when it differs from the bubble.
+ * A message line that would read as a header or that marker is escaped with one leading backslash,
+ * and so is one already starting with backslashes before one — so every line reads back as written.
  */
 object ChatTranscript {
 
@@ -40,6 +43,7 @@ object ChatTranscript {
     private const val MAGIC = "# Code on the Go AI Agent chat"
     private const val FORMAT_VERSION = "1"
     private const val HEADER_PREFIX = "--- "
+    private const val HISTORY_MARKER = "--- MODEL WROTE"
     private const val KEY_FORMAT = "format"
     private const val KEY_NAME = "name"
     private const val TOKEN_DURATION = "duration="
@@ -71,7 +75,8 @@ object ChatTranscript {
         }
         for (message in session.messages) {
             append('\n').append(header(message)).append('\n')
-            message.text.split('\n').forEach { append(escape(it)).append('\n') }
+            appendBody(message.text)
+            message.historyText?.let { append(HISTORY_MARKER).append('\n').appendBody(it) }
         }
     }
 
@@ -142,9 +147,14 @@ object ChatTranscript {
                 ?: throw InvalidTranscriptException("expected a message header")
             val body = mutableListOf<String>()
             while (index < lines.size && !isHeader(lines[index])) {
-                body += unescape(lines[index++])
+                body += lines[index++]
             }
-            messages += message(header, body.joinToString("\n").trimEnd('\n'))
+            // Only the separator export writes (or the empty string after the file's last newline).
+            if (body.lastOrNull() == "") body.removeAt(body.lastIndex)
+            val marker = body.indexOfFirst(::isHistoryMarker)
+            val text = if (marker < 0) body else body.subList(0, marker)
+            val history = if (marker < 0) null else body.subList(marker + 1, body.size)
+            messages += message(header, text.joinBody(), history?.joinBody())
         }
         return ChatSession(createdAt = now, messages = messages, projectKey = projectKey, name = name)
     }
@@ -177,6 +187,16 @@ object ChatTranscript {
 
     private fun isHeader(line: String): Boolean = matchHeader(line) != null
 
+    private fun isHistoryMarker(line: String): Boolean = line.trimEnd() == HISTORY_MARKER
+
+    private fun isStructural(line: String): Boolean = isHeader(line) || isHistoryMarker(line)
+
+    private fun StringBuilder.appendBody(text: String): StringBuilder = apply {
+        text.split('\n').forEach { append(escape(it)).append('\n') }
+    }
+
+    private fun List<String>.joinBody(): String = joinToString("\n", transform = ::unescape)
+
     private fun header(message: ChatMessage): String = buildString {
         append(HEADER_PREFIX).append(message.sender.name).append(' ')
         append(Instant.ofEpochMilli(message.timestamp))
@@ -188,7 +208,7 @@ object ChatTranscript {
         }
     }
 
-    private fun message(header: MatchResult, text: String): ChatMessage {
+    private fun message(header: MatchResult, text: String, historyText: String?): ChatMessage {
         val (sender, stamp, tokens) = header.destructured
         val timestamp = try {
             Instant.parse(stamp).toEpochMilli()
@@ -214,12 +234,13 @@ object ChatTranscript {
             status = status,
             timestamp = timestamp,
             durationMs = durationMs,
+            historyText = historyText,
         )
     }
 
     private fun escape(line: String): String =
-        if (isHeader(line.trimStart('\\'))) "\\" + line else line
+        if (isStructural(line.trimStart('\\'))) "\\" + line else line
 
     private fun unescape(line: String): String =
-        if (line.startsWith('\\') && isHeader(line.trimStart('\\'))) line.substring(1) else line
+        if (line.startsWith('\\') && isStructural(line.trimStart('\\'))) line.substring(1) else line
 }
