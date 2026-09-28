@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.services.LogSource
 
 /**
  * The agent's own tool catalogue, in one place rather than inline in the chat: what the agent can
@@ -22,6 +23,8 @@ object BuiltInToolHandlers {
         SearchProjectHandler(context),
         OpenFileHandler(context),
         ReadBuildOutputHandler(context),
+        ReadLogsHandler(context, LogSource.APP),
+        ReadLogsHandler(context, LogSource.IDE),
         // Write tools
         CreateFileHandler(context),
         UpdateFileHandler(context),

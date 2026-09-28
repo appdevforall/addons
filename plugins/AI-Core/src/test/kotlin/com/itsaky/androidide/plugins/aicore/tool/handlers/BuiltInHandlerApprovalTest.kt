@@ -39,6 +39,8 @@ class BuiltInHandlerApprovalTest {
             "search_project",
             "open_file",
             "read_build_output",
+            "read_app_logs",
+            "read_ide_logs",
         )
     }
 

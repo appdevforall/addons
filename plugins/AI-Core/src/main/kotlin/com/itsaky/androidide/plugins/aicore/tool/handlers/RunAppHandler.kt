@@ -96,7 +96,7 @@ class RunAppHandler(
             if (success) {
                 ToolResult.success(
                     message = "Build succeeded",
-                    data = message
+                    data = "$message\n\nIf the app crashes or misbehaves, call read_app_logs."
                 )
             } else {
                 ToolResult.failure(
