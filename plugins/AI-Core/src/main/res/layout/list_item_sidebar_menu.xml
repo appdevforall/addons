@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One entry in a sidebar menu (see SidebarPopupMenu), laid out to Material 3's menu item: 48dp tall,
+  12dp side padding, a 24dp leading icon and a 12dp gap before a body-large label.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/sidebar_menu_item_height"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/sidebar_menu_item_padding"
+    android:paddingEnd="@dimen/sidebar_menu_item_padding">
+
+    <ImageView
+        android:id="@+id/sidebar_menu_icon"
+        android:layout_width="@dimen/sidebar_menu_icon_size"
+        android:layout_height="@dimen/sidebar_menu_icon_size"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/sidebar_menu_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/sidebar_menu_item_padding"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/plugin_on_surface"
+        android:textSize="@dimen/sidebar_menu_text_size" />
+</LinearLayout>

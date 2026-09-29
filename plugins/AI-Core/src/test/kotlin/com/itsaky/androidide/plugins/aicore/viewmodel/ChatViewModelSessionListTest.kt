@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
 import io.mockk.every
 import io.mockk.mockk
 import java.util.concurrent.ConcurrentHashMap
@@ -313,6 +314,35 @@ class ChatViewModelSessionListTest {
         // Clear Chat empties the thread the user is in; New chat is what starts another.
         assertEquals(listOf("s1"), viewModel.sessions.value.map { it.id })
         assertTrue(viewModel.sessions.value.single().messages.isEmpty())
+    }
+
+    @Test
+    fun givenAnExportedChat_whenImported_thenItIsAddedAsANewCurrentChatAndTheOriginalIsUntouched() {
+        seed(session("s1", message("m1", "the original", "USER")))
+        val viewModel = restoredViewModel()
+        val original = viewModel.sessions.value.single()
+
+        viewModel.importSession(ChatTranscript.parse(ChatTranscript.export(original), null))
+
+        assertEquals(2, viewModel.sessions.value.size)
+        assertEquals(original, viewModel.sessions.value.single { it.id == "s1" })
+        val imported = viewModel.sessions.value.single { it.id != "s1" }
+        assertEquals(listOf("the original"), imported.messages.map { it.text })
+        assertEquals(TEST_PROJECT_KEY, imported.projectKey)
+        assertEquals(imported.id, viewModel.currentSessionId.value)
+        assertEquals(listOf("the original"), viewModel.messages.value.map { it.text })
+    }
+
+    @Test
+    fun givenAnImportedChat_whenTheIdeIsRestarted_thenItIsStillInTheList() {
+        seed(session("s1", message("m1", "the original", "USER")))
+        val viewModel = restoredViewModel()
+        val exported = ChatTranscript.export(viewModel.sessions.value.single())
+        viewModel.importSession(ChatTranscript.parse(exported, null))
+        val importedId = viewModel.currentSessionId.value!!
+        awaitStoredSessions { it.contains(importedId) }
+
+        assertTrue(restoredViewModel().sessions.value.any { it.id == importedId })
     }
 
     /**
