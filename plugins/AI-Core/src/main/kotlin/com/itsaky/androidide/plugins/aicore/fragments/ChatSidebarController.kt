@@ -325,6 +325,7 @@ internal class ChatSidebarController(
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeSessions() {
         val untitled = _binding?.root?.context?.getString(R.string.session_untitled) ?: return
+        val naming = _binding?.root?.context?.getString(R.string.session_title_generating) ?: return
         scope.launch {
             // Nothing is collected while the panel is hidden: the sessions are rewritten once per
             // streamed token, and re-sorting, re-paging and diffing a list nobody can see is the
@@ -335,8 +336,9 @@ internal class ChatSidebarController(
                     viewModel.currentSessionId,
                     selection,
                     visibleCount,
-                ) { sessions, currentId, picked, limit ->
-                    ChatSessionRows.from(sessions, currentId, untitled, picked, limit)
+                    viewModel.titlePending,
+                ) { sessions, currentId, picked, limit, pending ->
+                    ChatSessionRows.from(sessions, currentId, untitled, picked, limit, pending, naming)
                 }
             }.collect { rows ->
                 sessionAdapter.submitList(rows)

@@ -95,18 +95,33 @@
          by choice, matching the IDE's own grey accent rather than this plugin's teal, on a screen
          whose chrome belongs to AI Core. Light/dark comes from values-night/colors.xml.
 
-         One style for every button on the pane: a secondary action that styled itself differently
-         is exactly what broke, and the hierarchy is not worth a second way to get contrast wrong. -->
+         Filled for the one primary action in a section, outlined for the rest, per Material 3's
+         button hierarchy. Both pin direct colours, so neither resolves a role against the host.
+         The app: items here are dropped inside the host; ui/PaneStyling.kt applies them in code. -->
     <style name="PluginButton.Filled" parent="Widget.Material3.Button">
         <item name="android:textAllCaps">false</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:letterSpacing">0</item>
         <item name="cornerRadius">@dimen/radius_md</item>
         <item name="android:minHeight">@dimen/touch_target_min</item>
-        <item name="android:textColor">@color/plugin_on_secondary</item>
-        <item name="backgroundTint">@color/plugin_secondary</item>
-        <item name="iconTint">@color/plugin_on_secondary</item>
-        <item name="rippleColor">@color/plugin_ripple</item>
+        <item name="android:textColor">@color/plugin_button_filled_content</item>
+        <item name="backgroundTint">@color/plugin_button_filled_container</item>
+        <item name="iconTint">@color/plugin_button_filled_content</item>
+        <item name="rippleColor">@color/plugin_button_filled_ripple</item>
+    </style>
+
+    <style name="PluginButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/plugin_button_outlined_content</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="iconTint">@color/plugin_button_outlined_content</item>
+        <item name="strokeColor">@color/plugin_button_outlined_stroke</item>
+        <item name="strokeWidth">@dimen/button_stroke_width</item>
+        <item name="rippleColor">@color/plugin_button_outlined_ripple</item>
     </style>
 
     <!-- Inputs -->

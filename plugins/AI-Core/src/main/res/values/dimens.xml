@@ -13,6 +13,8 @@
 <resources>
     <dimen name="chat_toolbar_height">48dp</dimen>
     <dimen name="chat_title_text_size">18sp</dimen>
+    <dimen name="chat_title_progress_size">16dp</dimen>
+    <dimen name="chat_title_progress_spacing">8dp</dimen>
     <dimen name="chat_input_bar_padding">8dp</dimen>
     <!--
       Cancels the group's 8dp top padding bar the 1dp border itself, so the tab hangs immediately
@@ -25,7 +27,7 @@
     <dimen name="chat_composer_corner_radius">22dp</dimen>
     <dimen name="chat_caption_text_size">12sp</dimen>
     <dimen name="chat_caption_spacing">4dp</dimen>
-    <integer name="chat_input_max_lines">4</integer>
+    <integer name="chat_input_max_lines">8</integer>
 
     <!-- Composer tab. The collapsed one overlays the list, so it costs no layout height. -->
     <dimen name="chat_composer_toggle_width">48dp</dimen>
@@ -37,6 +39,21 @@
     <dimen name="chat_composer_toggle_touch_height">48dp</dimen>
     <dimen name="chat_composer_tab_inset_top">32dp</dimen>
     <dimen name="chat_composer_tab_padding_top">34dp</dimen>
+    <!-- User message bubble (list_item_chat_user_message); read by MaxWidthLinearLayout. -->
+    <fraction name="chat_user_bubble_max_width">75%</fraction>
+    <!-- Expand toggle in a long user bubble; the negative inset tucks it into the corner padding. -->
+    <dimen name="chat_user_bubble_toggle_size">40dp</dimen>
+    <dimen name="chat_user_bubble_toggle_padding">8dp</dimen>
+    <dimen name="chat_user_bubble_toggle_inset">-8dp</dimen>
+    <!-- Gap under a user message, so the agent reply below reads as a separate turn. -->
+    <dimen name="chat_user_message_spacing_bottom">12dp</dimen>
+    <!-- Action row under a message (copy, and whatever joins it); view_chat_message_actions. -->
+    <dimen name="chat_message_actions_spacing">2dp</dimen>
+    <dimen name="chat_message_action_size">40dp</dimen>
+    <dimen name="chat_message_action_padding">11dp</dimen>
+    <dimen name="chat_user_bubble_padding_horizontal">14dp</dimen>
+    <dimen name="chat_user_bubble_padding_vertical">10dp</dimen>
+    <dimen name="chat_user_bubble_corner_radius">18dp</dimen>
     <!-- Chat history rows (see ChatSidebarController). -->
     <dimen name="session_row_min_height">56dp</dimen>
     <dimen name="session_row_icon_size">20dp</dimen>

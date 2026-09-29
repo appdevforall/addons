@@ -351,7 +351,7 @@ class GeminiBackend(
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         val future = CompletableFuture<LlmResponse>()
 
-        currentJob = scope.launch {
+        val job = scope.launch {
             val keyStamp = storedKeyStamp()
             try {
                 val apiKey = readGeminiApiKey()
@@ -381,6 +381,8 @@ class GeminiBackend(
                 future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
+        currentJob = job
+        future.cancelJobOnCancel(job)
 
         return future
     }
@@ -577,7 +579,7 @@ class GeminiBackend(
 
         val future = CompletableFuture<LlmResponse>()
 
-        currentJob = scope.launch {
+        val job = scope.launch {
             val keyStamp = storedKeyStamp()
             try {
                 val apiKey = readGeminiApiKey()
@@ -607,6 +609,8 @@ class GeminiBackend(
                 future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
+        currentJob = job
+        future.cancelJobOnCancel(job)
 
         return future
     }

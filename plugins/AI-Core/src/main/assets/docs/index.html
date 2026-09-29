@@ -203,6 +203,17 @@
   app's data, for example — the stored key can no longer be read and will need to
   be entered again; tapping <b>Edit</b> tells you when that has happened.</p>
 
+  <h2>Writing a message</h2>
+  <ul>
+    <li>The prompt field grows as you type, up to about eight lines, and then scrolls: drag inside it to
+      read back over a long prompt without moving the panel it sits in.</li>
+    <li>With a hardware keyboard attached, <b>Shift+Enter</b> sends the message
+      and <b>Enter</b> starts a new line.</li>
+    <li>A message the agent cannot send — no backend configured, or no key saved
+      — is left in the field, so the warning never costs you what you typed. The
+      warning itself goes away on its own once the backend is configured.</li>
+  </ul>
+
   <h2>Reading the conversation</h2>
   <ul>
     <li><b>Retry</b> appears on a step that failed — including a tool call you
@@ -216,8 +227,11 @@
     <li><b>System log</b> rows are collapsed records of the agent's internal
       steps: tools run, files touched, backend errors. Tap the header to expand
       one. They are saved with the session but are not sent to the model.</li>
-    <li>Long-press a message to copy its text, or to edit and re-send one of
-      your own.</li>
+    <li>Your own messages longer than four lines are shown folded. Tap the
+      down arrow in the bubble's corner to read the whole message, and the up
+      arrow to fold it again. The model always receives all of it.</li>
+    <li>Tap the copy icon under a message, yours or the agent's, to copy its
+      text. It appears under a reply once the agent has finished writing it.</li>
   </ul>
 
   <h2>Keeping several chats</h2>
@@ -225,6 +239,12 @@
   that project's chats and no one else's, and you can keep as many as you want —
   one for a build failure, one for a refactor, one for the feature you are adding
   — instead of letting a single conversation collect all three.</p>
+  <p>The header of the Agent tab names the chat you are in, shortened to one line;
+  long-press it for the same note as every other control on the screen.</p>
+  <p>After the agent's first reply in a chat, the backend you selected writes a short
+  title for it from your first message and that reply. Meanwhile the header reads
+  <i>Naming chat…</i>; if the backend cannot write one, the chat is named after the
+  first ten words of your first message.</p>
   <p>The button at the top right of the Agent tab slides a <b>sidebar</b> in over
   the conversation. Its three parts are fixed in place except the middle one, which
   is the only part that scrolls:</p>
@@ -232,7 +252,7 @@
     <li><b>New chat</b>, at the top, starts a fresh conversation. The one you were
       in is kept, and you can go back to it whenever you like.</li>
     <li><b>Recent</b>, in the middle, lists this project's conversations, newest
-      first, each named after its first message and dated from when it began, with
+      first, each named with a short title and dated from when it began, with
       a tick on the one you are in. It holds the newest to begin with and loads
       more as you scroll, so a project with a long history still opens at once.
       Tap a row to carry on with it: the agent reloads that conversation, so the
@@ -250,8 +270,8 @@
   left of that row closes the sidebar, as does tapping the dimmed conversation
   beside it or pressing <b>Back</b>.</p>
   <p>The <b>⋮</b> button on a row in <b>Recent</b> renames or deletes that chat. A
-  name you give it replaces the first-message title; clearing the name gives the
-  first-message title back. Deleting cannot be undone — and deleting the last chat
+  name you give it replaces the automatic title; clearing the name gives the
+  automatic title back. Deleting cannot be undone — and deleting the last chat
   leaves you an empty one to carry on in, rather than nothing.</p>
   <p>To clear out several at once, <b>long-press</b> a row. Every row gets a
   checkbox, tapping a row ticks it instead of opening it, and the bin at the top of

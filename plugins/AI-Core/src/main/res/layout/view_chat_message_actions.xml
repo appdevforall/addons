@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-message actions, included under both agent and user messages; each row's include sets the
+  gravity. New actions go here as further buttons. ChatAdapter hides the row until a reply is done.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/message_actions"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="@dimen/chat_message_actions_spacing"
+    android:orientation="horizontal">
+
+    <ImageButton
+        android:id="@+id/btn_copy_message"
+        android:layout_width="@dimen/chat_message_action_size"
+        android:layout_height="@dimen/chat_message_action_size"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/desc_copy_message"
+        android:padding="@dimen/chat_message_action_padding"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_content_copy"
+        android:tint="@color/plugin_on_surface_variant" />
+
+</LinearLayout>

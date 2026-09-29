@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
@@ -33,6 +35,9 @@ import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.shortcuts.ChatShortcuts
+import com.itsaky.androidide.plugins.aicore.shortcuts.bindShortcuts
+import com.itsaky.androidide.plugins.aicore.shortcuts.runs
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModel
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModelStore
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
@@ -42,9 +47,18 @@ import com.itsaky.androidide.plugins.services.IdeUIService
 import io.noties.markwon.Markwon
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private const val TAG = "$LOG_PREFIX.ChatFragment"
+
+/** Runs of whitespace, including the line breaks a pasted prompt carries. */
+private val WHITESPACE = Regex("\\s+")
+
+/** One line, so a title taken from a multi-line prompt ellipsizes instead of stopping at a break. */
+private fun String.oneLine(): String = trim().replace(WHITESPACE, " ")
 
 /**
  * ChatFragment for Agent chat UI.
@@ -179,6 +193,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         initializeMarkwon()
         initializeViewModel()
         syncStorageToCurrentProject()
+        setupChatTitle()
         setupSidebar()
         setupRecyclerView()
         setupInputArea()
@@ -304,15 +319,59 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     private fun setupRecyclerView() {
         // Item views inflate from parent.context, so no Context needs passing in.
-        chatAdapter = ChatAdapter(markwon, ::wireTooltip) { action, message ->
-            onMessageAction(action, message)
-        }
+        chatAdapter = ChatAdapter(
+            markwon = markwon,
+            wireTooltip = ::wireTooltip,
+            isUserMessageExpanded = viewModel::isUserMessageExpanded,
+            toggleUserMessageExpanded = viewModel::toggleUserMessageExpanded,
+            onMessageAction = ::onMessageAction,
+        )
         binding.chatRecyclerView.apply {
             adapter = chatAdapter
             layoutManager = LinearLayoutManager(requireContext()).apply {
                 stackFromEnd = true
             }
         }
+    }
+
+    /**
+     * Keeps the toolbar showing the conversation that is on screen, retitling it as the user's
+     * first message arrives or the chat is renamed. A chat that is neither named nor started reads
+     * as the sidebar calls it, rather than leaving the header blank.
+     */
+    private fun setupChatTitle() {
+        wireTooltip(binding.chatTitle, AiCorePlugin.TOOLTIP_TAG_CHAT_TITLE)
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // The current session is republished on every streamed token, and its title is the
+                // same string in nearly all of them. Mapped and de-duplicated first, so a run costs
+                // one String comparison a token instead of a collapse and a toolbar layout pass.
+                combine(
+                    viewModel.currentSession.map { it?.id to it?.displayTitle }.distinctUntilChanged(),
+                    viewModel.titlePending,
+                ) { (id, title), pending -> (id != null && id in pending) to title }
+                    .distinctUntilChanged()
+                    .collect { (naming, title) -> showChatTitle(naming, title) }
+            }
+        }
+    }
+
+    /**
+     * @param naming whether the backend is still writing this chat's title: a spinner and a muted
+     *   placeholder stand in, so the raw prompt never flashes up before the real title.
+     * @param title the chat's title, or null for one neither named nor started.
+     */
+    private fun showChatTitle(naming: Boolean, title: String?) {
+        val binding = _binding ?: return
+        binding.chatTitleProgress.isVisible = naming
+        val shown = title?.oneLine()?.takeIf { it.isNotEmpty() }
+        binding.chatTitle.text = when {
+            naming -> getString(R.string.session_title_generating)
+            else -> shown ?: getString(R.string.session_untitled)
+        }
+        // The view's own Context: it carries the plugin's resources and the IDE's day/night mode.
+        val color = if (naming) R.color.plugin_on_surface_variant else R.color.plugin_on_surface
+        binding.chatTitle.setTextColor(binding.chatTitle.context.getColor(color))
     }
 
     /**
@@ -358,14 +417,17 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             if (viewModel.agentState.value.isRunning) {
                 viewModel.stopProcessing(reason = "stop button")
             } else {
-                val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
-                if (message.isNotBlank()) {
-                    composer?.hideKeyboard()
-                    viewModel.sendMessage(message)
-                    binding.promptInputEdittext.text?.clear()
-                }
+                sendPrompt()
             }
         }
+
+        // The field scrolls its own long prompts, and answers the chat's keyboard chords.
+        binding.promptInputEdittext.keepVerticalDragsToItself()
+        binding.promptInputEdittext.growUpTo(
+            resources.getInteger(R.integer.chat_input_max_lines),
+            binding.root,
+        )
+        binding.promptInputEdittext.bindShortcuts(ChatShortcuts.SEND_MESSAGE runs ::sendPrompt)
 
         binding.btnAddContext.setOnClickListener {
             showFilePicker()
@@ -376,6 +438,21 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         wireTooltip(binding.inputBarCard, AiCorePlugin.TOOLTIP_TAG_CHAT_INPUT)
         wireTooltip(binding.sendButton, AiCorePlugin.TOOLTIP_TAG_CHAT_SEND)
         wireTooltip(binding.backendStatusText, AiCorePlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
+    }
+
+    /**
+     * Sends what is in the composer, from the button or from [ChatShortcuts.SEND_MESSAGE].
+     *
+     * A refused send — no backend configured, no key saved — leaves the composer exactly as it
+     * was, text and keyboard both: it used to wipe the prompt the user had just typed, and putting
+     * the keyboard away as well would take the caret off a prompt they still have to re-send.
+     */
+    private fun sendPrompt() {
+        val message = binding.promptInputEdittext.text?.toString() ?: return
+        if (message.isBlank()) return
+        if (!viewModel.sendMessage(message)) return
+        composer?.hideKeyboard()
+        binding.promptInputEdittext.text?.clear()
     }
 
     /**
@@ -653,11 +730,6 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     private fun onMessageAction(action: String, message: com.itsaky.androidide.plugins.aicore.models.ChatMessage) {
         when (action) {
-            ChatAdapter.ACTION_EDIT -> {
-                // Show dialog to edit message
-                binding.promptInputEdittext.setText(message.text)
-                binding.promptInputEdittext.requestFocus()
-            }
             ChatAdapter.ACTION_RETRY -> {
                 // The prompt behind this row, not its text: the row may be a tool failure.
                 viewModel.retryLastRun()
@@ -666,7 +738,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 // Open settings fragment
                 openSettingsFragment()
             }
+            ChatAdapter.ACTION_COPY -> copyToClipboard(message.text)
         }
+    }
+
+    private fun copyToClipboard(text: String) {
+        val binding = _binding ?: return
+        val clipboard = requireContext().getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText("chat_message", text))
+        Snackbar.make(binding.root, getString(R.string.msg_copied), Snackbar.LENGTH_SHORT).show()
     }
 
     /**
