@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.future.await
@@ -317,8 +318,46 @@ class ChatViewModel(
     @Volatile
     private var historySizeBeforeLastRun = 0
 
+    /**
+     * The user message the last run posted, so [editPrompt] knows [historySizeBeforeLastRun]
+     * describes that prompt and not an earlier one; null when the retry point is forgotten.
+     */
+    @Volatile
+    private var lastRunUserMessageId: String? = null
+
     /** The tool awaiting approval, straight from [approvalManager] — no polling in between. */
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = approvalManager.currentApprovalRequest
+
+    /**
+     * Whether the user's prompts offer Edit and version switching: false while a run is generating,
+     * executing a tool, or waiting on an approval, which counts as busy on its own.
+     */
+    val canChangePrompts: StateFlow<Boolean> = combine(_agentState, pendingApprovalRequest, ::isIdle)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Every prompt on screen with other versions, and which of them it is; see [ChatBranches]. */
+    internal val promptVersions: StateFlow<Map<String, ChatBranches.Position>> =
+        combine(_sessions, _currentSessionId) { sessions, sessionId ->
+            sessions.firstOrNull { it.id == sessionId }
+        }
+            // A streamed token replaces the session but moves no message, so it needs no recount.
+            .distinctUntilChangedBy { session ->
+                session?.let { Triple(it.id, it.messages.map(ChatMessage::id), it.otherBranches) }
+            }
+            .map { session -> session?.let(ChatBranches::positions).orEmpty() }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** The one rule [canChangePrompts] and [isBusy] share: no run in flight, no approval open. */
+    private fun isIdle(state: AgentState, approval: ApprovalRequest?): Boolean =
+        !state.isRunning && approval == null
+
+    /**
+     * Whether a prompt may not be edited or switched right now. Read from the sources rather than
+     * [canChangePrompts], which a collector can see a beat late; [isGenerating] covers a run claimed
+     * but not yet in [AgentState.Processing].
+     */
+    private fun isBusy(): Boolean =
+        isGenerating.get() || !isIdle(_agentState.value, pendingApprovalRequest.value)
 
     private var _contextFiles = listOf<File>()
 
@@ -562,7 +601,9 @@ class ChatViewModel(
         if (remaining.size == _messages.value.size) return false
         _messages.value = remaining
         val session = currentSessionOrNull() ?: return true
-        replaceCurrentSessionMessages(session.messages.filterNot(doomed))
+        // Through ChatBranches: a stored version may follow a removed message, and must not dangle.
+        val trimmed = ChatBranches.removeFromScreen(session, doomed)
+        _sessions.value = _sessions.value.map { if (it.id == session.id) trimmed else it }
         return true
     }
 
@@ -646,14 +687,16 @@ class ChatViewModel(
 
     /**
      * Build context string from selected files.
+     *
+     * @param files the attachments the run started with, not the live list the composer edits.
      */
-    private fun buildContextString(): String {
-        if (contextFiles.isEmpty()) return ""
+    private fun buildContextString(files: List<File>): String {
+        if (files.isEmpty()) return ""
 
         val contextBuilder = StringBuilder()
         contextBuilder.append("\n\nCONTEXT FILES:\n\n")
 
-        contextFiles.forEach { file ->
+        files.forEach { file ->
             if (file.exists() && file.isFile) {
                 try {
                     val content = file.readText()
@@ -1065,10 +1108,24 @@ class ChatViewModel(
      *   which is what keeps the composer's text in place for an unconfigured backend.
      */
     fun sendMessage(userMessage: String): Boolean {
+        val llmService = passPreflight(userMessage) ?: return false
+        // Reject re-entry while a generation is still in flight.
+        if (!isGenerating.compareAndSet(false, true)) return false
+        launchRun(llmService, userMessage, contextFiles)
+        return true
+    }
+
+    /**
+     * The checks a prompt must pass before any run starts; a setup failure leaves a notice.
+     *
+     * @param userMessage the prompt about to be sent.
+     * @return the service to run against, or null when the prompt must not be sent.
+     */
+    private fun passPreflight(userMessage: String): LlmInferenceService? {
         val llmService = getLlmService()
         if (llmService == null) {
             emitSystemError(str(R.string.error_llm_service_not_available))
-            return false
+            return null
         }
 
         if (!_backendStatus.value.isAvailable) {
@@ -1084,49 +1141,56 @@ class ChatViewModel(
                     SelectedBackend.None -> str(R.string.backend_none_installed)
                 }
             )
-            return false
+            return null
         }
 
-        if (userMessage.isBlank()) {
-            return false
-        }
+        return llmService.takeUnless { userMessage.isBlank() }
+    }
 
-        // Reject re-entry while a generation is still in flight.
-        if (!isGenerating.compareAndSet(false, true)) {
-            return false
-        }
-
-        AgentTrace.beginRun(currentBackendId, userMessage, contextFiles.size)
+    /**
+     * Starts the agent run for a prompt that passed [passPreflight], once the caller has claimed
+     * [isGenerating]. Main only: the prompt is on screen by the time this returns.
+     *
+     * @param llmService the service [passPreflight] returned.
+     * @param userMessage the prompt to send.
+     * @param runFiles the attachments, read by the caller before anything it changed could move them.
+     */
+    private fun launchRun(llmService: LlmInferenceService, userMessage: String, runFiles: List<File>) {
+        AgentTrace.beginRun(currentBackendId, userMessage, runFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
         activityMessageId = null
         runToolNames.clear()
+        // Created here, on Main, so the retry point below names the prompt it belongs to.
+        val userChatMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            text = userMessage,
+            sender = Sender.USER,
+            status = MessageStatus.SENT,
+            contextFiles = runFiles.map { it.absolutePath }.takeIf { it.isNotEmpty() },
+        )
         // Where a Retry has to rewind to; read here, on Main, while no run can be appending.
         lastRunPrompt = userMessage
+        lastRunUserMessageId = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
         // Read once: prompt, grammar and executor must all describe the same tool set.
         val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
-        generationJob = viewModelScope.launch(Dispatchers.IO) {
-            // The session this run may title, and whether a title request took that job over.
-            var titleSessionId: String? = null
+        // The session this run may title; read before the message lands, so the header never
+        // shows it as the title first.
+        val titleSessionId = currentSessionOrNull()?.takeIf { needsTitle(it) }?.id
+        titleSessionId?.let { id -> _titlePending.value = _titlePending.value + id }
+        // Posted now, not from the run: a Stop before the run's first dispatch left a fork with no
+        // prompt at its fork point, and so no arrows to reach the version it had put aside.
+        _messages.value = _messages.value + userChatMessage
+        syncMessageToSession(userChatMessage)
+        setState(AgentState.Processing(str(R.string.msg_generating)))
+        // ATOMIC: a Stop before the first dispatch skipped the block, finally too, so isGenerating
+        // stayed set and every later send was refused; now the cancel lands at the first suspension.
+        generationJob = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.ATOMIC) {
+            // Whether a title request took over settling this run's title placeholder.
             var titleRequestStarted = false
             try {
-                // Add user message to the UI.
-                val userChatMessage = ChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    text = userMessage,
-                    sender = Sender.USER,
-                    status = MessageStatus.SENT
-                )
-                withContext(Dispatchers.Main) {
-                    // Before the message lands, so the header never shows it as the title first.
-                    titleSessionId = currentSessionOrNull()?.takeIf { needsTitle(it) }?.id
-                    titleSessionId?.let { id -> _titlePending.value = _titlePending.value + id }
-                    _messages.value = _messages.value + userChatMessage
-                    syncMessageToSession(userChatMessage)
-                    setState(AgentState.Processing(str(R.string.msg_generating)))
-                }
                 // Queued behind a title still being written; the prompt shows as generating meanwhile.
                 awaitTitleRequest()
 
@@ -1141,7 +1205,7 @@ class ChatViewModel(
 
                 val messageWithContext = buildString {
                     append(userMessage)
-                    append(buildContextString())
+                    append(buildContextString(runFiles))
                 }
                 val history = _history.value.toMutableList()
                 history.add(
@@ -1189,9 +1253,10 @@ class ChatViewModel(
                         }
                     }
                 } finally {
-                    // Persist history only if this run wasn't superseded (epoch bumped).
-                    if (generationEpoch.get() == epoch) {
-                        _history.value = history.toList()
+                    // On Main, so a Stop, clear or chat switch can't bump the epoch between check and write.
+                    withContext(NonCancellable + Dispatchers.Main) {
+                        // Persist history only if this run wasn't superseded (epoch bumped).
+                        if (generationEpoch.get() == epoch) _history.value = history.toList()
                     }
                     stopStateTimer()
                 }
@@ -1221,7 +1286,6 @@ class ChatViewModel(
                 }
             }
         }
-        return true
     }
 
     /**
@@ -1348,6 +1412,138 @@ class ChatViewModel(
         }
         _history.value = _history.value.take(historySizeBeforeLastRun)
         sendMessage(prompt)
+    }
+
+    /** How [editPrompt] ended, which decides whether the composer leaves edit mode. */
+    enum class EditResult {
+        /** The chat was rewound or forked and the edited prompt is running. */
+        STARTED,
+        /** A run is in flight or an approval is open; the user has to stop it first. */
+        BUSY,
+        /** The message is no longer a prompt on screen. */
+        NOT_EDITABLE,
+        /** The edited text was blank or the backend is not ready; nothing was changed. */
+        REFUSED,
+    }
+
+    /**
+     * Runs the agent on [newText] in place of the prompt [messageId]. The newest prompt is replaced
+     * outright, as if it had never been sent; an older one forks, keeping the original as a version
+     * (see [ChatBranches]). Either way the model sees only the messages above it. File edits a
+     * run already made are not undone.
+     *
+     * @param messageId a user prompt on screen.
+     * @param newText the edited prompt, sent with the context files attached right now.
+     * @return what happened; only [EditResult.STARTED] changed anything.
+     */
+    fun editPrompt(messageId: String, newText: String): EditResult {
+        // Before the pre-flight, whose setup notice would otherwise land inside a live run.
+        if (isBusy()) return EditResult.BUSY
+        if (_messages.value.none { it.id == messageId && it.sender == Sender.USER }) {
+            return EditResult.NOT_EDITABLE
+        }
+        // Read before the cut: the composer leaves edit mode on it, handing back the draft's files.
+        val runFiles = contextFiles
+        // Checked before the rewind, so a refused send changes nothing.
+        val llmService = passPreflight(newText) ?: return EditResult.REFUSED
+        // Claimed before the cut too, so a chat is never cut for a run that then cannot start.
+        if (!isGenerating.compareAndSet(false, true)) return EditResult.BUSY
+        val cut = if (editForks(messageId)) forkAt(messageId) else rewind(messageId)
+        if (!cut) {
+            isGenerating.set(false)
+            return EditResult.NOT_EDITABLE
+        }
+        launchRun(llmService, newText, runFiles)
+        return EditResult.STARTED
+    }
+
+    /**
+     * Whether editing the prompt [messageId] forks the chat, keeping the original as a version,
+     * rather than replacing it: true for every prompt but the newest.
+     */
+    fun editForks(messageId: String): Boolean = !PromptEdit.isLatestPrompt(_messages.value, messageId)
+
+    /**
+     * Shows the version of prompt [messageId] [step] places away, and gives the model that branch
+     * alone: nothing said in another version reaches it. Main only.
+     *
+     * @param step -1 for the older version, 1 for the newer one.
+     * @return false, changing nothing, while busy or past either end of the versions.
+     */
+    fun switchPromptVersion(messageId: String, step: Int): Boolean {
+        if (isBusy()) return false
+        val session = currentSessionOrNull() ?: return false
+        val targetId = ChatBranches.versionId(session, messageId, step) ?: return false
+        val switched = ChatBranches.switchTo(session, messageId, targetId) ?: return false
+        adoptBranch(switched, "VERSION", "step=$step")
+        return true
+    }
+
+    /**
+     * Forks the chat at the older prompt [messageId]: it and everything after it become a stored
+     * version, and the messages above it are all the next run sees. Main only; the caller checks
+     * that no run is in flight.
+     *
+     * @return false, changing nothing, when [messageId] is not a prompt on screen.
+     */
+    private fun forkAt(messageId: String): Boolean {
+        val session = currentSessionOrNull() ?: return false
+        val forked = ChatBranches.fork(session, messageId) ?: return false
+        adoptBranch(forked, "FORK", "keptMessages=${forked.messages.size}")
+        return true
+    }
+
+    /**
+     * Puts [session], a branch change of the current chat, on screen and rebuilds the model's
+     * history from its messages alone, then writes it at once.
+     */
+    private fun adoptBranch(session: ChatSession, stage: String, detail: String) {
+        _sessions.value = _sessions.value.map { if (it.id == session.id) session else it }
+        _messages.value = session.messages
+        _history.value = rebuildHistoryFrom(session.messages)
+        // The rewind point names a run on the branch just left.
+        forgetRetryPoint()
+        traceHistoryCut(stage, detail)
+        persistState()
+    }
+
+    /** Traces a change to the model's history, with how much of it was kept and its last turn. */
+    private fun traceHistoryCut(stage: String, detail: String) {
+        AgentTrace.stage(
+            stage,
+            "$detail historyKept=${_history.value.size}",
+            _history.value.lastOrNull()?.let { "${it.role}: ${AgentTrace.preview(it.content)}" },
+        )
+    }
+
+    /**
+     * Cuts the conversation back to just before [messageId]: transcript, session and history all
+     * lose that prompt and every turn after it, and the cut session is written at once. Main only.
+     *
+     * @param messageId the newest user prompt.
+     * @return false, changing nothing, while busy or when [messageId] is not the newest prompt.
+     */
+    internal fun rewindTo(messageId: String): Boolean = !isBusy() && rewind(messageId)
+
+    /** [rewindTo] for a caller that has already checked, and claimed, that no run is in flight. */
+    private fun rewind(messageId: String): Boolean {
+        val kept = PromptEdit.messagesBefore(_messages.value, messageId) ?: return false
+        val dropped = _messages.value.size - kept.size
+        _messages.value = kept
+        replaceCurrentSessionMessages(kept)
+        // The live history carries the tool turns a rebuild cannot; use it when it is this prompt's.
+        _history.value = if (messageId == lastRunUserMessageId) {
+            _history.value.take(historySizeBeforeLastRun)
+        } else {
+            rebuildHistoryFrom(kept)
+        }
+        forgetRetryPoint()
+        // A title written from the discarded first exchange would name a conversation that is gone.
+        if (kept.none { it.sender == Sender.USER }) resetGeneratedTitle()
+        traceHistoryCut("EDIT", "droppedMessages=$dropped")
+        // Written now rather than debounced, like a clear: the discarded branch must not come back.
+        persistState()
+        return true
     }
 
     /**
@@ -1747,24 +1943,37 @@ class ChatViewModel(
         _history.value = emptyList()
         // Without this the session keeps its messages and the cleared chat returns on the next sync.
         replaceCurrentSessionMessages(emptyList())
-        // The title described the conversation just cleared; the next first reply writes a new one.
-        // Its reply would name the cleared chat, and its settle would end the next run's placeholder.
+        // Its other versions go too: a cleared chat has no prompt left for them to belong to.
         _currentSessionId.value?.let { sessionId ->
-            // Another chat's request is left to finish and settle its own placeholder.
-            titleRequest?.takeIf { it.sessionId == sessionId }?.let {
-                it.job.cancel()
-                titleRequest = null
-            }
-            titleRequested.remove(sessionId)
-            settleTitle(sessionId)
             _sessions.value = _sessions.value.map {
-                if (it.id == sessionId) it.copy(generatedTitle = null) else it
+                if (it.id == sessionId) it.copy(otherBranches = null, selectedBranches = null) else it
             }
         }
+        // The title described the conversation just cleared; the next first reply writes a new one.
+        resetGeneratedTitle()
         forgetRetryPoint()
         setState(AgentState.Idle)
         // Written now rather than debounced: a clear is deliberate and must survive a force-stop.
         persistState()
+    }
+
+    /**
+     * Drops the current chat's generated title, and any request still writing one, so the next
+     * first reply names it afresh. A title the user typed is kept. Main only.
+     */
+    private fun resetGeneratedTitle() {
+        val sessionId = _currentSessionId.value ?: return
+        // Its reply would name the discarded chat, and its settle would end the next run's placeholder.
+        // Another chat's request is left to finish and settle its own placeholder.
+        titleRequest?.takeIf { it.sessionId == sessionId }?.let {
+            it.job.cancel()
+            titleRequest = null
+        }
+        titleRequested.remove(sessionId)
+        settleTitle(sessionId)
+        _sessions.value = _sessions.value.map {
+            if (it.id == sessionId) it.copy(generatedTitle = null) else it
+        }
     }
 
     /**
@@ -1975,6 +2184,7 @@ class ChatViewModel(
      */
     private fun forgetRetryPoint() {
         lastRunPrompt = null
+        lastRunUserMessageId = null
         historySizeBeforeLastRun = 0
     }
 
