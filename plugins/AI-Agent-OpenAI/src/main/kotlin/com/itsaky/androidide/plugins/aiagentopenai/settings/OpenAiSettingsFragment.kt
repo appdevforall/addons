@@ -34,6 +34,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.plugin.OpenAiPlugin
 import com.itsaky.androidide.plugins.aiagentopenai.ui.SecretRevealController
+import com.itsaky.androidide.plugins.aiagentopenai.ui.applyPaneStyling
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -41,6 +42,14 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** The pane's secondary actions, drawn outlined; each section's Save stays filled. */
+private val OUTLINED_BUTTON_IDS = setOf(
+    R.id.btn_clear_api_key,
+    R.id.btn_edit_api_key,
+    R.id.btn_get_key,
+    R.id.btn_test_connection,
+)
 
 /**
  * This backend's settings pane, mounted by whichever screen offers a backend selector.
@@ -112,6 +121,7 @@ class OpenAiSettingsFragment : Fragment() {
 
         // The key section publishes onServerChanged, so it is built before the server section that
         // fires it, and before the first call below that dresses the pane for the saved server.
+        view.applyPaneStyling(OUTLINED_BUTTON_IDS)
         setupApiKeyUi(view)
         setupServerUi(view)
         setupModelPicker(view, chatModelPicker())
@@ -198,6 +208,7 @@ class OpenAiSettingsFragment : Fragment() {
         target.text = ""
         target.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
     }
+
 
     /**
      * Put the dropdown chevron on [box]'s end icon.

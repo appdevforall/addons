@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outlined button label and icon: on-surface, and M3's 38% while disabled. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.38" android:color="@color/plugin_on_surface" android:state_enabled="false" />
+    <item android:color="@color/plugin_on_surface" />
+</selector>

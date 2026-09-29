@@ -19,4 +19,7 @@
     <!-- Rows still ahead of the last visible one before the next page is appended. -->
     <integer name="chat_sidebar_page_lookahead">8</integer>
     <integer name="chat_sidebar_animation_ms">200</integer>
+
+    <!-- Lines a user message shows folded; a longer one gets an expand toggle. -->
+    <integer name="user_message_collapsed_lines">4</integer>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outlined button ripple, drawn in the label colour over the transparent container. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.12" android:color="@color/plugin_on_surface" android:state_pressed="true" />
+    <item android:alpha="0.12" android:color="@color/plugin_on_surface" android:state_focused="true" />
+    <item android:alpha="0.08" android:color="@color/plugin_on_surface" android:state_hovered="true" />
+    <item android:alpha="0.12" android:color="@color/plugin_on_surface" />
+</selector>

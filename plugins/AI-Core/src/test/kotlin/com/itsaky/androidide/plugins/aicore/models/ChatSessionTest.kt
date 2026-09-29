@@ -39,6 +39,31 @@ class ChatSessionTest {
     }
 
     @Test
+    fun givenAGeneratedTitle_whenReadingTheTitle_thenItReplacesTheFirstMessage() {
+        val session = ChatSession(
+            messages = listOf(ChatMessage(text = "how do i fix the gradle sync", sender = Sender.USER)),
+            generatedTitle = "Fix Gradle sync"
+        )
+
+        assertEquals("Fix Gradle sync", session.displayTitle)
+    }
+
+    @Test
+    fun givenALongFirstMessageAndNoGeneratedTitle_whenReadingTheTitle_thenItIsCutToTenWords() {
+        val text = "please help me   fix the gradle\nsync that fails after I upgraded the android plugin"
+        val session = ChatSession(messages = listOf(ChatMessage(text = text, sender = Sender.USER)))
+
+        assertEquals("please help me fix the gradle sync that fails after…", session.displayTitle)
+    }
+
+    @Test
+    fun givenAUserNameAndAGeneratedTitle_whenReadingTheTitle_thenTheUsersNameWins() {
+        val session = ChatSession(name = "My build issue", generatedTitle = "Fix Gradle sync")
+
+        assertEquals("My build issue", session.displayTitle)
+    }
+
+    @Test
     fun testChatSessionTitle_WithUserMessage() {
         val messages = mutableListOf(
             ChatMessage(
