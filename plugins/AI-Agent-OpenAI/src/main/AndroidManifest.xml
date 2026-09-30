@@ -43,9 +43,9 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.36: the first release to ship KeystoreSecretStore in plugin-api, which this
-             plugin's SecureApiKeyStore builds on. ADFA-5269 landed after 26.35 was tagged, so
-             26.35 would name a release that cannot run this plugin. Do not lower it. -->
+        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
+             this backend reports getActiveModelName() and notifyBackendChanged() (ADFA-6278).
+             Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
             android:value="26.41" />

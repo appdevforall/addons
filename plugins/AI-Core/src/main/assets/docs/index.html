@@ -242,6 +242,25 @@
       warning itself goes away on its own once the backend is configured.</li>
   </ul>
 
+  <h2>What the agent is connected to</h2>
+  <p>The row of tags under the message field shows, before you send anything,
+  what will answer and what the agent can reach:</p>
+  <ul>
+    <li><b>The backend</b>, with the model it will use when the backend reports
+      one — <i>Gemini API · gemini-2.5-flash</i>, for example.</li>
+    <li><b>Web</b>, or <b>Offline</b> while the device has no internet
+      connection. Network backends and MCP servers need it; a backend that runs
+      on the device does not.</li>
+    <li><b>One tag per tool source</b>: each MCP server you configured, and each
+      plugin that adds tools to the agent.</li>
+  </ul>
+  <p>The tags update on their own as things connect, disconnect or change. A
+  red tag is set up but not working right now — a server that cannot be
+  reached, a backend with no API key — and stays in the row so you can see what
+  is broken; it clears by itself once the problem is fixed. Tap a tag for its
+  details: where it comes from, how many tools it offers and, when red, why.
+  Long-press one for help. With many tags the row scrolls sideways.</p>
+
   <h2>Reading the conversation</h2>
   <ul>
     <li><b>Retry</b> appears on a step that failed — including a tool call you

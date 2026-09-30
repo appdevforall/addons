@@ -2,17 +2,16 @@ package com.itsaky.androidide.plugins.aiagentopenai.plugin
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
 import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentopenai.backend.OpenAiBackend
+import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.OpenAiPromptConfig
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
-import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.services.SharedServices
 
 /**
  * Registers the OpenAI-compatible backend with AI Core's inference router.
@@ -26,14 +25,11 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
     private lateinit var context: PluginContext
     private var backend: OpenAiBackend? = null
 
-    /** True once [backend] is registered with the router, so re-registration is idempotent. */
-    @Volatile private var registered = false
+    /** Keeps [backend] registered with AI Core across its restarts, and reports setting changes. */
+    private lateinit var registration: LlmBackendRegistration
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentopenai"
-
-        /** Provider of [LlmInferenceService]; this plugin is useless without it. */
-        private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 
         private const val TOOLTIP_TAG_PLUGIN = "plugin_ai_backend_openai"
 
@@ -52,6 +48,16 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_openai_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_openai_get_key"
 
+        /** The settings that change what [OpenAiBackend.isAvailable] or its model name answers. */
+        private val WATCHED_KEYS = setOf(
+            OpenAiPreferences.KEY_BASE_URL,
+            OpenAiPreferences.KEY_API_KEY,
+            OpenAiPreferences.KEY_MODEL,
+        )
+
+        /** The settings that change whether the server answers [OpenAiBackend.checkServer]. */
+        private val RECHECK_KEYS = setOf(OpenAiPreferences.KEY_BASE_URL, OpenAiPreferences.KEY_API_KEY)
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -68,31 +74,22 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         fun getBackend(): OpenAiBackend? = activeBackend
     }
 
-    /**
-     * Re-registers when AI Core activates. Plugins load in parallel with no ordering, so
-     * [activate] may run before AI Core has published its service; this closes that race instead
-     * of polling for it.
-     */
-    private val aiCoreLifecycle = object : PluginLifecycleListener {
-        override fun onPluginActivated(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registerBackend()
-        }
-
-        override fun onPluginDeactivated(pluginId: String) {
-            // The router went away and took the registration with it; allow a fresh one.
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-
-        override fun onPluginUninstalled(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-    }
-
     override fun initialize(context: PluginContext): Boolean {
         return try {
             this.context = context
             // Published for the settings pane, which the hosting screen constructs directly.
             pluginContext = context
+            registration = LlmBackendRegistration(
+                context = context,
+                preferences = { OpenAiPreferences.of(context) },
+                watchedKeys = WATCHED_KEYS,
+                // A new server or key makes the last check describe something else.
+                onSettingChanged = { key ->
+                    if (key == null || key in RECHECK_KEYS) backend?.checkServer()
+                },
+                // After registering, so the result has someone to be announced to.
+                onRegistered = { backend?.checkServer() },
+            )
             context.logger.info("OpenAiPlugin: Plugin initialized successfully")
             true
         } catch (e: Exception) {
@@ -109,65 +106,23 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
             releaseBackend()
             preloadPromptConfig()
 
-            val openAi = OpenAiBackend(context, sharedPromptConfig::configIfLoaded)
+            val openAi = OpenAiBackend(
+                context,
+                sharedPromptConfig::configIfLoaded,
+                onStatusChanged = registration::notifyBackendChanged,
+            )
             backend = openAi
             activeBackend = openAi
 
             // Decrypt the key off-thread now, so a main-thread isAvailable() can't say "no key".
             openAi.warmKeyCache()
-
-            // Listen first, then try: a listener added after a successful attempt would still be
-            // needed for a later AI Core restart, and one added before costs nothing.
-            context.addPluginLifecycleListener(aiCoreLifecycle)
-            if (!registerBackend()) {
-                context.logger.info(
-                    "OpenAiPlugin: AI Core is not active yet; will register when it activates"
-                )
-            }
+            registration.start(openAi)
 
             true
         } catch (e: Exception) {
             context.logger.error("OpenAiPlugin: Activation failed", e)
             false
         }
-    }
-
-    /**
-     * Registers the backend with AI Core's router, if the router is reachable.
-     *
-     * @return true when the backend is registered (now or already), false when AI Core is absent
-     */
-    private fun registerBackend(): Boolean {
-        if (registered) return true
-        val openAi = backend ?: return false
-
-        val service = resolveInferenceService()
-        if (service == null) {
-            context.logger.debug("OpenAiPlugin: LlmInferenceService not available yet")
-            return false
-        }
-
-        return try {
-            service.registerBackend(openAi)
-            registered = true
-            context.logger.info("OpenAiPlugin: Registered '${openAi.getId()}' backend with AI Core")
-            true
-        } catch (e: Exception) {
-            context.logger.error("OpenAiPlugin: Could not register the OpenAI backend", e)
-            false
-        }
-    }
-
-    /**
-     * Resolves AI Core's router, preferring the process-global registry and falling back to the
-     * provider-scoped lookup so a registry cleared by another plugin is not fatal.
-     */
-    private fun resolveInferenceService(): LlmInferenceService? = try {
-        SharedServices.get(LlmInferenceService::class.java)
-            ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
-    } catch (e: Exception) {
-        context.logger.warn("OpenAiPlugin: Could not resolve LlmInferenceService: ${e.message}")
-        null
     }
 
     /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
@@ -197,15 +152,6 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         context.logger.info("OpenAiPlugin: Deactivating plugin")
 
         return try {
-            context.removePluginLifecycleListener(aiCoreLifecycle)
-
-            val openAi = backend
-            if (openAi != null && registered) {
-                resolveInferenceService()?.unregisterBackend(openAi.getId())
-                registered = false
-                context.logger.info("OpenAiPlugin: Unregistered '${openAi.getId()}' backend")
-            }
-
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
             sharedPromptConfig.clear()
@@ -218,21 +164,18 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
     }
 
     /**
-     * Cancels in-flight requests, drops the decrypted key from the heap, and clears the published
-     * backend. Idempotent, so a [deactivate] followed by [dispose] closes nothing twice.
+     * Unregisters from AI Core, cancels in-flight requests, drops the decrypted key from the heap,
+     * and clears the published backend. Idempotent, so [deactivate] then [dispose] is safe.
      */
     private fun releaseBackend() {
+        if (::registration.isInitialized) registration.stop()
         backend?.close()
         backend = null
         activeBackend = null
-        registered = false
     }
 
     override fun dispose() {
         context.logger.info("OpenAiPlugin: Disposing plugin")
-
-        // deactivate() removes this too; a dispose without one would leave the host holding this.
-        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
         sharedPromptConfig.clear()

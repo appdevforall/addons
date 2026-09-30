@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A capability tag's status light; the chip tints it per status in code. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/plugin_on_surface" />
+    <size
+        android:width="8dp"
+        android:height="8dp" />
+</shape>

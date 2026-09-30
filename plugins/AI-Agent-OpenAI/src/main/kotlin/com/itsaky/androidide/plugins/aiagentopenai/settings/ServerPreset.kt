@@ -42,6 +42,13 @@ internal object ServerPresets {
     )
 
     /**
+     * The preset [url] belongs to, for naming the server it points at.
+     *
+     * @return the preset, or null for a URL none offers
+     */
+    fun presetFor(url: String?): ServerPreset? = ALL.getOrNull(indexOf(url))?.takeIf { it.url != null }
+
+    /**
      * The preset whose URL matches [url], for restoring the picker's position.
      *
      * @return the index in [ALL], or the index of the "Custom" entry when nothing matches

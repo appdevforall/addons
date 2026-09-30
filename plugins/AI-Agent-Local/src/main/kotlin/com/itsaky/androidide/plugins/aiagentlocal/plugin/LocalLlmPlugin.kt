@@ -2,7 +2,7 @@ package com.itsaky.androidide.plugins.aiagentlocal.plugin
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
 import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentlocal.backend.LocalLlmBackend
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
@@ -12,8 +12,6 @@ import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.sharedPromptConf
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
-import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.services.SharedServices
 
 /**
  * Registers the on-device llama.cpp backend with AI Core's inference router.
@@ -26,21 +24,14 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
     private lateinit var context: PluginContext
 
-    /**
-     * Volatile because [activate] writes it on the loading thread while the host may deliver
-     * `onPluginActivated` on another: a plain field lets [registerBackend] read null and give up
-     * without scheduling a retry, leaving the selector permanently empty.
-     */
+    /** The live backend, from [activate] until [deactivate] releases it. */
     @Volatile private var backend: LocalLlmBackend? = null
 
-    /** True once [backend] is registered with the router, so re-registration is idempotent. */
-    @Volatile private var registered = false
+    /** Keeps [backend] registered with AI Core across its restarts, and reports setting changes. */
+    private lateinit var registration: LlmBackendRegistration
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentlocal"
-
-        /** Provider of [LlmInferenceService]; this plugin is useless without it. */
-        private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 
         /**
          * The whole-plugin entry, and the only one carrying the Tier-3 guide button. Anchored to
@@ -64,6 +55,12 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_MEMORY_PROCEED = "ai_local_memory_warning_proceed"
         const val TOOLTIP_TAG_MEMORY_CANCEL = "ai_local_memory_warning_cancel"
 
+        /** The settings that change what [LocalLlmBackend.isAvailable] or its model name answers. */
+        private val WATCHED_KEYS = setOf(
+            LocalLlmPreferences.KEY_MODEL_PATH,
+            LocalLlmPreferences.KEY_MODEL_NAME,
+        )
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -71,31 +68,16 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         fun getContext(): PluginContext? = pluginContext
     }
 
-    /**
-     * Re-registers when AI Core activates. Plugins load in parallel with no ordering, so
-     * [activate] may run before AI Core has published its service; this closes that race
-     * instead of polling for it.
-     */
-    private val aiCoreLifecycle = object : PluginLifecycleListener {
-        override fun onPluginActivated(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registerBackend()
-        }
-
-        override fun onPluginDeactivated(pluginId: String) {
-            // The router went away and took the registration with it; allow a fresh one.
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-
-        override fun onPluginUninstalled(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-    }
-
     override fun initialize(context: PluginContext): Boolean {
         return try {
             this.context = context
             // Published for the settings pane, which the hosting screen constructs directly.
             pluginContext = context
+            registration = LlmBackendRegistration(
+                context = context,
+                preferences = { LocalLlmPreferences.of(context) },
+                watchedKeys = WATCHED_KEYS,
+            )
             context.logger.info("LocalLlmPlugin: Plugin initialized successfully")
             true
         } catch (e: Exception) {
@@ -116,60 +98,15 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
             releaseBackend()
             preloadPromptConfig()
 
-            backend = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded)
-
-            // Listen first, then try: a listener added after a successful attempt would still be
-            // needed for a later AI Core restart, and one added before costs nothing.
-            context.addPluginLifecycleListener(aiCoreLifecycle)
-            if (!registerBackend()) {
-                context.logger.info(
-                    "LocalLlmPlugin: AI Core is not active yet; will register when it activates"
-                )
-            }
+            val local = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded)
+            backend = local
+            registration.start(local)
 
             true
         } catch (e: Exception) {
             context.logger.error("LocalLlmPlugin: Activation failed", e)
             false
         }
-    }
-
-    /**
-     * Registers the local backend with AI Core's router, if the router is reachable.
-     *
-     * @return true when the backend is registered (now or already), false when AI Core is absent
-     */
-    private fun registerBackend(): Boolean {
-        if (registered) return true
-        val local = backend ?: return false
-
-        val service = resolveInferenceService()
-        if (service == null) {
-            context.logger.debug("LocalLlmPlugin: LlmInferenceService not available yet")
-            return false
-        }
-
-        return try {
-            service.registerBackend(local)
-            registered = true
-            context.logger.info("LocalLlmPlugin: Registered '${local.getId()}' backend with AI Core")
-            true
-        } catch (e: Exception) {
-            context.logger.error("LocalLlmPlugin: Could not register the local backend", e)
-            false
-        }
-    }
-
-    /**
-     * Resolves AI Core's router, preferring the process-global registry and falling back to the
-     * provider-scoped lookup so a registry cleared by another plugin is not fatal.
-     */
-    private fun resolveInferenceService(): LlmInferenceService? = try {
-        SharedServices.get(LlmInferenceService::class.java)
-            ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
-    } catch (e: Exception) {
-        context.logger.warn("LocalLlmPlugin: Could not resolve LlmInferenceService: ${e.message}")
-        null
     }
 
     /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
@@ -199,15 +136,6 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         context.logger.info("LocalLlmPlugin: Deactivating plugin")
 
         return try {
-            context.removePluginLifecycleListener(aiCoreLifecycle)
-
-            val local = backend
-            if (local != null && registered) {
-                resolveInferenceService()?.unregisterBackend(local.getId())
-                registered = false
-                context.logger.info("LocalLlmPlugin: Unregistered '${local.getId()}' backend")
-            }
-
             // A disabled plugin must not keep the loaded model resident in host RAM.
             releaseBackend()
             sharedPromptConfig.clear()
@@ -225,16 +153,13 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
      * re-enable still infers.
      */
     private fun releaseBackend() {
+        if (::registration.isInitialized) registration.stop()
         backend?.close()
         backend = null
-        registered = false
     }
 
     override fun dispose() {
         context.logger.info("LocalLlmPlugin: Disposing plugin")
-
-        // deactivate() removes this too; a dispose without one would leave the host holding this.
-        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
         sharedPromptConfig.clear()

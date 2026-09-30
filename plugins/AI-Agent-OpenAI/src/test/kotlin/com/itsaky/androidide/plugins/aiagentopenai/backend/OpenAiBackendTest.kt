@@ -17,7 +17,7 @@ import org.junit.Test
  */
 class OpenAiBackendTest {
 
-    private val backend = OpenAiBackend(mockk(relaxed = true)) { null }
+    private val backend = OpenAiBackend(mockk(relaxed = true), promptConfig = { null })
 
     @Test
     fun givenConfigNotYetLoaded_whenAskedForItsPrompt_thenItReturnsNullInsteadOfBlocking() {

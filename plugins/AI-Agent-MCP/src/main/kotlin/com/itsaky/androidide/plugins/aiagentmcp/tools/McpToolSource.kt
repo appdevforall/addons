@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
+import com.itsaky.androidide.plugins.services.CapabilityStatus
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -25,7 +26,9 @@ private const val TAG = "$LOG_PREFIX.McpToolSource"
  * which would exhaust a phone-sized context window on its own, so the toggle defaults to off and
  * this class never widens it.
  */
-class McpToolSource : ToolSourceRegistry.ToolSource {
+class McpToolSource :
+    ToolSourceRegistry.StatusReportingToolSource,
+    ToolSourceRegistry.GroupedToolSource {
 
     /** Calls in flight, so a stopped agent run can drop the socket instead of waiting it out. */
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
@@ -58,6 +61,39 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
             parametersSchema = exposed.tool.inputSchema,
         )
     }
+
+    /**
+     * One group per enabled server, so the agent shows each server as its own tag. A server that
+     * is enabled but unreachable offers no tools and keeps its group, marked degraded.
+     */
+    override fun getToolGroups(): List<ToolSourceRegistry.ToolGroup> {
+        val namesByServer = exposedTools().groupBy({ it.server.id }, { it.name })
+        return McpServerStore.servers().filter { it.enabled }.map { server ->
+            Group(
+                id = server.id,
+                displayName = server.name,
+                toolNames = namesByServer[server.id].orEmpty(),
+                health = McpServerHealth.of(server.id),
+            )
+        }
+    }
+
+    /** The worst of the enabled servers' states: one broken server is worth flagging on the whole. */
+    override fun getStatus(): CapabilityStatus {
+        val states = enabledHealth().map { it?.state ?: McpServerHealth.State.CONNECTING }
+        return when {
+            McpServerHealth.State.DEGRADED in states -> CapabilityStatus.DEGRADED
+            McpServerHealth.State.CONNECTING in states -> CapabilityStatus.CONNECTING
+            else -> CapabilityStatus.AVAILABLE
+        }
+    }
+
+    /** The first broken server's reason; each group carries its own. */
+    override fun getStatusMessage(): String? =
+        enabledHealth().firstOrNull { it?.state == McpServerHealth.State.DEGRADED }?.message
+
+    private fun enabledHealth(): List<McpServerHealth.Health?> =
+        McpServerStore.servers().filter { it.enabled }.map { McpServerHealth.of(it.id) }
 
     override fun invoke(
         invocation: ToolSourceRegistry.ToolInvocation,
@@ -111,9 +147,12 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
         } finally {
             liveSessions.remove(callId)
         }
+        // A reply of any kind, a tool's own failure included, means the server is answering.
+        McpServerHealth.available(server.id)
         Outcome(result.success, result.text, result.errorMessage)
     } catch (e: Throwable) {
         Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
+        McpToolCatalog.recordFailure(server, e)
         val context = McpPlugin.getContext()?.androidContext
         Outcome(false, "", McpErrorFormatter.format(context, server.name, e))
     }
@@ -207,6 +246,27 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
         override fun getParametersSchema(): Map<String, Any> = parametersSchema
         override fun requiresApproval(): Boolean = true
         override fun isReadOnly(): Boolean = false
+    }
+
+    /**
+     * One server's tools, as the host contract describes a group. A server never asked yet reads
+     * as connecting rather than working: the tag should not promise tools that may not answer.
+     */
+    private class Group(
+        private val id: String,
+        private val displayName: String,
+        private val toolNames: List<String>,
+        private val health: McpServerHealth.Health?,
+    ) : ToolSourceRegistry.ToolGroup {
+        override fun getId(): String = id
+        override fun getDisplayName(): String = displayName
+        override fun getToolNames(): List<String> = toolNames
+        override fun getStatus(): CapabilityStatus = when (health?.state) {
+            McpServerHealth.State.AVAILABLE -> CapabilityStatus.AVAILABLE
+            McpServerHealth.State.DEGRADED -> CapabilityStatus.DEGRADED
+            McpServerHealth.State.CONNECTING, null -> CapabilityStatus.CONNECTING
+        }
+        override fun getStatusMessage(): String? = health?.message
     }
 
     /** One outcome, as the host contract describes it. */

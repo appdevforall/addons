@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.settings
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -249,5 +250,18 @@ class BaseUrlPolicyTest {
         assertFalse(BaseUrlPolicy.isOpenAiApi("http://localhost:11434/v1"))
         assertFalse(BaseUrlPolicy.isOpenAiApi("https://openrouter.ai/api/v1"))
         assertFalse(BaseUrlPolicy.isOpenAiApi(null))
+    }
+
+    @Test
+    fun givenAnAcceptedUrl_whenReadingItsAuthority_thenHostAndPortAreReturned() {
+        assertEquals("192.168.1.20:1234", BaseUrlPolicy.authorityOf("http://192.168.1.20:1234/v1"))
+        assertEquals("example.com", BaseUrlPolicy.authorityOf("https://example.com"))
+    }
+
+    @Test
+    fun givenAMalformedUrl_whenReadingItsAuthority_thenNoneIsReturned() {
+        assertNull(BaseUrlPolicy.authorityOf("localhost:1234"))
+        assertNull(BaseUrlPolicy.authorityOf("https:///v1"))
+        assertNull(BaseUrlPolicy.authorityOf("http://exa mple.com"))
     }
 }

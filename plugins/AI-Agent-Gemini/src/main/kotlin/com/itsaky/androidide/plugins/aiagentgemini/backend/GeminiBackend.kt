@@ -61,7 +61,7 @@ class GeminiBackend(
     private val context: PluginContext,
     private val promptConfig: () -> GeminiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend, WebSearchBackend {
+    EmbeddingBackend, WebSearchBackend, ActiveModelReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -336,6 +336,12 @@ class GeminiBackend(
     override fun getId(): String = "gemini"
 
     override fun getName(): String = "Gemini API"
+
+    /**
+     * The chat model requests go to, for the Agent's backend tag. Read from preferences like every
+     * request, so it is never stale; the plugin reports a change through `notifyBackendChanged`.
+     */
+    override fun getActiveModelName(): String = getModelName()
 
     /**
      * Written for a large cloud model; see [GeminiSystemPrompt] for why the wording belongs here.

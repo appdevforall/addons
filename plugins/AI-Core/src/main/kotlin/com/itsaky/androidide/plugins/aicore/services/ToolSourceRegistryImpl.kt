@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import java.io.File
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArraySet
 
 private const val TAG = "$LOG_PREFIX.ToolSourceRegistry"
 
@@ -32,6 +33,9 @@ class ToolSourceRegistryImpl(
     /** The host-side sources, kept in registration order so [getToolSources] can return them. */
     private val hostSources = LinkedHashMap<String, ToolSourceRegistry.ToolSource>()
 
+    /** Consumers of what [getToolSources] describes — the chat's tag row, say. */
+    private val listeners = CopyOnWriteArraySet<ToolSourceRegistry.ToolSourceListener>()
+
     override fun registerToolSource(source: ToolSourceRegistry.ToolSource) {
         val providerId = try {
             source.providerId.orEmpty().trim()
@@ -53,6 +57,7 @@ class ToolSourceRegistryImpl(
 
         synchronized(lock) { hostSources[providerId] = source }
         store.register(HostToolSource(source, providerId, displayName))
+        fireChanged(providerId)
     }
 
     override fun unregisterToolSource(source: ToolSourceRegistry.ToolSource) {
@@ -66,13 +71,52 @@ class ToolSourceRegistryImpl(
             return
         }
         store.unregister(id)
+        fireChanged(id)
     }
 
     override fun getToolSources(): List<ToolSourceRegistry.ToolSource> =
         synchronized(lock) { hostSources.values.toList() }
 
     override fun notifyToolsChanged(providerId: String) {
-        store.toolsChanged(providerId.trim())
+        val id = providerId.trim()
+        store.toolsChanged(id)
+        if (isRegistered(id)) fireChanged(id)
+    }
+
+    /**
+     * Relays a provider's health change to the listeners only: the tool list is unchanged, so the
+     * agent's router, executor and grammar are not rebuilt for it.
+     */
+    override fun notifyToolSourceStatusChanged(providerId: String) {
+        val id = providerId.trim()
+        if (isRegistered(id)) fire(id) { it.onToolSourceStatusChanged(id) }
+    }
+
+    override fun addToolSourceListener(listener: ToolSourceRegistry.ToolSourceListener) {
+        listeners.add(listener)
+    }
+
+    override fun removeToolSourceListener(listener: ToolSourceRegistry.ToolSourceListener) {
+        listeners.remove(listener)
+    }
+
+    private fun isRegistered(providerId: String): Boolean =
+        synchronized(lock) { hostSources.containsKey(providerId) }
+
+    private fun fireChanged(providerId: String) = fire(providerId) { it.onToolSourcesChanged(providerId) }
+
+    /**
+     * Tells every listener, on the caller's thread and outside [lock], as the contract requires.
+     * One that throws is logged and skipped rather than reaching the provider that reported.
+     */
+    private inline fun fire(providerId: String, call: (ToolSourceRegistry.ToolSourceListener) -> Unit) {
+        for (listener in listeners) {
+            try {
+                call(listener)
+            } catch (e: Throwable) {
+                Log.e(TAG, "A tool-source listener threw for '$providerId'", e)
+            }
+        }
     }
 
     /**

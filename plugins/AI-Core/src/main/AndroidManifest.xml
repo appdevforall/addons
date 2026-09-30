@@ -39,6 +39,10 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
+        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
+             this plugin implements the ToolSourceRegistry and LlmInferenceService listeners, groups and
+             status from ADFA-6278, and its chat reads them for the capability tags.
+             Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
             android:value="26.41" />
