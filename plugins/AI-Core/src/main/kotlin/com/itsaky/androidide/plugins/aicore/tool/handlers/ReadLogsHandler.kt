@@ -74,7 +74,7 @@ class ReadLogsHandler(
                 )
                 ToolResult.success(
                     message = if (window.anchoredOnError) {
-                        "$label from the first error (${window.text.length} characters)"
+                        "$label from the newest error (${window.text.length} characters)"
                     } else {
                         "$label (last ${window.text.length} characters)"
                     },
@@ -134,13 +134,13 @@ class ReadLogsHandler(
         private fun tabFor(source: LogSource): LogTab = when (source) {
             LogSource.APP -> LogTab(
                 toolName = "read_app_logs",
-                description = "Read the App Logs of the user's running app, from the first crash or error",
+                description = "Read the App Logs of the user's running app, from the newest crash or error",
                 label = "App Logs",
                 emptyLog = "(App Logs are empty. Run the app with run_app first, then read them again.)",
             )
             LogSource.IDE -> LogTab(
                 toolName = "read_ide_logs",
-                description = "Read the IDE Logs of Code on the Go and its plugins, from the first error",
+                description = "Read the IDE Logs of Code on the Go and its plugins, from the newest error",
                 label = "IDE Logs",
                 emptyLog = "(IDE Logs are empty.)",
             )

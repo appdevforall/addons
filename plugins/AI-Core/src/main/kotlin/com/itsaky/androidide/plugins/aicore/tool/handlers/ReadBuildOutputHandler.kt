@@ -7,12 +7,6 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import kotlinx.coroutines.CancellationException
 
-/** The slice of a build log handed to the model, and whether it starts at the first error. */
-internal data class OutputWindow(
-    val text: String,
-    val anchoredOnError: Boolean,
-)
-
 /**
  * Handler for reading the current build output.
  */
@@ -80,8 +74,6 @@ class ReadBuildOutputHandler(
         /** Maximum characters of build log handed to the model. */
         internal const val MAX_OUTPUT_CHARS = 8000
 
-        private const val TRUNCATION_MARKER = "...[truncated]...\n"
-
         // The host strips line timing prefixes; tolerated here so the window is right either way.
         private val LINE_PREFIX = Regex("""^(?:\[\d{2}:\d{2}:\d{2}\.\d{3}] )?(?:Δ\d+ms\s+)?""")
 
@@ -112,7 +104,7 @@ class ReadBuildOutputHandler(
             val text = if (overflows) body.takeLast(MAX_OUTPUT_CHARS) else body
             val dropped = overflows || (errorOffset ?: 0) > 0
             return OutputWindow(
-                text = if (dropped) TRUNCATION_MARKER + text else text,
+                text = if (dropped) "$TRUNCATION_MARKER\n$text" else text,
                 anchoredOnError = errorOffset != null && !overflows,
             )
         }

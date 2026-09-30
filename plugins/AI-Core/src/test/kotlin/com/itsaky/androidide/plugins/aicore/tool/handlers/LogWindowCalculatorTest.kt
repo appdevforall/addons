@@ -55,7 +55,7 @@ class LogWindowCalculatorTest {
 
     @Test
     fun givenALogOfExactlyTheBudget_whenWindowed_thenItIsReturnedWhole() {
-        val entries = List(79) { LogEntry(LogLevel.INFO, "x".repeat(99)) } +
+        val entries = List(38) { LogEntry(LogLevel.INFO, "x".repeat(99)) } +
             LogEntry(LogLevel.INFO, "x".repeat(100))
         val whole = entries.joinToString("\n") { it.text }
         assertEquals(MAX_OUTPUT_CHARS, whole.length)
@@ -88,6 +88,26 @@ class LogWindowCalculatorTest {
         assertTrue(text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.endsWith("b"))
         assertFalse("split surrogate", text.removePrefix("$marker\n").first().isLowSurrogate())
+    }
+
+    @Test
+    fun givenAnOlderCrashAndANewerOne_whenWindowed_thenItAnchorsOnTheNewest() {
+        val older = LogEntry(LogLevel.ERROR, "E AndroidRuntime: FATAL EXCEPTION: old")
+        val newer = LogEntry(LogLevel.ERROR, "E AndroidRuntime: FATAL EXCEPTION: new")
+
+        val text = LogWindowCalculator.windowFor(listOf(older) + info(3) + newer, false).text
+
+        assertTrue(text.startsWith("$marker\n${newer.text}"))
+    }
+
+    @Test
+    fun givenTwoErrorRuns_whenWindowed_thenItAnchorsOnTheStartOfTheNewest() {
+        val older = LogEntry(LogLevel.ERROR, "E Plugin: old")
+        val newest = listOf(LogEntry(LogLevel.ERROR, "E Plugin: new"), LogEntry(LogLevel.ERROR, "E Plugin: at frame"))
+
+        val text = LogWindowCalculator.windowFor(listOf(older) + info(3) + newest, false).text
+
+        assertEquals("$marker\nE Plugin: new\nE Plugin: at frame", text)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
+import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
 import com.itsaky.androidide.plugins.services.LogEntry
 import com.itsaky.androidide.plugins.services.LogLevel
 
@@ -8,22 +9,20 @@ import com.itsaky.androidide.plugins.services.LogLevel
  * including the truncation markers. Only the kept lines are ever joined into a string.
  */
 internal object LogWindowCalculator {
-    /** Maximum characters of log handed to the model, the same budget as build output. */
-    const val MAX_OUTPUT_CHARS = 8000
+    /** Maximum characters of log handed to the model: AgentLoop's cap, less room for the message. */
+    const val MAX_OUTPUT_CHARS = AgentLoop.DEFAULT_TOOL_OUTPUT_CHAR_LIMIT - 100
 
-    private const val TRUNCATION_MARKER = "...[truncated]..."
-
-    /** Markers of an app crash; the anchor prefers these over any earlier plain error. */
+    /** Markers of an app crash; the anchor prefers these over any plain error. */
     private val CRASH_MARKERS = listOf("FATAL EXCEPTION", "Fatal signal")
 
     /**
-     * A crash's exception and top frames sit where it starts, not in the tail of later chatter,
-     * so the window starts at the first crash line, else the first error line, and keeps the
-     * head of what follows. With neither, it keeps the newest lines.
+     * Logs span runs, so the window starts at the newest crash line, else the start of the newest
+     * run of error lines, and keeps the head of what follows. With neither, it keeps the newest
+     * lines.
      */
     fun windowFor(entries: List<LogEntry>, hostTruncated: Boolean): OutputWindow {
-        val anchor = entries.indexOfFirst { isCrashLine(it) }.takeIf { it >= 0 }
-            ?: entries.indexOfFirst { it.level == LogLevel.ERROR }.takeIf { it >= 0 }
+        val anchor = entries.indexOfLast { isCrashLine(it) }.takeIf { it >= 0 }
+            ?: newestErrorRunStart(entries)
         val text = if (anchor != null) {
             head(entries.subList(anchor, entries.size), droppedBefore = hostTruncated || anchor > 0)
         } else {
@@ -90,6 +89,13 @@ internal object LogWindowCalculator {
     private fun keepEnd(text: String, room: Int): String {
         val start = text.length - room
         return text.substring(if (text[start].isLowSurrogate()) start + 1 else start)
+    }
+
+    /** The first line of the newest contiguous run of ERROR lines, so its trace keeps its head. */
+    private fun newestErrorRunStart(entries: List<LogEntry>): Int? {
+        var start = entries.indexOfLast { it.level == LogLevel.ERROR }.takeIf { it >= 0 } ?: return null
+        while (start > 0 && entries[start - 1].level == LogLevel.ERROR) start--
+        return start
     }
 
     private fun isCrashLine(entry: LogEntry): Boolean =

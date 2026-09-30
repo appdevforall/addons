@@ -21,7 +21,7 @@ import org.junit.Test
 
 /**
  * Unit tests for [ReadLogsHandler] — the `read_app_logs` and `read_ide_logs` tools. Covers the
- * 8000-character budget, the crash-anchored window, and the empty and missing-service answers.
+ * character budget, the crash-anchored window, and the empty and missing-service answers.
  */
 class ReadLogsHandlerTest {
 
@@ -158,7 +158,7 @@ class ReadLogsHandlerTest {
         assertTrue(data.contains("NullPointerException"))
         assertTrue(data.contains("MainActivity.kt:12"))
         assertFalse("the head must be dropped", data.contains("I MyApp: step1\n"))
-        assertTrue(result.message.contains("first error"))
+        assertTrue(result.message.contains("newest error"))
     }
 
     @Test

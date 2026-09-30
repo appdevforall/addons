@@ -23,8 +23,7 @@ object BuiltInToolHandlers {
         SearchProjectHandler(context),
         OpenFileHandler(context),
         ReadBuildOutputHandler(context),
-        ReadLogsHandler(context, LogSource.APP),
-        ReadLogsHandler(context, LogSource.IDE),
+    ) + (if (hostHasLogApi()) LogToolHandlers.create(context) else emptyList()) + listOf(
         // Write tools
         CreateFileHandler(context),
         UpdateFileHandler(context),
@@ -35,5 +34,17 @@ object BuiltInToolHandlers {
         GradleSyncHandler(context),
         // Template tool
         GenerateFromTemplateHandler(context),
+    )
+
+    // A string, not a class literal: hosts before ADFA-6267 lack the class, and the literal would throw.
+    private fun hostHasLogApi(): Boolean =
+        runCatching { Class.forName("com.itsaky.androidide.plugins.services.IdeLogService") }.isSuccess
+}
+
+/** The log tools, kept apart so [LogSource] is only touched on a host that has it. */
+private object LogToolHandlers {
+    fun create(context: PluginContext): List<ToolHandler> = listOf(
+        ReadLogsHandler(context, LogSource.APP),
+        ReadLogsHandler(context, LogSource.IDE),
     )
 }
