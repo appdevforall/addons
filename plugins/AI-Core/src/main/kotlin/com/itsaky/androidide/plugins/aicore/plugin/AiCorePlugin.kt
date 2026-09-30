@@ -29,20 +29,11 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import java.io.File
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 
 class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExtension {
 
     private lateinit var context: PluginContext
     private var llmService: LlmInferenceService? = null
-
-    /** Runs this plugin's background work while it is active; cancelled on deactivation. */
-    private var activeScope: CoroutineScope? = null
 
     companion object {
         /** Must match `plugin.id` in AndroidManifest.xml — keys the host's plugin Context lookup
@@ -167,18 +158,10 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
     }
 
     /** Reads and validates the prompt config now, so the first chat turn does no disk I/O. */
-    @OptIn(ExperimentalCoroutinesApi::class)
     private fun preloadPromptConfig() {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        activeScope = scope
         val source = AssetPromptConfigSource(context.androidContext.assets)
-        val load = sharedPromptConfig.preload(scope, source)
-        load.invokeOnCompletion { error ->
-            when (error) {
-                null -> reportLoadedConfig(load.getCompleted())
-                is CancellationException -> Unit
-                else -> context.logger.error("AI Core Plugin: prompt config failed to load", error)
-            }
+        sharedPromptConfig.reload(source, ::reportLoadedConfig) { error ->
+            context.logger.error("AI Core Plugin: prompt config failed to load", error)
         }
     }
 
@@ -199,8 +182,6 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         context.logger.info("AI Core Plugin deactivating...")
 
         sharedPromptConfig.clear()
-        activeScope?.cancel()
-        activeScope = null
 
         // Backends belong to their own plugins; dropping the service drops the whole registry, and
         // each backend plugin unregisters itself on its own deactivation.

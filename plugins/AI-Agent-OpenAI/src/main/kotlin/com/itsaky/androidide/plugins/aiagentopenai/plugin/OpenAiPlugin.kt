@@ -13,12 +13,6 @@ import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 
 /**
  * Registers the OpenAI-compatible backend with AI Core's inference router.
@@ -34,9 +28,6 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
 
     /** True once [backend] is registered with the router, so re-registration is idempotent. */
     @Volatile private var registered = false
-
-    /** Runs the prompt-config load while the plugin is active; cancelled on deactivation. */
-    @Volatile private var configScope: CoroutineScope? = null
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentopenai"
@@ -180,22 +171,13 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
     }
 
     /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
-    @OptIn(ExperimentalCoroutinesApi::class)
     private fun preloadPromptConfig() {
-        releasePromptConfig()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        configScope = scope
         val source = AssetPromptConfigSource(context.androidContext.assets)
-        val load = sharedPromptConfig.preload(scope, source)
-        load.invokeOnCompletion { error ->
-            when (error) {
-                null -> reportLoadedConfig(load.getCompleted())
-                is CancellationException -> Unit
-                else -> context.logger.error(
-                    "OpenAiPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
-                    error,
-                )
-            }
+        sharedPromptConfig.reload(source, ::reportLoadedConfig) { error ->
+            context.logger.error(
+                "OpenAiPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                error,
+            )
         }
     }
 
@@ -209,13 +191,6 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         for (problem in OpenAiSystemPrompt.problems(config)) {
             context.logger.warn("OpenAiPlugin: $problem; ai-core's default prompt is sent instead")
         }
-    }
-
-    /** Drops the cached config and stops a load still in flight. Idempotent. */
-    private fun releasePromptConfig() {
-        sharedPromptConfig.clear()
-        configScope?.cancel()
-        configScope = null
     }
 
     override fun deactivate(): Boolean {
@@ -233,7 +208,7 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
 
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
-            releasePromptConfig()
+            sharedPromptConfig.clear()
 
             true
         } catch (e: Exception) {
@@ -260,7 +235,7 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
-        releasePromptConfig()
+        sharedPromptConfig.clear()
         pluginContext = null
         context.logger.info("OpenAiPlugin: Released OpenAI backend")
     }
