@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * Implementation of LlmInferenceService.
@@ -24,12 +25,53 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
     private val backends = ConcurrentHashMap<String, LlmBackend>()
     @Volatile private var currentGeneration: CompletableFuture<LlmResponse>? = null
 
+    /**
+     * Told of every register, unregister, selection and [notifyBackendChanged]. A set, so adding a
+     * listener twice is the no-op the contract promises.
+     */
+    private val backendListeners = CopyOnWriteArraySet<BackendChangeListener>()
+
     override fun registerBackend(backend: LlmBackend) {
-        backends[backend.getId()] = backend
+        val id = backend.getId()
+        backends[id] = backend
+        fireBackendChanged(id)
     }
 
     override fun unregisterBackend(backendId: String) {
-        backends.remove(backendId)
+        if (backends.remove(backendId) != null) fireBackendChanged(backendId)
+    }
+
+    override fun addBackendChangeListener(listener: BackendChangeListener) {
+        backendListeners.add(listener)
+    }
+
+    override fun removeBackendChangeListener(listener: BackendChangeListener) {
+        backendListeners.remove(listener)
+    }
+
+    /**
+     * Relays a backend's own change — a key entered, a model loaded or picked — to the listeners.
+     * Also how [BackendRegistry.select] reports a new selection, which is a change to the same id.
+     *
+     * @param backendId the backend that changed; one that is not registered is ignored
+     */
+    override fun notifyBackendChanged(backendId: String) {
+        if (backends.containsKey(backendId)) fireBackendChanged(backendId)
+    }
+
+    /**
+     * Tells every listener, on the caller's thread and outside any lock, as the contract requires.
+     * One that throws is logged and skipped: it is another plugin's code, and must not stop the
+     * rest from hearing, nor surface in the backend plugin that reported the change.
+     */
+    private fun fireBackendChanged(backendId: String) {
+        for (listener in backendListeners) {
+            try {
+                listener.onBackendChanged(backendId)
+            } catch (e: Throwable) {
+                logger?.error("A backend change listener threw for '$backendId'", e)
+            }
+        }
     }
 
     /**

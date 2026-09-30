@@ -165,6 +165,9 @@
     <string name="pref_agent_title">Agent</string>
     <string name="pref_agent_summary">AI backend, model and API key</string>
     <string name="msg_settings_unavailable">Couldn\'t open Agent settings. Open them from Preferences → Configuration → Agent.</string>
+    <!-- Matches the MCP plugin's own Preferences row, which opens the same screen -->
+    <string name="pref_mcp_title">MCP servers</string>
+    <string name="msg_plugin_settings_unavailable">Couldn\'t open %1$s. Open it from Preferences → Configuration → %1$s.</string>
 
     <!-- Settings -->
     <string name="settings_title">AI Settings</string>
@@ -229,4 +232,31 @@
     <string name="backend_no_settings">%1$s has no settings to configure.</string>
     <string name="backend_pane_unavailable">This backend\'s settings are unavailable. It may have been uninstalled or disabled.</string>
     <string name="state_error">Error: %s</string>
+
+    <!-- Capability tags under the chat input: what the agent is connected to (ADFA-6279). -->
+    <string name="capability_backend_model">%1$s \u00b7 %2$s</string>
+    <string name="capability_web">Web</string>
+    <string name="capability_web_offline">Offline</string>
+    <string name="capability_status_available">Working</string>
+    <string name="capability_status_connecting">Connecting</string>
+    <string name="capability_status_degraded">Not working</string>
+    <string name="capability_backend_not_configured">Not set up yet. Open the Agent settings to finish configuring it.</string>
+    <string name="capability_backend_none_installed">No AI backend is installed. Install one from the Plugin Manager.</string>
+    <string name="capability_backend_not_installed">The backend you selected is no longer installed. Choose another in the Agent settings.</string>
+    <string name="capability_web_online_detail">The device is online, so network backends and MCP servers can be reached.</string>
+    <string name="capability_web_offline_detail">The device is offline. Network backends and MCP servers cannot be reached until it reconnects.</string>
+    <string name="capability_detail_kind_backend">Backend</string>
+    <string name="capability_detail_kind_web">Web access</string>
+    <string name="capability_detail_source">Source: %1$s</string>
+    <string name="capability_detail_model">Model: %1$s</string>
+    <string name="capability_detail_model_unknown">Model: not reported</string>
+    <string name="capability_detail_status">Status: %1$s</string>
+    <string name="capability_detail_reason">Reason: %1$s</string>
+    <string name="capability_detail_open_settings">Settings</string>
+    <plurals name="capability_detail_tools">
+        <item quantity="one">%d tool</item>
+        <item quantity="other">%d tools</item>
+    </plurals>
+    <string name="desc_capability_tag">%1$s, %2$s. Tap for details.</string>
+    <string name="desc_capability_row">What the agent is connected to</string>
 </resources>

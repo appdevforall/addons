@@ -58,15 +58,21 @@ internal object OpenAiToolProtocol {
     /**
      * The `parameters` value for a tool.
      *
-     * An empty schema becomes a bare object rather than being omitted: omitting `parameters`
-     * declares a tool that takes none, and the model would then call it with nothing.
+     * An empty schema becomes an object with no properties rather than being omitted: omitting
+     * `parameters` declares a tool that takes none, and the model would then call it with nothing.
+     * `properties` is always present on an object schema, since LM Studio refuses the whole
+     * request when one tool's `parameters` lacks it.
      *
      * @param schema the tool's JSON Schema, empty when it publishes none.
      * @return the schema to declare.
      */
     fun parametersJson(schema: Map<String, Any>?): JSONObject {
-        if (schema.isNullOrEmpty()) return JSONObject().put("type", "object")
-        return schemaJson(schema, MAX_SCHEMA_DEPTH)
+        val json = if (schema.isNullOrEmpty()) JSONObject() else schemaJson(schema, MAX_SCHEMA_DEPTH)
+        if (!json.has("type")) json.put("type", "object")
+        if (json.optString("type") == "object" && json.optJSONObject("properties") == null) {
+            json.put("properties", JSONObject())
+        }
+        return json
     }
 
     /**

@@ -214,8 +214,9 @@ class McpSettingsViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 McpConnections.invalidate(id)
-                McpToolCatalog.forget(id)
+                // Removed first, so a probe finishing in between sees it gone and records nothing.
                 McpServerStore.remove(id)
+                McpToolCatalog.forget(id)
             }
             reload()
         }

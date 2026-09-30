@@ -2,14 +2,12 @@ package com.itsaky.androidide.plugins.aiagentgemini.plugin
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
 import com.itsaky.androidide.plugins.aiagentgemini.backend.GeminiBackend
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
-import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.services.SharedServices
 
 /**
  * Registers the Google Gemini API backend with AI Core's inference router.
@@ -22,21 +20,14 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
 
     private lateinit var context: PluginContext
 
-    /**
-     * Volatile because [activate] writes it on the loading thread while the host may deliver
-     * `onPluginActivated` on another: a plain field lets [registerBackend] read null and give up
-     * without scheduling a retry, leaving the selector permanently empty.
-     */
+    /** The live backend, from [activate] until [deactivate] releases it. */
     @Volatile private var backend: GeminiBackend? = null
 
-    /** True once [backend] is registered with the router, so re-registration is idempotent. */
-    @Volatile private var registered = false
+    /** Keeps [backend] registered with AI Core across its restarts, and reports setting changes. */
+    private lateinit var registration: LlmBackendRegistration
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentgemini"
-
-        /** Provider of [LlmInferenceService]; this plugin is useless without it. */
-        private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 
         /**
          * The whole-plugin entry, and the only one carrying the Tier-3 guide button. Anchored to
@@ -57,6 +48,9 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_GEMINI_EMBEDDING_MODEL = "ai_gemini_embedding_model"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_gemini_get_free_key"
 
+        /** The settings that change what [GeminiBackend.isAvailable] or its model name answers. */
+        private val WATCHED_KEYS = setOf(GeminiPreferences.KEY_API_KEY, GeminiPreferences.KEY_MODEL)
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -73,31 +67,16 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         fun getBackend(): GeminiBackend? = activeBackend
     }
 
-    /**
-     * Re-registers when AI Core activates. Plugins load in parallel with no ordering, so
-     * [activate] may run before AI Core has published its service; this closes that race
-     * instead of polling for it.
-     */
-    private val aiCoreLifecycle = object : PluginLifecycleListener {
-        override fun onPluginActivated(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registerBackend()
-        }
-
-        override fun onPluginDeactivated(pluginId: String) {
-            // The router went away and took the registration with it; allow a fresh one.
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-
-        override fun onPluginUninstalled(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-    }
-
     override fun initialize(context: PluginContext): Boolean {
         return try {
             this.context = context
             // Published for the settings pane, which the hosting screen constructs directly.
             pluginContext = context
+            registration = LlmBackendRegistration(
+                context = context,
+                preferences = { GeminiPreferences.of(context) },
+                watchedKeys = WATCHED_KEYS,
+            )
             context.logger.info("GeminiPlugin: Plugin initialized successfully")
             true
         } catch (e: Exception) {
@@ -123,15 +102,7 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
 
             // Decrypt the key off-thread now, so a main-thread isAvailable() can't say "no key".
             gemini.warmKeyCache()
-
-            // Listen first, then try: a listener added after a successful attempt would still be
-            // needed for a later AI Core restart, and one added before costs nothing.
-            context.addPluginLifecycleListener(aiCoreLifecycle)
-            if (!registerBackend()) {
-                context.logger.info(
-                    "GeminiPlugin: AI Core is not active yet; will register when it activates"
-                )
-            }
+            registration.start(gemini)
 
             true
         } catch (e: Exception) {
@@ -140,57 +111,10 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         }
     }
 
-    /**
-     * Registers the Gemini backend with AI Core's router, if the router is reachable.
-     *
-     * @return true when the backend is registered (now or already), false when AI Core is absent
-     */
-    private fun registerBackend(): Boolean {
-        if (registered) return true
-        val gemini = backend ?: return false
-
-        val service = resolveInferenceService()
-        if (service == null) {
-            context.logger.debug("GeminiPlugin: LlmInferenceService not available yet")
-            return false
-        }
-
-        return try {
-            service.registerBackend(gemini)
-            registered = true
-            context.logger.info("GeminiPlugin: Registered '${gemini.getId()}' backend with AI Core")
-            true
-        } catch (e: Exception) {
-            context.logger.error("GeminiPlugin: Could not register the Gemini backend", e)
-            false
-        }
-    }
-
-    /**
-     * Resolves AI Core's router, preferring the process-global registry and falling back to the
-     * provider-scoped lookup so a registry cleared by another plugin is not fatal.
-     */
-    private fun resolveInferenceService(): LlmInferenceService? = try {
-        SharedServices.get(LlmInferenceService::class.java)
-            ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
-    } catch (e: Exception) {
-        context.logger.warn("GeminiPlugin: Could not resolve LlmInferenceService: ${e.message}")
-        null
-    }
-
     override fun deactivate(): Boolean {
         context.logger.info("GeminiPlugin: Deactivating plugin")
 
         return try {
-            context.removePluginLifecycleListener(aiCoreLifecycle)
-
-            val gemini = backend
-            if (gemini != null && registered) {
-                resolveInferenceService()?.unregisterBackend(gemini.getId())
-                registered = false
-                context.logger.info("GeminiPlugin: Unregistered '${gemini.getId()}' backend")
-            }
-
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
 
@@ -206,17 +130,14 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
      * backend. Idempotent, so a [deactivate] followed by [dispose] closes nothing twice.
      */
     private fun releaseBackend() {
+        if (::registration.isInitialized) registration.stop()
         backend?.close()
         backend = null
         activeBackend = null
-        registered = false
     }
 
     override fun dispose() {
         context.logger.info("GeminiPlugin: Disposing plugin")
-
-        // deactivate() removes this too; a dispose without one would leave the host holding this.
-        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
         pluginContext = null

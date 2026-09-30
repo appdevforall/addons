@@ -36,11 +36,12 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.32: this plugin calls getPluginService() and the plugin lifecycle listener API,
-             and pairs with ai-core, which requires the same release. -->
+        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
+             this backend reports getActiveModelName() and notifyBackendChanged() (ADFA-6278).
+             Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.32" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.max_ide_version"
