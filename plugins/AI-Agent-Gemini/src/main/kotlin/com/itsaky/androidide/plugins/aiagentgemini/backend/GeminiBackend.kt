@@ -61,7 +61,7 @@ class GeminiBackend(
     private val context: PluginContext,
     private val promptConfig: () -> GeminiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend {
+    EmbeddingBackend, WebSearchBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -365,6 +365,9 @@ class GeminiBackend(
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentgemini.settings.GeminiSettingsFragment"
+
+    /** Searches through Google Search grounding; see [GeminiWebSearch]. */
+    override fun canSearchWeb(): Boolean = true
 
     override fun isAvailable(): Boolean {
         // Available once a (decryptable) API key is configured.

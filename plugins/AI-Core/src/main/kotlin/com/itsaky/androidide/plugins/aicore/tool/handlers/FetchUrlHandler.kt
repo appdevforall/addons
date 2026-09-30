@@ -54,7 +54,7 @@ class FetchUrlHandler : ToolHandler {
     }
 
     /**
-     * GETs [url], following redirects by hand so each hop is held to [problemWith] too: the
+     * GETs [url], following same-host redirects by hand so each hop is held to [problemWith] too: the
      * platform follows only same-scheme redirects, and checks none of them.
      */
     private fun fetch(url: String): ToolResult {
@@ -66,8 +66,13 @@ class FetchUrlHandler : ToolHandler {
                 if (code in 300..399) {
                     val location = conn.getHeaderField("Location")
                         ?: return ToolResult.failure("$current redirected without saying where")
-                    current = URL(URL(current), location).toString()
-                    problemWith(current)?.let { return ToolResult.failure("Redirected to $current: $it") }
+                    val next = URL(URL(current), location).toString()
+                    problemWith(next)?.let { return ToolResult.failure("Redirected to $next: $it") }
+                    // Another host needs its own approval, so hand the URL back instead of following.
+                    if (!URI(next).host.equals(URI(current).host, ignoreCase = true)) {
+                        return ToolResult.success("$current redirects to $next; fetch that URL to follow it", next)
+                    }
+                    current = next
                     return@repeat
                 }
                 if (code !in 200..299) {

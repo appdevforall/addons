@@ -97,8 +97,12 @@ class ToolCallExtractor {
          * reads as an example rather than a call. Blanked rather than removed: a call after a fence
          * must keep an object opening before it, and offsets must still line up with [text].
          */
-        private fun blankFencedBlocks(text: String): String =
-            FENCED_BLOCK_REGEX.replace(text) { " ".repeat(it.value.length) }
+        private fun blankFencedBlocks(text: String): String {
+            // A reply that is one fenced block and nothing else is a call that lost its envelope.
+            val trimmed = text.trim()
+            if (FENCED_BLOCK_REGEX.find(trimmed)?.value == trimmed) return text
+            return FENCED_BLOCK_REGEX.replace(text) { " ".repeat(it.value.length) }
+        }
 
         /**
          * Whether [position] sits inside an unclosed `{`, by brace depth rather than the nearest

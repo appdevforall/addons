@@ -41,7 +41,7 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.39" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.max_ide_version"

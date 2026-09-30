@@ -1,9 +1,9 @@
 package com.itsaky.androidide.plugins.aicore.tool.web
 
 /**
- * The names the web tools go by, in the tool list and between ai-core and the backends. Both tools
- * are always offered: a search goes to the provider already receiving the conversation, and each
- * fetch asks the user first.
+ * The names the web tools go by, in the tool list and between ai-core and the backends. A search
+ * goes to the provider already receiving the conversation, so it is offered only when that backend
+ * can search; each fetch asks the user first.
  */
 object WebAccess {
 

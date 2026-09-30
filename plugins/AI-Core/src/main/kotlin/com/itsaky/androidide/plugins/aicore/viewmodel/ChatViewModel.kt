@@ -960,8 +960,14 @@ class ChatViewModel(
 
                 // One list for both halves of the protocol: the prompt describes it and a
                 // natively calling backend is sent it, so the two can never name different tools.
+                val canSearch = runCatching {
+                    (getLlmService()?.getBackend(currentBackendId) as? LlmInferenceService.WebSearchBackend)
+                        ?.canSearchWeb()
+                }.getOrNull() == true
+                // Offered only where it can succeed; elsewhere every search is a wasted round trip.
                 val toolDefinitions =
                     PromptToolCatalog.definitions(tools, RESPOND_TOOL, sharedPromptConfig.config())
+                        .filter { canSearch || it.name != WebAccess.WEB_SEARCH_TOOL }
 
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
                     // The grammar shapes a local tool call but not its values, so paths get sampled.
@@ -985,8 +991,7 @@ class ChatViewModel(
                 )
                 // Code to judge, or a question about what is current: search before answering.
                 val requiredTool = WebAccess.WEB_SEARCH_TOOL.takeIf { search ->
-                    currentBackendId != AiBackend.LOCAL_ID &&
-                        toolDefinitions.any { it.name == search } &&
+                    toolDefinitions.any { it.name == search } &&
                         VerificationPolicy.requiresWebCheck(userMessage, contextFiles.isNotEmpty())
                 }
                 requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }

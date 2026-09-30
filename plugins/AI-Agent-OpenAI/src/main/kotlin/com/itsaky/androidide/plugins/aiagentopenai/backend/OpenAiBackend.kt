@@ -64,7 +64,7 @@ class OpenAiBackend(
     private val context: PluginContext,
     private val promptConfig: () -> OpenAiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend {
+    EmbeddingBackend, WebSearchBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -300,6 +300,9 @@ class OpenAiBackend(
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentopenai.settings.OpenAiSettingsFragment"
+
+    /** Only OpenAI's own Responses API searches; a compatible server refuses the request. */
+    override fun canSearchWeb(): Boolean = BaseUrlPolicy.isOpenAiApi(getBaseUrl())
 
     /**
      * Available when the server can plausibly be called.

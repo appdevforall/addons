@@ -258,6 +258,16 @@ class ToolCallExtractorTest {
     }
 
     @Test
+    fun givenAReplyThatIsOnlyAFencedCall_whenExtracting_thenTheCallRuns() {
+        val reply = "```json\n{\"tool\":\"read_file\",\"args\":{\"file_path\":\"app/build.gradle.kts\"}}\n```"
+
+        val calls = ToolCallExtractor.extractToolCalls(reply)
+
+        assertEquals(1, calls.size)
+        assertEquals("read_file", calls[0].name)
+    }
+
+    @Test
     fun givenAnUnclosedFenceHoldingAValidCall_whenExtracting_thenNothingRuns() {
         val reply = "Example:\n```\n{\"tool\":\"run_app\",\"args\":{}}"
 
