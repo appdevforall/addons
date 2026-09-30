@@ -17,6 +17,9 @@ internal object NetworkTags {
 
     /** Batch embedding — `"GEEM"`. */
     const val EMBEDDING = 0x4745454D
+
+    /** Resolving a web search's source links — `"GESR"`. */
+    const val SEARCH_SOURCES = 0x47455352
 }
 
 /**

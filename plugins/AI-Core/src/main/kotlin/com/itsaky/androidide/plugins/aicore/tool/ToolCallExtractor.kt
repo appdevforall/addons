@@ -48,6 +48,14 @@ class ToolCallExtractor {
         private val BARE_TOOL_KEY_REGEX = Regex(""""tool"\s*:""")
 
         /**
+         * A fenced code block, closed or left open by a reply that hit its output cap.
+         *
+         * Only ever used to decide whether a `{"tool":…}` shape is a call or something the user
+         * asked to be shown, never to produce text, so swallowing an unclosed tail is the safe way.
+         */
+        private val FENCED_BLOCK_REGEX = Regex("""```(?:.*?```|.*)""", RegexOption.DOT_MATCHES_ALL)
+
+        /**
          * Classifies a reply that [extractToolCalls] found nothing in.
          *
          * Only meaningful for such a reply: a parsed envelope matches these shapes too, so calling
@@ -71,15 +79,40 @@ class ToolCallExtractor {
         /**
          * Whether [text] holds something shaped like a bare `{"tool":…}` call.
          *
-         * Requires the key to sit inside an object, so neither the diagnosis nor the prose filter
-         * fires on a sentence that quotes the word.
+         * Requires the key to sit inside an object and outside a fenced code block, so neither the
+         * diagnosis nor the prose filter fires on a sentence that quotes the word, nor on the JSON
+         * an answer about tool schemas or a config file is made of (ADFA-6223).
          *
          * @param text the text to inspect.
          * @return true when a bare call is present.
          */
         private fun containsBareToolCall(text: String): Boolean {
-            val key = BARE_TOOL_KEY_REGEX.find(text) ?: return false
-            return text.lastIndexOf('{', key.range.first) >= 0
+            val outsideFences = blankFencedBlocks(text)
+            // Every match is tried: prose quoting the key ahead of a real call must not hide the call.
+            return BARE_TOOL_KEY_REGEX.findAll(outsideFences).any { isInsideObject(outsideFences, it.range.first) }
+        }
+
+        /**
+         * [text] with every fenced code block overwritten by spaces, so a bare `{"tool":…}` there
+         * reads as an example rather than a call. Blanked rather than removed: a call after a fence
+         * must keep an object opening before it, and offsets must still line up with [text].
+         */
+        private fun blankFencedBlocks(text: String): String =
+            FENCED_BLOCK_REGEX.replace(text) { " ".repeat(it.value.length) }
+
+        /**
+         * Whether [position] sits inside an unclosed `{`, by brace depth rather than the nearest
+         * brace, so a closed object before prose does not count and a nested one inside a call does.
+         */
+        private fun isInsideObject(text: String, position: Int): Boolean {
+            var depth = 0
+            for (i in 0 until position) {
+                when (text[i]) {
+                    '{' -> depth++
+                    '}' -> if (depth > 0) depth--
+                }
+            }
+            return depth > 0
         }
 
         /**
@@ -169,9 +202,9 @@ class ToolCallExtractor {
             toolCalls.addAll(extractFromXmlTags(body))
             if (toolCalls.isNotEmpty()) strategy = "envelope"
 
-            // Strategy 2: Bare JSON objects if no XML found
+            // Strategy 2: Bare JSON objects if no XML found; one inside a code fence is an example.
             if (toolCalls.isEmpty()) {
-                toolCalls.addAll(extractFromJsonObjects(body))
+                toolCalls.addAll(extractFromJsonObjects(blankFencedBlocks(body)))
                 if (toolCalls.isNotEmpty()) strategy = "bare_json"
             }
 
@@ -220,7 +253,7 @@ class ToolCallExtractor {
         /**
          * Strategy 2: Extract tool calls from bare JSON objects.
          * Format: {"tool":"name","args":{...}}
-         * Uses brace-balanced extraction to handle nested args objects.
+         * Brace-balanced, for nested args; the caller blanks code fences first.
          */
         private fun extractFromJsonObjects(text: String): List<ToolCall> {
             val toolCalls = mutableListOf<ToolCall>()

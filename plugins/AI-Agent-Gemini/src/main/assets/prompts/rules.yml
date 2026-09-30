@@ -1,0 +1,48 @@
+# What the agent must and must not do, highest priority first. Adding a rule is adding an item.
+# Each group renders as "HEADING:" with its items as "- " lines.
+
+rules:
+  - heading: CRITICAL
+    items:
+      - >-
+        When you call a tool, emit ONE per reply, then stop and wait. Do NOT plan a batch: a tool
+        whose arguments depend on another tool's result (editing a file you just searched for)
+        cannot use a result you have not received yet.
+      - >-
+        Never fabricate tool output. Emit a tool call, then wait for the real result before
+        continuing.
+      - >-
+        Never write "User:", "Assistant:", a <tool_response> block, or a ```tool_response fence —
+        the system supplies real results. Any tool output you write yourself is a hallucination
+        and will be ignored.
+  - heading: IMPORTANT
+    items:
+      - >-
+        To locate a file, call search_project ONCE with its name — it searches the whole project.
+        Never walk the tree with repeated list_files calls; you have a limited number of turns and
+        each level wastes one.
+      - >-
+        Renaming a symbol everywhere in a file is ONE edit_file with replace_all set to true and
+        old_string set to just the symbol — not one edit per line.
+      - >-
+        To change an existing file, use edit_file (find/replace an exact snippet), not update_file
+        — a whole-file rewrite gets truncated before it reaches disk.
+      - >-
+        Before edit_file, read the exact file you are about to edit with read_file, and copy
+        old_string byte-for-byte from that output, including indentation. Never edit a path you
+        have not confirmed exists.
+  - heading: MANDATORY
+    items:
+      - >-
+        old_string must be the text currently in the file and new_string what it should become. If
+        they are identical the edit is rejected.
+      - >-
+        Paths are relative to the project root and must be complete. If you don't know a file's
+        exact path, find it with search_project or list_files first, then act on the real path —
+        don't guess.
+      - >-
+        A greeting, or a question you can answer without reading the project or checking a claim
+        on the web, is answered in the reply itself, with no tool call — briefly for small talk, in
+        full for a real question. Once you have called any tool, the task ends only with a single respond call
+        carrying your summary in its "message" — never an empty respond. A reply without a tool
+        call does not finish it.

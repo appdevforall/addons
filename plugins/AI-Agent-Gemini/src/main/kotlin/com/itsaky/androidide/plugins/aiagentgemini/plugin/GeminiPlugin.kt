@@ -3,13 +3,23 @@ package com.itsaky.androidide.plugins.aiagentgemini.plugin
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentgemini.backend.GeminiBackend
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
+import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
+import com.itsaky.androidide.plugins.aiagentgemini.prompt.config.GeminiPromptConfig
+import com.itsaky.androidide.plugins.aiagentgemini.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /**
  * Registers the Google Gemini API backend with AI Core's inference router.
@@ -31,6 +41,9 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
 
     /** True once [backend] is registered with the router, so re-registration is idempotent. */
     @Volatile private var registered = false
+
+    /** Runs the prompt-config load while the plugin is active; cancelled on deactivation. */
+    @Volatile private var configScope: CoroutineScope? = null
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentgemini"
@@ -116,8 +129,9 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
 
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
+            preloadPromptConfig()
 
-            val gemini = GeminiBackend(context)
+            val gemini = GeminiBackend(context, sharedPromptConfig::configIfLoaded)
             backend = gemini
             activeBackend = gemini
 
@@ -178,6 +192,45 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         null
     }
 
+    /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun preloadPromptConfig() {
+        releasePromptConfig()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        configScope = scope
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        val load = sharedPromptConfig.preload(scope, source)
+        load.invokeOnCompletion { error ->
+            when (error) {
+                null -> reportLoadedConfig(load.getCompleted())
+                is CancellationException -> Unit
+                else -> context.logger.error(
+                    "GeminiPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                    error,
+                )
+            }
+        }
+    }
+
+    /**
+     * Logs that the config loaded, and any name typo its layout would hit at render time.
+     *
+     * @param config the config just loaded.
+     */
+    private fun reportLoadedConfig(config: GeminiPromptConfig) {
+        context.logger.info("GeminiPlugin: loaded prompt config with ${config.rules.size} rule groups")
+        for (problem in GeminiSystemPrompt.problems(config)) {
+            context.logger.warn("GeminiPlugin: $problem; ai-core's default prompt is sent instead")
+        }
+    }
+
+    /** Drops the cached config and stops a load still in flight. Idempotent. */
+    private fun releasePromptConfig() {
+        sharedPromptConfig.clear()
+        configScope?.cancel()
+        configScope = null
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("GeminiPlugin: Deactivating plugin")
 
@@ -193,6 +246,7 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
 
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
+            releasePromptConfig()
 
             true
         } catch (e: Exception) {
@@ -219,6 +273,7 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
+        releasePromptConfig()
         pluginContext = null
         context.logger.info("GeminiPlugin: Released Gemini backend")
     }

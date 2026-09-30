@@ -1,0 +1,27 @@
+# How the tool list is introduced, and how to call a tool. A small model calls through the text
+# protocol only; when ai-core parses no text calls, none of tool_call_format is sent.
+
+tools:
+  heading: Tools
+
+tool_call_format:
+  text:
+    instruction: >-
+      TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:
+    examples_heading: Examples (pick the tool that matches; copy the FORMAT, not the values)
+    # Each renders as "PURPOSE:" followed by the call on its own line.
+    examples:
+      - purpose: Greeting / question you can answer -> respond
+        call: '<tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>'
+      - purpose: Open a file (a bare name is fine here) -> open_file
+        call: '<tool_call>{"tool":"open_file","args":{"file_path":"{{EXAMPLE_FILE_NAME}}"}}</tool_call>'
+      - purpose: Change one line of a file -> edit_file
+        call: '<tool_call>{"tool":"edit_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}","old_string":"setTitle(\"Old\")","new_string":"setTitle(\"New\")"}}</tool_call>'
+      - purpose: Change two lines (note the \n, never a real line break) -> edit_file
+        call: '<tool_call>{"tool":"edit_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}","old_string":"a = 1\nb = 2","new_string":"a = 10\nb = 20"}}</tool_call>'
+      - purpose: >-
+          Rename every use of one name in a file -> ONE edit_file with replace_all (NOT one call
+          per line)
+        call: '<tool_call>{"tool":"edit_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}","old_string":"oldName","new_string":"newName","replace_all":"true"}}</tool_call>'
+      - purpose: Find where a file actually lives before editing it -> search_project
+        call: '<tool_call>{"tool":"search_project","args":{"query":"{{EXAMPLE_FILE_STEM}}"}}</tool_call>'

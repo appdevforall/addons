@@ -2,6 +2,9 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.SHIPPED_ROOT
+import com.itsaky.androidide.plugins.aicore.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
@@ -9,8 +12,11 @@ import io.mockk.mockk
 import io.mockk.verify
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -49,6 +55,9 @@ class ChatViewModelTitleQueueTest {
     /** Backs the preferences mock; concurrent because the persist scope writes from its own thread. */
     private val stored = ConcurrentHashMap<String, String>()
 
+    /** Runs the prompt config load that activation starts on device; the title is worded from it. */
+    private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     @Before
     fun setUp() {
         // ChatViewModel's stateIn() calls run on viewModelScope, i.e. Dispatchers.Main.
@@ -69,6 +78,7 @@ class ChatViewModelTitleQueueTest {
         // Like the real service: the global cancel reaches whatever call is current, here the title.
         every { llmService.cancelGeneration() } answers { titleResponse.cancel(true); Unit }
         SharedServices.register(LlmInferenceService::class.java, llmService)
+        runBlocking { sharedPromptConfig.preload(configScope, DirectoryPromptConfigSource(SHIPPED_ROOT)).await() }
         stored[SESSIONS_KEY] =
             """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[""" +
             """{"id":"m1","text":"explain this build script","sender":"USER","status":"SENT","timestamp":1},""" +
@@ -80,6 +90,8 @@ class ChatViewModelTitleQueueTest {
     fun tearDown() {
         Dispatchers.resetMain()
         SharedServices.clear()
+        sharedPromptConfig.clear()
+        configScope.cancel()
     }
 
     private fun newViewModel() = ChatViewModel { null }.apply {

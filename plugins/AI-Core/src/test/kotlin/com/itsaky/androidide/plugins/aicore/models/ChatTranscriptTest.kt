@@ -99,6 +99,44 @@ class ChatTranscriptTest {
     }
 
     @Test
+    fun givenAnActivityRowWithAToolLog_whenExported_thenTheSearchAndItsResultAreInTheFile() {
+        val log = "✓ web_search(query=Ktor JsonFeature)\nSearched the web for: Ktor JsonFeature\nRemoved in 2.0."
+        val original = ChatSession(messages = listOf(message("✓ 1 action · web_search", Sender.TOOL, toolLog = log)))
+
+        val exported = ChatTranscript.export(original)
+
+        assertTrue(exported.contains("--- CALLS MADE\n$log\n"))
+    }
+
+    @Test
+    fun givenBothAHistoryAndAToolLog_whenRoundTripped_thenEachLandsInItsOwnField() {
+        val original = ChatSession(
+            messages = listOf(
+                message("bubble", Sender.AGENT, durationMs = 5, historyText = "wrote\n\nthis", toolLog = "log\n\nlines"),
+                message("✓ 1 action", Sender.TOOL, durationMs = 0, toolLog = "only a log"),
+                message("Why?", Sender.USER),
+            )
+        )
+
+        val imported = ChatTranscript.parse(ChatTranscript.export(original), null)
+
+        assertEquals(original.messages.map { it.text }, imported.messages.map { it.text })
+        assertEquals(original.messages.map { it.historyText }, imported.messages.map { it.historyText })
+        assertEquals(original.messages.map { it.toolLog }, imported.messages.map { it.toolLog })
+    }
+
+    @Test
+    fun givenAMessageThatLooksLikeTheCallsMarker_whenRoundTripped_thenItIsNotSplit() {
+        val tricky = "a\n--- CALLS MADE\nb"
+        val original = ChatSession(messages = listOf(message(tricky, Sender.AGENT, toolLog = tricky)))
+
+        val imported = ChatTranscript.parse(ChatTranscript.export(original), null).messages.single()
+
+        assertEquals(tricky, imported.text)
+        assertEquals(tricky, imported.toolLog)
+    }
+
+    @Test
     fun givenAMessageThatLooksLikeTheHistoryMarker_whenRoundTripped_thenItIsNotSplit() {
         val tricky = "a\n--- MODEL WROTE\n\\--- MODEL WROTE \nb"
         val original = ChatSession(messages = listOf(message(tricky, Sender.AGENT, historyText = tricky)))
@@ -286,8 +324,9 @@ class ChatTranscriptTest {
         durationMs: Long? = null,
         status: MessageStatus = MessageStatus.SENT,
         historyText: String? = null,
+        toolLog: String? = null,
     ) = ChatMessage(
         text = text, sender = sender, timestamp = timestamp, durationMs = durationMs, status = status,
-        historyText = historyText,
+        historyText = historyText, toolLog = toolLog,
     )
 }

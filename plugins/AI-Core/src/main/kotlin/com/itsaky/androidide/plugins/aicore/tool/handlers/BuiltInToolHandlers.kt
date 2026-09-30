@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 
 /**
@@ -11,11 +12,15 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 object BuiltInToolHandlers {
 
     /**
-     * Builds one handler per built-in tool.
+     * Builds one handler per built-in tool, the web tools included.
      * @param context the plugin context each handler works through.
+     * @param webSearch runs one web search through the active backend.
      * @return the handlers, read-only tools first.
      */
-    fun create(context: PluginContext): List<ToolHandler> = listOf(
+    fun create(
+        context: PluginContext,
+        webSearch: suspend (String) -> ToolResult = { ToolResult.failure("Web search is unavailable") },
+    ): List<ToolHandler> = listOf(
         // Read-only tools
         ReadFileHandler(context),
         ListFilesHandler(context),
@@ -32,5 +37,8 @@ object BuiltInToolHandlers {
         GradleSyncHandler(context),
         // Template tool
         GenerateFromTemplateHandler(context),
+        // Web tools
+        WebSearchHandler(webSearch),
+        FetchUrlHandler(),
     )
 }

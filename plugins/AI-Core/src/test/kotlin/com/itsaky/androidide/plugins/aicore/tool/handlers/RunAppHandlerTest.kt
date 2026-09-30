@@ -2,8 +2,10 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
-import com.itsaky.androidide.plugins.services.BuildAndLaunchCallback
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.prompt.ToolDescriptions
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
+import com.itsaky.androidide.plugins.services.BuildAndLaunchCallback
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import io.mockk.Runs
 import io.mockk.every
@@ -153,7 +155,7 @@ class RunAppHandlerTest {
         // install prompt is answered. Without this caveat the model reports the app as running.
         assertTrue(
             "run_app success does not mean the app launched",
-            handler.description.contains("install started"),
+            ToolDescriptions.describe(shippedConfig, "respond", handler).contains("install started"),
         )
     }
 

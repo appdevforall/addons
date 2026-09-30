@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.prompt.ToolResultsPrompt
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Role
 import kotlinx.coroutines.test.runTest
@@ -27,6 +29,46 @@ class AgentLoopTest {
         }
     }
 
+    /** A loop worded by the shipped `agent_loop.yml`, as the ViewModel builds it. */
+    private fun agentLoop(
+        maxIterations: Int = AgentLoop.DEFAULT_MAX_ITERATIONS,
+        maxConsecutiveRepeats: Int = AgentLoop.DEFAULT_MAX_CONSECUTIVE_REPEATS,
+        terminalTool: String? = null,
+        toolOutputCharLimit: Int = ToolResultsPrompt.DEFAULT_CHAR_LIMIT,
+        unfinishedTurn: (suspend () -> String)? = null,
+    ) = AgentLoop(
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond", toolOutputCharLimit),
+        maxIterations = maxIterations,
+        maxConsecutiveRepeats = maxConsecutiveRepeats,
+        terminalTool = terminalTool,
+        unfinishedTurn = unfinishedTurn,
+    )
+
+    /** The loop the ViewModel runs: ends on "respond", and asks an unfinished run to finish. */
+    private fun finishingLoop() = agentLoop(
+        terminalTool = "respond",
+        unfinishedTurn = { UNFINISHED },
+    )
+
+    /** [finishingLoop], also asking a run that owes a tool for it. */
+    private fun verifyingLoop() = AgentLoop(
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond"),
+        terminalTool = "respond",
+        unfinishedTurn = { UNFINISHED },
+        requiredToolTurn = { tool -> "$REQUIRED $tool" },
+    )
+
+    /** Every tool name the run executed, in order. */
+    private class ToolRecorder {
+        val names = mutableListOf<String>()
+        suspend fun execute(calls: List<ToolCall>): List<ToolResult> {
+            names += calls.map { it.name }
+            return calls.map { ToolResult.success("ok", "result") }
+        }
+    }
+
+    private val respond = """<tool_call>{"tool":"respond","args":{"message":"Done."}}</tool_call>"""
+
     private fun toolCall(name: String) = """<tool_call>{"tool":"$name","args":{}}</tool_call>"""
 
     /** A call whose argument sets its signature apart from the same tool called on another path. */
@@ -39,7 +81,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "hello"))
         var toolsInvoked = 0
 
-        val result = AgentLoop().run(
+        val result = agentLoop().run(
             history = history,
             generate = model::generate,
             executeTools = { toolsInvoked++; emptyList() }
@@ -65,7 +107,7 @@ class AgentLoopTest {
         var finalTurn = -1
         var finalMessage: String? = null
 
-        val result = AgentLoop(terminalTool = "respond").run(
+        val result = agentLoop(terminalTool = "respond").run(
             history = history,
             generate = model::generate,
             executeTools = { toolsInvoked++; emptyList() },
@@ -94,7 +136,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "hi"))
         var finalMessage: String? = null
 
-        val result = AgentLoop(terminalTool = "respond").run(
+        val result = agentLoop(terminalTool = "respond").run(
             history = history,
             generate = model::generate,
             executeTools = { emptyList() },
@@ -119,7 +161,7 @@ class AgentLoopTest {
         var toolsInvoked = 0
         var finalMessage: String? = null
 
-        val result = AgentLoop(terminalTool = "respond").run(
+        val result = agentLoop(terminalTool = "respond").run(
             history = history,
             generate = model::generate,
             executeTools = { toolsInvoked++; emptyList() },
@@ -146,7 +188,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "read MainActivity.kt"))
         val executed = mutableListOf<List<ToolCall>>()
 
-        val result = AgentLoop().run(
+        val result = agentLoop().run(
             history = history,
             generate = { replies[turn++] },
             executeTools = { calls ->
@@ -175,7 +217,7 @@ class AgentLoopTest {
         var turn = 0
         val history = mutableListOf(ChatMessage(Role.USER, "read MainActivity.kt"))
 
-        AgentLoop().run(
+        agentLoop().run(
             history = history,
             generate = { replies[turn++] },
             executeTools = { listOf(ToolResult.success("contents", "MainActivity.kt")) }
@@ -199,7 +241,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "open MainActivity.java"))
         val executed = mutableListOf<List<ToolCall>>()
 
-        val result = AgentLoop().run(
+        val result = agentLoop().run(
             history = history,
             generate = model::generate,
             executeTools = { calls ->
@@ -245,7 +287,7 @@ class AgentLoopTest {
         var maxReachedTurns = -1
         var toolBatches = 0
 
-        val result = AgentLoop(maxIterations = 3).run(
+        val result = agentLoop(maxIterations = 3).run(
             history = history,
             generate = model::generate,
             executeTools = { toolBatches++; listOf(ToolResult.success("ok")) },
@@ -269,7 +311,7 @@ class AgentLoopTest {
         var repeatedTurns = -1
         var toolBatches = 0
 
-        val result = AgentLoop(maxIterations = 8).run(
+        val result = agentLoop(maxIterations = 8).run(
             history = history,
             generate = model::generate,
             executeTools = { toolBatches++; listOf(ToolResult.success("ok")) },
@@ -294,7 +336,7 @@ class AgentLoopTest {
         var toolBatches = 0
 
         // A failed batch keeps the retry tolerance: one repeat allowed, the second aborts.
-        val result = AgentLoop(maxIterations = 8).run(
+        val result = agentLoop(maxIterations = 8).run(
             history = history,
             generate = model::generate,
             executeTools = { toolBatches++; listOf(ToolResult.failure("nope")) },
@@ -316,7 +358,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "go"))
         var toolBatches = 0
 
-        val result = AgentLoop(maxIterations = 8, maxConsecutiveRepeats = 1).run(
+        val result = agentLoop(maxIterations = 8, maxConsecutiveRepeats = 1).run(
             history = history,
             generate = model::generate,
             executeTools = { toolBatches++; listOf(ToolResult.failure("nope")) }
@@ -340,7 +382,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "open MainActivity"))
         val executed = mutableListOf<List<ToolCall>>()
 
-        val result = AgentLoop(terminalTool = "respond").run(
+        val result = agentLoop(terminalTool = "respond").run(
             history = history,
             generate = model::generate,
             executeTools = { calls ->
@@ -363,7 +405,7 @@ class AgentLoopTest {
         var toolsInvoked = 0
         var finalMessage: String? = null
 
-        val result = AgentLoop(terminalTool = "respond").run(
+        val result = agentLoop(terminalTool = "respond").run(
             history = history,
             generate = model::generate,
             executeTools = { toolsInvoked++; emptyList() },
@@ -385,7 +427,7 @@ class AgentLoopTest {
         val modelTurns = mutableListOf<Int>()
         val toolTurns = mutableListOf<Int>()
 
-        AgentLoop().run(
+        agentLoop().run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("contents")) },
@@ -404,7 +446,7 @@ class AgentLoopTest {
         val model = ScriptedModel(listOf(toolCall("open_file"), "acknowledged"))
         val history = mutableListOf(ChatMessage(Role.USER, "open nope"))
 
-        AgentLoop().run(
+        agentLoop().run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.failure("File not found", "does not exist")) }
@@ -421,7 +463,7 @@ class AgentLoopTest {
         val model = ScriptedModel(listOf(toolCall("read_file"), "ok"))
         val history = mutableListOf(ChatMessage(Role.USER, "read big"))
 
-        AgentLoop(toolOutputCharLimit = 500).run(
+        agentLoop(toolOutputCharLimit = 500).run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("read", big)) }
@@ -433,32 +475,8 @@ class AgentLoopTest {
     }
 
     @Test
-    fun givenASuccessfulToolResult_whenFormatToolResultsIsCalled_thenItBiasesTheModelToStop() {
-        val loop = AgentLoop()
-        val fedBack = loop.formatToolResults(
-            listOf(ToolCall("open_file", emptyMap())),
-            listOf(ToolResult.success("Opened file in editor", ".gitignore"))
-        )
-        // After success, finishing is the default and another tool call is discouraged.
-        assertTrue(fedBack.contains("you are DONE"))
-        assertTrue(fedBack.contains("respond"))
-        assertTrue(fedBack.contains("Do NOT call another tool"))
-    }
-
-    @Test
-    fun givenAFailedToolResult_whenFormatToolResultsIsCalled_thenItKeepsTheOpenEndedNextToolCue() {
-        val loop = AgentLoop()
-        val fedBack = loop.formatToolResults(
-            listOf(ToolCall("open_file", emptyMap())),
-            listOf(ToolResult.failure("File not found", "does not exist"))
-        )
-        assertTrue(fedBack.contains("FAILED"))
-        assertTrue(fedBack.contains("call the next tool"))
-    }
-
-    @Test
     fun givenATranscript_whenRenderTranscriptIsCalled_thenItLabelsAssistantTurnsAndAddsNoTrailingCue() {
-        val loop = AgentLoop()
+        val loop = agentLoop()
         val transcript = loop.renderTranscript(
             listOf(
                 ChatMessage(Role.USER, "hi"),
@@ -482,7 +500,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "add a view"))
         var reported: ToolCallExtractor.UnparsedReply? = null
 
-        val result = AgentLoop().run(
+        val result = agentLoop().run(
             history = history,
             generate = model::generate,
             executeTools = { emptyList() },
@@ -503,7 +521,7 @@ class AgentLoopTest {
         val model = ScriptedModel(listOf("Hi! What shall we build?"))
         var reported = false
 
-        val result = AgentLoop().run(
+        val result = agentLoop().run(
             history = mutableListOf(ChatMessage(Role.USER, "hi")),
             generate = model::generate,
             executeTools = { emptyList() },
@@ -524,7 +542,7 @@ class AgentLoopTest {
             val model = ScriptedModel(listOf(toolCall("open_file"), "I could not open that file."))
             var abandonedTurn = 0
 
-            val result = AgentLoop().run(
+            val result = agentLoop().run(
                 history = mutableListOf(ChatMessage(Role.USER, "open nope")),
                 generate = model::generate,
                 executeTools = { listOf(ToolResult.failure("File not found", "does not exist")) },
@@ -546,7 +564,7 @@ class AgentLoopTest {
         val model = ScriptedModel(listOf(toolCall("open_file"), "Opened it."))
         var abandoned = false
 
-        val result = AgentLoop().run(
+        val result = agentLoop().run(
             history = mutableListOf(ChatMessage(Role.USER, "open A.kt")),
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("Opened", "A.kt")) },
@@ -581,7 +599,7 @@ class AgentLoopTest {
         var maxReachedTurns = -1
         var toolBatches = 0
 
-        val result = AgentLoop(maxIterations = 16).run(
+        val result = agentLoop(maxIterations = 16).run(
             history = history,
             generate = model::generate,
             executeTools = { toolBatches++; listOf(ToolResult.success("ok")) },
@@ -616,7 +634,7 @@ class AgentLoopTest {
         )
         val history = mutableListOf(ChatMessage(Role.USER, "read the sources"))
 
-        val result = AgentLoop(maxIterations = 16).run(
+        val result = agentLoop(maxIterations = 16).run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("ok")) }
@@ -634,7 +652,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "go"))
         var cycledTurns = -1
 
-        val result = AgentLoop(maxIterations = 16).run(
+        val result = agentLoop(maxIterations = 16).run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.failure("nope")) },
@@ -657,7 +675,7 @@ class AgentLoopTest {
         val history = mutableListOf(ChatMessage(Role.USER, "summarise the sources"))
         var cycledTurns = -1
 
-        val result = AgentLoop(maxIterations = 16).run(
+        val result = agentLoop(maxIterations = 16).run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("ok")) },
@@ -689,7 +707,7 @@ class AgentLoopTest {
         var repeatAfterSuccessTurn = -1
         var cycledTurns = -1
 
-        val result = AgentLoop(maxIterations = 16).run(
+        val result = agentLoop(maxIterations = 16).run(
             history = history,
             generate = model::generate,
             executeTools = { listOf(ToolResult.success("ok")) },
@@ -703,5 +721,215 @@ class AgentLoopTest {
         assertEquals(5, result.turns)
         assertEquals(5, cycledTurns)
         assertEquals("a circling run must not be reported as completed", -1, repeatAfterSuccessTurn)
+    }
+
+    @Test
+    fun givenProseAfterATool_whenTheLoopRuns_thenItAsksToFinishAndEndsOnTheTerminalTool() = runTest {
+        val model = ScriptedModel(listOf(toolCall("web_search"), "Here is the design…", respond))
+        val history = mutableListOf(ChatMessage(Role.USER, "research, design, code"))
+        var askedAt = 0
+        var answer: String? = null
+
+        val result = finishingLoop().run(
+            history = history,
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("results")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnfinishedReply(turn: Int) {
+                    askedAt = turn
+                }
+
+                override suspend fun onFinalAnswer(turn: Int, message: String) {
+                    answer = message
+                }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(3, result.turns)
+        assertEquals(2, askedAt)
+        assertEquals("Done.", answer)
+        val ask = history[history.size - 2]
+        assertEquals(Role.USER, ask.role)
+        assertEquals(UNFINISHED, ask.content)
+    }
+
+    @Test
+    fun givenProseTwiceAfterATool_whenTheLoopRuns_thenItAsksOnlyOnceAndStops() = runTest {
+        val model = ScriptedModel(listOf(toolCall("web_search"), "Next, I will…", "Still prose."))
+        var asks = 0
+
+        val result = finishingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "do it")),
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("results")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnfinishedReply(turn: Int) {
+                    asks++
+                }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(3, result.turns)
+        assertEquals(1, asks)
+    }
+
+    @Test
+    fun givenANewToolBatchAfterAnAsk_whenProseFollowsAgain_thenItAsksAgain() = runTest {
+        val model = ScriptedModel(
+            listOf(toolCall("web_search"), "prose", toolCall("read_file"), "prose", respond)
+        )
+        var asks = 0
+
+        val result = finishingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "do it")),
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("ok")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnfinishedReply(turn: Int) {
+                    asks++
+                }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(5, result.turns)
+        assertEquals(2, asks)
+    }
+
+    @Test
+    fun givenAnAnswerWithNoToolsRun_whenTheLoopRuns_thenItEndsWithoutAsking() = runTest {
+        val model = ScriptedModel(listOf("Kotlin is a language."))
+        var asked = false
+
+        val result = finishingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "what is kotlin")),
+            generate = model::generate,
+            executeTools = { emptyList() },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnfinishedReply(turn: Int) {
+                    asked = true
+                }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(1, result.turns)
+        assertFalse(asked)
+    }
+
+    @Test
+    fun givenAFailedToolThenProseTwice_whenTheLoopRuns_thenItIsAbandonedAfterTheAsk() = runTest {
+        val model = ScriptedModel(listOf(toolCall("open_file"), "It failed.", "I give up."))
+
+        val result = finishingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "open nope")),
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.failure("File not found")) },
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(3, result.turns)
+    }
+
+    @Test
+    fun givenARequiredTool_whenTheModelAnswersWithoutIt_thenItIsAskedOnceAndTheRunContinues() = runTest {
+        val model = ScriptedModel(listOf("Looks correct and modern.", toolCall("web_search"), respond))
+        val tools = ToolRecorder()
+        val skipped = mutableListOf<String>()
+        val history = mutableListOf(ChatMessage(Role.USER, "review this"))
+
+        val result = verifyingLoop().run(
+            history = history,
+            generate = model::generate,
+            executeTools = tools::execute,
+            requiredTool = "web_search",
+            events = object : AgentLoop.Events {
+                override suspend fun onRequiredToolSkipped(turn: Int, tool: String) { skipped += tool }
+            },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(3, result.turns)
+        assertEquals(listOf("web_search"), skipped)
+        assertEquals(listOf("web_search"), tools.names)
+        assertEquals("$REQUIRED web_search", history[2].content)
+    }
+
+    @Test
+    fun givenARequiredTool_whenTheModelAnswersThroughTheTerminalToolFirst_thenItIsAskedForTheTool() = runTest {
+        val model = ScriptedModel(listOf(respond, toolCall("web_search"), respond))
+        val tools = ToolRecorder()
+        var finalAnswers = 0
+
+        val result = verifyingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "is this deprecated?")),
+            generate = model::generate,
+            executeTools = tools::execute,
+            requiredTool = "web_search",
+            events = object : AgentLoop.Events {
+                override suspend fun onFinalAnswer(turn: Int, message: String) { finalAnswers++ }
+            },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("web_search"), tools.names)
+        assertEquals(1, finalAnswers)
+    }
+
+    @Test
+    fun givenARequiredTool_whenTheModelCallsItFirst_thenItIsNeverAskedFor() = runTest {
+        val model = ScriptedModel(listOf(toolCall("web_search"), "Here is the review.", respond))
+        var skipped = 0
+
+        val result = verifyingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "review this")),
+            generate = model::generate,
+            executeTools = ToolRecorder()::execute,
+            requiredTool = "web_search",
+            events = object : AgentLoop.Events {
+                override suspend fun onRequiredToolSkipped(turn: Int, tool: String) { skipped++ }
+            },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(0, skipped)
+    }
+
+    @Test
+    fun givenARequiredTool_whenTheModelNeverCallsIt_thenItIsAskedOnlyOnceAndTheRunEnds() = runTest {
+        val model = ScriptedModel(listOf("Looks fine.", "Still looks fine."))
+        val tools = ToolRecorder()
+
+        val result = verifyingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "review this")),
+            generate = model::generate,
+            executeTools = tools::execute,
+            requiredTool = "web_search",
+        )
+
+        assertTrue(result.completed)
+        assertEquals(2, result.turns)
+        assertTrue(tools.names.isEmpty())
+    }
+
+    @Test
+    fun givenNoRequiredTool_whenTheModelAnswersDirectly_thenTheRunEndsOnThatAnswer() = runTest {
+        val model = ScriptedModel(listOf("Hello!"))
+
+        val result = verifyingLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "hi")),
+            generate = model::generate,
+            executeTools = ToolRecorder()::execute,
+        )
+
+        assertTrue(result.completed)
+        assertEquals(1, result.turns)
+    }
+
+    private companion object {
+        const val UNFINISHED = "finish or carry on"
+        const val REQUIRED = "call first:"
     }
 }

@@ -185,4 +185,15 @@ class UnsupportedParameterTest {
         assertFalse(UnsupportedTools.rejectedIn(401, """{"error":"unsupported tools"}"""))
         assertFalse(UnsupportedTools.rejectedIn(400, null))
     }
+
+    @Test
+    fun givenAServerRefusingToolChoice_whenReadingTheError_thenOnlyToolChoiceIsDropped() {
+        // Read as a tools refusal instead, it would switch the server off native calls for good.
+        val body = """{"error":{"message":"tool_choice is not supported","param":"tool_choice"}}"""
+
+        assertEquals(RequestTuning.TOOL_CHOICE, UnsupportedParameter.nameIn(body))
+        val tuning = RequestTuning(RequestTuning.MAX_TOKENS, sendTemperature = true)
+        assertEquals(false, tuning.without(RequestTuning.TOOL_CHOICE)?.sendToolChoice)
+        assertNull(tuning.without(RequestTuning.TOOL_CHOICE)!!.without(RequestTuning.TOOL_CHOICE))
+    }
 }

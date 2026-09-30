@@ -48,6 +48,44 @@ via CodeOnTheGo's Plugin Manager, then restart the IDE.
 The model file itself is chosen in **AI Core → Agent settings**; this backend
 reads that setting at request time.
 
+## System prompt config
+
+With **Use simple local prompt** on, this backend asks ai-core to send a short prompt
+written for 1–3B on-device models; it lives in `src/main/assets/prompts/`, one YAML
+file per concern, apart from the code that sends it. Changing the tone, adding a
+rule or translating the prompt is an edit to those files alone. ai-core appends its
+own IDE CONTEXT block after the rendered prompt. With the setting off,
+`getSystemPrompt` returns null and ai-core's own prompt is sent.
+
+The files are loaded, validated and cached once, when the plugin is activated.
+`getSystemPrompt` renders `layout.yml` from that cache for each request, since the
+tool list and the example path vary per run; it never waits. Until the config has
+loaded, or if it cannot render, it returns null and ai-core sends its default prompt.
+
+| File | Keys | What it is |
+|---|---|---|
+| `agent.yml` | `schema_version`, `identity`, `include` | The entry point: the version (`1`; another is refused rather than misread), who the agent is, and the files below. |
+| `rules.yml` | `rules` | Rule groups, each a `heading` and its `items`; today one `Rules` group. **Adding a rule is adding an item.** |
+| `tools.yml` | `tools`, `tool_call_format` | What introduces the tool list, and `tool_call_format.text`: the envelope and its examples, each a `purpose` and a `call`. A small model calls through the text protocol only, so there is no native format; when ai-core parses no text calls, none of it is sent. |
+| `layout.yml` | `layout.system_prompt` | Where each text goes. |
+
+The structure, the names texts are rendered under and the checks are AI-Agent-Gemini's
+and AI-Agent-OpenAI's (see Gemini's README). The request's values are `TOOLS` (each
+with `NAME`, `DESCRIPTION`, inserted verbatim), `TOOL_CALL_SYNTAX`,
+`EXAMPLE_FILE_PATH`, `EXAMPLE_FILE_NAME` (the bare file name, which `read_file` and
+`open_file` accept) and `EXAMPLE_FILE_STEM`.
+
+Rendering is strict: an unknown name throws, naming the text it was in, where the
+file-per-section design this replaced dropped the file silently. Activation renders
+the prompt for requests that open and close every section and logs any failure, and
+`LocalSystemPromptTest` fails on one in the shipped files. A new key needs
+`LocalPromptConfig` and its parser; a new name needs `LocalPromptVariables`.
+
+The engine and the YAML plumbing (`PromptTemplateEngine`, `PromptConfigLoader`,
+`PromptConfigStore`, `PromptConfigObject`, ...) are the IDE's, in `plugin-api.jar`'s
+`com.itsaky.androidide.plugins.ai.prompt`, shared with ai-core and the other backends.
+Only `LocalPromptConfig`, its mapping in `LocalPromptConfigParser`, and `sharedPromptConfig` are this plugin's own.
+
 ## Key classes
 
 Every source file sits in a package named for its layer; nothing is loose at the
@@ -60,7 +98,9 @@ root of `com/itsaky/androidide/plugins/aiagentlocal/`.
   classification and its user-facing wording
 - `preferences/LocalLlmPreferences.kt` — this plugin's settings store, plus the
   one-time adoption of settings written under earlier plugin ids
-- `prompt/LocalSystemPrompt.kt` — the system prompt small on-device models need
+- `prompt/LocalSystemPrompt.kt` — renders `layout.yml` from `LocalPromptVariables`;
+  `prompt/config/` maps `assets/prompts/` onto this plugin's config type, which the
+  IDE's `ai.prompt` package loads, validates, caches and renders
 - `feedback/UserFeedback.kt` — throttled Toasts, and the actionable exceptions
 - `format/ByteSize.kt` — binary-unit rendering of RAM figures
 - `logging/` — `LOG_PREFIX` (`AiAgentLocal`), prefixing every logcat tag this plugin writes

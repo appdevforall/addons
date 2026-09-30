@@ -11,10 +11,12 @@ import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
  *
  * @param tokenParam the JSON key carrying the output-token cap
  * @param sendTemperature false to omit `temperature` entirely
+ * @param sendToolChoice false to omit `tool_choice`, which some compatible servers do not take
  */
 internal data class RequestTuning(
     val tokenParam: String,
     val sendTemperature: Boolean,
+    val sendToolChoice: Boolean = true,
 ) {
 
     /**
@@ -28,6 +30,7 @@ internal data class RequestTuning(
      */
     fun without(param: String): RequestTuning? = when (param) {
         TEMPERATURE -> if (sendTemperature) copy(sendTemperature = false) else null
+        TOOL_CHOICE -> if (sendToolChoice) copy(sendToolChoice = false) else null
         MAX_COMPLETION_TOKENS ->
             if (tokenParam == MAX_COMPLETION_TOKENS) copy(tokenParam = MAX_TOKENS) else null
         MAX_TOKENS ->
@@ -39,6 +42,7 @@ internal data class RequestTuning(
         const val TEMPERATURE = "temperature"
         const val MAX_TOKENS = "max_tokens"
         const val MAX_COMPLETION_TOKENS = "max_completion_tokens"
+        const val TOOL_CHOICE = "tool_choice"
 
         /**
          * Model id prefixes whose models are reasoning models on `chat/completions`.
@@ -91,6 +95,8 @@ internal object UnsupportedParameter {
         RequestTuning.MAX_COMPLETION_TOKENS,
         RequestTuning.MAX_TOKENS,
         RequestTuning.TEMPERATURE,
+        // Before the tools detector sees it: refusing a forced call is no reason to drop every tool.
+        RequestTuning.TOOL_CHOICE,
     )
 
     /**

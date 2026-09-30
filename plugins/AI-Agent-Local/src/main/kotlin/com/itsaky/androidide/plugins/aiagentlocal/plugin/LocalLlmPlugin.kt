@@ -3,13 +3,23 @@ package com.itsaky.androidide.plugins.aiagentlocal.plugin
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentlocal.backend.LocalLlmBackend
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.LocalSystemPrompt
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.LocalPromptConfig
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /**
  * Registers the on-device llama.cpp backend with AI Core's inference router.
@@ -31,6 +41,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
     /** True once [backend] is registered with the router, so re-registration is idempotent. */
     @Volatile private var registered = false
+
+    /** Runs the prompt-config load while the plugin is active; cancelled on deactivation. */
+    @Volatile private var configScope: CoroutineScope? = null
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentlocal"
@@ -110,8 +123,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
+            preloadPromptConfig()
 
-            backend = LocalLlmBackend(context)
+            backend = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded)
 
             // Listen first, then try: a listener added after a successful attempt would still be
             // needed for a later AI Core restart, and one added before costs nothing.
@@ -167,6 +181,45 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         null
     }
 
+    /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun preloadPromptConfig() {
+        releasePromptConfig()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        configScope = scope
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        val load = sharedPromptConfig.preload(scope, source)
+        load.invokeOnCompletion { error ->
+            when (error) {
+                null -> reportLoadedConfig(load.getCompleted())
+                is CancellationException -> Unit
+                else -> context.logger.error(
+                    "LocalLlmPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                    error,
+                )
+            }
+        }
+    }
+
+    /**
+     * Logs that the config loaded, and any name typo its layout would hit at render time.
+     *
+     * @param config the config just loaded.
+     */
+    private fun reportLoadedConfig(config: LocalPromptConfig) {
+        context.logger.info("LocalLlmPlugin: loaded prompt config with ${config.rules.size} rule groups")
+        for (problem in LocalSystemPrompt.problems(config)) {
+            context.logger.warn("LocalLlmPlugin: $problem; ai-core's default prompt is sent instead")
+        }
+    }
+
+    /** Drops the cached config and stops a load still in flight. Idempotent. */
+    private fun releasePromptConfig() {
+        sharedPromptConfig.clear()
+        configScope?.cancel()
+        configScope = null
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("LocalLlmPlugin: Deactivating plugin")
 
@@ -182,6 +235,7 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
             // A disabled plugin must not keep the loaded model resident in host RAM.
             releaseBackend()
+            releasePromptConfig()
 
             true
         } catch (e: Exception) {
@@ -208,6 +262,7 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
+        releasePromptConfig()
         pluginContext = null
         context.logger.info("LocalLlmPlugin: Released local LLM backend")
     }

@@ -10,7 +10,11 @@
     <string name="gemini_error_service_unavailable">Gemini is temporarily unavailable (HTTP %1$d). Try again in a moment.</string>
     <string name="gemini_error_unexpected">Gemini returned an error (HTTP %1$d).</string>
     <string name="gemini_error_unexpected_reason">Gemini returned an error (HTTP %1$d). %2$s</string>
-    <string name="gemini_error_truncated">The reply hit the model\'s output limit before the action was complete, so nothing was changed. Ask for a smaller step, or raise the output limit in AI Settings.</string>
+    <string name="gemini_error_truncated">The reply hit the model\'s output limit before the action was complete, so nothing was changed. Ask for a smaller step.</string>
+    <string name="gemini_error_malformed_call">Gemini could not write a valid tool call. This usually happens when one call carries a whole large file. Ask for the work in smaller steps.</string>
+    <string name="gemini_error_empty">Gemini returned an empty reply. Try again.</string>
+    <string name="gemini_error_empty_reason">Gemini returned an empty reply (%1$s). Try again, or rephrase the request.</string>
+    <string name="gemini_note_reply_cut_off">[Reply cut off at the model\'s output limit. Say \"continue\" for the rest.]</string>
     <string name="gemini_error_unreachable">Could not reach Gemini. Check your internet connection and try again.</string>
     <string name="gemini_error_failed">The Gemini request failed.</string>
     <string name="gemini_error_failed_reason">The Gemini request failed. %1$s</string>

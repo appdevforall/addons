@@ -39,7 +39,12 @@ class BuiltInHandlerApprovalTest {
             "search_project",
             "open_file",
             "read_build_output",
+            // Its query goes to the provider already holding the conversation; no new party sees it.
+            "web_search",
         )
+
+        /** Built-ins that reach a host the model chose, so the user sees where before it happens. */
+        val OUTBOUND_TOOLS = setOf("fetch_url")
     }
 
     private val context = mockk<PluginContext>(relaxed = true)
@@ -52,7 +57,7 @@ class BuiltInHandlerApprovalTest {
         // So a new handler cannot be added without someone deciding which side it is on.
         assertEquals(
             "classify the new built-in below before shipping it",
-            MUTATING_TOOLS + READ_ONLY_TOOLS,
+            MUTATING_TOOLS + READ_ONLY_TOOLS + OUTBOUND_TOOLS,
             builtIns.mapTo(mutableSetOf()) { it.toolName },
         )
     }
@@ -65,6 +70,21 @@ class BuiltInHandlerApprovalTest {
             "these run without asking the user: ${unguarded.map { it.toolName }}",
             unguarded.isEmpty(),
         )
+    }
+
+    @Test
+    fun givenABuiltInThatReachesAModelChosenHost_whenItIsRegistered_thenItRequiresApproval() {
+        val unguarded = builtIns.filter { it.toolName in OUTBOUND_TOOLS && !it.requiresApproval }
+
+        assertTrue("these reach the network without asking: ${unguarded.map { it.toolName }}", unguarded.isEmpty())
+    }
+
+    @Test
+    fun givenTheBuiltIns_whenListed_thenBothWebToolsAreAlwaysAmongThem() {
+        val names = builtIns.map { it.toolName }
+
+        assertTrue(names.contains("web_search"))
+        assertTrue(names.contains("fetch_url"))
     }
 
     @Test

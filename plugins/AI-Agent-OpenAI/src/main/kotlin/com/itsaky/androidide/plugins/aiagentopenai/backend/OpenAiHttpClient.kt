@@ -1,8 +1,10 @@
 package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiHttpException
+import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiTimeoutException
 import java.io.BufferedReader
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import org.json.JSONObject
 
@@ -28,8 +30,11 @@ internal class OpenAiHttpClient(
     companion object {
         private const val CONNECT_TIMEOUT_MS = 15_000
 
-        /** Generation can run for a while, so the read timeout is far longer than the connect. */
-        private const val READ_TIMEOUT_MS = 60_000
+        /**
+         * Generation can run for a while, so the read timeout is far longer than the connect. A
+         * reasoning model such as gpt-5 can think past a minute, longer still around a web search.
+         */
+        private const val READ_TIMEOUT_MS = 180_000
     }
 
     /**
@@ -44,6 +49,7 @@ internal class OpenAiHttpClient(
      * @param onAccepted called once the status line says 2xx, before a byte of the body is read
      * @return whatever [readResponse] produced
      * @throws OpenAiHttpException on a non-2xx answer, carrying the server's error body
+     * @throws OpenAiTimeoutException when the server accepted the request, then went silent
      */
     fun <T> post(
         url: String,
@@ -64,9 +70,14 @@ internal class OpenAiHttpClient(
         onConnected(conn)
         try {
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            conn.failIfNotOk()
-            onAccepted()
-            conn.inputStream.bufferedReader().use(readResponse)
+            try {
+                conn.failIfNotOk()
+                onAccepted()
+                conn.inputStream.bufferedReader().use(readResponse)
+            } catch (e: SocketTimeoutException) {
+                // The body was sent, so the connection worked; only the answer was slow.
+                throw OpenAiTimeoutException(readTimeoutMs, e)
+            }
         } finally {
             conn.disconnect()
         }

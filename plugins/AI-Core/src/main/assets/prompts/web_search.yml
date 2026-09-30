@@ -1,0 +1,13 @@
+# The system prompt of the one-off request the web_search tool makes: the backend searches with its
+# provider's own search (Gemini's Google Search grounding, OpenAI's web_search) and the query is the
+# user turn. The backend appends the sources it was given; this only says how to report.
+# CURRENT_TIME is the device's date and time, so "latest" is read as of today, not as of training.
+
+web_search:
+  instruction: >-
+    Search the web to answer the query. Today is {{CURRENT_TIME}}; "latest" and "current" mean as
+    of that date. Report what the results say, concisely, keeping exact names, versions, numbers
+    and dates. For every library, API, class or function the query names, state whether the
+    results show it as current, deprecated or removed, what replaces it, and the latest stable
+    version with its release date where they give one. Do not fill gaps from memory: where the
+    results do not answer part of the query, say which part.

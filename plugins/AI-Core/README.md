@@ -128,6 +128,131 @@ and a copy of the dialog's own header could otherwise forge structure the user
 then trusts. Contributing plugins therefore ship no sanitising of their own and
 depend on the installed `ai-core` for it; the two version independently.
 
+## System prompt config
+
+The agent's **behaviour** and ai-core's **integration** are kept apart. Everything
+the model reads — who the agent is, its rules, their priorities, every heading and
+the order it all appears in — is in `src/main/assets/prompts/`, one YAML file per
+concern. The Kotlin code only loads them, supplies the run's values and sends the
+result. To change the tone, add a rule or translate the prompt, edit those files alone.
+
+| Layer | Owns | Where |
+|---|---|---|
+| Config | wording, rules, layout | `assets/prompts/*.yml` |
+| Loading | `agent.yml` and its includes, merged into one document | `prompt/config/PromptConfigLoader.kt`, `PromptConfigDocument.kt` |
+| Schema | the keys and types, validated strictly | `prompt/config/AgentPromptConfig.kt`, `AgentPromptConfigParser.kt` |
+| Cache | read once on activation, held in memory | `prompt/config/PromptConfigStore.kt` |
+| Rendering | values into the layout, one pass | `prompt/PromptVariables.kt`, `SystemPromptRenderer.kt`, `ToolResultsPrompt.kt`, `ApprovalPrompt.kt`, `ContextFilesPrompt.kt`, `template/PromptTemplateEngine.kt` |
+| Integration | which prompt a run gets, the tool loop, and sending it | `prompt/SystemPromptFactory.kt`, `tool/AgentLoop.kt`, `viewmodel/ChatViewModel.kt` |
+
+The files are loaded once, when the plugin is activated, and cached in memory, so
+no chat turn reads the disk. For each user message the layout is rendered into one
+string, the run's system prompt. The model never sees or fetches the files themselves.
+
+### The files
+
+`agent.yml` is the entry point. It holds `schema_version`, the agent's `identity`
+and an `include` list; the listed files are read in that order and merged with it
+into one document:
+
+| File | Keys | What it is |
+|---|---|---|
+| `agent.yml` | `schema_version`, `identity`, `include` | The version (`2`; another is refused rather than misread), who the agent is and what it will answer, and the files below. |
+| `rules.yml` | `rules` | Priority groups, highest first; each has a `heading` (`CRITICAL`, `IMPORTANT`, `MANDATORY`, `OPTIONAL`) and its `items`. **Adding a rule is adding an item.** |
+| `tools.yml` | `tools`, `tool_call_format` | What introduces the tool list, and how to write a call as text (sent only under the text protocol). The list itself is the tools the run offers (`PromptToolCatalog`). |
+| `ide_context.yml` | `ide_context`, `session` | One line per fact the IDE can state: open files, module paths. `session` states the device's date and time on every prompt, and that the web tools are there. |
+| `agent_loop.yml` | `agent_loop`, `approval` | What the agent is told after each tool batch: the `FAILED:` marker, the truncation notice, what to do next after a success or a failure, the `unfinished` turn sent once when a run that has used tools replies without `respond`, and the `required_tool` turn sent once when a run that had to search first answers without searching. `approval` is what it is told when the user denies a call, asks for a revision, or leaves the dialog unanswered. |
+| `context_files.yml` | `context_files` | The heading over the files the user attached to a message. |
+| `chat_title.yml` | `chat_title` | The system prompt of the one-off request that names a chat after its first reply. |
+| `web_search.yml` | `web_search` | The system prompt of the one-off request the `web_search` tool makes through the active backend. It may use `CURRENT_TIME`, so "latest" is read as of the device's date. |
+| `answer_review.yml` | `answer_review` | The system prompt of the second pass over an answer holding code, and what stands in for the evidence when no tool ran. `layout.answer_review` arranges its user turn from `REQUEST`, `EVIDENCE`, `HAS_EVIDENCE` and `DRAFT`; the instruction may use `CURRENT_TIME` and must end on `END_MARKER`, the line the code checks to know the reply was not cut off. |
+| `tool_descriptions.yml` | `terminal_tool`, `built_in_tools` | What each of ai-core's own tools is for and what each argument means, keyed by tool name, plus the tool the agent answers with. The model reads it in the tool list and native definitions; the approval dialog shows the same description. |
+| `layout.yml` | `layout.system_prompt`, `layout.ide_context`, `layout.tool_results`, `layout.context_files`, `layout.chat_title` | Where each text goes. The IDE CONTEXT layout is also appended to a backend's own prompt; `tool_results` is the user turn after each tool batch; `context_files` frames the attached files appended to the user's message; `chat_title` is the exchange the title request sends. |
+
+**Connecting a new file** is two edits, and no code: create it, then add it to
+`include`. Which file holds a key is up to the files: a top-level key may move to
+any included file (or `agent.yml` itself; with no `include`, one file can hold
+everything). The rules that keep this safe:
+
+- **A key belongs to one file.** Defining it in two fails and names both
+  (`tools.yml: identity is also defined in agent.yml`), so no copy wins silently.
+- **Only `agent.yml` includes.** One level, so the whole prompt is always listed in one place.
+- **Nothing is loaded by accident.** A `.yml` not listed is not read, and a listed
+  one that is missing fails the load; `ShippedPromptFilesTest` also fails if a
+  shipped file is never included. Entries are `.yml` paths under `prompts/`, each listed once.
+- **Names cross files; anchors do not.** `layout.yml` places `{{IDENTITY}}` from
+  `agent.yml` by name. YAML anchors (`&x`/`*x`) work only inside one file.
+
+Parsing is strict: a missing key, an unknown or misspelled key, a duplicate, an
+empty list or an unquoted number fails naming the file that holds it and the path,
+for example `rules.yml: rules[1].items is empty`. The parser is the IDE's
+`snakeyaml-engine`, which reads plain maps and lists only, with no class binding, so no reflection.
+
+### Template syntax
+
+Every text in the config is a template, written in a small in-house Mustache subset:
+
+- `{{NAME}}` — a value. Config text placed this way is rendered where it lands, with
+  the values in scope there; run data (a tool's description) is inserted verbatim.
+- `{{#NAME}}…{{/NAME}}` — a section: repeated per item of a list (the item's
+  keys shadow outer ones), rendered once for `true` or non-empty text, dropped for
+  `false`, null, empty.
+- `{{^NAME}}…{{/NAME}}` — an inverted section: rendered only when `{{#NAME}}` would not be.
+- Inside a list, `FIRST` and `LAST` say where the item sits, e.g. `{{^FIRST}}` for a separator.
+
+A line holding only a section tag vanishes, so tags can sit on their own lines.
+Names are upper case, so JSON's `}}` in the examples is never read as a tag.
+
+Every text is named by its YAML path in upper case, whichever file holds it: `identity` is `IDENTITY`,
+`tools.heading` is `TOOLS_HEADING`, `ide_context.current_file` is
+`IDE_CONTEXT_CURRENT_FILE`, `layout.ide_context` is `LAYOUT_IDE_CONTEXT`. Each
+`RULES` item has `HEADING` and `ITEMS`, and each of those has `TEXT`. The run's values:
+
+| Name | Value |
+|---|---|
+| `TERMINAL_TOOL` | the tool that answers the user (`respond`) |
+| `TOOLS` | list; each has `NAME`, `DESCRIPTION` |
+| `TOOL_CALL_SYNTAX` | the tool-call envelope; **null under native tool calling** |
+| `EXAMPLE_FILE_PATH` | a real open file, for examples |
+| `CURRENT_TIME` | the device's date, time and time zone, e.g. `Friday, 25 September 2026, 14:03 (America/Mexico_City, UTC-06:00)` |
+| `HAS_IDE_CONTEXT` | whether anything is open or any module is known |
+| `CURRENT_FILE` | the focused file, or null |
+| `OTHER_FILES` | the other open tabs, comma separated; empty when none |
+| `MODULES` | list; each has `NAME`, `SOURCE_DIR`, `LAYOUT_DIR`, `MANIFEST` (each may be null) |
+| `HAS_MODULES` | whether `MODULES` has any |
+| `TOOL_RESPONSES` | in `layout.tool_results`: the batch's results, already in `<tool_response>` envelopes |
+| `ALL_SUCCEEDED` | in `layout.tool_results`: whether every tool in the batch succeeded |
+| `MESSAGE` | in `agent_loop.failed`: what the failed tool reported |
+| `KEPT`, `COUNT` | in `agent_loop.truncated`: the part kept, and how many characters were cut |
+| `TOOL` | in `approval`: the tool the user did not approve; in `agent_loop.required_tool`: the tool the run had to call first |
+| `INSTRUCTION` | in `approval.corrected_with_instruction`: what the user typed, verbatim |
+| `MINUTES` | in `approval.timed_out`: how long the dialog waited |
+| `USER_TEXT`, `REPLY_TEXT` | in `layout.chat_title`: the chat's first message and the reply to it, each cut to its start, verbatim |
+| `FILES` | in `layout.context_files`: list of the attachments that could be read; each has `NAME`, `CONTENT` (verbatim) |
+
+A built-in tool's name and the shape of its arguments (names, types, which are
+required) stay in its handler, since the code runs them; what the tool and each
+argument are *for* is `tool_descriptions.yml`'s. Every built-in and every argument
+it declares must be described there, and an entry naming no built-in or no real
+argument is refused, so a new built-in cannot ship unworded and a typo cannot
+describe nothing. A tool contributed by another plugin brings its own description
+and is never rewritten.
+
+The `<tool_response>` envelope and the transcript's `Assistant:` label stay in code:
+chat-tuned models are trained on the tag (handed bare prose, a small model re-issues
+the call it already ran), `ToolCallExtractor` spots a model imitating it, and the
+backend appends its own matching `Assistant:` cue. Tool output is inserted verbatim,
+never rendered as a template.
+
+Rendering is strict: an unknown name throws, naming the text it was in
+(`rules.yml: rules[2].items[0]: unknown name {{TERMINAL_TOLL}}`). Activation renders
+every layout against runs and tool batches that open and close every section, and
+logs any failure, and checks `tool_descriptions.yml` against the built-in tools;
+`SystemPromptConfigTest`, `ToolResultsPromptTest`, `ApprovalPromptTest`,
+`ContextFilesPromptTest`, `ChatTitleTest` and `ToolDescriptionsTest` fail on one in the shipped files. Two changes need
+code: a new key needs `AgentPromptConfig` and its parser, and a new name needs
+`PromptVariables`.
+
 ## Key classes
 
 Every source file sits in a package named for its layer; nothing is loose at the
@@ -149,6 +274,10 @@ root of `com/itsaky/androidide/plugins/aicore/`.
 - `managers/ChatStorageManager.kt` — chat history persisted as JSON
 - `logging/` — `LOG_PREFIX` (`AiCore`), prefixing every logcat tag this plugin
   writes, and `AgentTrace`, the one-stream trace of an agent run
+- `prompt/` — system-prompt assembly: `SystemPromptFactory` picks the backend's
+  prompt or the general one, and `SystemPromptRenderer` renders it from
+  `PromptVariables`. `prompt/config/` maps `assets/prompts/` onto `AgentPromptConfig`; the
+  IDE's `ai.prompt` package (in `plugin-api.jar`) loads, validates, caches and renders it.
 - `fragments/`, `viewmodel/`, `tool/` — the Agent chat, its tool loop and handlers
 
 ## License

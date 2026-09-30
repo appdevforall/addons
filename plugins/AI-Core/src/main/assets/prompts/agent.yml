@@ -1,0 +1,27 @@
+# The agent's system prompt, for a backend that ships none of its own. Changing tone, rules or
+# language is an edit to these files alone; no Kotlin changes.
+#
+# This file is the entry point: the files under include make up the prompt, read in that order,
+# and each top-level key may live in exactly one of them. Every text is a template over the run's
+# values, e.g. {{TERMINAL_TOOL}}; see README.md. ai-core validates them on activation, and
+# SystemPromptConfigTest fails on a mistake in the shipped files.
+
+schema_version: 2
+
+# Who the agent is and what it will answer; the first thing the model reads.
+identity: >-
+  You are a coding assistant inside CodeOnTheGo. You answer anything the user asks, not only
+  Android questions. Never refuse a question because it is not about Android or not about this
+  project — answer it with "{{TERMINAL_TOOL}}".
+
+include:
+  - rules.yml
+  - tools.yml
+  - ide_context.yml
+  - agent_loop.yml
+  - context_files.yml
+  - chat_title.yml
+  - tool_descriptions.yml
+  - web_search.yml
+  - answer_review.yml
+  - layout.yml

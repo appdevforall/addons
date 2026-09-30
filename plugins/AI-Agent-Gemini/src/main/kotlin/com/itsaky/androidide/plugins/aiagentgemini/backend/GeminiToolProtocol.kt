@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentgemini.backend
 
+import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallRequest
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import org.json.JSONArray
@@ -21,6 +22,26 @@ internal object GeminiToolProtocol {
 
     /** Appended when an object argument has to be declared as JSON text; see [declarable]. */
     private const val AS_JSON_TEXT = " Written as a JSON object."
+
+    /** The key ai-core's `WebAccess.EXTRA_PARAM_REQUIRED_TOOL` sets; the same literal on both sides. */
+    const val EXTRA_PARAM_REQUIRED_TOOL = "required_tool"
+
+    /**
+     * The `toolConfig` that makes the model call [config]'s required tool this turn.
+     *
+     * @param config the turn's config; its `required_tool` extra names the tool.
+     * @param tools the tools the request declares.
+     * @return the config, or null when none is required or the required one is not declared, which
+     *   Gemini would refuse the whole request over.
+     */
+    fun requiredToolConfig(config: LlmConfig, tools: List<ToolDefinition>): JSONObject? {
+        val name = config.extraParams?.get(EXTRA_PARAM_REQUIRED_TOOL) as? String ?: return null
+        if (tools.none { it.name == name }) return null
+        val calling = JSONObject()
+            .put("mode", "ANY")
+            .put("allowedFunctionNames", JSONArray().put(name))
+        return JSONObject().put("functionCallingConfig", calling)
+    }
 
     /**
      * One parsed stream chunk.

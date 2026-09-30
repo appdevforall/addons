@@ -1,0 +1,55 @@
+# Where each text from the other files goes, by the name it is rendered under (see README.md).
+# A line holding only a section tag (#, ^ or /) vanishes, so tags can sit on their own lines.
+
+layout:
+  system_prompt: |-
+    {{IDENTITY}}
+
+    {{SCOPE_HEADING}}:
+    {{#SCOPE_ITEMS}}
+    - {{TEXT}}
+    {{/SCOPE_ITEMS}}
+
+    {{TOOLS_HEADING}}:
+    {{#TOOLS}}
+    - {{NAME}}: {{DESCRIPTION}}
+    {{/TOOLS}}
+
+    {{BEHAVIOR_HEADING}}:
+    {{#BEHAVIOR_ITEMS}}
+    - {{TEXT}}
+    {{/BEHAVIOR_ITEMS}}
+
+    {{#RULES}}
+    {{^FIRST}}
+
+    {{/FIRST}}
+    {{HEADING}}:
+    {{#ITEMS}}
+    - {{TEXT}}
+    {{/ITEMS}}
+    {{/RULES}}
+    {{#NATIVE_TOOL_CALLS}}
+
+    {{TOOL_CALL_FORMAT_NATIVE}}
+    {{TOOL_CALL_FORMAT_NO_NARRATION}}
+    {{/NATIVE_TOOL_CALLS}}
+    {{#TOOL_CALL_SYNTAX}}
+
+    {{TOOL_CALL_FORMAT_TEXT_INSTRUCTION}}
+    {{TOOL_CALL_SYNTAX}}
+    {{TOOL_CALL_FORMAT_NO_NARRATION}}
+    {{TOOL_CALL_FORMAT_TEXT_ONLY_THE_LINE_RUNS}}
+
+    {{TOOL_CALL_FORMAT_TEXT_EXAMPLES_HEADING}}:
+    {{#TOOL_CALL_FORMAT_TEXT_EXAMPLES}}
+    {{PURPOSE}}:
+    {{CALL}}
+    {{/TOOL_CALL_FORMAT_TEXT_EXAMPLES}}
+    {{/TOOL_CALL_SYNTAX}}
+
+    {{WORKFLOW_HEADING}}:
+    {{#WORKFLOW_STEPS}}
+    {{NUMBER}}. {{TEXT}}
+    {{/WORKFLOW_STEPS}}
+    {{WORKFLOW_CLOSING}}

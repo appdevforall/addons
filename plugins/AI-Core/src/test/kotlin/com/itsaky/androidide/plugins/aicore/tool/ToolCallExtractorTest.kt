@@ -223,6 +223,107 @@ class ToolCallExtractorTest {
         assertEquals(reply, ToolCallExtractor.proseOutsideToolCalls(reply))
     }
 
+    /**
+     * The answer the prompt's SCOPE clause exists to allow (ADFA-6223): an off-domain question
+     * whose answer is JSON that happens to carry a `tool` key.
+     */
+    private val answerAboutToolSchemas =
+        "An MCP server advertises each tool like this:\n\n" +
+            "```json\n{\"tool\": \"search\", \"args\": { ... }}\n```\n\n" +
+            "The name is what the client calls."
+
+    @Test
+    fun givenAnAnswerWhoseCodeFenceHoldsToolJson_whenExtracting_thenNoToolCallsAreProduced() {
+        assertTrue(ToolCallExtractor.extractToolCalls(answerAboutToolSchemas).isEmpty())
+    }
+
+    @Test
+    fun givenAnAnswerWhoseCodeFenceHoldsToolJson_whenDiagnosed_thenNothingIsReportedAsWrong() {
+        // Diagnosing it replaces a good answer with "the reply was malformed" and loses it.
+        assertNull(ToolCallExtractor.diagnoseUnparsedReply(answerAboutToolSchemas))
+    }
+
+    @Test
+    fun givenAnAnswerWhoseCodeFenceHoldsToolJson_whenStrippingCalls_thenTheAnswerSurvives() {
+        assertEquals(answerAboutToolSchemas, ToolCallExtractor.proseOutsideToolCalls(answerAboutToolSchemas))
+    }
+
+    @Test
+    fun givenAFencedExampleThatIsAValidCall_whenExtracting_thenNothingRuns() {
+        // Valid JSON, unlike the `{ ... }` above, so only the fence keeps the example from running.
+        val reply = "To delete a file the agent sends:\n\n```json\n" +
+            "{\"tool\":\"delete_file\",\"args\":{\"file_path\":\"A.kt\"}}\n```\n\nIt asks first."
+
+        assertTrue(ToolCallExtractor.extractToolCalls(reply).isEmpty())
+    }
+
+    @Test
+    fun givenAnUnclosedFenceHoldingAValidCall_whenExtracting_thenNothingRuns() {
+        val reply = "Example:\n```\n{\"tool\":\"run_app\",\"args\":{}}"
+
+        assertTrue(ToolCallExtractor.extractToolCalls(reply).isEmpty())
+    }
+
+    @Test
+    fun givenABareCallAfterAFencedExample_whenExtracting_thenOnlyTheCallOutsideRuns() {
+        val reply = "```json\n{\"tool\":\"delete_file\",\"args\":{\"file_path\":\"A.kt\"}}\n```\n" +
+            "{\"tool\":\"open_file\",\"args\":{\"file_path\":\"B.kt\"}}"
+
+        val calls = ToolCallExtractor.extractToolCalls(reply)
+
+        assertEquals(1, calls.size)
+        assertEquals("open_file", calls[0].name)
+        assertEquals("B.kt", calls[0].args["file_path"])
+    }
+
+    @Test
+    fun givenAnUnclosedCodeFenceHoldingToolJson_whenDiagnosed_thenNothingIsReportedAsWrong() {
+        // A reply cut off inside the fence is still an answer, not a call that failed to parse.
+        assertNull(
+            ToolCallExtractor.diagnoseUnparsedReply(
+                "Here is the config:\n\n```json\n{\"tool\": \"search\", \"args\": {"
+            )
+        )
+    }
+
+    @Test
+    fun givenProseQuotingTheToolKeyBeforeABareCall_whenDiagnosed_thenTheCallIsStillFound() {
+        // Only the first match used to be tested for an object around it, so the sentence hid the call.
+        assertEquals(
+            ToolCallExtractor.UnparsedReply.MALFORMED,
+            ToolCallExtractor.diagnoseUnparsedReply(
+                "Each entry has a \"tool\": key.\n{\"tool\":\"open_file\",\"args\":{\"file_path\":\"A\"}"
+            ),
+        )
+    }
+
+    @Test
+    fun givenUnrelatedJsonBeforeProseQuotingTheToolKey_whenDiagnosed_thenNothingIsReportedAsWrong() {
+        // A closed object earlier in the reply does not put later prose inside an object.
+        val reply = "Data: {\"status\": \"ok\"}.\nNote that \"tool\": is a reserved word."
+        assertNull(ToolCallExtractor.diagnoseUnparsedReply(reply))
+    }
+
+    @Test
+    fun givenABareCallWhoseToolKeyFollowsANestedObject_whenDiagnosed_thenItStillReadsAsMalformed() {
+        // The nearest brace before the key closes the nested args; only depth sees the outer object.
+        assertEquals(
+            ToolCallExtractor.UnparsedReply.MALFORMED,
+            ToolCallExtractor.diagnoseUnparsedReply("{\"args\":{\"file_path\":\"A\"},\"tool\":\"open_file\""),
+        )
+    }
+
+    @Test
+    fun givenABareCallOutsideAFence_whenDiagnosed_thenItStillReadsAsMalformed() {
+        // The fence guard must not excuse a broken call that merely sits near one.
+        assertEquals(
+            ToolCallExtractor.UnparsedReply.MALFORMED,
+            ToolCallExtractor.diagnoseUnparsedReply(
+                "```kotlin\nval x = 1\n```\n{\"tool\":\"open_file\",\"args\":{\"file_path\":\"A\"}"
+            ),
+        )
+    }
+
     @Test
     fun givenArgumentsWithQuotesAndNewlines_whenRenderedAsAnEnvelope_thenTheyExtractBackUnchanged() {
         // The payload that cannot survive the model writing it by hand; rendering escapes it.

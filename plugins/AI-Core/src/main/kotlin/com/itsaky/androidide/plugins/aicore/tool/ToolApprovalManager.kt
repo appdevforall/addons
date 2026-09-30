@@ -1,8 +1,11 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
+import com.itsaky.androidide.plugins.ai.prompt.PromptConfigProvider
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
+import com.itsaky.androidide.plugins.aicore.prompt.ApprovalPrompt
+import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +19,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Manages user approval for tool execution.
  * Tools that modify system state require explicit user approval.
  */
-class ToolApprovalManager {
+class ToolApprovalManager(
+    // Words what the model is told when the user does not approve; see agent_loop.yml's approval.
+    private val config: PromptConfigProvider<AgentPromptConfig>,
+    // What the dialog says a tool does; the ViewModel reads a built-in's from the prompt config.
+    private val describe: suspend (ToolHandler) -> String = { it.description },
+) {
     private val TAG = "$LOG_PREFIX.ToolApprovalManager"
 
     // One source for the wait and the wording, so the message cannot outlive the number.
@@ -95,7 +103,7 @@ class ToolApprovalManager {
                 displayName = handler.displayName,
                 sourceLabel = handler.sourceLabel,
                 args = args,
-                description = handler.description
+                description = describe(handler)
             )
 
             val deferred = CompletableDeferred<ApprovalDecision>()
@@ -124,7 +132,7 @@ class ToolApprovalManager {
      * @param handler its handler.
      * @return the response for this call.
      */
-    private fun responseTo(
+    private suspend fun responseTo(
         decision: ApprovalDecision?,
         toolName: String,
         handler: ToolHandler
@@ -145,41 +153,25 @@ class ToolApprovalManager {
         ApprovalResult.CORRECTED -> {
             Log.d(TAG, "User requested a correction for $toolName")
             // Only this attempt is denied; a tool failure is the channel the loop re-feeds.
-            ApprovalResponse(approved = false, denialMessage = correctionMessage(toolName, decision.correction))
+            val message = ApprovalPrompt.corrected(config.config(), toolName, decision.correction.orEmpty())
+            ApprovalResponse(approved = false, denialMessage = message)
         }
         ApprovalResult.DENIED -> {
             Log.d(TAG, "Approval denied for $toolName")
             ApprovalResponse(
                 approved = false,
-                denialMessage = "User denied permission to execute $toolName"
+                denialMessage = ApprovalPrompt.denied(config.config(), toolName)
             )
         }
         null -> {
             Log.w(TAG, "Approval request timed out after ${APPROVAL_TIMEOUT_MS}ms for $toolName")
             ApprovalResponse(
                 approved = false,
-                denialMessage = "Approval request timed out (no response within " +
-                    "$APPROVAL_TIMEOUT_MINUTES minutes). Please try again."
+                denialMessage = ApprovalPrompt.timedOut(config.config(), toolName, APPROVAL_TIMEOUT_MINUTES)
             )
         }
     }
 
-    /**
-     * Phrases a correction back to the model as the instruction to apply on the retry.
-     * @param toolName the tool the user rejected.
-     * @param correction what the user typed, if anything.
-     * @return the denial message the loop feeds back.
-     */
-    private fun correctionMessage(toolName: String, correction: String?): String {
-        val instruction = correction?.trim().orEmpty()
-        val rejected = "User rejected this $toolName call and asked you to revise it"
-        return if (instruction.isEmpty()) {
-            "$rejected."
-        } else {
-            "$rejected: \"$instruction\". Apply that instruction and try again."
-        }
-    }
-    
     /**
      * Submit user's approval decision.
      * @param result what the user chose.

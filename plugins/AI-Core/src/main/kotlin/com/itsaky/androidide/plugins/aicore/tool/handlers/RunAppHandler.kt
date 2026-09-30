@@ -32,12 +32,6 @@ class RunAppHandler(
 ) : ToolHandler {
     override val toolName = "run_app"
 
-    // The install is gated on a system prompt only the user can answer, so the model is told the
-    // success it gets back is weaker than "the app is running" — otherwise it reports the launch.
-    override val description = "Build the app and install it on this device. The user has to " +
-        "confirm a system install prompt, so success means the install started, not that the " +
-        "app is on screen"
-
     // Build operation requires approval for safety
     override val requiresApproval = true
 

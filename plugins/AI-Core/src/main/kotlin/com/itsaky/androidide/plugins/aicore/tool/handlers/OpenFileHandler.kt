@@ -24,10 +24,9 @@ class OpenFileHandler(
 ) : ToolHandler {
     override val toolName = "open_file"
     override val parametersSchema = ToolSchema.objectOf(
-        "file_path" to ToolSchema.string("Project-relative path of the file to open."),
+        "file_path" to ToolSchema.string(),
         required = listOf("file_path"),
     )
-    override val description = "Open a file in the IDE editor"
     override val requiresApproval = false
     override val pathArgs = listOf("file_path")
     override val resolvesPathsInternally = true

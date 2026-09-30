@@ -1,0 +1,21 @@
+# The local model's system prompt: the wording this backend asks ai-core to send when the simple
+# prompt is on, apart from the code that sends it. Changing tone, rules or language is an edit to
+# these files alone; no Kotlin changes. Written for a small on-device model, so it is short.
+#
+# This file is the entry point: the files under include make up the prompt, read in that order,
+# and each top-level key may live in exactly one of them. Every text is a template over the
+# request's values, e.g. {{EXAMPLE_FILE_NAME}}; see README.md. The plugin validates them on
+# activation, and LocalSystemPromptTest fails on a mistake in the shipped files. ai-core appends
+# its own IDE CONTEXT block after the rendered prompt.
+
+schema_version: 1
+
+# Who the agent is; the first thing the model reads.
+identity: >-
+  You are a coding assistant inside CodeOnTheGo. You answer anything the user asks, not only
+  Android questions.
+
+include:
+  - rules.yml
+  - tools.yml
+  - layout.yml

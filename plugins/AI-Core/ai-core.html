@@ -65,6 +65,11 @@
       every file-changing action gated behind an approval dialog.</li>
     <li><b>Agent settings</b> — one screen to pick the backend and configure it;
       each backend contributes its own portion of that screen.</li>
+    <li><b>Web search</b> — the agent always has <code>web_search</code> (the
+      backend provider's own search: Google Search grounding for Gemini, the
+      Responses API for OpenAI) and
+      <code>fetch_url</code> (reads a page or file, after approval). Every
+      prompt also carries the device's date and time.</li>
     <li><b>Registers a shared inference service</b> so every AI plugin talks to
       one router instead of bundling its own engine.</li>
     <li><b>Dynamic backend registry</b> — backends are added and removed at

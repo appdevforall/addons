@@ -3,12 +3,22 @@ package com.itsaky.androidide.plugins.aiagentopenai.plugin
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentopenai.backend.OpenAiBackend
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.OpenAiPromptConfig
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /**
  * Registers the OpenAI-compatible backend with AI Core's inference router.
@@ -24,6 +34,9 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
 
     /** True once [backend] is registered with the router, so re-registration is idempotent. */
     @Volatile private var registered = false
+
+    /** Runs the prompt-config load while the plugin is active; cancelled on deactivation. */
+    @Volatile private var configScope: CoroutineScope? = null
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentopenai"
@@ -103,8 +116,9 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         return try {
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
+            preloadPromptConfig()
 
-            val openAi = OpenAiBackend(context)
+            val openAi = OpenAiBackend(context, sharedPromptConfig::configIfLoaded)
             backend = openAi
             activeBackend = openAi
 
@@ -165,6 +179,45 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         null
     }
 
+    /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun preloadPromptConfig() {
+        releasePromptConfig()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        configScope = scope
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        val load = sharedPromptConfig.preload(scope, source)
+        load.invokeOnCompletion { error ->
+            when (error) {
+                null -> reportLoadedConfig(load.getCompleted())
+                is CancellationException -> Unit
+                else -> context.logger.error(
+                    "OpenAiPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                    error,
+                )
+            }
+        }
+    }
+
+    /**
+     * Logs that the config loaded, and any name typo its layout would hit at render time.
+     *
+     * @param config the config just loaded.
+     */
+    private fun reportLoadedConfig(config: OpenAiPromptConfig) {
+        context.logger.info("OpenAiPlugin: loaded prompt config with ${config.rules.size} rule groups")
+        for (problem in OpenAiSystemPrompt.problems(config)) {
+            context.logger.warn("OpenAiPlugin: $problem; ai-core's default prompt is sent instead")
+        }
+    }
+
+    /** Drops the cached config and stops a load still in flight. Idempotent. */
+    private fun releasePromptConfig() {
+        sharedPromptConfig.clear()
+        configScope?.cancel()
+        configScope = null
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("OpenAiPlugin: Deactivating plugin")
 
@@ -180,6 +233,7 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
 
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
+            releasePromptConfig()
 
             true
         } catch (e: Exception) {
@@ -206,6 +260,7 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
+        releasePromptConfig()
         pluginContext = null
         context.logger.info("OpenAiPlugin: Released OpenAI backend")
     }
