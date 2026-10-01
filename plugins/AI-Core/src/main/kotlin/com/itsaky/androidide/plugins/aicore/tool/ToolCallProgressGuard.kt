@@ -7,7 +7,8 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
  * [AgentLoop] builds one per run and asks it about every batch before running it, so the loop
  * orchestrates turns and this decides what counts as progress.
  *
- * @param maxConsecutiveRepeats identical unsuccessful batches tolerated back to back.
+ * @param maxConsecutiveRepeats identical unsuccessful batches, or successful log re-reads, tolerated
+ *   back to back.
  * @param maxTurnsWithoutProgress turns tolerated introducing no batch the run has not already run.
  * @param pathsOf the project paths one call names, whether it reads them or rewrites them.
  * @param changesPaths whether a call rewrites what it names, so a run is not judged on novelty
@@ -49,6 +50,7 @@ internal class ToolCallProgressGuard(
     private var currentBatchWrites = emptySet<String>()
     private var currentBatchChanges = false
     private var currentBatchIsNew = false
+    private var currentBatchRereadsLive = false
 
     // Null until a batch has run: "no tools yet" and "the tools failed" end a run differently.
     private var previousBatchSucceeded: Boolean? = null
@@ -69,6 +71,7 @@ internal class ToolCallProgressGuard(
         currentBatchPaths = pathsNamedBy(calls)
         currentBatchWrites = pathsNamedBy(calls.filter(changesPaths))
         currentBatchChanges = calls.any(changesPaths)
+        currentBatchRereadsLive = calls.all { it.name in LIVE_READS }
         val verdict = verdictFor(signature)
         if (verdict == Verdict.PROCEED) {
             previousSignature = signature
@@ -117,7 +120,7 @@ internal class ToolCallProgressGuard(
             consecutiveRepeats = 0
             return Verdict.PROCEED
         }
-        if (previousBatchSucceeded == true) return Verdict.ASSUME_COMPLETE
+        if (previousBatchSucceeded == true && !currentBatchRereadsLive) return Verdict.ASSUME_COMPLETE
         consecutiveRepeats++
         return if (consecutiveRepeats >= maxConsecutiveRepeats) Verdict.REPEATED else Verdict.PROCEED
     }
@@ -132,4 +135,9 @@ internal class ToolCallProgressGuard(
         calls.joinToString("|") { call ->
             call.name + "(" + call.args.toSortedMap().entries.joinToString(",") { "${it.key}=${it.value}" } + ")"
         }
+
+    private companion object {
+        /** Reads whose answer changes between calls, so re-issuing one does not mean the work is done. */
+        val LIVE_READS = setOf("read_app_logs", "read_ide_logs")
+    }
 }
