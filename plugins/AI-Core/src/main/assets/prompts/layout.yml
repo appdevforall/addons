@@ -32,6 +32,9 @@ layout:
   # Also appended to a backend's own prompt, so the session lines reach every backend.
   ide_context: |
     {{SESSION_CURRENT_TIME}}
+    {{#CAN_SEARCH_WEB}}
+    {{SESSION_WEB_SEARCH}}
+    {{/CAN_SEARCH_WEB}}
     {{SESSION_WEB_ACCESS}}
     {{#HAS_IDE_CONTEXT}}
 

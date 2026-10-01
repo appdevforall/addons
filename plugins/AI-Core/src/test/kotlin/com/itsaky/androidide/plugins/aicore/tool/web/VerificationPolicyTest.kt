@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.web
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallingBackend.EXTRA_PARAM_REQUIRED_TOOL
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -102,9 +103,9 @@ class VerificationPolicyTest {
         assertEquals(100, required.maxTokens)
         assertEquals("system", required.systemPrompt)
         assertEquals(
-            mapOf("grammar" to "g", WebAccess.EXTRA_PARAM_REQUIRED_TOOL to WebAccess.WEB_SEARCH_TOOL),
+            mapOf("grammar" to "g", EXTRA_PARAM_REQUIRED_TOOL to WebAccess.WEB_SEARCH_TOOL),
             required.extraParams,
         )
-        assertNull(config.extraParams[WebAccess.EXTRA_PARAM_REQUIRED_TOOL])
+        assertNull(config.extraParams[EXTRA_PARAM_REQUIRED_TOOL])
     }
 }

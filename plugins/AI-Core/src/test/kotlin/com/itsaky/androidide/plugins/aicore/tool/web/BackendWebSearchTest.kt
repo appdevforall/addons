@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigS
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmBackend
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmResponse
+import com.itsaky.androidide.plugins.services.LlmInferenceService.WebSearchBackend.EXTRA_PARAM_WEB_SEARCH
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -36,7 +37,7 @@ class BackendWebSearchTest {
 
         runBlocking { search(backend).search("latest kotlin version") }
 
-        assertEquals(true, sent.captured.extraParams?.get(WebAccess.EXTRA_PARAM_WEB_SEARCH))
+        assertEquals(true, sent.captured.extraParams?.get(EXTRA_PARAM_WEB_SEARCH))
         assertEquals("gemini", sent.captured.backendId)
     }
 

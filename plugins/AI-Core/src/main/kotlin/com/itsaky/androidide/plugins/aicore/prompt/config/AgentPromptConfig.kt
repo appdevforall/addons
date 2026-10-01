@@ -78,10 +78,12 @@ data class AgentPromptConfig(
 
     /**
      * @property currentTime states the device's date and time.
-     * @property webAccess says the web tools are there to be used.
+     * @property webSearch says web_search is there to be used, for a backend that offers it.
+     * @property webAccess says fetch_url is there to be used.
      */
     data class SessionText(
         val currentTime: PromptText,
+        val webSearch: PromptText,
         val webAccess: PromptText,
     )
 

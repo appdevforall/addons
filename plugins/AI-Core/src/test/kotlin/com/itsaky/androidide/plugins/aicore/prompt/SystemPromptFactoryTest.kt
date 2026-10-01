@@ -61,8 +61,9 @@ class SystemPromptFactoryTest {
     }
 
     @Test
-    fun givenABackendWithItsOwnPrompt_whenCreating_thenItIsToldTheWebIsReachable() {
-        val prompt = runBlocking { factory(FakeBackend("I am Gemini.")).create(tools) }
+    fun givenABackendWithItsOwnPromptOfferingWebSearch_whenCreating_thenItIsToldTheWebIsReachable() {
+        val search = ToolDefinition("web_search", "Search the web.", emptyMap())
+        val prompt = runBlocking { factory(FakeBackend("I am Gemini.")).create(tools + search) }
 
         assertTrue(prompt.contains("You can reach the internet."))
     }

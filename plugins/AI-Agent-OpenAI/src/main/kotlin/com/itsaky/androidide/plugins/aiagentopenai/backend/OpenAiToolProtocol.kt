@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallRequest
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallingBackend.EXTRA_PARAM_REQUIRED_TOOL
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,9 +20,6 @@ internal object OpenAiToolProtocol {
      * and a pathologically deep one would otherwise recurse until the host process dies.
      */
     private const val MAX_SCHEMA_DEPTH = 12
-
-    /** The key ai-core's `WebAccess.EXTRA_PARAM_REQUIRED_TOOL` sets; the same literal on both sides. */
-    const val EXTRA_PARAM_REQUIRED_TOOL = "required_tool"
 
     /**
      * The `tool_choice` that makes the model call [config]'s required tool this turn.

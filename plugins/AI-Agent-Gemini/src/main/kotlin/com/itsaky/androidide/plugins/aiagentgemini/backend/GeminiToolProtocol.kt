@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentgemini.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallRequest
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallingBackend.EXTRA_PARAM_REQUIRED_TOOL
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import org.json.JSONArray
 import org.json.JSONObject
@@ -22,9 +23,6 @@ internal object GeminiToolProtocol {
 
     /** Appended when an object argument has to be declared as JSON text; see [declarable]. */
     private const val AS_JSON_TEXT = " Written as a JSON object."
-
-    /** The key ai-core's `WebAccess.EXTRA_PARAM_REQUIRED_TOOL` sets; the same literal on both sides. */
-    const val EXTRA_PARAM_REQUIRED_TOOL = "required_tool"
 
     /**
      * The `toolConfig` that makes the model call [config]'s required tool this turn.

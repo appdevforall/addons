@@ -82,7 +82,7 @@ object SystemPromptRenderer {
             Triple(
                 SystemPromptRequest(tools, "<tool_call>…</tool_call>", "app/Main.kt"),
                 IdeContext("app/Main.kt", listOf("lib/A.kt", "lib/B.kt"), listOf(full, bare)),
-                session,
+                session.copy(canSearchWeb = true),
             ),
             Triple(SystemPromptRequest(emptyList(), null, null), IdeContext(null, emptyList(), listOf(bare)), session),
             Triple(SystemPromptRequest(emptyList(), null, null), IdeContext.EMPTY, session),

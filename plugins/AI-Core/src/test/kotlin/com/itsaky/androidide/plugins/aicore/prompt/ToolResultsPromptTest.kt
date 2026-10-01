@@ -156,6 +156,15 @@ class ToolResultsPromptTest {
     }
 
     @Test
+    fun givenAFetchedPagePastTheDefaultCap_whenRendering_thenItIsNotCut() {
+        val page = "x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT) + "END"
+
+        val turn = render(listOf(ToolCall("fetch_url", emptyMap())), listOf(ToolResult.success("Fetched", page)))
+
+        assertTrue(turn.contains("END\n</tool_response>"))
+    }
+
+    @Test
     fun givenAProjectResultPastTheDefaultCap_whenRendering_thenItIsStillCut() {
         val turn = render(openFile, listOf(ToolResult.success("x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT + 10))))
 

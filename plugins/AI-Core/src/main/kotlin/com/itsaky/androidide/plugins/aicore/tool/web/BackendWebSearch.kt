@@ -8,6 +8,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.SessionContext
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmBackend
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.WebSearchBackend.EXTRA_PARAM_WEB_SEARCH
 import kotlinx.coroutines.future.await
 
 /**
@@ -41,7 +42,7 @@ class BackendWebSearch(
             maxTokens = SEARCH_MAX_TOKENS
             systemPrompt = instruction(config.config(), currentTime())
             // A backend that cannot search must refuse on seeing this, not answer from memory.
-            extraParams = mapOf(WebAccess.EXTRA_PARAM_WEB_SEARCH to true)
+            extraParams = mapOf(EXTRA_PARAM_WEB_SEARCH to true)
         }
         val response = backend.generate(query, request).await()
         if (!response.success) {

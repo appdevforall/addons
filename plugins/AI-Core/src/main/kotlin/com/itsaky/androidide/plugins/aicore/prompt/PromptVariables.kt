@@ -29,6 +29,7 @@ object PromptVariables {
     const val IDE_CONTEXT_MODULES_KNOWN = "IDE_CONTEXT_MODULES_KNOWN"
     const val IDE_CONTEXT_CLOSING = "IDE_CONTEXT_CLOSING"
     const val SESSION_CURRENT_TIME = "SESSION_CURRENT_TIME"
+    const val SESSION_WEB_SEARCH = "SESSION_WEB_SEARCH"
     const val SESSION_WEB_ACCESS = "SESSION_WEB_ACCESS"
     const val LAYOUT_IDE_CONTEXT = "LAYOUT_IDE_CONTEXT"
     const val AGENT_LOOP_GROUNDING = "AGENT_LOOP_GROUNDING"
@@ -105,6 +106,9 @@ object PromptVariables {
 
     /** The device's date, time and time zone; see [SessionContext]. */
     const val CURRENT_TIME = "CURRENT_TIME"
+
+    /** Whether this run offers web_search; see [SessionContext]. */
+    const val CAN_SEARCH_WEB = "CAN_SEARCH_WEB"
 
     /** Whether the IDE has anything open or any module worth stating. */
     const val HAS_IDE_CONTEXT = "HAS_IDE_CONTEXT"
@@ -221,7 +225,9 @@ object PromptVariables {
         val text = config.ideContext
         return mapOf(
             SESSION_CURRENT_TIME to config.session.currentTime,
+            SESSION_WEB_SEARCH to config.session.webSearch,
             SESSION_WEB_ACCESS to config.session.webAccess,
+            CAN_SEARCH_WEB to session.canSearchWeb,
             CURRENT_TIME to session.currentTime,
             IDE_CONTEXT_HEADING to text.heading,
             IDE_CONTEXT_CURRENT_FILE to text.currentFile,

@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.prompt
 
 import com.itsaky.androidide.plugins.ai.prompt.PromptConfigProvider
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
+import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
 import com.itsaky.androidide.plugins.services.LlmInferenceService.SystemPromptRequest
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 
@@ -35,7 +36,7 @@ class SystemPromptFactory(
         val loaded = config.config()
         // One editor read serves both the IDE CONTEXT block and the paths in the examples.
         val context = ideContext.read()
-        val session = session()
+        val session = session().copy(canSearchWeb = tools.any { it.name == WebAccess.WEB_SEARCH_TOOL })
         val request = SystemPromptRequest(
             tools,
             // Null tells the backend this side parses no envelope; see SystemPromptRequest.

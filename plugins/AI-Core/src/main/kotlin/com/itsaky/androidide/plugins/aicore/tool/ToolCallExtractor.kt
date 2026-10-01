@@ -48,12 +48,12 @@ class ToolCallExtractor {
         private val BARE_TOOL_KEY_REGEX = Regex(""""tool"\s*:""")
 
         /**
-         * A fenced code block, closed or left open by a reply that hit its output cap.
+         * A fenced code block, closed or, when it starts a line, left open by a reply that hit its cap.
          *
          * Only ever used to decide whether a `{"tool":…}` shape is a call or something the user
          * asked to be shown, never to produce text, so swallowing an unclosed tail is the safe way.
          */
-        private val FENCED_BLOCK_REGEX = Regex("""```(?:.*?```|.*)""", RegexOption.DOT_MATCHES_ALL)
+        private val FENCED_BLOCK_REGEX = Regex("""```.*?```|(?m:^)```.*""", RegexOption.DOT_MATCHES_ALL)
 
         /**
          * Classifies a reply that [extractToolCalls] found nothing in.

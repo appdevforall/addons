@@ -70,12 +70,6 @@ class LocalLlmBackend(
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
 
-        /**
-         * `extraParams` key ai-core's `web_search` tool sets to ask for an answer from a web
-         * search, which an on-device model cannot make; see [generate].
-         */
-        const val EXTRA_PARAM_WEB_SEARCH = "web_search"
-
         /** What the agent is told when it asks for a search; it can still read a page with fetch_url. */
         private const val WEB_SEARCH_UNSUPPORTED =
             "Web search is not available with the on-device model. Use fetch_url to read a page instead."
@@ -713,7 +707,7 @@ class LocalLlmBackend(
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         context.logger.info("LocalLlmBackend.generate() called with prompt: ${prompt.take(50)}...")
         // Refused, not answered: a search reply made up from the model's memory reads as found fact.
-        if (config.extraParams?.get(EXTRA_PARAM_WEB_SEARCH) == true) {
+        if (config.extraParams?.get(WebSearchBackend.EXTRA_PARAM_WEB_SEARCH) == true) {
             return CompletableFuture.completedFuture(LlmResponse.failure(WEB_SEARCH_UNSUPPORTED))
         }
         return runGeneration(buildPrompt(config.systemPrompt, prompt), config)

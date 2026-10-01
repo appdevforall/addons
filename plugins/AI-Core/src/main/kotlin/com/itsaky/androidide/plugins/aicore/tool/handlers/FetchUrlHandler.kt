@@ -33,6 +33,8 @@ class FetchUrlHandler : ToolHandler {
         required = listOf("url"),
     )
     override val requiresApproval = true
+    // Always Allow would approve every later host too, which the cross-host hand-back exists to stop.
+    override val allowsSessionApproval = false
     override val argAliases = mapOf("link" to "url", "address" to "url")
 
     override suspend fun validate(args: Map<String, Any?>): Validation {

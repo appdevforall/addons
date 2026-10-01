@@ -10,9 +10,11 @@ import java.util.Locale
  * real-time information" even to a question it has a tool for (ADFA-6223).
  *
  * @property currentTime the device's date, time and time zone, already worded for the prompt.
+ * @property canSearchWeb whether this run offers web_search; told otherwise, a model calls it anyway.
  */
 data class SessionContext(
     val currentTime: String,
+    val canSearchWeb: Boolean = false,
 ) {
 
     companion object {

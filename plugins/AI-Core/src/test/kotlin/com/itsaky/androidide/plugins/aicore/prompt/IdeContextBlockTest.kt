@@ -27,12 +27,23 @@ class IdeContextBlockTest {
     }
 
     @Test
-    fun givenAnyRun_whenRendering_thenTheWebToolsAreNamedAndRefusalIsForbidden() {
-        val block = SystemPromptRenderer.renderIdeContext(shippedConfig, IdeContext.EMPTY, SESSION)
+    fun givenARunThatCanSearch_whenRendering_thenTheWebToolsAreNamedAndRefusalIsForbidden() {
+        val session = SESSION.copy(canSearchWeb = true)
+        val block = SystemPromptRenderer.renderIdeContext(shippedConfig, IdeContext.EMPTY, session)
 
         assertTrue(block.contains("call web_search"))
-        assertTrue(block.contains("call fetch_url"))
+        assertTrue(block.contains("Call fetch_url"))
         assertTrue(block.contains("Never say you cannot access the internet."))
+    }
+
+    @Test
+    fun givenARunThatCannotSearch_whenRendering_thenOnlyFetchUrlIsNamed() {
+        // Told to call a tool it was not given, the model gets "Unknown tool" or fakes a search.
+        val block = SystemPromptRenderer.renderIdeContext(shippedConfig, IdeContext.EMPTY, SESSION)
+
+        assertFalse(block.contains("web_search"))
+        assertFalse(block.contains("Never say you cannot access the internet."))
+        assertTrue(block.contains("Call fetch_url"))
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiReplyException
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.WebSearchBackend.EXTRA_PARAM_WEB_SEARCH
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -11,9 +12,6 @@ import org.json.JSONObject
  * dedicated `*-search-api` models, and no compatible server (Ollama, LM Studio) searches at all.
  */
 internal object OpenAiWebSearch {
-
-    /** The key ai-core's `WebAccess.EXTRA_PARAM_WEB_SEARCH` sets; the same literal on both sides. */
-    const val EXTRA_PARAM_WEB_SEARCH = "web_search"
 
     /** The Responses API endpoint, under the same base URL as `chat/completions`. */
     const val RESPONSES_PATH = "/responses"

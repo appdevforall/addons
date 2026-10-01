@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentgemini.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.WebSearchBackend.EXTRA_PARAM_WEB_SEARCH
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -10,9 +11,6 @@ import org.json.JSONObject
  * Google Search mixed with function calling, and only Gemini 3 accepts the two together.
  */
 internal object GeminiWebSearch {
-
-    /** The key ai-core's `WebAccess.EXTRA_PARAM_WEB_SEARCH` sets; the same literal on both sides. */
-    const val EXTRA_PARAM_WEB_SEARCH = "web_search"
 
     /**
      * Put after a report the output cap cut short. Without it the agent read a report ending

@@ -275,6 +275,16 @@ class ToolCallExtractorTest {
     }
 
     @Test
+    fun givenAStrayInlineFenceBeforeABareCall_whenExtracting_thenTheCallRuns() {
+        val reply = "Wrap it in ``` fences.\n{\"tool\":\"read_file\",\"args\":{\"file_path\":\"A.kt\"}}"
+
+        val calls = ToolCallExtractor.extractToolCalls(reply)
+
+        assertEquals(1, calls.size)
+        assertEquals("read_file", calls[0].name)
+    }
+
+    @Test
     fun givenABareCallAfterAFencedExample_whenExtracting_thenOnlyTheCallOutsideRuns() {
         val reply = "```json\n{\"tool\":\"delete_file\",\"args\":{\"file_path\":\"A.kt\"}}\n```\n" +
             "{\"tool\":\"open_file\",\"args\":{\"file_path\":\"B.kt\"}}"

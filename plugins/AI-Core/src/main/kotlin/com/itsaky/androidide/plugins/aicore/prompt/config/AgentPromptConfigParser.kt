@@ -61,6 +61,7 @@ object AgentPromptConfigParser : PromptConfigParser<AgentPromptConfig> {
                 session = obj("session").read {
                     SessionText(
                         currentTime = text("current_time"),
+                        webSearch = text("web_search"),
                         webAccess = text("web_access"),
                     )
                 },

@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.web
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallingBackend.EXTRA_PARAM_REQUIRED_TOOL
 
 /**
  * Decides, from the message rather than the model's confidence, when a run must search before it
@@ -24,7 +25,7 @@ object VerificationPolicy {
      *
      * @param config the run's config.
      * @param tool the tool the model must call.
-     * @return a new config, identical but for [WebAccess.EXTRA_PARAM_REQUIRED_TOOL].
+     * @return a new config, identical but for [EXTRA_PARAM_REQUIRED_TOOL].
      */
     fun requiring(config: LlmConfig, tool: String): LlmConfig = LlmConfig(config.backendId).apply {
         modelName = config.modelName
@@ -32,7 +33,7 @@ object VerificationPolicy {
         maxTokens = config.maxTokens
         stopSequences = config.stopSequences
         systemPrompt = config.systemPrompt
-        extraParams = config.extraParams.orEmpty() + (WebAccess.EXTRA_PARAM_REQUIRED_TOOL to tool)
+        extraParams = config.extraParams.orEmpty() + (EXTRA_PARAM_REQUIRED_TOOL to tool)
     }
 
     /** A fenced block, or at least [MIN_CODE_LINES] lines that read as source or build script. */

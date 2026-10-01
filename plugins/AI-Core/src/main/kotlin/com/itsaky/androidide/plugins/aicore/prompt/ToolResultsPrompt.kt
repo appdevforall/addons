@@ -37,8 +37,8 @@ class ToolResultsPrompt(
         const val DEFAULT_CHAR_LIMIT = 4000
 
         /**
-         * A search report's cap: [DEFAULT_CHAR_LIMIT] cut a full report before the Sources list the
-         * backend appends to it, leaving the agent nothing to cite. No local backend can search.
+         * A search report's or fetched page's cap: [DEFAULT_CHAR_LIMIT] cut a report before its Sources
+         * list, and a page before anything past its navigation.
          */
         const val WEB_SEARCH_CHAR_LIMIT = 12000
 
@@ -47,7 +47,7 @@ class ToolResultsPrompt(
          *
          * @param config the loaded prompt config.
          * @param terminalTool the name of the tool that ends a run by answering the user.
-         * @param charLimit each result's cap; a web search's is at least [WEB_SEARCH_CHAR_LIMIT].
+         * @param charLimit each result's cap; a web search's or fetch's is at least [WEB_SEARCH_CHAR_LIMIT].
          * @param calls the tool calls that ran.
          * @param results their results, positionally aligned with [calls].
          * @return the turn to add to the transcript.
@@ -63,7 +63,7 @@ class ToolResultsPrompt(
                 results.forEachIndexed { index, result ->
                     val name = calls.getOrNull(index)?.name ?: "tool"
                     val limit =
-                        if (name == WebAccess.WEB_SEARCH_TOOL) maxOf(charLimit, WEB_SEARCH_CHAR_LIMIT) else charLimit
+                        if (name == WebAccess.WEB_SEARCH_TOOL || name == WebAccess.FETCH_URL_TOOL) maxOf(charLimit, WEB_SEARCH_CHAR_LIMIT) else charLimit
                     val body = truncate(config, terminalTool, body(config, terminalTool, result), limit)
                     append("<tool_response>\n[").append(name).append("] ").append(body)
                     append("\n</tool_response>\n\n")

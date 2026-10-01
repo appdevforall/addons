@@ -16,9 +16,10 @@ ide_context:
 # today's date, and one never told it can reach the web claims it cannot.
 session:
   current_time: "Current date and time on the user's device: {{CURRENT_TIME}}"
-  web_access: >-
+  # Stated only to a backend that offers web_search.
+  web_search: >-
     You can reach the internet. For anything current or outside what you know — news, releases,
-    prices, documentation, a library's latest version — call web_search, and call fetch_url to
-    read a page, a repository or a file the user links. Your training data is older than today, so
-    check with web_search before you judge code or name a library's API or version. Never say you
-    cannot access the internet.
+    prices, documentation, a library's latest version — call web_search. Your training data is
+    older than today, so check with web_search before you judge code or name a library's API or
+    version. Never say you cannot access the internet.
+  web_access: Call fetch_url to read a page, a repository or a file the user links.
