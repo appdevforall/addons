@@ -87,3 +87,15 @@ built_in_tools:
       for a URL the user gives or one a web search found.
     arguments:
       url: The full http or https URL to fetch.
+  read_app_logs:
+    description: Read the App Logs of the user's running app, from the newest crash or error
+    arguments:
+      min_level: >-
+        Lowest level to include: verbose, debug, info, warning or error. Defaults to all levels.
+      filter: Case-insensitive text a line must contain, matched against its tag and message.
+  read_ide_logs:
+    description: Read the IDE Logs of Code on the Go and its plugins, from the newest error
+    arguments:
+      min_level: >-
+        Lowest level to include: verbose, debug, info, warning or error. Defaults to all levels.
+      filter: Case-insensitive text a line must contain, matched against its tag and message.

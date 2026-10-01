@@ -41,6 +41,8 @@ class BuiltInHandlerApprovalTest {
             "read_build_output",
             // Its query goes to the provider already holding the conversation; no new party sees it.
             "web_search",
+            "read_app_logs",
+            "read_ide_logs",
         )
 
         /** Built-ins that reach a host the model chose, so the user sees where before it happens. */
