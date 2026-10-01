@@ -96,7 +96,7 @@ class LogWindowCalculatorTest {
         val older = LogEntry(LogLevel.ERROR, "E AndroidRuntime: FATAL EXCEPTION: old")
         val newer = LogEntry(LogLevel.ERROR, "E AndroidRuntime: FATAL EXCEPTION: new")
 
-        val text = LogWindowCalculator.windowFor(listOf(older) + info(3) + newer, false).text
+        val text = LogWindowCalculator.windowFor(listOf(older) + info(2000) + newer, false).text
 
         assertTrue(text.startsWith("$marker\n${newer.text}"))
     }
@@ -106,7 +106,7 @@ class LogWindowCalculatorTest {
         val older = LogEntry(LogLevel.ERROR, "E Plugin: old")
         val newest = listOf(LogEntry(LogLevel.ERROR, "E Plugin: new"), LogEntry(LogLevel.ERROR, "E Plugin: at frame"))
 
-        val text = LogWindowCalculator.windowFor(listOf(older) + info(3) + newest, false).text
+        val text = LogWindowCalculator.windowFor(listOf(older) + info(2000) + newest, false).text
 
         assertEquals("$marker\nE Plugin: new\nE Plugin: at frame", text)
     }
@@ -116,7 +116,7 @@ class LogWindowCalculatorTest {
         val earlier = LogEntry(LogLevel.ERROR, "E Glide: load failed")
         val lowercase = LogEntry(null, "fatal signal 11 (SIGSEGV), code 1")
 
-        val window = LogWindowCalculator.windowFor(listOf(earlier) + info(3) + lowercase, false)
+        val window = LogWindowCalculator.windowFor(listOf(earlier) + info(2000) + lowercase, false)
 
         assertTrue(window.anchoredOnError)
         assertTrue(window.text.startsWith("$marker\n${lowercase.text}"))
@@ -126,9 +126,29 @@ class LogWindowCalculatorTest {
     fun givenAnOlderCrashAndANewerErrorRun_whenWindowed_thenItAnchorsOnTheErrorRun() {
         val newer = LogEntry(LogLevel.ERROR, "E Plugin: new")
 
-        val text = LogWindowCalculator.windowFor(listOf(crash) + info(3) + newer, false).text
+        val text = LogWindowCalculator.windowFor(listOf(crash) + info(2000) + newer, false).text
 
         assertEquals("$marker\n${newer.text}", text)
+    }
+
+    @Test
+    fun givenACrashThenALaterErrorThatBothFit_whenWindowed_thenItAnchorsOnTheCrash() {
+        val later = LogEntry(LogLevel.ERROR, "E FrameEvents: updateAcquireFence")
+
+        val text = LogWindowCalculator.windowFor(info(2000) + crash + info(3) + later, false).text
+
+        assertTrue(text.startsWith("$marker\n${crash.text}"))
+        assertTrue(text.endsWith(later.text))
+    }
+
+    @Test
+    fun givenAReadThatFits_whenWindowed_thenItIsReturnedWholeAndUnanchored() {
+        val entries = info(3) + LogEntry(LogLevel.ERROR, "E MyApp: failed")
+
+        val window = LogWindowCalculator.windowFor(entries, hostTruncated = false)
+
+        assertEquals(entries.joinToString("\n") { it.text }, window.text)
+        assertFalse(window.anchoredOnError)
     }
 
     @Test

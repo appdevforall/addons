@@ -150,7 +150,7 @@ class ReadLogsHandlerTest {
 
     @Test
     fun givenACrashAfterChatter_whenReading_thenTheWindowStartsAtTheCrash() = runTest {
-        answerWith(info(50) + crash + info(5, label = "after"))
+        answerWith(info(2000) + crash + info(5, label = "after"))
 
         val result = handler.execute(emptyMap())
 
@@ -165,7 +165,7 @@ class ReadLogsHandlerTest {
     @Test
     fun givenAnEarlierPlainErrorAndACrash_whenReading_thenTheCrashWins() = runTest {
         val earlier = LogEntry(LogLevel.ERROR, "E Glide: load failed")
-        answerWith(listOf(earlier) + info(5) + crash)
+        answerWith(listOf(earlier) + info(2000) + crash)
 
         val data = handler.execute(emptyMap()).data.orEmpty()
 
@@ -176,7 +176,7 @@ class ReadLogsHandlerTest {
     @Test
     fun givenAnErrorButNoCrash_whenReading_thenTheWindowStartsAtTheError() = runTest {
         val error = LogEntry(LogLevel.ERROR, "E PluginManager: failed to load plugin")
-        answerWith(info(20) + error + info(3, label = "after"))
+        answerWith(info(2000) + error + info(3, label = "after"))
 
         val data = handler.execute(emptyMap()).data.orEmpty()
 

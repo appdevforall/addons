@@ -12,23 +12,24 @@ internal object LogWindowCalculator {
     /** Maximum characters of log handed to the model: AgentLoop's cap, less room for the message. */
     const val MAX_OUTPUT_CHARS = AgentLoop.DEFAULT_TOOL_OUTPUT_CHAR_LIMIT - 100
 
-    /** Markers of an app crash; the anchor prefers these over any plain error. */
+    /** Markers of an app crash; the anchor prefers these over a later error when the crash fits. */
     private val CRASH_MARKERS = listOf("FATAL EXCEPTION", "Fatal signal")
 
     /**
-     * Logs span runs, so the window starts at whichever is newer, the newest crash line or the start
-     * of the newest run of error lines. With neither, or a log of nothing but errors, it keeps the
-     * newest lines.
+     * A read that fits is returned whole. Logs span runs, so otherwise the window starts at the newest
+     * crash if it and all after it fit, else at whichever is newer, that crash or the start of the
+     * newest run of error lines. With neither, or a log of nothing but errors, it keeps the newest lines.
      */
     fun windowFor(entries: List<LogEntry>, hostTruncated: Boolean): OutputWindow {
-        val anchor = listOfNotNull(
-            entries.indexOfLast { isCrashLine(it) }.takeIf { it >= 0 },
-            newestErrorRunStart(entries),
-        ).maxOrNull()
+        if (!hostTruncated && fits(entries, MAX_OUTPUT_CHARS)) return OutputWindow(joined(entries), false)
+        val crash = entries.indexOfLast { isCrashLine(it) }.takeIf { it >= 0 }
+        val markedRoom = MAX_OUTPUT_CHARS - TRUNCATION_MARKER.length - 1
+        val anchor = crash?.takeIf { fits(entries.subList(it, entries.size), markedRoom) }
+            ?: listOfNotNull(crash, newestErrorRunStart(entries)).maxOrNull()
         val text = if (anchor != null) {
             fromAnchor(entries.subList(anchor, entries.size), droppedBefore = hostTruncated || anchor > 0)
         } else {
-            tail(entries, droppedBefore = hostTruncated)
+            tail(entries)
         }
         return OutputWindow(text = text, anchoredOnError = anchor != null)
     }
@@ -37,7 +38,7 @@ internal object LogWindowCalculator {
     private fun fromAnchor(entries: List<LogEntry>, droppedBefore: Boolean): String {
         val prefix = if (droppedBefore) "$TRUNCATION_MARKER\n" else ""
         val room = MAX_OUTPUT_CHARS - prefix.length
-        if (fitCount(entries, room) == entries.size) return prefix + joined(entries)
+        if (fits(entries, room)) return prefix + joined(entries)
 
         val separator = "\n$TRUNCATION_MARKER\n"
         val half = (room - separator.length) / 2
@@ -45,8 +46,7 @@ internal object LogWindowCalculator {
     }
 
     /** The newest lines of [entries] that fit, marking what was dropped before them. */
-    private fun tail(entries: List<LogEntry>, droppedBefore: Boolean): String {
-        if (!droppedBefore && fitCount(entries, MAX_OUTPUT_CHARS) == entries.size) return joined(entries)
+    private fun tail(entries: List<LogEntry>): String {
         val prefix = "$TRUNCATION_MARKER\n"
         return prefix + tailBody(entries, MAX_OUTPUT_CHARS - prefix.length)
     }
@@ -78,6 +78,8 @@ internal object LogWindowCalculator {
         }
         return count
     }
+
+    private fun fits(entries: List<LogEntry>, room: Int): Boolean = fitCount(entries, room) == entries.size
 
     private fun joined(entries: List<LogEntry>): String = entries.joinToString("\n") { it.text }
 
