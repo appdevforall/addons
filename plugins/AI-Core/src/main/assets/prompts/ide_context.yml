@@ -1,0 +1,25 @@
+# What the IDE has open, stated so the agent uses real paths.
+
+ide_context:
+  heading: IDE CONTEXT (real paths — use these verbatim, do not rewrite them)
+  current_file: "File the user is viewing: {{CURRENT_FILE}}"
+  other_files: "Other open files: {{OTHER_FILES}}"
+  module_source_dir: "New classes for module '{{NAME}}' go in: {{SOURCE_DIR}}"
+  module_layout_dir: "Layouts for module '{{NAME}}': {{LAYOUT_DIR}}"
+  module_manifest: "Manifest for module '{{NAME}}': {{MANIFEST}}"
+  modules_known: These directories already exist — do not call list_files to rediscover them.
+  closing: >-
+    If the user names a file that appears above, use that exact path and do not guess a different
+    folder or extension.
+
+# The run's own facts, stated on every prompt whether or not anything is open: no model knows
+# today's date, and one never told it can reach the web claims it cannot.
+session:
+  current_time: "Current date and time on the user's device: {{CURRENT_TIME}}"
+  # Stated only to a backend that offers web_search.
+  web_search: >-
+    You can reach the internet. For anything current or outside what you know — news, releases,
+    prices, documentation, a library's latest version — call web_search. Your training data is
+    older than today, so check with web_search before you judge code or name a library's API or
+    version. Never say you cannot access the internet.
+  web_access: Call fetch_url to read a page, a repository or a file the user links.

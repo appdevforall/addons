@@ -70,6 +70,9 @@ internal class OpenAiFailureMessages(
             OpenAiFailure.Unreachable ->
                 resources.getString(R.string.openai_error_unreachable)
 
+            is OpenAiFailure.TimedOut ->
+                resources.getString(R.string.openai_error_timed_out, failure.seconds)
+
             is OpenAiFailure.Failed -> failure.reason?.let {
                 resources.getString(R.string.openai_error_failed_reason, it)
             } ?: resources.getString(R.string.openai_error_failed)

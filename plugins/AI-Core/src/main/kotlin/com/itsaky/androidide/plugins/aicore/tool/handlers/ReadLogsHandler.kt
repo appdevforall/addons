@@ -22,15 +22,10 @@ class ReadLogsHandler(
     private val tab = tabFor(source)
 
     override val toolName = tab.toolName
-    override val description = tab.description
     override val requiresApproval = false
     override val parametersSchema = ToolSchema.objectOf(
-        "min_level" to ToolSchema.string(
-            "Lowest level to include: verbose, debug, info, warning or error. Defaults to all levels."
-        ),
-        "filter" to ToolSchema.string(
-            "Case-insensitive text a line must contain, matched against its tag and message."
-        ),
+        "min_level" to ToolSchema.string(),
+        "filter" to ToolSchema.string(),
     )
 
     private val label = tab.label
@@ -101,10 +96,9 @@ class ReadLogsHandler(
             "(No $label lines match that level or filter. Try again without them.)"
         }
 
-    /** How the tool for one log tab is named and described, to the model and in messages. */
+    /** How the tool for one log tab is named, and how its messages refer to the tab. */
     private class LogTab(
         val toolName: String,
-        val description: String,
         val label: String,
         val emptyLog: String,
     )
@@ -134,14 +128,12 @@ class ReadLogsHandler(
         private fun tabFor(source: LogSource): LogTab = when (source) {
             LogSource.APP -> LogTab(
                 toolName = "read_app_logs",
-                description = "Read the App Logs of the user's running app, from the newest crash or error",
                 label = "App Logs",
                 emptyLog = "(No App Logs have arrived: the app has not run since they were cleared, or the " +
                     "log sender is disabled in Developer Options.)",
             )
             LogSource.IDE -> LogTab(
                 toolName = "read_ide_logs",
-                description = "Read the IDE Logs of Code on the Go and its plugins, from the newest error",
                 label = "IDE Logs",
                 emptyLog = "(IDE Logs are empty.)",
             )

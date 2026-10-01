@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- fetch_url reads web pages over HttpURLConnection -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="AI Core Plugin"
         android:theme="@style/PluginTheme">
@@ -38,7 +41,7 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.39" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.max_ide_version"
@@ -50,10 +53,11 @@
             android:value="1" />
 
         <!-- The agent's tools read and write project files, run Gradle and inspect project
-             structure. No network.access: the backend plugins make every outbound call. -->
+             structure. network.access is for fetch_url alone, which asks before each fetch;
+             inference and search still go through the backend plugins. -->
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,system.commands,project.structure" />
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure,network.access" />
 
         <meta-data
             android:name="plugin.main_class"

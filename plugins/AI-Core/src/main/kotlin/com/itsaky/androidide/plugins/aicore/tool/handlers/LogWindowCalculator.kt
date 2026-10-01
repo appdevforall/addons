@@ -1,6 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
-import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
+import com.itsaky.androidide.plugins.aicore.prompt.ToolResultsPrompt
 import com.itsaky.androidide.plugins.services.LogEntry
 import com.itsaky.androidide.plugins.services.LogLevel
 
@@ -9,8 +9,8 @@ import com.itsaky.androidide.plugins.services.LogLevel
  * including the truncation markers. Only the kept lines are ever joined into a string.
  */
 internal object LogWindowCalculator {
-    /** Maximum characters of log handed to the model: AgentLoop's cap, less room for the message. */
-    const val MAX_OUTPUT_CHARS = AgentLoop.DEFAULT_TOOL_OUTPUT_CHAR_LIMIT - 100
+    /** Maximum characters of log handed to the model: the per-result cap, less room for the message. */
+    const val MAX_OUTPUT_CHARS = ToolResultsPrompt.DEFAULT_CHAR_LIMIT - 100
 
     /** Markers of an app crash; the anchor prefers these over a later error when the crash fits. */
     private val CRASH_MARKERS = listOf("FATAL EXCEPTION", "Fatal signal")

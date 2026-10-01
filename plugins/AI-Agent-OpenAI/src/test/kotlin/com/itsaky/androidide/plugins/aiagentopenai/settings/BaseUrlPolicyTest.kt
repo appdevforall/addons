@@ -237,4 +237,17 @@ class BaseUrlPolicyTest {
         assertFalse(BaseUrlPolicy.sameOrigin(null, "https://api.openai.com/v1"))
         assertFalse(BaseUrlPolicy.sameOrigin("nonsense", "nonsense"))
     }
+
+    @Test
+    fun givenOpenAisOwnApi_whenCheckingForHostedSearch_thenItIsOpenAi() {
+        assertTrue(BaseUrlPolicy.isOpenAiApi("https://api.openai.com/v1"))
+        assertTrue(BaseUrlPolicy.isOpenAiApi("https://API.openai.com/v1/"))
+    }
+
+    @Test
+    fun givenACompatibleServer_whenCheckingForHostedSearch_thenItIsNotOpenAi() {
+        assertFalse(BaseUrlPolicy.isOpenAiApi("http://localhost:11434/v1"))
+        assertFalse(BaseUrlPolicy.isOpenAiApi("https://openrouter.ai/api/v1"))
+        assertFalse(BaseUrlPolicy.isOpenAiApi(null))
+    }
 }

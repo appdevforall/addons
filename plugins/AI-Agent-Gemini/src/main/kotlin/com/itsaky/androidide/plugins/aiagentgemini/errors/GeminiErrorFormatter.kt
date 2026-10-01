@@ -58,6 +58,13 @@ sealed interface GeminiFailure {
      */
     data object ReplyTruncated : GeminiFailure
 
+    /**
+     * Generation ended with neither text nor a tool call for any reason but the output cap.
+     *
+     * @property finishReason the stream's `finishReason`, e.g. `MALFORMED_FUNCTION_CALL`, or null.
+     */
+    data class NoReply(val finishReason: String?) : GeminiFailure
+
     /** Everything else, including failures that never reached the network. */
     data class Failed(val reason: String?) : GeminiFailure
 }
@@ -92,6 +99,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             is GeminiFailure.Unexpected,
             GeminiFailure.Unreachable,
             GeminiFailure.ReplyTruncated,
+            is GeminiFailure.NoReply,
             is GeminiFailure.Failed -> null
         }
 

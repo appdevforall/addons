@@ -21,15 +21,10 @@ class AddDependencyHandler(
 ) : ToolHandler {
     override val toolName = "add_dependency"
     override val parametersSchema = ToolSchema.objectOf(
-        "dependency" to ToolSchema.string(
-            "Maven coordinate to add, as group:artifact:version."
-        ),
-        "build_file" to ToolSchema.string(
-            "Project-relative build file to add it to. Defaults to the app module's."
-        ),
+        "dependency" to ToolSchema.string(),
+        "build_file" to ToolSchema.string(),
         required = listOf("dependency"),
     )
-    override val description = "Add a Maven dependency to the project build file"
     override val requiresApproval = true
     override val mutatesProject = true
 
@@ -42,9 +37,13 @@ class AddDependencyHandler(
             return ToolResult.failure("dependency is required (e.g., 'com.squareup.retrofit2:retrofit:2.9.0')")
         }
 
-        val buildFile = args["build_file"]?.toString()?.trim() ?: DEFAULT_BUILD_FILE
+        val buildFile = args["build_file"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: DEFAULT_BUILD_FILE
+        // The service opens the path as given, so a project-relative one must be made absolute.
+        val buildFilePath = PathGuard.resolveWithin(buildFile)?.absolutePath
+            ?: return ToolResult.failure("Build file path must be within project directory")
 
-        Log.d(TAG, "Adding dependency: $dependency to $buildFile")
+        Log.d(TAG, "Adding dependency: $dependency to $buildFilePath")
 
         return try {
             val service = pluginContext.services.get(IdeProjectManipulationService::class.java)
@@ -53,7 +52,7 @@ class AddDependencyHandler(
                 return ToolResult.failure("Project manipulation service not available")
             }
 
-            val success = service.addDependency(dependency, buildFile)
+            val success = service.addDependency(dependency, buildFilePath)
             if (success) {
                 Log.d(TAG, "Dependency added successfully: $dependency")
                 ToolResult.success(

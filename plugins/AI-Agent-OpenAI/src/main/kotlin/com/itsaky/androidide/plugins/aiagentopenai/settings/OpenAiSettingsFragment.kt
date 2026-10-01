@@ -31,10 +31,14 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.ai.ui.ButtonColors
+import com.itsaky.androidide.plugins.ai.ui.FieldColors
+import com.itsaky.androidide.plugins.ai.ui.PaneStyle
+import com.itsaky.androidide.plugins.ai.ui.RevealToggle
+import com.itsaky.androidide.plugins.ai.ui.SecretRevealController
+import com.itsaky.androidide.plugins.ai.ui.applyPaneStyling
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.plugin.OpenAiPlugin
-import com.itsaky.androidide.plugins.aiagentopenai.ui.SecretRevealController
-import com.itsaky.androidide.plugins.aiagentopenai.ui.applyPaneStyling
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -49,6 +53,30 @@ private val OUTLINED_BUTTON_IDS = setOf(
     R.id.btn_edit_api_key,
     R.id.btn_get_key,
     R.id.btn_test_connection,
+)
+
+/** This plugin's resources for [applyPaneStyling]. */
+private val PANE_STYLE = PaneStyle(
+    filledButton = ButtonColors(
+        content = R.color.plugin_button_filled_content,
+        ripple = R.color.plugin_button_filled_ripple,
+        container = R.color.plugin_button_filled_container,
+    ),
+    outlinedButton = ButtonColors(
+        content = R.color.plugin_button_outlined_content,
+        ripple = R.color.plugin_button_outlined_ripple,
+        stroke = R.color.plugin_button_outlined_stroke,
+    ),
+    field = FieldColors(
+        stroke = R.color.plugin_box_stroke,
+        error = R.color.plugin_error,
+        hint = R.color.plugin_text_muted,
+        endIcon = R.color.plugin_on_surface_variant,
+    ),
+    divider = R.color.plugin_outline_variant,
+    buttonStrokeWidth = R.dimen.button_stroke_width,
+    cornerRadius = R.dimen.radius_md,
+    dividerThickness = R.dimen.divider_thickness,
 )
 
 /**
@@ -121,7 +149,7 @@ class OpenAiSettingsFragment : Fragment() {
 
         // The key section publishes onServerChanged, so it is built before the server section that
         // fires it, and before the first call below that dresses the pane for the saved server.
-        view.applyPaneStyling(OUTLINED_BUTTON_IDS)
+        view.applyPaneStyling(PANE_STYLE, OUTLINED_BUTTON_IDS)
         setupApiKeyUi(view)
         setupServerUi(view)
         setupModelPicker(view, chatModelPicker())
@@ -478,7 +506,12 @@ class OpenAiSettingsFragment : Fragment() {
 
         // Not endIconMode="password_toggle": the window has to be flagged secure for as long as the
         // key is legible, and the built-in toggle gives no hook for that.
-        val reveal = SecretRevealController(apiKeyBox, apiKeyInput) { legible ->
+        val reveal = SecretRevealController(
+            apiKeyBox,
+            apiKeyInput,
+            reveal = RevealToggle(R.drawable.ic_visibility, R.string.cd_show_credential),
+            hide = RevealToggle(R.drawable.ic_visibility_off, R.string.cd_hide_credential),
+        ) { legible ->
             setSecureWindow(legible)
         }
         reveal.attach()

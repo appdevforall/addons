@@ -47,6 +47,11 @@ data class ChatMessage(
      */
     val historyText: String? = null,
     /**
+     * What each tool call of the run asked and got back, on the run's activity row only; see
+     * [com.itsaky.androidide.plugins.aicore.viewmodel.AgentActivity.logEntry]. Never sent to the model.
+     */
+    val toolLog: String? = null,
+    /**
      * Whether this row only reports that the backend is not configured yet. The chat drops those
      * once the backend answers as ready, so a key saved afterwards leaves no stranded warning
      * behind. False for every message stored before this field existed.

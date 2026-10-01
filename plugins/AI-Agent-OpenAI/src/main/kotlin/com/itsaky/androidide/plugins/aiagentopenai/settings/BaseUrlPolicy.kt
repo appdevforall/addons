@@ -155,6 +155,17 @@ internal object BaseUrlPolicy {
         keyRequirement(url) == KeyRequirement.REQUIRED
 
     /**
+     * Whether [url] is OpenAI's own API, the one server here with hosted web search.
+     *
+     * @param url the configured base URL
+     * @return true only for `api.openai.com`; false for any compatible server or an unusable URL
+     */
+    fun isOpenAiApi(url: String?): Boolean {
+        val accepted = normalize(url) as? BaseUrlResult.Accepted ?: return false
+        return hostOf(accepted.url.substringAfter("://")).equals(OPENAI_HOST, ignoreCase = true)
+    }
+
+    /**
      * How the settings pane should present the key field for [url].
      *
      * Derived from the URL alone, so it updates the moment the user picks a preset — no request is

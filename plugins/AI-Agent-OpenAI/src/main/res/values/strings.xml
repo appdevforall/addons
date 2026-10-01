@@ -14,6 +14,7 @@
 
     <!-- Generation and catalog errors (OpenAiErrorFormatter) -->
     <string name="openai_error_model_unavailable">The server does not have a model called \"%1$s\". Tap Refresh under Model to see what it offers, or type another name.</string>
+    <string name="openai_error_web_search_unsupported">Web search needs OpenAI\'s own API, and %1$s has none. Read a page with fetch_url instead, or point the server URL at https://api.openai.com/v1.</string>
     <string name="openai_error_quota">You have reached the server\'s rate limit. Wait a moment and try again.</string>
     <string name="openai_error_billing">Your OpenAI account has no credit left. OpenAI API keys are prepaid and separate from a ChatGPT subscription — add credit, or point the server URL at a model running on your own machine.</string>
     <string name="openai_error_key_refused">The server refused your API key. Re-enter it in Agent settings.</string>
@@ -26,6 +27,7 @@
     <string name="openai_error_unexpected_reason">The server returned an error (HTTP %1$d). %2$s</string>
     <string name="openai_error_server_not_running">Nothing answered at %1$s. Check that the server is running and that this device can reach it.</string>
     <string name="openai_error_unreachable">Could not reach OpenAI. Check your internet connection and try again.</string>
+    <string name="openai_error_timed_out">The model sent no answer within %1$d seconds. Try again, or choose a faster model.</string>
     <string name="openai_error_empty_reply">The server answered but sent no reply text. Check the model is fully loaded in your server, then try again — see the IDE log for what the server sent.</string>
     <string name="openai_error_reasoning_only">The model spent its whole reply on internal reasoning and never answered. Raise the response length limit in your server, or choose a model without a thinking mode.</string>
     <string name="openai_error_truncated">The reply was cut off before any text arrived — the response length limit is too low for this model. Raise it in your server settings.</string>

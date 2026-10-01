@@ -3,7 +3,11 @@ package com.itsaky.androidide.plugins.aiagentopenai.plugin
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentopenai.backend.OpenAiBackend
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.OpenAiPromptConfig
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
@@ -103,8 +107,9 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         return try {
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
+            preloadPromptConfig()
 
-            val openAi = OpenAiBackend(context)
+            val openAi = OpenAiBackend(context, sharedPromptConfig::configIfLoaded)
             backend = openAi
             activeBackend = openAi
 
@@ -165,6 +170,29 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         null
     }
 
+    /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
+    private fun preloadPromptConfig() {
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        sharedPromptConfig.reload(source, ::reportLoadedConfig) { error ->
+            context.logger.error(
+                "OpenAiPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                error,
+            )
+        }
+    }
+
+    /**
+     * Logs that the config loaded, and any name typo its layout would hit at render time.
+     *
+     * @param config the config just loaded.
+     */
+    private fun reportLoadedConfig(config: OpenAiPromptConfig) {
+        context.logger.info("OpenAiPlugin: loaded prompt config with ${config.rules.size} rule groups")
+        for (problem in OpenAiSystemPrompt.problems(config)) {
+            context.logger.warn("OpenAiPlugin: $problem; ai-core's default prompt is sent instead")
+        }
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("OpenAiPlugin: Deactivating plugin")
 
@@ -180,6 +208,7 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
 
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
+            sharedPromptConfig.clear()
 
             true
         } catch (e: Exception) {
@@ -206,6 +235,7 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
+        sharedPromptConfig.clear()
         pluginContext = null
         context.logger.info("OpenAiPlugin: Released OpenAI backend")
     }

@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -48,7 +49,7 @@ class ToolApprovalManagerTest {
     @Test
     fun givenAToolDeclaringNoApproval_whenApprovalIsRequested_thenItRunsWithNoDialog() = runBlocking {
         // The handler's own declaration is the whole gate now; no name list is consulted.
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
         val readOnly = object : ToolHandler {
             override val toolName = "read_file"
             override val description = "fake read"
@@ -66,7 +67,7 @@ class ToolApprovalManagerTest {
     fun givenAToolDeclaringApproval_whenItIsNamedLikeAFormerlyExemptTool_thenTheUserIsStillAsked() {
         // `gradle_sync` and `generate_from_template` were exempted by name ahead of what their
         // handlers asked for, which is how the two tools that act on the project ran unprompted.
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
         val syncing = object : ToolHandler {
             override val toolName = "gradle_sync"
             override val description = "fake sync"
@@ -90,7 +91,7 @@ class ToolApprovalManagerTest {
 
     @Test
     fun givenACorrection_whenApprovalIsRequested_thenItIsNotApprovedAndTheInstructionIsRelayed() {
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
 
         val response = decideWith(manager, ApprovalResult.CORRECTED, "keep the original method name")
 
@@ -103,7 +104,7 @@ class ToolApprovalManagerTest {
 
     @Test
     fun givenACorrectionWithNoText_whenApprovalIsRequested_thenItStillReadsAsARevisionRequest() {
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
 
         val response = decideWith(manager, ApprovalResult.CORRECTED, "   ")
 
@@ -114,7 +115,7 @@ class ToolApprovalManagerTest {
     @Test
     fun givenSessionApprovalOfAnEdit_whenAskedAgain_thenTheUserIsAskedAgain() {
         // Keyed by tool name alone, so honouring it would grant unreviewed writes to every file.
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
 
         val first = decideWith(manager, ApprovalResult.APPROVED_FOR_SESSION)
         assertTrue(first.approved)
@@ -125,7 +126,7 @@ class ToolApprovalManagerTest {
 
     @Test
     fun givenSessionApprovalOfANonDestructiveTool_whenAskedAgain_thenItIsRemembered() = runBlocking {
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
         val handler = object : ToolHandler {
             override val toolName = "add_dependency"
             override val description = "fake"
@@ -144,7 +145,7 @@ class ToolApprovalManagerTest {
     @Test
     fun givenTwoConcurrentRequests_whenBothAreAnswered_thenNeitherCallerIsStranded() = runBlocking {
         // One slot and one dialog: a second request used to overwrite it and strand the first.
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
 
         val first = async(Dispatchers.Default) {
             manager.ensureApproved("edit_file", approvableHandler, mapOf("file_path" to "A.kt"))
@@ -172,7 +173,7 @@ class ToolApprovalManagerTest {
     @Test
     fun givenACancelledRun_whenApprovalWasPending_thenNoStaleRequestKeepsTheDialogUp() = runBlocking {
         // Cancelling at the await must still clear the request, or the dialog stays on screen.
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
 
         val pending = async(Dispatchers.Default) {
             manager.ensureApproved("edit_file", approvableHandler, mapOf("file_path" to "A.kt"))
@@ -189,7 +190,7 @@ class ToolApprovalManagerTest {
     fun givenAContributedTool_whenApprovedForTheSession_thenTheUserIsStillAskedAgain() {
         // A contributed tool runs outside PathGuard and cannot be enumerated in a name list, so
         // "Always Allow" has to be refused by the handler's own declaration.
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
         val contributed = object : ToolHandler {
             override val toolName = "aiagentmcp_create_issue"
             override val description = "creates an issue on a remote server"
@@ -233,7 +234,7 @@ class ToolApprovalManagerTest {
 
     @Test
     fun givenADenial_whenApprovalIsRequested_thenItReportsTheDenial() {
-        val manager = ToolApprovalManager()
+        val manager = ToolApprovalManager({ shippedConfig })
 
         val response = decideWith(manager, ApprovalResult.DENIED)
 

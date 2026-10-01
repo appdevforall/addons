@@ -1,0 +1,10 @@
+# The wording around the tool list; the tools themselves are the ones the run offers.
+
+tools:
+  heading: Tools
+
+# Taught only under the text protocol; a natively calling backend gets none of it.
+tool_call_format:
+  instruction: "TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:"
+  example_heading: Example
+  example: '<tool_call>{"tool":"open_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}"}}</tool_call>'

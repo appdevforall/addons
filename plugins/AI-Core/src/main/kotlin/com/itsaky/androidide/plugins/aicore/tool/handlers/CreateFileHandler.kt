@@ -17,11 +17,10 @@ class CreateFileHandler(
 ) : ToolHandler {
     override val toolName = "create_file"
     override val parametersSchema = ToolSchema.objectOf(
-        "file_path" to ToolSchema.string("Project-relative path of the file to create."),
-        "content" to ToolSchema.string("The file's full contents."),
+        "file_path" to ToolSchema.string(),
+        "content" to ToolSchema.string(),
         required = listOf("file_path", "content"),
     )
-    override val description = "Create a new file with given content"
     override val requiresApproval = true  // Requires approval for file creation
     override val mutatesProject = true
     override val pathArgs = listOf("file_path")
