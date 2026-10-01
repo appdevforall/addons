@@ -136,7 +136,8 @@ class ReadLogsHandler(
                 toolName = "read_app_logs",
                 description = "Read the App Logs of the user's running app, from the newest crash or error",
                 label = "App Logs",
-                emptyLog = "(App Logs are empty. Run the app with run_app first, then read them again.)",
+                emptyLog = "(No App Logs have arrived: the app has not run since they were cleared, or the " +
+                    "log sender is disabled in Developer Options.)",
             )
             LogSource.IDE -> LogTab(
                 toolName = "read_ide_logs",

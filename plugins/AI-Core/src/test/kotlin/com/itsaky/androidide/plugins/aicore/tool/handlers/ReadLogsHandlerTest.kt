@@ -79,14 +79,15 @@ class ReadLogsHandlerTest {
     }
 
     @Test
-    fun givenAnEmptyLog_whenReading_thenItSaysSoAndPointsAtRunApp() = runTest {
+    fun givenAnEmptyLog_whenReading_thenItNamesTheLogSenderWithoutPrescribingRunApp() = runTest {
         every { logService.readLogs(any(), any()) } returns LogReadResult.EMPTY
 
         val result = handler.execute(emptyMap())
 
         assertTrue(result.success)
         assertTrue(result.message.contains("No App Logs"))
-        assertTrue(result.data.orEmpty().contains("run_app"))
+        assertTrue(result.data.orEmpty().contains("log sender"))
+        assertFalse(result.data.orEmpty().contains("run_app"))
     }
 
     @Test
@@ -197,15 +198,15 @@ class ReadLogsHandlerTest {
     }
 
     @Test
-    fun givenACrashFollowedByALongLog_whenReading_thenTheCrashHeadSurvivesTheCap() = runTest {
+    fun givenACrashFollowedByALongLog_whenReading_thenTheCrashHeadAndNewestLinesSurviveTheCap() = runTest {
         answerWith(crash + info(2000, label = "after"))
 
         val data = handler.execute(emptyMap()).data.orEmpty()
 
         assertTrue(data.startsWith("E AndroidRuntime: FATAL EXCEPTION: main"))
         assertTrue(data.contains("MainActivity.kt:12"))
-        assertTrue(data.endsWith("...[truncated]..."))
-        assertFalse(data.contains("I MyApp: after2000"))
+        assertTrue(data.contains("\n...[truncated]...\n"))
+        assertTrue(data.endsWith("I MyApp: after2000"))
     }
 
     @Test

@@ -30,7 +30,7 @@ object BuiltInToolHandlers {
         EditFileHandler(context),
         AddDependencyHandler(context),
         // Build tools
-        RunAppHandler(context),
+        RunAppHandler(context, hasLogTools = hostHasLogApi()),
         GradleSyncHandler(context),
         // Template tool
         GenerateFromTemplateHandler(context),

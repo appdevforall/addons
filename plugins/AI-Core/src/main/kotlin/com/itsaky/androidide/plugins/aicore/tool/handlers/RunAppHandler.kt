@@ -28,7 +28,8 @@ internal const val BUILD_PROGRESS_LOG_INTERVAL_MS = 30 * 1000L
  * Handler for running/building the app.
  */
 class RunAppHandler(
-    private val pluginContext: PluginContext
+    private val pluginContext: PluginContext,
+    private val hasLogTools: Boolean = false,
 ) : ToolHandler {
     override val toolName = "run_app"
 
@@ -96,7 +97,11 @@ class RunAppHandler(
             if (success) {
                 ToolResult.success(
                     message = "Build succeeded",
-                    data = "$message\n\nIf the app crashes or misbehaves, call read_app_logs."
+                    data = if (hasLogTools) {
+                        "$message\n\nIf the app crashes or misbehaves, call read_app_logs."
+                    } else {
+                        message
+                    }
                 )
             } else {
                 ToolResult.failure(

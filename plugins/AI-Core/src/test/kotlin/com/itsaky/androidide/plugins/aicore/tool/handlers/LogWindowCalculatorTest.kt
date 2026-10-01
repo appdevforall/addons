@@ -37,7 +37,8 @@ class LogWindowCalculatorTest {
 
         assertTrue("budget exceeded: ${text.length}", text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.startsWith("$marker\n${crash.text}"))
-        assertTrue(text.endsWith("\n$marker"))
+        assertTrue(text.contains("\n$marker\n"))
+        assertTrue(text.endsWith("I MyApp: after2000"))
         assertWholeLines(text, entries)
     }
 
@@ -68,14 +69,14 @@ class LogWindowCalculatorTest {
     @Test
     fun givenOneOversizedCrashLine_whenWindowed_thenItsStartIsKeptWithoutSplittingAnEmoji() {
         // The emoji's surrogate pair straddles the cut point.
-        val room = MAX_OUTPUT_CHARS - "\n$marker".length
-        val line = "E AndroidRuntime: FATAL EXCEPTION: " + "a".repeat(room - 36) + "😀" + "b".repeat(100)
+        val half = (MAX_OUTPUT_CHARS - "\n$marker\n".length) / 2
+        val line = "E AndroidRuntime: FATAL EXCEPTION: " + "a".repeat(half - 36) + "😀" + "b".repeat(MAX_OUTPUT_CHARS)
 
         val text = LogWindowCalculator.windowFor(listOf(LogEntry(LogLevel.ERROR, line)), false).text
 
         assertTrue(text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.startsWith("E AndroidRuntime: FATAL EXCEPTION"))
-        assertFalse("split surrogate", text.removeSuffix("\n$marker").last().isHighSurrogate())
+        assertFalse("split surrogate", text.substringBefore("\n$marker\n").last().isHighSurrogate())
     }
 
     @Test
@@ -119,5 +120,25 @@ class LogWindowCalculatorTest {
 
         assertTrue(window.anchoredOnError)
         assertTrue(window.text.startsWith("$marker\n${lowercase.text}"))
+    }
+
+    @Test
+    fun givenAnOlderCrashAndANewerErrorRun_whenWindowed_thenItAnchorsOnTheErrorRun() {
+        val newer = LogEntry(LogLevel.ERROR, "E Plugin: new")
+
+        val text = LogWindowCalculator.windowFor(listOf(crash) + info(3) + newer, false).text
+
+        assertEquals("$marker\n${newer.text}", text)
+    }
+
+    @Test
+    fun givenOnlyErrorLines_whenWindowed_thenTheNewestAreKept() {
+        val entries = (1..2000).map { LogEntry(LogLevel.ERROR, "E MyApp: error$it") }
+
+        val text = LogWindowCalculator.windowFor(entries, hostTruncated = false).text
+
+        assertTrue(text.startsWith("$marker\n"))
+        assertTrue(text.endsWith("E MyApp: error2000"))
+        assertWholeLines(text, entries)
     }
 }

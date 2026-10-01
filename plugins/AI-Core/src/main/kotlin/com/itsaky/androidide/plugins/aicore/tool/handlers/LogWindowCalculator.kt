@@ -16,53 +16,55 @@ internal object LogWindowCalculator {
     private val CRASH_MARKERS = listOf("FATAL EXCEPTION", "Fatal signal")
 
     /**
-     * Logs span runs, so the window starts at the newest crash line, else the start of the newest
-     * run of error lines, and keeps the head of what follows. With neither, it keeps the newest
-     * lines.
+     * Logs span runs, so the window starts at whichever is newer, the newest crash line or the start
+     * of the newest run of error lines. With neither, or a log of nothing but errors, it keeps the
+     * newest lines.
      */
     fun windowFor(entries: List<LogEntry>, hostTruncated: Boolean): OutputWindow {
-        val anchor = entries.indexOfLast { isCrashLine(it) }.takeIf { it >= 0 }
-            ?: newestErrorRunStart(entries)
+        val anchor = listOfNotNull(
+            entries.indexOfLast { isCrashLine(it) }.takeIf { it >= 0 },
+            newestErrorRunStart(entries),
+        ).maxOrNull()
         val text = if (anchor != null) {
-            head(entries.subList(anchor, entries.size), droppedBefore = hostTruncated || anchor > 0)
+            fromAnchor(entries.subList(anchor, entries.size), droppedBefore = hostTruncated || anchor > 0)
         } else {
             tail(entries, droppedBefore = hostTruncated)
         }
         return OutputWindow(text = text, anchoredOnError = anchor != null)
     }
 
-    /** The oldest lines of [entries] that fit, marking what was dropped on either side. */
-    private fun head(entries: List<LogEntry>, droppedBefore: Boolean): String {
+    /** [entries] whole if they fit, else their head and their newest lines, half the room each. */
+    private fun fromAnchor(entries: List<LogEntry>, droppedBefore: Boolean): String {
         val prefix = if (droppedBefore) "$TRUNCATION_MARKER\n" else ""
         val room = MAX_OUTPUT_CHARS - prefix.length
         if (fitCount(entries, room) == entries.size) return prefix + joined(entries)
 
-        val suffix = "\n$TRUNCATION_MARKER"
-        val kept = fitCount(entries, room - suffix.length)
-        val body = if (kept > 0) {
-            joined(entries.subList(0, kept))
-        } else {
-            keepStart(entries.first().text, room - suffix.length)
-        }
-        return prefix + body + suffix
+        val separator = "\n$TRUNCATION_MARKER\n"
+        val half = (room - separator.length) / 2
+        return prefix + headBody(entries, half) + separator + tailBody(entries, half)
     }
 
     /** The newest lines of [entries] that fit, marking what was dropped before them. */
     private fun tail(entries: List<LogEntry>, droppedBefore: Boolean): String {
+        if (!droppedBefore && fitCount(entries, MAX_OUTPUT_CHARS) == entries.size) return joined(entries)
         val prefix = "$TRUNCATION_MARKER\n"
-        val newestFirst = entries.asReversed()
-        if (!droppedBefore && fitCount(newestFirst, MAX_OUTPUT_CHARS) == entries.size) {
-            return joined(entries)
-        }
+        return prefix + tailBody(entries, MAX_OUTPUT_CHARS - prefix.length)
+    }
 
-        val room = MAX_OUTPUT_CHARS - prefix.length
-        val kept = fitCount(newestFirst, room)
-        val body = if (kept > 0) {
+    /** The oldest whole lines of [entries] that fit in [room], else the start of the first. */
+    private fun headBody(entries: List<LogEntry>, room: Int): String {
+        val kept = fitCount(entries, room)
+        return if (kept > 0) joined(entries.subList(0, kept)) else keepStart(entries.first().text, room)
+    }
+
+    /** The newest whole lines of [entries] that fit in [room], else the end of the last. */
+    private fun tailBody(entries: List<LogEntry>, room: Int): String {
+        val kept = fitCount(entries.asReversed(), room)
+        return if (kept > 0) {
             joined(entries.subList(entries.size - kept, entries.size))
         } else {
             keepEnd(entries.last().text, room)
         }
-        return prefix + body
     }
 
     /** How many of [entries], taken in order, fit in [room] characters once joined by newlines. */
@@ -91,11 +93,14 @@ internal object LogWindowCalculator {
         return text.substring(if (text[start].isLowSurrogate()) start + 1 else start)
     }
 
-    /** The first line of the newest contiguous run of ERROR lines, so its trace keeps its head. */
+    /**
+     * The first line of the newest contiguous run of ERROR lines, so its trace keeps its head; null
+     * when every line is an ERROR, where a head would keep the oldest errors.
+     */
     private fun newestErrorRunStart(entries: List<LogEntry>): Int? {
         var start = entries.indexOfLast { it.level == LogLevel.ERROR }.takeIf { it >= 0 } ?: return null
         while (start > 0 && entries[start - 1].level == LogLevel.ERROR) start--
-        return start
+        return start.takeUnless { it == 0 && entries.last().level == LogLevel.ERROR }
     }
 
     private fun isCrashLine(entry: LogEntry): Boolean =

@@ -7,7 +7,8 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
  * [AgentLoop] builds one per run and asks it about every batch before running it, so the loop
  * orchestrates turns and this decides what counts as progress.
  *
- * @param maxConsecutiveRepeats identical unsuccessful batches tolerated back to back.
+ * @param maxConsecutiveRepeats identical unsuccessful batches, or successful log re-reads, tolerated
+ *   back to back.
  * @param maxTurnsWithoutProgress turns tolerated introducing no batch the run has not already run.
  * @param pathsOf the project paths one call names, whether it reads them or rewrites them.
  * @param changesPaths whether a call rewrites what it names, so a run is not judged on novelty
@@ -70,7 +71,7 @@ internal class ToolCallProgressGuard(
         currentBatchPaths = pathsNamedBy(calls)
         currentBatchWrites = pathsNamedBy(calls.filter(changesPaths))
         currentBatchChanges = calls.any(changesPaths)
-        currentBatchRereadsLive = calls.any { it.name in LIVE_READS }
+        currentBatchRereadsLive = calls.all { it.name in LIVE_READS }
         val verdict = verdictFor(signature)
         if (verdict == Verdict.PROCEED) {
             previousSignature = signature

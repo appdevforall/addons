@@ -68,6 +68,16 @@ class ToolCallProgressGuardTest {
     }
 
     @Test
+    fun givenALogReadBatchedWithABuildReissued_whenInspected_thenItAssumesComplete() {
+        val guard = guard()
+        val batch = call("run_app") + call("read_app_logs")
+        guard.inspect(batch)
+        guard.recordResults(ok)
+
+        assertEquals(ToolCallProgressGuard.Verdict.ASSUME_COMPLETE, guard.inspect(batch))
+    }
+
+    @Test
     fun givenArgumentsInAnotherOrder_whenInspected_thenTheBatchIsStillTheSameAction() {
         val guard = guard()
         guard.inspect(listOf(ToolCall("read_file", linkedMapOf("file_path" to "A.kt", "limit" to 10))))
