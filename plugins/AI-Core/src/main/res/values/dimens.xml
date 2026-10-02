@@ -27,6 +27,13 @@
     <dimen name="chat_composer_corner_radius">22dp</dimen>
     <dimen name="chat_caption_text_size">12sp</dimen>
     <dimen name="chat_caption_spacing">4dp</dimen>
+    <!-- Capability tags under the input: compact, since the row is a tax on the history's height. -->
+    <dimen name="capability_tag_min_height">28dp</dimen>
+    <dimen name="capability_tag_spacing">6dp</dimen>
+    <dimen name="capability_tag_text_size">12sp</dimen>
+    <dimen name="capability_tag_stroke_width">1dp</dimen>
+    <dimen name="capability_tag_icon_size">8dp</dimen>
+    <dimen name="capability_tag_padding_horizontal">10dp</dimen>
     <integer name="chat_input_max_lines">8</integer>
 
     <!-- Composer tab. The collapsed one overlays the list, so it costs no layout height. -->

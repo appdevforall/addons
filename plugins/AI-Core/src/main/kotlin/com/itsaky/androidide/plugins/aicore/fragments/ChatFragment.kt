@@ -30,6 +30,8 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.BuildConfig
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.adapters.ChatAdapter
+import com.itsaky.androidide.plugins.aicore.capabilities.CapabilityMonitor
+import com.itsaky.androidide.plugins.aicore.capabilities.PluginScreen
 import com.itsaky.androidide.plugins.aicore.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
@@ -89,6 +91,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     private var composer: ComposerAutoHideController? = null
     private var sidebar: ChatSidebarController? = null
+    private var capabilityTags: CapabilityTagRowController? = null
 
     /**
      * Closes the sidebar on Back rather than letting the press reach the host, which would shut the
@@ -210,6 +213,8 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         composer = null
         sidebar?.detach()
         sidebar = null
+        capabilityTags?.detach()
+        capabilityTags = null
         _binding = null
     }
 
@@ -251,7 +256,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         setupCutoutPadding()
         setupComposer(savedInstanceState)
         setupStatusBar()
-        setupBackendIndicator()
+        setupCapabilityTags()
         observeViewModel()
 
         AgentTrace.stage(
@@ -348,9 +353,6 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         syncStorageToCurrentProject()
         // On becoming visible, so the check runs after every plugin has loaded.
         viewModel.checkBackendAvailability()
-        // Re-resolve the selected backend here: the settings screen is a separate activity that
-        // fully covers chat, so returning from it always delivers onResume.
-        viewModel.refreshBackendLabel()
     }
 
     /**
@@ -567,7 +569,6 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         wireTooltip(binding.btnAddContext, AiCorePlugin.TOOLTIP_TAG_CONTEXT_FILES)
         wireTooltip(binding.inputBarCard, AiCorePlugin.TOOLTIP_TAG_CHAT_INPUT)
         wireTooltip(binding.sendButton, AiCorePlugin.TOOLTIP_TAG_CHAT_SEND)
-        wireTooltip(binding.backendStatusText, AiCorePlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
     }
 
     /**
@@ -654,14 +655,21 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         binding.agentStatusContainer.isVisible = false
     }
 
-    private fun setupBackendIndicator() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.activeBackendLabel.collect { label ->
-                    _binding?.backendStatusText?.text = label
-                }
-            }
-        }
+    /**
+     * Stands up the tag row under the input, which took the backend caption's place: the backend
+     * tag names what the caption did, and updates live instead of on resume.
+     */
+    private fun setupCapabilityTags() {
+        val controller = CapabilityTagRowController(
+            binding = binding,
+            monitor = CapabilityMonitor(requireContext()),
+            showTooltip = ::showTooltip,
+            dialogContext = { if (isAdded) themedDialogContext() else null },
+            onOpenSettings = ::openSettingsFragment,
+            onOpenPluginScreen = ::openPluginSettings,
+        )
+        controller.attach(viewLifecycleOwner)
+        capabilityTags = controller
     }
 
     private fun observeViewModel() {
@@ -896,6 +904,23 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             AiCorePlugin.getContext()?.logger
                 ?.warn("ChatFragment: could not open the Agent settings screen")
             showInfoSnackbar(getString(R.string.msg_settings_unavailable))
+        }
+    }
+
+    /**
+     * Opens a settings screen another plugin owns, such as MCP's servers list. The host loads the
+     * Fragment with that plugin's class loader, so its own resources and state apply.
+     * @param screen the screen to open.
+     */
+    private fun openPluginSettings(screen: PluginScreen) {
+        val title = getString(screen.titleRes)
+        val opened = PluginFragmentHelper.getServiceRegistry(AiCorePlugin.PLUGIN_ID)
+            ?.get(IdeUIService::class.java)
+            ?.openPluginScreen(screen.pluginId, screen.fragmentClassName, title) ?: false
+        if (!opened) {
+            AiCorePlugin.getContext()?.logger
+                ?.warn("ChatFragment: could not open ${screen.fragmentClassName} of ${screen.pluginId}")
+            showInfoSnackbar(getString(R.string.msg_plugin_settings_unavailable, title))
         }
     }
 

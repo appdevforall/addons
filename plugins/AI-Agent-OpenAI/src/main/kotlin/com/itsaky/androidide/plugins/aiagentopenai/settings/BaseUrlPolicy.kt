@@ -88,6 +88,14 @@ internal object BaseUrlPolicy {
     private val IPV4 = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
 
     /**
+     * The `host[:port]` of [url], read with the same pattern [normalize] accepts, so it never throws.
+     *
+     * @return the authority, or null for a URL not of the accepted shape
+     */
+    fun authorityOf(url: String): String? =
+        URL_SHAPE.matchEntire(url.trim())?.groupValues?.get(2)?.takeIf { it.isNotBlank() }
+
+    /**
      * Normalizes [input] and applies the cleartext rule.
      *
      * Trims, drops a trailing slash and a pasted endpoint path, then decides whether plain `http`

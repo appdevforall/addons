@@ -4,6 +4,7 @@ import android.content.res.Resources
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.R
+import com.itsaky.androidide.plugins.aicore.capabilities.CapabilityMonitor
 import com.itsaky.androidide.plugins.aicore.fragments.AiSettingsFragment
 import com.itsaky.androidide.plugins.aicore.fragments.ChatFragment
 import com.itsaky.androidide.plugins.aicore.services.LlmInferenceServiceImpl
@@ -79,6 +80,12 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_USER_MESSAGE_EXPAND = "agent_user_message_expand"
         const val TOOLTIP_TAG_MESSAGE_COPY = "agent_message_copy"
 
+        // Tags for the capability row under the chat input (see CapabilityTagRowController).
+        const val TOOLTIP_TAG_CAPABILITY_BACKEND = "agent_capability_backend"
+        const val TOOLTIP_TAG_CAPABILITY_WEB = "agent_capability_web"
+        /** Every tool-source tag shares this one: MCP servers and plugins alike. */
+        const val TOOLTIP_TAG_CAPABILITY_TOOLS = "agent_capability_tools"
+
         // Tags for the interactive controls on the AI Settings screen (see AiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_BACK = "ai_settings_back"
         const val TOOLTIP_TAG_SETTINGS_BACKEND = "ai_settings_backend"
@@ -115,6 +122,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         context.logger.info("AI Core Plugin: registered LlmInferenceService in SharedServices")
 
         registerToolSourceRegistry()
+        CapabilityMonitor.onServicesPublished()
 
         PathGuard.setProjectRootProvider {
             try {
@@ -663,6 +671,52 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>Copies the whole message, including any lines folded out of
                 view, so you can paste it into a file or send it again.</p>
                 <p>More actions for a message will appear beside this one.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CAPABILITY_BACKEND,
+            summary = "The backend and model that will answer your next message.",
+            detail = """
+                <p>Names the AI backend selected under <b>Preferences &rarr;
+                Configuration &rarr; Agent</b>, and the model it will use when the
+                backend reports one.</p>
+                <p>It turns red when that backend is not ready — no API key, no
+                model chosen, or its plugin uninstalled — so you can fix it before
+                sending anything. Tap it for the details and a shortcut to the
+                settings.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CAPABILITY_WEB,
+            summary = "Whether the device is online, which network backends and MCP servers need.",
+            detail = """
+                <p>Shows <b>Web</b> while the device has a working internet
+                connection, and <b>Offline</b>, in red, while it does not.</p>
+                <p>A backend that runs on the device keeps working offline. A
+                network backend and every MCP server cannot be reached until the
+                connection comes back.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CAPABILITY_TOOLS,
+            summary = "Extra tools the agent can use, from an MCP server or another plugin.",
+            detail = """
+                <p>Each MCP server you configured, and each plugin that adds tools
+                to the agent, gets its own tag. Tap one to see where it comes from
+                and how many tools it offers.</p>
+                <p>A red tag is set up but not working right now — a server that
+                cannot be reached, say — and the details say why. It clears by
+                itself once the server answers again. A tag disappears when you
+                switch the server or plugin off.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)

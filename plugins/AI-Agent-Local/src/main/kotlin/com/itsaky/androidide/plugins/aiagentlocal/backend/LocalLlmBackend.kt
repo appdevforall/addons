@@ -56,7 +56,7 @@ class LocalLlmBackend(
     private val modelSourceOverride: NativeModelSource? = null,
     private val engineOverride: ModelResidencyEngine? = null,
     private val watcherOverride: ModelSourceWatcher? = null,
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ActiveModelReportingBackend {
 
     companion object {
         /**
@@ -196,6 +196,21 @@ class LocalLlmBackend(
     override fun getId(): String = "local"
 
     override fun getName(): String = "Local LLM"
+
+    /**
+     * The configured model's name, for the Agent's backend tag: the one the settings pane saved at
+     * selection, else a plain file path's own name. A `content://` reference with no saved name
+     * says nothing readable, so it reports none rather than a document id.
+     */
+    override fun getActiveModelName(): String? {
+        val prefs = LocalLlmPreferences.of(context)
+        prefs.getString(LocalLlmPreferences.KEY_MODEL_NAME, null)?.trim()
+            ?.takeIf { it.isNotEmpty() }?.let { return it }
+        val path = prefs.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)?.trim()
+            ?.takeIf { it.isNotEmpty() } ?: return null
+        if (path.startsWith("content:")) return null
+        return File(path).name.takeIf { it.isNotEmpty() }
+    }
 
     /**
      * Whether the user's current selection names this backend.

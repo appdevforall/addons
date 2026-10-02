@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
+import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailure
@@ -19,6 +20,8 @@ import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
 import com.itsaky.androidide.plugins.aiagentopenai.security.ApiKeyCache
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlPolicy
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlResult
+import com.itsaky.androidide.plugins.aiagentopenai.settings.ServerPresets
+import com.itsaky.androidide.plugins.services.CapabilityStatus
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import java.io.BufferedReader
 import java.io.IOException
@@ -31,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -56,15 +60,26 @@ private const val TAG = "$LOG_PREFIX.AgentTrace"
  * What this class owns is the *conversation*: which model, which turns, what to do when a server
  * rejects a parameter or answers nothing. Sockets are [OpenAiHttpClient]'s, the decrypted key is
  * [ApiKeyCache]'s, and the wording of a failure is [OpenAiFailureMessages]'.
+ *
+ * @param onStatusChanged told when [getStatus] changes, to report it through `notifyBackendChanged`.
  */
 class OpenAiBackend(
-    private val context: PluginContext
+    private val context: PluginContext,
+    onStatusChanged: () -> Unit = {},
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend {
+    EmbeddingBackend, StatusReportingBackend, ActiveModelReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val http = OpenAiHttpClient()
+
+    /** For [checkServer]: a server that is up answers `/models` at once, so it waits far less. */
+    private val probeHttp = OpenAiHttpClient(connectTimeoutMs = PROBE_TIMEOUT_MS)
+
+    private val health = ServerHealth(onStatusChanged)
+
+    @Volatile
+    private var probeJob: Job? = null
 
     private val keyCache =
         ApiKeyCache(::openAiPrefs, OpenAiPreferences.KEY_API_KEY, context.logger, scope)
@@ -119,6 +134,11 @@ class OpenAiBackend(
 
         /** Model-catalog endpoint. Optional: many compatible servers do not implement it. */
         private const val MODELS_PATH = "/models"
+
+        private const val PROBE_TIMEOUT_MS = 5_000
+
+        /** How often an unreachable server is checked again, so starting it turns the tag green. */
+        private const val RECHECK_INTERVAL_MS = 30_000L
     }
 
     /** This plugin's own settings, written by its settings pane and read here at request time. */
@@ -252,13 +272,96 @@ class OpenAiBackend(
     override fun getName(): String = configLabel(R.string.openai_backend_name, fallback = "OpenAI")
 
     /**
+     * The chat model requests go to, with the server it runs on when that is not OpenAI's own. AI
+     * Core puts this after [getName] with its own separator, so the server is bracketed, not dotted.
+     */
+    override fun getActiveModelName(): String {
+        val model = getModelName()
+        val server = serverLabel() ?: return model
+        return configLabel(R.string.openai_model_on_server, args = arrayOf(model, server))
+            .ifEmpty { model }
+    }
+
+    /**
+     * Which server the tag should name beside the model: the preset's name, or the host of a URL
+     * no preset offers. Null for OpenAI's own API, which [getName] already names.
+     */
+    private fun serverLabel(): String? {
+        val baseUrl = getBaseUrl()
+        if (baseUrl == BaseUrlPolicy.DEFAULT_BASE_URL) return null
+        val preset = ServerPresets.presetFor(baseUrl) ?: return BaseUrlPolicy.authorityOf(baseUrl)
+        return configLabel(preset.labelRes).takeIf { it.isNotEmpty() }
+    }
+
+    /** Whether the configured server answered its last check; see [checkServer]. */
+    override fun getStatus(): CapabilityStatus = health.readingFor(getBaseUrl()).status
+
+    /** Called across the plugin boundary, so a failed lookup is no reason rather than a throw. */
+    override fun getStatusMessage(): String? {
+        val reading = health.readingFor(getBaseUrl())
+        val problem = reading.problem ?: return null
+        return try {
+            val res = context.androidContext
+            when (problem) {
+                ServerProblem.UNREACHABLE ->
+                    res.getString(R.string.openai_error_server_not_running, reading.baseUrl)
+                ServerProblem.KEY_REFUSED -> res.getString(CredentialFailure.KeyRefused.messageRes)
+                ServerProblem.SERVER_ERROR ->
+                    res.getString(R.string.openai_error_service_unavailable, reading.httpStatus ?: 0)
+            }
+        } catch (e: Exception) {
+            context.logger.error("OpenAiBackend: could not resolve the status message", e)
+            null
+        }
+    }
+
+    /**
+     * Asks the configured server for `/models`, off-thread, and records whether it answered.
+     * While it stays unreachable or failing it is asked again every [RECHECK_INTERVAL_MS]; a
+     * refused key is not, since only the user can fix it. Replaces a check already running.
+     */
+    fun checkServer() {
+        if (!scope.isActive) return
+        probeJob?.cancel()
+        probeJob = scope.launch {
+            while (isActive) {
+                // Not set up is reported as such by isAvailable; asking OpenAI with no key is noise.
+                if (!isAvailable()) return@launch
+                val reading = probe(getBaseUrl())
+                // The probe blocks on a socket, so close() may have landed while it waited.
+                if (!isActive) return@launch
+                health.record(reading)
+                val retry = reading.problem == ServerProblem.UNREACHABLE ||
+                    reading.problem == ServerProblem.SERVER_ERROR
+                if (!retry) return@launch
+                delay(RECHECK_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun probe(baseUrl: String): HealthReading = try {
+        probeHttp.get(baseUrl + MODELS_PATH, readApiKeyOrBlank())
+        HealthReading.available(baseUrl)
+    } catch (e: OpenAiHttpException) {
+        HealthReading.ofHttpStatus(baseUrl, e.statusCode)
+    } catch (e: IOException) {
+        context.logger.debug("OpenAiBackend: $baseUrl did not answer: ${e.message}")
+        HealthReading.unreachable(baseUrl)
+    }
+
+    /**
      * Resolves a label against this plugin's own resources, degrading rather than throwing —
      * [getName] is called across the plugin boundary.
      *
      * @param fallback returned when the lookup fails
+     * @param args the format arguments, for a resource that takes any
      */
-    private fun configLabel(resId: Int, fallback: String = ""): String = try {
-        context.androidContext.getString(resId)
+    private fun configLabel(
+        resId: Int,
+        fallback: String = "",
+        args: Array<Any> = emptyArray(),
+    ): String = try {
+        context.androidContext.getString(resId, *args)
     } catch (e: Exception) {
         context.logger.error("OpenAiBackend: could not resolve label $resId", e)
         fallback
@@ -773,15 +876,29 @@ class OpenAiBackend(
         sse: Boolean = false,
         onConnected: (HttpURLConnection) -> Unit = {},
         readResponse: (BufferedReader) -> T,
-    ): T = http.post(
-        url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
-        apiKey = readApiKeyOrBlank(),
-        body = body,
-        sse = sse,
-        onConnected = onConnected,
-        onAccepted = { credentialFailures.clear() },
-        readResponse = readResponse,
-    )
+    ): T {
+        val baseUrl = getBaseUrl()
+        return try {
+            http.post(
+                url = baseUrl + CHAT_COMPLETIONS_PATH,
+                apiKey = readApiKeyOrBlank(),
+                body = body,
+                sse = sse,
+                onConnected = onConnected,
+                onAccepted = {
+                    credentialFailures.clear()
+                    health.record(HealthReading.available(baseUrl))
+                },
+                readResponse = readResponse,
+            )
+        } catch (e: OpenAiHttpException) {
+            throw e
+        } catch (e: IOException) {
+            // Also how Stop lands, which no reading should describe; a fresh check says which it was.
+            checkServer()
+            throw e
+        }
+    }
 
     /**
      * List what the configured server offers, split into the models each picker may show.
@@ -881,6 +998,8 @@ class OpenAiBackend(
     /** Release all resources: cancel the backend scope, any in-flight request, and the key cache. */
     fun close() {
         currentJob?.cancel()
+        probeJob?.cancel()
+        probeJob = null
         scope.cancel()
         keyCache.clear()
     }

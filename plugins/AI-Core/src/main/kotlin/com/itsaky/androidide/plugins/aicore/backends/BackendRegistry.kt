@@ -156,6 +156,12 @@ object BackendRegistry {
      */
     fun select(backendId: String) {
         prefs()?.edit()?.putString(AiBackend.PREFERENCE_KEY, backendId)?.apply()
+        // A new selection changes which backend the chat's tag row names, so its listeners hear.
+        try {
+            service()?.notifyBackendChanged(backendId)
+        } catch (e: Throwable) {
+            logError("could not announce the selection of '$backendId'", e)
+        }
     }
 
     /**

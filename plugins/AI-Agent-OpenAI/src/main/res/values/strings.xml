@@ -3,6 +3,8 @@
 
     <!-- Name shown in the backend selector, via LlmBackend.getName() -->
     <string name="openai_backend_name">OpenAI</string>
+    <!-- The Agent's backend tag: model, then the non-OpenAI server it runs on. -->
+    <string name="openai_model_on_server">%1$s (%2$s)</string>
 
     <!-- Server presets (ServerPresets.ALL) -->
     <string name="preset_openai">OpenAI</string>
