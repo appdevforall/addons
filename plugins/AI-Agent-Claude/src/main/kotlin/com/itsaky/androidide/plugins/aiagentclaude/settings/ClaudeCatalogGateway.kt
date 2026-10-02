@@ -26,8 +26,9 @@ interface ClaudeCatalogGateway {
      * one. This is what makes testing a key before persisting it possible.
      *
      * @param apiKey the candidate key
+     * @param workspaceId the candidate workspace for a key that belongs to none, or null
      */
-    fun listModels(apiKey: String): CatalogResult
+    fun listModels(apiKey: String, workspaceId: String?): CatalogResult
 }
 
 /**
@@ -63,8 +64,8 @@ class BackendClaudeCatalogGateway(
     override fun listModelsForSavedSettings(): CatalogResult =
         await { it.listModels() }
 
-    override fun listModels(apiKey: String): CatalogResult =
-        await { it.listModels(apiKey) }
+    override fun listModels(apiKey: String, workspaceId: String?): CatalogResult =
+        await { it.listModels(apiKey, workspaceId) }
 
     /**
      * Runs [request] against the backend and awaits its future.

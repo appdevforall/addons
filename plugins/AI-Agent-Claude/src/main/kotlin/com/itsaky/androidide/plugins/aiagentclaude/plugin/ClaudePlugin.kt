@@ -41,6 +41,7 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
 
         // Tags for the controls on this backend's settings pane (see ClaudeSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_KEY = "ai_claude_key"
+        const val TOOLTIP_TAG_SETTINGS_WORKSPACE = "ai_claude_workspace"
         const val TOOLTIP_TAG_SETTINGS_MODEL = "ai_claude_model"
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_claude_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_claude_get_key"
@@ -243,6 +244,18 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
                 written to disk. A key that cannot be checked, because the device
                 is offline, can still be saved but is marked unverified rather
                 than claiming a check that never happened.</p>
+            """.trimIndent(),
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_WORKSPACE,
+            summary = "Only for a key that is not in a workspace: the workspace Claude should bill it to.",
+            detail = """
+                <p>A key that is not in a workspace is refused on every request
+                until it names one, so this field appears only after Claude has
+                said so, and a key in a workspace never needs it.</p>
+                <p>Copy the ID, which starts with <code>wrkspc_</code>, from the
+                workspace's page in the Claude Console. It is saved with the key
+                and removed when the key is cleared.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(

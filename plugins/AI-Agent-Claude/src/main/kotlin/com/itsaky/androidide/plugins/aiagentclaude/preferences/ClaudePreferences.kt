@@ -24,6 +24,12 @@ internal object ClaudePreferences {
     const val KEY_API_KEY_TIMESTAMP = "claude_api_key_timestamp"
     const val KEY_API_KEY_VERIFIED = "claude_api_key_verified"
 
+    /**
+     * Workspace id sent with every request, for a key that belongs to no workspace. Absent for a
+     * key that does, which is the usual case. Belongs to the key, so it is cleared with it.
+     */
+    const val KEY_WORKSPACE_ID = "claude_workspace_id"
+
     /** Model id to request, e.g. `claude-opus-5-5`. */
     const val KEY_MODEL = "claude_model"
 

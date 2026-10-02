@@ -27,6 +27,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentclaude.R
+import com.itsaky.androidide.plugins.aiagentclaude.backend.WorkspaceIds
 import com.itsaky.androidide.plugins.aiagentclaude.plugin.ClaudePlugin
 import com.itsaky.androidide.plugins.aiagentclaude.ui.SecretRevealController
 import com.itsaky.androidide.plugins.aiagentclaude.ui.applyPaneStyling
@@ -215,6 +216,8 @@ class ClaudeSettingsFragment : Fragment() {
         val getKeyButton = view.findViewById<Button>(R.id.btn_get_key)
         val verificationText = view.findViewById<TextView>(R.id.claude_key_verification_text)
         val keyLabel = view.findViewById<TextView>(R.id.claude_api_key_label)
+        val workspaceLayout = view.findViewById<LinearLayout>(R.id.claude_workspace_layout)
+        val workspaceInput = view.findViewById<EditText>(R.id.claude_workspace_input)
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
         listOf<View>(
@@ -222,6 +225,20 @@ class ClaudeSettingsFragment : Fragment() {
             verificationText, keyLabel
         ).forEach { wireTooltip(it, ClaudePlugin.TOOLTIP_TAG_SETTINGS_KEY) }
         wireTooltip(getKeyButton, ClaudePlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
+        listOf<View>(
+            view.findViewById(R.id.claude_workspace_label),
+            view.findViewById(R.id.claude_workspace_box),
+            view.findViewById(R.id.claude_workspace_hint_text),
+        ).forEach { wireTooltip(it, ClaudePlugin.TOOLTIP_TAG_SETTINGS_WORKSPACE) }
+
+        // Shown only for a key Claude has refused for having no workspace, or with one saved: a key
+        // that belongs to a workspace, which is most of them, never sees the field.
+        workspaceInput.setText(viewModel.getWorkspaceId().orEmpty())
+        workspaceLayout.visibility = if (viewModel.getWorkspaceId() != null) View.VISIBLE else View.GONE
+
+        /** The workspace id typed beside the key, or null when the field is not offered. */
+        fun typedWorkspaceId(): String? =
+            workspaceInput.text.toString().trim().takeIf { workspaceLayout.visibility == View.VISIBLE }
 
         /** Shows the field for a new key, or the saved key's status and its Edit/Clear actions. */
         fun updateUiState(isEditing: Boolean) {
@@ -334,11 +351,12 @@ class ClaudeSettingsFragment : Fragment() {
          */
         suspend fun persistKey(
             apiKey: String,
+            workspaceId: String?,
             verified: Boolean,
             resultText: String,
             @DrawableRes resultIcon: Int
         ) {
-            if (!viewModel.saveApiKey(apiKey, verified)) {
+            if (!viewModel.saveApiKey(apiKey, verified, workspaceId)) {
                 Toast.makeText(
                     requireContext(),
                     getString(R.string.msg_api_key_save_failed),
@@ -365,7 +383,7 @@ class ClaudeSettingsFragment : Fragment() {
          * key because the network is down would leave the plugin unconfigurable, so this gets the
          * muted "unchecked" icon and a key the API actually refused never reaches here.
          */
-        fun confirmSaveUnverified(apiKey: String, reason: String) {
+        fun confirmSaveUnverified(apiKey: String, workspaceId: String?, reason: String) {
             showStatus(verificationText, reason, R.drawable.ic_key_unchecked)
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.title_save_unverified_key)
@@ -375,6 +393,7 @@ class ClaudeSettingsFragment : Fragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         persistKey(
                             apiKey,
+                            workspaceId,
                             verified = false,
                             resultText = reason,
                             resultIcon = R.drawable.ic_key_unchecked
@@ -397,11 +416,23 @@ class ClaudeSettingsFragment : Fragment() {
                 apiKeyInput.requestFocus()
                 return@setOnClickListener
             }
+            val workspaceId = typedWorkspaceId()
+            // Checked here rather than left to a 400: a value that cannot be a header is a typo
+            // the user can fix on the spot, and must never be sent.
+            if (WorkspaceIds.normalize(workspaceId) == WorkspaceIds.Result.Invalid) {
+                showStatus(
+                    verificationText,
+                    getString(R.string.msg_workspace_invalid),
+                    R.drawable.ic_key_rejected
+                )
+                workspaceInput.requestFocus()
+                return@setOnClickListener
+            }
             setKeyEntryEnabled(false)
             showStatus(verificationText, getString(R.string.msg_verifying_key))
             viewLifecycleOwner.lifecycleScope.launch {
                 val verdict = try {
-                    viewModel.verifyConnection(apiKey)
+                    viewModel.verifyConnection(apiKey, workspaceId)
                 } finally {
                     setKeyEntryEnabled(true)
                 }
@@ -409,6 +440,7 @@ class ClaudeSettingsFragment : Fragment() {
                     // Model count omitted: the user saved a key, not asked for a catalog.
                     is ConnectionVerification.Verified -> persistKey(
                         apiKey,
+                        workspaceId,
                         verified = true,
                         resultText = getString(R.string.msg_key_verified),
                         resultIcon = R.drawable.ic_key_verified
@@ -417,6 +449,7 @@ class ClaudeSettingsFragment : Fragment() {
                     // A rate-limited key is a working key, so it gets the same icon as a clean pass.
                     ConnectionVerification.RateLimited -> persistKey(
                         apiKey,
+                        workspaceId,
                         verified = true,
                         resultText = getString(R.string.msg_key_verified_rate_limited),
                         resultIcon = R.drawable.ic_key_verified
@@ -425,6 +458,7 @@ class ClaudeSettingsFragment : Fragment() {
                     // The API accepted the key, so it travelled fine; it just lists no models.
                     ConnectionVerification.NoModels -> persistKey(
                         apiKey,
+                        workspaceId,
                         verified = true,
                         resultText = getString(R.string.msg_api_no_models),
                         resultIcon = R.drawable.ic_key_unchecked
@@ -455,21 +489,26 @@ class ClaudeSettingsFragment : Fragment() {
                         apiKeyInput.requestFocus()
                     }
 
-                    // Nothing is written, as for a refusal: chat could never use this key.
+                    // Nothing is written until the key and a workspace are accepted together: chat
+                    // could never use the key alone.
                     ConnectionVerification.NeedsWorkspace -> {
+                        val alreadyAsked = !workspaceId.isNullOrEmpty()
+                        workspaceLayout.visibility = View.VISIBLE
                         showStatus(
                             verificationText,
-                            getString(R.string.msg_key_needs_workspace),
+                            getString(
+                                if (alreadyAsked) R.string.msg_workspace_rejected else R.string.msg_key_needs_workspace
+                            ),
                             R.drawable.ic_key_rejected
                         )
-                        apiKeyInput.requestFocus()
+                        workspaceInput.requestFocus()
                     }
 
                     ConnectionVerification.Unreachable ->
-                        confirmSaveUnverified(apiKey, getString(R.string.msg_api_unreachable))
+                        confirmSaveUnverified(apiKey, workspaceId, getString(R.string.msg_api_unreachable))
 
                     ConnectionVerification.Unknown ->
-                        confirmSaveUnverified(apiKey, getString(R.string.msg_key_uncheckable))
+                        confirmSaveUnverified(apiKey, workspaceId, getString(R.string.msg_key_uncheckable))
                 }
             }
         }
@@ -478,6 +517,9 @@ class ClaudeSettingsFragment : Fragment() {
         fun revealEditMode(apiKey: String) {
             apiKeyInput.setText(apiKey)
             apiKeyInput.setSelection(apiKey.length)
+            // The saved workspace comes back with its key; a key that needed none still needs none.
+            workspaceInput.setText(viewModel.getWorkspaceId().orEmpty())
+            workspaceLayout.visibility = if (viewModel.getWorkspaceId() != null) View.VISIBLE else View.GONE
             // The old verdict described the stored key, which is about to change.
             hideStatus(verificationText)
             updateUiState(isEditing = true)
@@ -528,6 +570,9 @@ class ClaudeSettingsFragment : Fragment() {
             hideStatus(verificationText)
             updateUiState(isEditing = true)
             apiKeyInput.setText("")
+            // Cleared with the key it belonged to, so the next key starts without the field.
+            workspaceInput.setText("")
+            workspaceLayout.visibility = View.GONE
         }
     }
 
@@ -646,6 +691,8 @@ class ClaudeSettingsFragment : Fragment() {
         val statusText = view.findViewById<TextView>(R.id.claude_connection_status_text)
         val apiKeyInput = view.findViewById<EditText>(R.id.claude_api_key_input)
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.claude_api_key_layout)
+        val workspaceLayout = view.findViewById<LinearLayout>(R.id.claude_workspace_layout)
+        val workspaceInput = view.findViewById<EditText>(R.id.claude_workspace_input)
 
         listOf<View>(testButton, statusText)
             .forEach { wireTooltip(it, ClaudePlugin.TOOLTIP_TAG_SETTINGS_TEST) }
@@ -696,8 +743,20 @@ class ClaudeSettingsFragment : Fragment() {
                     apiKeyInput.requestFocus()
                     return@launch
                 }
+                // What is on screen when the field is being edited, as for the key; otherwise what
+                // was saved with the key.
+                val workspaceId = if (useTyped && workspaceLayout.visibility == View.VISIBLE) {
+                    workspaceInput.text.toString().trim()
+                } else {
+                    viewModel.getWorkspaceId()
+                }
+                if (WorkspaceIds.normalize(workspaceId) == WorkspaceIds.Result.Invalid) {
+                    showStatus(statusText, getString(R.string.msg_workspace_invalid), R.drawable.ic_key_rejected)
+                    testButton.isEnabled = true
+                    return@launch
+                }
                 val verdict = try {
-                    viewModel.verifyConnection(key)
+                    viewModel.verifyConnection(key, workspaceId)
                 } finally {
                     testButton.isEnabled = true
                 }

@@ -62,6 +62,48 @@
                     android:inputType="textPassword"
                     android:maxLines="1" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Only for a key that belongs to no workspace: shown once Claude has refused the key
+                 for that, or while an id is saved, so a key that needs none never sees it. -->
+            <LinearLayout
+                android:id="@+id/claude_workspace_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/claude_workspace_label"
+                    style="@style/Plugin.SectionHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_claude_workspace" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/claude_workspace_box"
+                    style="@style/PluginTextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/hint_claude_workspace">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/claude_workspace_input"
+                        style="@style/PluginTextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text|textNoSuggestions"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:id="@+id/claude_workspace_hint_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:text="@string/hint_claude_workspace_help"
+                    android:textAppearance="@style/Plugin.Text.Small" />
+            </LinearLayout>
         </LinearLayout>
 
         <TextView

@@ -88,6 +88,14 @@ invalidated-key recovery cannot delete this one's key. A key is checked against
 `/v1/models` before it is saved; one that cannot be checked because the device is
 offline can be saved anyway and is marked unverified.
 
+**Keys outside a workspace.** Such a key is refused with a 400 on every request
+until it carries an `anthropic-workspace-id` header. The plugin cannot look the
+id up (listing workspaces needs an admin key), so when the key check reports
+this, the pane shows a **Workspace ID** field; the id is saved with the key,
+sent on every request, and removed with the key. A key in a workspace never sees
+the field. Typed ids are checked by `WorkspaceIds` before they become a header:
+one printable token, no whitespace or line breaks.
+
 ## Installation
 
 Install **`ai-core` as well**; without the router this plugin has nothing to

@@ -574,6 +574,7 @@ class ClaudeBackend(
     ): T = http.post(
         url = BASE_URL + MESSAGES_PATH,
         apiKey = readApiKeyOrBlank(),
+        workspaceId = storedWorkspaceId(),
         body = body,
         betas = betas,
         sse = sse,
@@ -589,7 +590,8 @@ class ClaudeBackend(
      * Completes exceptionally on a network/API failure — an HTTP one as a [ClaudeHttpException], so
      * the caller can tell a refused key from an unreachable API.
      */
-    internal fun listModels(): CompletableFuture<List<String>> = listModels(readApiKeyOrBlank())
+    internal fun listModels(): CompletableFuture<List<String>> =
+        listModels(readApiKeyOrBlank(), storedWorkspaceId())
 
     /**
      * List the models a caller-supplied key can use.
@@ -598,8 +600,9 @@ class ClaudeBackend(
      * [listModels] reads what is on disk. Nothing here touches the stored key or its cache.
      *
      * @param apiKey the candidate key; never logged
+     * @param workspaceId the candidate workspace for a key that belongs to none, or null
      */
-    internal fun listModels(apiKey: String): CompletableFuture<List<String>> {
+    internal fun listModels(apiKey: String, workspaceId: String?): CompletableFuture<List<String>> {
         val future = CompletableFuture<List<String>>()
         // close() cancels the scope, making launch a silent no-op; fail loudly instead.
         if (!scope.isActive) {
@@ -609,7 +612,7 @@ class ClaudeBackend(
 
         val job = scope.launch {
             try {
-                val body = http.get(BASE_URL + ClaudeModelCatalog.PATH, apiKey.trim())
+                val body = http.get(BASE_URL + ClaudeModelCatalog.PATH, apiKey.trim(), workspaceId)
                 val models = ClaudeModelCatalog.ids(body)
                 context.logger.info("ClaudeBackend: the API offers ${models.size} models")
                 future.complete(models)
@@ -634,6 +637,10 @@ class ClaudeBackend(
      */
     private fun storedKeyStamp(): Long =
         claudePrefs()?.getLong(ClaudePreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
+
+    /** The saved workspace id, or null when the key needs none. Checked again where it is sent. */
+    private fun storedWorkspaceId(): String? =
+        claudePrefs()?.getString(ClaudePreferences.KEY_WORKSPACE_ID, null)
 
     /** The saved key, or blank when none is stored or it cannot be decrypted. */
     private fun readApiKeyOrBlank(): String = keyCache.read().orEmpty()

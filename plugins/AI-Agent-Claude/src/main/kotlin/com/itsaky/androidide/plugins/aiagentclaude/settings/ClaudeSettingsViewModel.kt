@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeBackend
+import com.itsaky.androidide.plugins.aiagentclaude.backend.WorkspaceIds
 import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentclaude.logging.LOG_PREFIX
@@ -166,11 +167,16 @@ class ClaudeSettingsViewModel(
      * Check whether [apiKey] actually works, without storing it.
      *
      * @param apiKey the candidate key as typed, trimmed here
+     * @param workspaceId the candidate workspace for a key that belongs to none; checked by
+     *   [WorkspaceIds] where it is sent
      * @return the verdict; [ConnectionVerification.Unknown] when nothing could be established
      */
-    suspend fun verifyConnection(apiKey: String): ConnectionVerification = withContext(ioDispatcher) {
+    suspend fun verifyConnection(
+        apiKey: String,
+        workspaceId: String? = getWorkspaceId(),
+    ): ConnectionVerification = withContext(ioDispatcher) {
         val result = try {
-            catalogGateway.listModels(apiKey.trim())
+            catalogGateway.listModels(apiKey.trim(), workspaceId)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -192,9 +198,11 @@ class ClaudeSettingsViewModel(
      * @param apiKey the plaintext key to store (trimmed before encryption)
      * @param verified true when [verifyConnection] confirmed this key; recorded in the same write so
      *   the flag can never outlive or precede the key it describes
+     * @param workspaceId the workspace this key must name, or null for a key that belongs to one;
+     *   written in the same commit, since a key and its workspace are only valid together
      * @return true only if the key was both encrypted and persisted
      */
-    suspend fun saveApiKey(apiKey: String, verified: Boolean = false): Boolean =
+    suspend fun saveApiKey(apiKey: String, verified: Boolean = false, workspaceId: String? = null): Boolean =
         withContext(ioDispatcher) {
             // Checked first, or the UI would claim an unwritten key was saved.
             val prefs = prefs()
@@ -209,11 +217,17 @@ class ClaudeSettingsViewModel(
                 return@withContext false
             }
             // commit(), not apply(): only a synchronous write can honestly return "persisted".
-            val saved = prefs.edit()
+            val editor = prefs.edit()
                 .putString(ClaudePreferences.KEY_API_KEY, encrypted)
                 .putLong(ClaudePreferences.KEY_API_KEY_TIMESTAMP, System.currentTimeMillis())
                 .putBoolean(ClaudePreferences.KEY_API_KEY_VERIFIED, verified)
-                .commit()
+            val workspace = WorkspaceIds.headerValue(workspaceId)
+            if (workspace != null) {
+                editor.putString(ClaudePreferences.KEY_WORKSPACE_ID, workspace)
+            } else {
+                editor.remove(ClaudePreferences.KEY_WORKSPACE_ID)
+            }
+            val saved = editor.commit()
             // The recorded refusal described the key this one replaces; kept, it would be reported
             // against a key that has never been tried.
             if (saved) credentialFailures.clear()
@@ -249,6 +263,10 @@ class ClaudeSettingsViewModel(
     fun hasStoredApiKey(): Boolean =
         !prefs()?.getString(ClaudePreferences.KEY_API_KEY, null).isNullOrBlank()
 
+    /** The workspace saved with the key, or null when the key needs none. */
+    fun getWorkspaceId(): String? =
+        prefs()?.getString(ClaudePreferences.KEY_WORKSPACE_ID, null)?.takeIf { it.isNotBlank() }
+
     fun getApiKeySaveTimestamp(): Long =
         prefs()?.getLong(ClaudePreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
 
@@ -258,6 +276,8 @@ class ClaudeSettingsViewModel(
             remove(ClaudePreferences.KEY_API_KEY_TIMESTAMP)
             // Removed with the key, or the next saved key would inherit this one's verdict.
             remove(ClaudePreferences.KEY_API_KEY_VERIFIED)
+            // The workspace was this key's; a replacement may belong to one of its own.
+            remove(ClaudePreferences.KEY_WORKSPACE_ID)
             // Same reasoning: the refusal described the key being removed.
             remove(ClaudePreferences.KEY_CREDENTIAL_FAILURE)
             remove(ClaudePreferences.KEY_CREDENTIAL_FAILURE_KEY_STAMP)
