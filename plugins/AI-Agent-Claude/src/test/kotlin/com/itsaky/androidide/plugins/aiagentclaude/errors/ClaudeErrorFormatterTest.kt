@@ -74,6 +74,14 @@ class ClaudeErrorFormatterTest {
     }
 
     @Test
+    fun givenAKeyWithNoWorkspace_whenClassified_thenTheKeyNeedsAWorkspace() {
+        // The API's real wording, captured on device (ADFA-6311). Reported as a bad request it
+        // would lose its reason, which is longer than the cap on echoed text.
+        val error = http(400, "invalid_request_error", "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace.")
+        assertEquals(ClaudeFailure.KeyNeedsWorkspace, classify(error))
+    }
+
+    @Test
     fun givenA413_whenClassified_thenTheRequestIsTooLarge() {
         assertEquals(ClaudeFailure.RequestTooLarge, classify(http(413, "request_too_large", "too big")))
     }

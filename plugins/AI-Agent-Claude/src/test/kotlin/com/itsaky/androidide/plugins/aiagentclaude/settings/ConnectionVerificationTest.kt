@@ -64,6 +64,16 @@ class ConnectionVerificationTest {
     }
 
     @Test
+    fun givenAKeyWithNoWorkspace_whenInterpreted_thenItNeedsAWorkspaceAndIsNotSaved() {
+        // Was Unknown, which offered "Save anyway" for a key every request then refused, and
+        // blamed a missing AI Core plugin (ADFA-6311, on device).
+        val body = """{"type":"error","error":{"type":"invalid_request_error","message":"This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace."}}"""
+        val verdict = CatalogResult.Failed(ClaudeHttpException(400, body)).toConnectionVerification()
+        assertEquals(ConnectionVerification.NeedsWorkspace, verdict)
+        assertFalse(verdict.isConfirmedValid)
+    }
+
+    @Test
     fun givenAnOverloadedApi_whenInterpreted_thenItIsUnreachable() {
         assertEquals(ConnectionVerification.Unreachable, failedWith(529))
         assertEquals(ConnectionVerification.Unreachable, failedWith(503))
@@ -102,6 +112,7 @@ class ConnectionVerificationTest {
     fun givenEveryInconclusiveVerdict_whenAskedIfConfirmed_thenNoneIs() {
         listOf(
             ConnectionVerification.Rejected,
+            ConnectionVerification.NeedsWorkspace,
             ConnectionVerification.Unreachable,
             ConnectionVerification.Unknown,
         ).forEach { assertFalse("$it must not confirm a key", it.isConfirmedValid) }

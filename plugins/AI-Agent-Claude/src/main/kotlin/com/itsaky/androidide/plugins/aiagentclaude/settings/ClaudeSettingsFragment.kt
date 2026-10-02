@@ -455,6 +455,16 @@ class ClaudeSettingsFragment : Fragment() {
                         apiKeyInput.requestFocus()
                     }
 
+                    // Nothing is written, as for a refusal: chat could never use this key.
+                    ConnectionVerification.NeedsWorkspace -> {
+                        showStatus(
+                            verificationText,
+                            getString(R.string.msg_key_needs_workspace),
+                            R.drawable.ic_key_rejected
+                        )
+                        apiKeyInput.requestFocus()
+                    }
+
                     ConnectionVerification.Unreachable ->
                         confirmSaveUnverified(apiKey, getString(R.string.msg_api_unreachable))
 
@@ -715,6 +725,10 @@ class ClaudeSettingsFragment : Fragment() {
 
         ConnectionVerification.Rejected ->
             getString(R.string.msg_key_rejected) to R.drawable.ic_key_rejected
+
+        // Not the save path's wording: the key under test may well be the one already saved.
+        ConnectionVerification.NeedsWorkspace ->
+            getString(R.string.msg_test_needs_workspace) to R.drawable.ic_key_rejected
 
         ConnectionVerification.Unreachable ->
             getString(R.string.msg_api_unreachable) to R.drawable.ic_key_rejected

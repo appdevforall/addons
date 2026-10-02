@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentclaude.settings
 
+import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeErrorFormatter
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeHttpException
 import java.io.IOException
 
@@ -29,8 +30,14 @@ sealed interface ConnectionVerification {
      */
     data object RateLimited : ConnectionVerification
 
-    /** The API refused the key (HTTP 401/403). The only state that blocks a save. */
+    /** The API refused the key (HTTP 401/403). Blocks a save. */
     data object Rejected : ConnectionVerification
+
+    /**
+     * The key belongs to no workspace, so every request with it is a 400. Blocks a save too: the
+     * key is genuine, but chat could never use it, and saving it anyway only moves the failure.
+     */
+    data object NeedsWorkspace : ConnectionVerification
 
     /** Nothing answered, or the API is overloaded or failing (no network, DNS, 5xx, 529). */
     data object Unreachable : ConnectionVerification
@@ -76,10 +83,18 @@ private fun classifyFailure(cause: Throwable): ConnectionVerification =
         // Ordered before the other 4xx: a throttled key is valid, and must not read as refused.
         429 -> ConnectionVerification.RateLimited
         401, 403 -> ConnectionVerification.Rejected
+        400 -> if (needsWorkspace(cause)) ConnectionVerification.NeedsWorkspace else ConnectionVerification.Unknown
         // The API's fault, not the key's: an overload or a 5xx says nothing about the credential.
         in 500..599 -> ConnectionVerification.Unreachable
         else -> ConnectionVerification.Unknown
     }
+
+/** Whether the 400 in [cause]'s chain is the API asking for a workspace-scoped key. */
+private fun needsWorkspace(cause: Throwable): Boolean {
+    val http = generateSequence(cause) { it.cause }.take(MAX_CAUSE_DEPTH)
+        .filterIsInstance<ClaudeHttpException>().firstOrNull() ?: return false
+    return with(ClaudeErrorFormatter) { parse(http.message).needsWorkspace() }
+}
 
 /** Depth cap: a malformed cause chain can be self-referential, and this runs on user input. */
 private const val MAX_CAUSE_DEPTH = 5

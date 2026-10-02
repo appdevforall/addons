@@ -46,6 +46,13 @@ sealed interface ClaudeFailure {
     /** The key is valid but not allowed to do this (HTTP 403). */
     data object KeyForbidden : ClaudeFailure
 
+    /**
+     * The key belongs to no workspace, so the API wants an `anthropic-workspace-id` header with
+     * every request (HTTP 400). Its own state because the cure is a new key, not a new request,
+     * and the API's explanation is longer than a reason this class echoes.
+     */
+    data object KeyNeedsWorkspace : ClaudeFailure
+
     /** The conversation is larger than the API accepts (HTTP 413). */
     data object RequestTooLarge : ClaudeFailure
 
@@ -98,7 +105,8 @@ sealed interface ClaudeFailure {
 internal enum class CredentialFailure(val tag: String, @get:StringRes val messageRes: Int) {
     KeyRefused("key_refused", R.string.claude_error_key_refused),
     KeyMissing("key_missing", R.string.claude_error_key_missing),
-    KeyForbidden("key_forbidden", R.string.claude_error_key_forbidden);
+    KeyForbidden("key_forbidden", R.string.claude_error_key_forbidden),
+    KeyNeedsWorkspace("key_needs_workspace", R.string.claude_error_key_needs_workspace);
 
     companion object {
         /**
@@ -115,6 +123,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             ClaudeFailure.KeyRefused -> KeyRefused
             ClaudeFailure.KeyMissing -> KeyMissing
             ClaudeFailure.KeyForbidden -> KeyForbidden
+            ClaudeFailure.KeyNeedsWorkspace -> KeyNeedsWorkspace
             is ClaudeFailure.ModelUnavailable,
             ClaudeFailure.QuotaExceeded,
             ClaudeFailure.BillingRequired,
@@ -209,6 +218,8 @@ object ClaudeErrorFormatter {
 
             status == 413 || parsed.apiType == "request_too_large" -> ClaudeFailure.RequestTooLarge
 
+            status == 400 && parsed.needsWorkspace() -> ClaudeFailure.KeyNeedsWorkspace
+
             status == 400 -> ClaudeFailure.RequestRejected(safeReason(parsed, error))
 
             // 529 is the API's "overloaded", which is the common one.
@@ -229,6 +240,13 @@ object ClaudeErrorFormatter {
      */
     private fun ClaudeApiError.mentionsCredit(): Boolean =
         apiMessage?.lowercase()?.contains("credit balance") == true
+
+    /**
+     * True when the API is refusing a key that belongs to no workspace. It names the header it
+     * wants, which is the most stable part of the wording to match on.
+     */
+    internal fun ClaudeApiError.needsWorkspace(): Boolean =
+        apiMessage?.contains("anthropic-workspace-id") == true
 
     /**
      * The API's own explanation, but only when it is short and safe to show.

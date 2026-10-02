@@ -19,6 +19,8 @@ class ClaudeCredentialProblemTest {
         assertTrue(ClaudeFailure.KeyRefused.isCredentialProblem)
         assertTrue(ClaudeFailure.KeyMissing.isCredentialProblem)
         assertTrue(ClaudeFailure.KeyForbidden.isCredentialProblem)
+        // The cure is a different key, so the settings pane is where it has to be reported.
+        assertTrue(ClaudeFailure.KeyNeedsWorkspace.isCredentialProblem)
     }
 
     @Test

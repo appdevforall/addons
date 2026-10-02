@@ -40,6 +40,9 @@ internal class ClaudeFailureMessages(private val context: PluginContext) {
             ClaudeFailure.KeyForbidden ->
                 resources.getString(CredentialFailure.KeyForbidden.messageRes)
 
+            ClaudeFailure.KeyNeedsWorkspace ->
+                resources.getString(CredentialFailure.KeyNeedsWorkspace.messageRes)
+
             ClaudeFailure.RequestTooLarge ->
                 resources.getString(R.string.claude_error_too_large)
 

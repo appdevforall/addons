@@ -11,6 +11,7 @@
     <string name="claude_error_key_refused">Claude refused your API key. Re-enter it in Agent settings.</string>
     <string name="claude_error_key_missing">Claude needs an API key. Add one in Agent settings.</string>
     <string name="claude_error_key_forbidden">Your API key is not allowed to do this. Choose another model, or check the key\'s workspace in the Claude Console.</string>
+    <string name="claude_error_key_needs_workspace">This API key is not in a workspace, so Claude refuses it. In the Claude Console, create a key inside a workspace and enter that one in Agent settings.</string>
     <string name="claude_error_too_large">This conversation is too long for Claude to accept. Start a new chat, or attach less of the project.</string>
     <string name="claude_error_request_rejected">Claude rejected the request.</string>
     <string name="claude_error_request_rejected_reason">Claude rejected the request. %1$s</string>
@@ -52,6 +53,8 @@
     <string name="msg_key_verified_rate_limited">Key accepted. Claude is rate-limiting right now.</string>
     <string name="msg_key_rejected">Claude refused this key. It wasn\'t saved. Check it and try again.</string>
     <string name="msg_key_rejected_kept">Claude refused this key. It wasn\'t saved. The key you had saved was kept, and chat is still using it.</string>
+    <string name="msg_key_needs_workspace">This key is not in a workspace, so Claude refuses every request made with it. It wasn\'t saved. In the Claude Console, create a key inside a workspace and paste that one.</string>
+    <string name="msg_test_needs_workspace">This key is not in a workspace, so Claude refuses every request made with it. In the Claude Console, create a key inside a workspace, then tap Edit and paste it.</string>
     <string name="msg_key_chat_failure">A chat request was refused: %1$s</string>
     <string name="msg_key_uncheckable">Couldn\'t check this. Make sure the AI Core plugin is installed, enabled and up to date.</string>
     <string name="title_save_unverified_key">Save without checking?</string>

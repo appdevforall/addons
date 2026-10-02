@@ -25,6 +25,7 @@ class CredentialFailureTagTest {
         assertEquals("key_refused", CredentialFailure.KeyRefused.tag)
         assertEquals("key_missing", CredentialFailure.KeyMissing.tag)
         assertEquals("key_forbidden", CredentialFailure.KeyForbidden.tag)
+        assertEquals("key_needs_workspace", CredentialFailure.KeyNeedsWorkspace.tag)
     }
 
     @Test
