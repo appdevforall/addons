@@ -13,7 +13,7 @@
     "url": ""
   },
   "template": {
-    "id": "org.appdevforall.fluttertemplates",
+    "id": "org.appdevforall.flutterstarterkit",
     "version": "1.0.0",
     "minAppVersion": "26.36"
   }

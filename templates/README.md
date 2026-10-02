@@ -10,9 +10,9 @@ code, write a plugin instead — see [`../plugins/README.md`](../plugins/README.
 
 Part 1 below is how to write one. Part 2 is the format reference.
 
-## Start from `Flutter-Templates`
+## Start from `Flutter-Starter-Kit`
 
-`templates/Flutter-Templates/` is the reference. Copy it and change what is yours. It is small
+`templates/Flutter-Starter-Kit/` is the reference. Copy it and change what is yours. It is small
 but complete: five templates in one bundle, an `addon.json` with the `template` block, a
 gallery page, both icons, and thumbnails. Every rule in Part 1 is visible in it.
 
@@ -30,7 +30,7 @@ chooser, user-supplied parameters, and placeholders in directory names.
 ## 1. Make the directory
 
 Name it in MixedCase with single hyphens, ASCII letters and digits only, as
-`docs/addon-naming-standards.md` describes. `Flutter-Templates`, not `flutter_templates`.
+`docs/addon-naming-standards.md` describes. `Flutter-Starter-Kit`, not `flutter_starter_kit`.
 
 ```
 templates/My-Templates/
@@ -361,7 +361,7 @@ archive root. You do not write this file. The publish workflow generates it, add
 archive, and it is gitignored.
 
 ```sh
-unzip -p flutter-templates.cgt cgt-build.properties
+unzip -p flutter-starter-kit.cgt cgt-build.properties
 ```
 
 ```properties
@@ -369,7 +369,7 @@ revision=a1b2c3d4e5f6
 revision_source=env:GITHUB_SHA
 timestamp=2026-09-25T14:02:11Z
 timestamp_source=git
-addon_id=org.appdevforall.fluttertemplates
+addon_id=org.appdevforall.flutterstarterkit
 version=1.0.0
 ```
 
@@ -457,7 +457,7 @@ const val TEMPLATE_EXTENSION = ".peb"
 ```
 
 `extensions.jar` is optional and rarely used. It supplies custom Pebble `Extension` classes,
-which the IDE dexes into `dex_opt/`. Neither `core.cgt` nor `flutter-templates.cgt` uses it.
+which the IDE dexes into `dex_opt/`. Neither `core.cgt` nor `flutter-starter-kit.cgt` uses it.
 
 An unrecognised entry at the archive root is ignored, which is why
 `cgt-build.properties` can sit there safely.

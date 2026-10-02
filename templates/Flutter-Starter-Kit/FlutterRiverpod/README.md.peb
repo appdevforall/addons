@@ -1,10 +1,10 @@
 # ${{APP_NAME}}
 
 
-Generated from a Flutter Templates starter for Code on the Go.
+Generated from the Flutter Starter Kit for Code on the Go.
 
 - Package: `${{PACKAGE_NAME}}`
-- Template: BLoC
+- Template: Riverpod
 - Flutter SDK: >=3.0.0
 
 ## Getting started
@@ -23,8 +23,8 @@ flutter run
 ```
 lib/
   main.dart
-  blocs/
-    counter_bloc.dart
+  providers/
+    counter_provider.dart
 pubspec.yaml
 analysis_options.yaml
 ```

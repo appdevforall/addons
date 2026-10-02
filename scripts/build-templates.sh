@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./scripts/build-templates.sh                         # every template, into dist/<slug>.cgt
-#   ./scripts/build-templates.sh Flutter-Templates       # only these (directory name or path, any case)
+#   ./scripts/build-templates.sh Flutter-Starter-Kit       # only these (directory name or path, any case)
 #
 # A name that is a plugin is ignored, so one name can go to both build scripts.
 # An unknown name fails. With no name, every template is built, including ones

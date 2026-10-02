@@ -62,7 +62,7 @@ apk-analyzer.html
 
 Worked example: a template
 
-Display Name: Flutter Templates
+Display Name: Flutter Starter Kit
 
 Artifact
 
@@ -70,27 +70,27 @@ Value
 
 GitHub src directory (source of truth)
 
-/templates/Flutter-Templates
+/templates/Flutter-Starter-Kit
 
 Published name on site
 
-Flutter Templates
+Flutter Starter Kit
 
 Name in the Extensions Manager, Templates tab
 
-Flutter Templates
+Flutter Starter Kit
 
 Title inside documentation HTML
 
-Flutter Templates
+Flutter Starter Kit
 
 Artifact filename
 
-flutter-templates.cgt
+flutter-starter-kit.cgt
 
 Documentation HTML filename
 
-flutter-templates.html
+flutter-starter-kit.html
 
 Note that the names of the individual templates inside a bundle are a separate matter. Those come from each template/template.json "name" field and are what a user picks on the New Project screen; they are not derived from the directory name. The directory name names the bundle.
 
@@ -98,10 +98,10 @@ Naming guidelines
 
 Leave implementation details out of the directory name. Naming an addon after its implementation locks you in if that implementation ever changes. Put that detail in the documentation body instead.
 
-Drop generic type-words when naming the directory. Words that describe the artifact rather than the addon's identity ("plugin," "CGP," "CGT," "Documentation") shouldn't be part of the directory name. Keep words that are genuinely part of the name even if generic-sounding on their own. E.g., "Manager" stays in "Template-Manager," because the addon's name is genuinely "Template Manager," not just "Template."
+Drop generic type-words when naming the directory. Words that describe the artifact rather than the addon's identity ("plugin," "template," "CGP," "CGT," "Documentation") shouldn't be part of the directory name. Keep words that are genuinely part of the name even if generic-sounding on their own. E.g., "Manager" stays in "Template-Manager," because the addon's name is genuinely "Template Manager," not just "Template."
 
 Prefer the spelling that most of the addon's existing artifacts already use, unless one spelling is clearly more accurate or more common going forward.
 
-Match number and form exactly. Decide once whether the directory name is singular or plural — that choice propagates automatically to the display name everywhere it's used, so get it right at the source. Flutter-Templates is plural because the bundle genuinely holds five of them.
+Match number and form exactly. Decide once whether the directory name is singular or plural — that choice propagates automatically to the display name everywhere it's used, so get it right at the source. Flutter-Starter-Kit is singular even though it holds five templates: the addon is one kit, and its name says so.
 
 No stray path fragments. Branch names, parent folders, or build artifacts (e.g., a main/ prefix) should never leak into the GitHub src directory name or the doc path.

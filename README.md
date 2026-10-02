@@ -52,9 +52,9 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 
 | Template bundle | Purpose |
 | --- | --- |
-| [`templates/Flutter-Templates/`](templates/Flutter-Templates/) | Five Flutter starter projects, one per state-management approach. |
+| [`templates/Flutter-Starter-Kit/`](templates/Flutter-Starter-Kit/) | Five Flutter starter projects, one per state-management approach. |
 
-A bundle holds one or more templates. It runs no code, so there is nothing to compile: the publish workflow zips the directory into a `.cgt` that Code on the Go reads directly. Start from `Flutter-Templates/`, which is the reference example.
+A bundle holds one or more templates. It runs no code, so there is nothing to compile: the publish workflow zips the directory into a `.cgt` that Code on the Go reads directly. Start from `Flutter-Starter-Kit/`, which is the reference example.
 
 
 ## Building a plugin

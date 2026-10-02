@@ -236,7 +236,7 @@ def test_a_template_ships_no_tarball(tmp_path):
     that would block every template publish.
     """
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    addon = tmp_path / "templates" / "Flutter-Templates"
+    addon = tmp_path / "templates" / "Flutter-Starter-Kit"
     (addon / "FlutterBasic" / "template").mkdir(parents=True)
     (addon / "templates.json").write_text('{"templates": [{"path": "FlutterBasic"}]}')
     (addon / "FlutterBasic" / "pubspec.yaml.peb").write_text("name: x\n")

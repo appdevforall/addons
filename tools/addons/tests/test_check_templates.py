@@ -13,15 +13,15 @@ from addons import check
 
 CATALOG_SCHEMA = Path(__file__).parents[3] / "site" / "catalog.schema.json"
 
-BLOCK = {"id": "org.appdevforall.fluttertemplates",
+BLOCK = {"id": "org.appdevforall.flutterstarterkit",
          "version": "1.0.0", "minAppVersion": "26.38"}
 
 BASE_META = {"summary": "s", "description": "d", "tags": ["flutter"],
              "origin": "community", "license": "AGPL-3.0-or-later",
              "author": {"name": "RJ Ali", "url": ""}}
 
-PAGE = ("<html><title>Flutter Templates</title>"
-        "<body><h1>Flutter Templates</h1></body></html>")
+PAGE = ("<html><title>Flutter Starter Kit</title>"
+        "<body><h1>Flutter Starter Kit</h1></body></html>")
 
 
 def make_template(root: Path, index=None, block=BLOCK,
@@ -30,7 +30,7 @@ def make_template(root: Path, index=None, block=BLOCK,
     site.mkdir(exist_ok=True)
     (site / "catalog.schema.json").write_text(CATALOG_SCHEMA.read_text())
 
-    d = root / "templates" / "Flutter-Templates"
+    d = root / "templates" / "Flutter-Starter-Kit"
     (d / "FlutterBasic" / "template").mkdir(parents=True)
     for icon in ("icon_day.png", "icon_night.png"):
         (d / icon).write_bytes(b"png")
@@ -48,7 +48,7 @@ def make_template(root: Path, index=None, block=BLOCK,
     if block is not None:
         meta["template"] = block
     (d / "addon.json").write_text(json.dumps(meta))
-    (d / "flutter-templates.html").write_text(PAGE)
+    (d / "flutter-starter-kit.html").write_text(PAGE)
     return d
 
 

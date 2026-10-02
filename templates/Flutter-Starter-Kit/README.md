@@ -1,4 +1,4 @@
-# Flutter Templates
+# Flutter Starter Kit
 
 A [Code on the Go](https://github.com/appdevforall/CodeOnTheGo) template bundle that adds
 **Flutter starter projects** to the New Project screen, alongside the built-in core templates.
@@ -33,8 +33,8 @@ everything else is copied byte for byte. These templates use three expressions o
 The `.cgt` is **never committed**. The publish workflow generates it. To build one locally:
 
 ```sh
-./scripts/build-cgt.sh templates/Flutter-Templates out
-unzip -l out/flutter-templates.cgt
+./scripts/build-templates.sh Flutter-Starter-Kit
+unzip -l dist/flutter-starter-kit.cgt
 ```
 
 See [`../README.md`](../README.md) for authoring guidance and the format reference.

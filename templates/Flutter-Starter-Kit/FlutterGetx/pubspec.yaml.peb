@@ -1,5 +1,5 @@
 name: "${{APP_NAME | lower | replace({" ": "_", "-": "_"})}}"
-description: Flutter Riverpod project created from a Flutter Templates starter for Code on the Go
+description: Flutter GetX project created from the Flutter Starter Kit for Code on the Go
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,8 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_riverpod: ^2.5.1
-  riverpod: ^2.5.1
+  get: ^4.6.6
 
 dev_dependencies:
   flutter_test:

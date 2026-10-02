@@ -71,7 +71,7 @@ def test_builds_a_valid_entry(tmp_path):
 
 TEMPLATE_METADATA = METADATA | {
     "template": {
-        "id": "org.appdevforall.fluttertemplates",
+        "id": "org.appdevforall.flutterstarterkit",
         "version": "1.0.0",
         "minAppVersion": "26.38",
     },
@@ -80,7 +80,7 @@ TEMPLATE_METADATA = METADATA | {
 
 def make_template(tmp_path: Path, with_tarball: bool = False) -> Path:
     """A template addon: no Gradle build, no manifest, metadata in addon.json."""
-    addon = tmp_path / "templates" / "Flutter-Templates"
+    addon = tmp_path / "templates" / "Flutter-Starter-Kit"
     (addon / "FlutterBasic" / "template").mkdir(parents=True)
     (addon / "templates.json").write_text(
         json.dumps({"templates": [{"path": "FlutterBasic"}]}))
@@ -89,9 +89,9 @@ def make_template(tmp_path: Path, with_tarball: bool = False) -> Path:
     (addon / "addon.json").write_text(json.dumps(TEMPLATE_METADATA))
     dist = tmp_path / "dist"
     dist.mkdir(exist_ok=True)
-    (dist / "flutter-templates.cgt").write_bytes(b"cgt")
+    (dist / "flutter-starter-kit.cgt").write_bytes(b"cgt")
     if with_tarball:
-        (dist / "flutter-templates-src.tar.gz").write_bytes(b"tar")
+        (dist / "flutter-starter-kit-src.tar.gz").write_bytes(b"tar")
     site = tmp_path / "site"
     site.mkdir(exist_ok=True)
     copy_schemas(site)
@@ -102,13 +102,13 @@ def test_a_template_entry_downloads_a_cgt(tmp_path):
     dist = make_template(tmp_path)
     entry = catalog.build(tmp_path, dist)["addons"][0]
     assert entry["type"] == "template"
-    assert entry["slug"] == "flutter-templates"
-    assert entry["name"] == "Flutter Templates"
+    assert entry["slug"] == "flutter-starter-kit"
+    assert entry["name"] == "Flutter Starter Kit"
     # from addon.json's template block, not from a manifest it does not have
-    assert entry["addonId"] == "org.appdevforall.fluttertemplates"
+    assert entry["addonId"] == "org.appdevforall.flutterstarterkit"
     assert entry["version"] == "1.0.0"
     assert entry["minAppVersion"] == "26.38"
-    assert entry["download"]["url"].endswith("/dl/flutter-templates.cgt")
+    assert entry["download"]["url"].endswith("/dl/flutter-starter-kit.cgt")
 
 
 def test_a_template_entry_omits_the_source_tarball(tmp_path):
@@ -120,20 +120,20 @@ def test_a_template_entry_omits_the_source_tarball(tmp_path):
     dist = make_template(tmp_path)
     entry = catalog.build(tmp_path, dist)["addons"][0]
     assert "sourceTarball" not in entry
-    assert entry["sourceUrl"].endswith("/templates/Flutter-Templates")
+    assert entry["sourceUrl"].endswith("/templates/Flutter-Starter-Kit")
 
 
 def test_a_template_does_not_need_a_tarball_in_dist(tmp_path):
     """Requiring one would fail the publish for every template."""
     dist = make_template(tmp_path)
-    assert not (dist / "flutter-templates-src.tar.gz").exists()
+    assert not (dist / "flutter-starter-kit-src.tar.gz").exists()
     catalog.build(tmp_path, dist)          # must not raise
 
 
 def test_a_missing_cgt_still_stops_the_build(tmp_path):
     dist = make_template(tmp_path)
-    (dist / "flutter-templates.cgt").unlink()
-    with pytest.raises(RuntimeError, match="flutter-templates.cgt"):
+    (dist / "flutter-starter-kit.cgt").unlink()
+    with pytest.raises(RuntimeError, match="flutter-starter-kit.cgt"):
         catalog.build(tmp_path, dist)
 
 
@@ -211,7 +211,7 @@ def test_v1_omits_templates(tmp_path):
     v1 = catalog.build(tmp_path, dist, schema_version=1)
     v2 = catalog.build(tmp_path, dist, schema_version=2)
     assert [e["slug"] for e in v1["addons"]] == ["keystore-generator"]
-    assert [e["slug"] for e in v2["addons"]] == ["flutter-templates",
+    assert [e["slug"] for e in v2["addons"]] == ["flutter-starter-kit",
                                                  "keystore-generator"]
 
 

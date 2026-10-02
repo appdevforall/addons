@@ -1,5 +1,5 @@
 name: "${{APP_NAME | lower | replace({" ": "_", "-": "_"})}}"
-description: Flutter Provider project created from a Flutter Templates starter for Code on the Go
+description: Flutter BLoC project created from the Flutter Starter Kit for Code on the Go
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,7 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  provider: ^6.1.2
+  flutter_bloc: ^8.1.4
+  bloc: ^8.1.4
+  equatable: ^2.0.5
 
 dev_dependencies:
   flutter_test:
