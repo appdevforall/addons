@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One row of the server / model dropdowns. The plugin's own item layout rather than
+  android.R.layout.simple_list_item_1, whose text color comes from the framework theme in effect
+  when the popup window is built — which is not reliably the one the pane is drawn in.
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/touch_target_min"
+    android:paddingHorizontal="@dimen/space_lg"
+    android:paddingVertical="@dimen/space_md"
+    android:textAppearance="@style/Plugin.Text.Body" />

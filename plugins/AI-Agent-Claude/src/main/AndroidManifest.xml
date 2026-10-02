@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Makes live HTTP(S) calls to an OpenAI-compatible server (ClaudeBackend, raw
+         HttpURLConnection). The server is whatever base URL the user configured. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- No usesCleartextTraffic here: plugin code runs in the host IDE's process, so the host's
+         network_security_config governs. It permits cleartext, which is what makes an
+         http://192.168.x.x LAN server reachable; BaseUrlPolicy warns about it on save instead. -->
+    <application
+        android:label="AI Agent OpenAI Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.itsaky.androidide.plugins.aiagentclaude" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="AI Agent OpenAI" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <!-- Build provenance (ADFA-5256): the commit and commit-date this .cgp was
+             built from. Both placeholders are always supplied by the plugin builder. -->
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="OpenAI-compatible inference backend for AI Core. Talks to OpenAI by default, or to any server that speaks the same chat/completions protocol — Ollama, LM Studio, OpenRouter, llama-server — by changing one URL." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <!-- 26.36: the first release to ship KeystoreSecretStore in plugin-api, which this
+             plugin's SecureApiKeyStore builds on. ADFA-5269 landed after 26.35 was tagged, so
+             26.35 would name a release that cannot run this plugin. Do not lower it. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.39" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- network.access: HTTP(S) calls to the configured base URL. No filesystem or native
+             code — the API key lives in this plugin's own SharedPreferences, encrypted. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="network.access" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.itsaky.androidide.plugins.aiagentclaude.plugin.ClaudePlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

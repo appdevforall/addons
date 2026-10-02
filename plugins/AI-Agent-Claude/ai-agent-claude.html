@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent OpenAI Plugin</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 820px;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+  table { border-collapse: collapse; margin: 0.5rem 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+
+  <h1>AI Agent OpenAI Plugin</h1>
+
+  <h2>Executive overview</h2>
+  <p><b>AI Agent OpenAI</b> adds <b>OpenAI</b>'s models to CodeOnTheGo's AI
+  features — and, through one editable server URL, any other server that speaks
+  the same protocol. It is a <b>headless</b> plugin with no screens of its own
+  beyond a settings pane: it registers itself as the <code>openai</code> inference
+  backend with <b>AI Core</b>, which routes requests from the Agent chat,
+  <b>Code Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>.</p>
+  <p>Install <b>AI Core</b> alongside it — without the router this plugin has
+  nothing to register with. Install order does not matter.</p>
+  <p>Using this backend sends prompts, and any file contents a plugin includes in
+  them, to whichever server is configured. Pointed at OpenAI that is a third
+  party; pointed at a machine on your own network it never leaves that network.</p>
+
+  <h2>One backend, many servers</h2>
+  <p>Across every server below the auth header, request JSON, streaming format
+  and error shape are identical — only the host changes. So this is one backend
+  with a URL field rather than one plugin per provider.</p>
+  <table>
+    <tr><th>Server URL</th><th>What it is</th></tr>
+    <tr><td><code>https://api.openai.com/v1</code></td><td><b>Default.</b> OpenAI itself.</td></tr>
+    <tr><td><code>http://localhost:11434/v1</code></td><td>Ollama running on the device.</td></tr>
+    <tr><td><code>http://192.168.1.50:11434/v1</code></td><td>Ollama on your own PC, over Wi-Fi.</td></tr>
+    <tr><td><code>http://192.168.1.50:1234/v1</code></td><td>LM Studio's server.</td></tr>
+    <tr><td><code>http://localhost:8080/v1</code></td><td><code>llama-server</code> from llama.cpp.</td></tr>
+    <tr><td><code>https://openrouter.ai/api/v1</code></td><td>OpenRouter — many models behind one key, some free.</td></tr>
+  </table>
+  <p>Presets in the settings pane fill these in. The local ones use
+  <code>localhost</code>; to reach another machine, pick the preset and edit the
+  host.</p>
+
+  <h2>Core functionality</h2>
+  <ul>
+    <li><b>Chat completions</b> over <code>POST {baseUrl}/chat/completions</code>,
+      with text completion, real multi-turn history as a
+      <code>messages[]</code> array, and server-sent-events streaming.</li>
+    <li><b>Server-aware key field</b> — the API key section adapts to the chosen
+      server as you pick it: mandatory for OpenAI, optional for another cloud
+      provider, and hidden entirely for a local or LAN address that needs no
+      credential.</li>
+    <li><b>Free-text or discovered models</b> — one field that is also a list:
+      type any model name, or pick one the server reported. Non-chat models
+      (embeddings, audio, images) are filtered out.</li>
+    <li><b>Test Connection &amp; List Models</b> — one request that both checks the
+      URL and key without saving either and fills the model list. Distinguishes a
+      refused key, a wrong path, an unreachable server and a server with no models
+      loaded.</li>
+    <li><b>Reasoning-model handling</b> — <code>gpt-5.x</code> and the
+      <code>o</code> series take <code>max_completion_tokens</code> and may reject
+      <code>temperature</code>; the right parameters are chosen from the model
+      name, and a refused parameter is retried once without it.</li>
+    <li><b>Encrypted at rest, and scoped to one server</b> — the API key is stored
+      as AES/GCM ciphertext under a hardware-backed Android Keystore secret, and
+      the server it was saved for is recorded with it: repointing the URL at a
+      local or LAN address never sends that key to the new server.</li>
+    <li><b>Translated, safe error messages</b> — a failure becomes one
+      user-facing sentence; the raw HTTP error body stays in the log and never
+      reaches the chat transcript.</li>
+  </ul>
+
+  <h2>Technical architecture</h2>
+  <table>
+    <tr><th>Component</th><th>Role</th></tr>
+    <tr><td><code>OpenAiPlugin</code></td><td>Plugin entry point. Registers the
+      backend with AI Core on activation, re-registering if AI Core activates
+      later; cancels in-flight requests and drops the decrypted key on
+      dispose.</td></tr>
+    <tr><td><code>OpenAiBackend</code></td><td>The transport. Calls
+      <code>chat/completions</code> over <code>HttpURLConnection</code>, parses the
+      streaming response, and fetches the model catalog.</td></tr>
+    <tr><td><code>BaseUrlPolicy</code></td><td>Normalizes the server URL — trims a
+      pasted <code>/chat/completions</code> path, lowercases the host — and
+      enforces the cleartext rule.</td></tr>
+    <tr><td><code>RequestTuning</code></td><td>Decides which optional parameters a
+      request carries, and which one to stop sending after a server refuses
+      it.</td></tr>
+    <tr><td><code>OpenAiErrorFormatter</code></td><td>Classifies a failure
+      (unknown model, rate limit, spent balance, refused key, outage, server not
+      running) so it can be reported as one translated sentence.</td></tr>
+    <tr><td><code>SecureApiKeyStore</code></td><td>Binds this plugin's own
+      Keystore alias to the IDE's <code>KeystoreSecretStore</code>, which
+      AES/GCM-encrypts the API key.</td></tr>
+  </table>
+  <p><b>No third-party HTTP SDK.</b> Plugins run in the host IDE's classloader
+  where <code>okhttp3</code> resolves to the host's older OkHttp — a mismatch that
+  crashed generation with a <code>NoSuchMethodError</code> when an SDK bundled its
+  own copy. <code>HttpURLConnection</code> has no third-party dependency and works
+  regardless of the host's OkHttp version.</p>
+
+  <h2>Usage</h2>
+  <ol>
+    <li>Install <b>AI Core</b> and <b>AI Agent OpenAI</b> via the Plugin Manager,
+      then restart the IDE.</li>
+    <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> and select
+      <b>OpenAI</b> as the backend.</li>
+    <li>Set the <b>Server</b>: keep the OpenAI default, or pick a preset and edit
+      the host to reach your own machine.</li>
+    <li>Enter an <b>API key</b> if the server needs one — it is checked before it
+      is saved. For a local server the section is hidden; there is nothing to
+      enter.</li>
+    <li>Tap <b>Test Connection &amp; List Models</b>, then set the <b>Model</b> by
+      picking from that list or typing a name.</li>
+  </ol>
+  <div class="note">
+    The key is sent as an <code>Authorization: Bearer</code> request header, never
+    in a URL query string — query strings leak into logs, proxies and crash
+    reports. With no key configured, no header is sent at all.
+  </div>
+
+  <h2>Cost</h2>
+  <p>OpenAI has <b>no free tier</b>: an API key draws on a prepaid balance and is
+  separate from a ChatGPT subscription. The free paths are to run a model on your
+  own computer and point the server URL at it, to use <b>AI Agent Local</b> for
+  on-device inference, to use <b>AI Agent Gemini</b>, which has a free tier, or to
+  point this backend at one of OpenRouter's free models.</p>
+
+  <h2>Key benefits</h2>
+  <ul>
+    <li><b>Frontier models</b> on a device that could not run them locally.</li>
+    <li><b>Or your own hardware</b> — the same plugin reaches a large model on
+      your PC over Wi-Fi, at no cost and without your code leaving the
+      network.</li>
+    <li><b>Small footprint</b> — no bundled model or native library.</li>
+    <li><b>Credential hygiene</b> — encrypted at rest, header-only in transit,
+      dropped from memory when the plugin unloads.</li>
+    <li><b>Legible failures</b> — a wrong path, a stopped server and a refused key
+      each say so specifically instead of producing one generic error.</li>
+    <li><b>Coexists with the other backends</b> — install several and switch in
+      Agent settings.</li>
+  </ul>
+</body>
+</html>

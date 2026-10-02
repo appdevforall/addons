@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      DayNight theme applied to the plugin's inflation Context via android:theme on
+      <application>. The host builds the plugin Context from this theme and keeps its
+      Configuration in sync with the IDE's day/night setting, so switching the parent to a
+      Material3 DayNight theme (was android:Theme.Material.Light, which pinned everything to
+      light) is what lets the UI follow the IDE. Colors map to @color/plugin_* which have
+      values-night/ variants.
+    -->
+    <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/plugin_primary</item>
+        <item name="colorOnPrimary">@color/plugin_on_primary</item>
+        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+
+        <item name="colorSecondary">@color/plugin_secondary</item>
+        <item name="colorOnSecondary">@color/plugin_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/plugin_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/plugin_on_secondary_container</item>
+
+        <item name="android:colorBackground">@color/plugin_surface</item>
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+
+        <item name="colorOutline">@color/plugin_outline</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+
+        <item name="colorError">@color/plugin_error</item>
+        <item name="colorOnError">@color/plugin_on_error</item>
+        <item name="colorErrorContainer">@color/plugin_error_container</item>
+        <item name="colorOnErrorContainer">@color/plugin_on_error_container</item>
+
+        <item name="materialButtonStyle">@style/PluginButton.Filled</item>
+        <item name="textInputStyle">@style/PluginTextInputLayout</item>
+    </style>
+
+    <!--
+      ThemeOverlay applied via android:theme on the settings pane's root. The host may build the
+      plugin's inflation Context by layering PluginTheme onto the *activity's* theme without
+      forcing it (PluginResourceContext), in which case PluginTheme's own items lose and the pane
+      falls back to framework widget defaults. android:theme on a ViewGroup wraps that subtree's
+      inflation Context, which is where MaterialButton and TextInputLayout look their styles up, so
+      this is what guarantees the pane is styled either way. No colors here: the widget styles pin
+      their own, so nothing depends on which theme won.
+    -->
+    <style name="ThemeOverlay.Plugin" parent="">
+        <item name="materialButtonStyle">@style/PluginButton.Filled</item>
+        <item name="textInputStyle">@style/PluginTextInputLayout</item>
+    </style>
+
+    <!-- Typography -->
+
+    <style name="Plugin.Text.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/plugin_on_surface</item>
+        <item name="android:textSize">@dimen/text_body</item>
+    </style>
+
+    <style name="Plugin.Text.Small" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/plugin_text_muted</item>
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:lineSpacingMultiplier">1.25</item>
+    </style>
+
+    <!-- Eyebrow label above a field, as used by the IDE's own grouped settings. -->
+    <style name="Plugin.Text.Label" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textColor">@color/plugin_text_muted</item>
+        <item name="android:textSize">@dimen/text_micro</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- Explicit parent="" required: dot-name inference would look up @style/Plugin, which does
+         not exist, and break resource linking. -->
+    <style name="Plugin.SectionHeader" parent="">
+        <item name="android:textAppearance">@style/Plugin.Text.Label</item>
+        <item name="android:paddingBottom">@dimen/space_xs</item>
+    </style>
+
+    <!-- A status line under a field: one icon, one sentence, muted. -->
+    <style name="Plugin.StatusLine" parent="">
+        <item name="android:textAppearance">@style/Plugin.Text.Small</item>
+        <item name="android:drawablePadding">@dimen/space_sm</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <!-- Buttons. Every color is a direct @color/* reference, never ?attr/*: the host may build the
+         plugin's inflation theme by layering PluginTheme onto the activity's own without forcing
+         it, and a Material 3 widget whose color roles resolve against that theme comes out as an
+         unreadable slab — dark-on-dark for an outlined button in light mode. The palette is neutral
+         by choice, matching the IDE's own grey accent rather than this plugin's teal, on a screen
+         whose chrome belongs to AI Core. Light/dark comes from values-night/colors.xml.
+
+         Filled for the one primary action in a section, outlined for the rest, per Material 3's
+         button hierarchy. Both pin direct colours, so neither resolves a role against the host.
+         The app: items here are dropped inside the host; ui/PaneStyling.kt applies them in code. -->
+    <style name="PluginButton.Filled" parent="Widget.Material3.Button">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/plugin_button_filled_content</item>
+        <item name="backgroundTint">@color/plugin_button_filled_container</item>
+        <item name="iconTint">@color/plugin_button_filled_content</item>
+        <item name="rippleColor">@color/plugin_button_filled_ripple</item>
+    </style>
+
+    <style name="PluginButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/plugin_button_outlined_content</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="iconTint">@color/plugin_button_outlined_content</item>
+        <item name="strokeColor">@color/plugin_button_outlined_stroke</item>
+        <item name="strokeWidth">@dimen/button_stroke_width</item>
+        <item name="rippleColor">@color/plugin_button_outlined_ripple</item>
+    </style>
+
+    <!-- Inputs -->
+
+    <style name="PluginTextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/plugin_outline</item>
+        <item name="boxStrokeErrorColor">@color/plugin_error</item>
+        <item name="hintTextColor">@color/plugin_text_muted</item>
+        <item name="android:textColorHint">@color/plugin_text_muted</item>
+        <item name="endIconTint">@color/plugin_on_surface_variant</item>
+        <item name="boxCornerRadiusTopStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_md</item>
+    </style>
+
+    <!-- The text inside every box. Applied explicitly because the preset and model fields are
+         AutoCompleteTextViews rather than TextInputEditTexts, and so do not pick the box's own
+         text style up from the theme. -->
+    <style name="PluginTextInputEditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:textAppearance">@style/Plugin.Text.Body</item>
+        <item name="android:textColor">@color/plugin_on_surface</item>
+    </style>
+
+</resources>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent OpenAI — Guide</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+  th, td {
+    border: 1px solid #e0e0e0;
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    font-size: 0.95em;
+  }
+  th { background: #fafafa; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>AI Agent OpenAI — Cloud and Self-Hosted Inference</h1>
+
+  <p><b>AI Agent OpenAI</b> is a headless plugin: it has no screens of its own,
+  only a settings pane inside AI Core. It adds the <code>openai</code> backend to
+  <b>AI Core</b>, which routes requests from the Agent chat, <b>Code
+  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>. Install
+  <b>AI Core</b> as well — without it this plugin has nothing to register with.</p>
+
+  <h2>One backend, many servers</h2>
+
+  <p>It speaks the OpenAI <code>chat/completions</code> protocol. Every server
+  below speaks the same protocol, so only the URL changes — set it in
+  <b>Agent settings</b> after selecting <b>OpenAI</b> as the backend.</p>
+
+  <table>
+    <tr><th>Server URL</th><th>What it is</th></tr>
+    <tr><td><code>https://api.openai.com/v1</code></td><td>OpenAI itself. The default.</td></tr>
+    <tr><td><code>http://localhost:11434/v1</code></td><td>Ollama running on this device.</td></tr>
+    <tr><td><code>http://192.168.1.50:11434/v1</code></td><td>Ollama on your own PC, over Wi-Fi.</td></tr>
+    <tr><td><code>http://192.168.1.50:1234/v1</code></td><td>LM Studio's server.</td></tr>
+    <tr><td><code>http://localhost:8080/v1</code></td><td><code>llama-server</code> from llama.cpp.</td></tr>
+    <tr><td><code>https://openrouter.ai/api/v1</code></td><td>OpenRouter — many models behind one key, some free.</td></tr>
+  </table>
+
+  <p>The presets in the settings pane fill these in for you. The local ones use
+  <code>localhost</code>; to reach another machine, pick the preset and edit the
+  host to that machine's address.</p>
+
+  <h2>Setup</h2>
+  <ul>
+    <li><b>Server</b> — pick a preset or type a URL, then tap <b>Save Server</b>.
+      It must end at the API root (<code>…/v1</code>), not at
+      <code>/chat/completions</code>. If you paste the full endpoint URL, the
+      extra path is removed for you.</li>
+    <li><b>API key</b> — required for OpenAI and OpenRouter, and left blank for a
+      local server, which needs no credential. The key is checked against the
+      server before it is saved. <b>This section disappears entirely</b> when the
+      server URL points at your own device or network — there is no key to enter,
+      so the pane stops asking for one. If a key is already saved, only
+      <b>Remove</b> stays behind: the key is kept for the servers that need it and
+      is never sent to a server it was not saved for.</li>
+    <li><b>Model</b> — one field that is also a list: type any model name, or tap
+      it to pick one the server reported. Typing is saved when you leave the
+      field. For a local server the model is whatever you pulled, such as
+      <code>qwen2.5-coder</code>.</li>
+    <li><b>Test Connection &amp; List Models</b> — checks the URL and key together
+      without saving either, so a typo is caught here rather than mid-chat. The
+      same reply fills the model list, because listing models <em>is</em> the
+      connection test.</li>
+  </ul>
+
+  <div class="note">
+    The key is stored encrypted with AES/GCM under a hardware-backed Android
+    Keystore secret, and is sent as an <code>Authorization: Bearer</code> header
+    — never in a URL, where it would leak into logs and proxies. With no key
+    configured, no authorization header is sent at all.
+  </div>
+
+  <h2>Cost, and the free options</h2>
+
+  <p>OpenAI has no free tier. An API key draws on a prepaid balance and is
+  <b>separate from a ChatGPT subscription</b> — paying for ChatGPT does not give
+  you API access. If you want to use the Agent without paying:</p>
+  <ul>
+    <li>Run a model on your own computer and point the server URL at it. This is
+      free, and your code never leaves your network.</li>
+    <li>Use <b>AI Agent Local</b> to run a small model on the device itself.</li>
+    <li>Use <b>AI Agent Gemini</b>, which has a free tier.</li>
+    <li>Point this backend at OpenRouter, which offers some free models.</li>
+  </ul>
+
+  <h2>Privacy</h2>
+  <p>Prompts, and any file contents a plugin includes in them, are transmitted to
+  whichever server you configure. For OpenAI or OpenRouter that means your code
+  leaves the device to a third party. For a server on your own machine it stays
+  on your network.</p>
+
+  <p>Plain <code>http://</code> is accepted only for this device or a private
+  network address, and the pane warns you once when you save one: that traffic
+  crosses your local network unencrypted. An unencrypted address on the open
+  internet is refused outright.</p>
+
+  <h2>Reasoning models</h2>
+  <p>Reasoning models (the <code>gpt-5</code> and <code>o</code> series) take
+  different request parameters: they reject <code>max_tokens</code> in favour of
+  <code>max_completion_tokens</code>, and several reject
+  <code>temperature</code>. This is handled for you — the right parameters are
+  chosen from the model name, and if a server still refuses one, the request is
+  retried once without it.</p>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><b>"The server answered 404"</b> — the URL is almost certainly missing
+      its <code>/v1</code> suffix.</li>
+    <li><b>"Nothing answered"</b> — the server is not running, or this device
+      cannot reach it. Check that Ollama or LM Studio is started, and that the
+      phone is on the same network as the computer.</li>
+    <li><b>"The server refused your API key"</b> — the key is wrong or revoked;
+      re-enter it.</li>
+    <li><b>"Your OpenAI account has no credit left"</b> — API usage is prepaid.
+      Add credit, or use one of the free options above.</li>
+    <li><b>"The server answered but has no models loaded"</b> — for Ollama, pull
+      a model first (<code>ollama pull qwen2.5-coder</code>).</li>
+    <li><b>"The server does not have a model called …"</b> — tap <b>Test
+      Connection &amp; List Models</b>, then pick from the Model field, or type the
+      exact name the server uses.</li>
+    <li><b>The <code>OpenAI</code> backend never appears</b> — AI Core isn't
+      installed or activated; install it and restart the IDE.</li>
+  </ul>
+</body>
+</html>
