@@ -26,6 +26,64 @@ fi
 
 REQUIRED_PROVENANCE_KEYS=(name version variant revision revision_source timestamp timestamp_source)
 
+# A template addon ships a .cgt, not a .cgp (ADFA-6252). Its record sits at the archive
+# root rather than under assets/ (a .cgt has no assets/ directory), and the key set differs:
+# there is no Android build `variant`, and no `libs_revision` because a template compiles
+# against nothing. Everything else -- the required-key sweep, and the unknown/+dirty/wall-clock
+# warnings -- means the same for either artifact.
+REQUIRED_CGT_PROVENANCE_KEYS=(revision revision_source timestamp timestamp_source addon_id version)
+CGT_PROVENANCE_ENTRY="cgt-build.properties"
+
+verify_cgt_provenance() {
+    local addon="$1" cgt props key value revision revision_source timestamp_source
+
+    cgt="$REPO_ROOT/$addon/build/plugin/$(basename "$addon" | tr '[:upper:]' '[:lower:]').cgt"
+    if [ ! -f "$cgt" ]; then
+        # The publish workflow builds into dist/, not into the addon directory, so accept
+        # either. Naming both paths matters: "no .cgt" otherwise reads as a build failure
+        # when it is only a different output directory.
+        cgt="$REPO_ROOT/dist/$(basename "$addon" | tr '[:upper:]' '[:lower:]').cgt"
+    fi
+    if [ ! -f "$cgt" ]; then
+        echo "Error: $addon produced no .cgt under build/plugin/ or dist/." >&2
+        return 1
+    fi
+
+    if ! props="$(unzip -p "$cgt" "$CGT_PROVENANCE_ENTRY" 2>/dev/null)" || [ -z "$props" ]; then
+        echo "Error: $(basename "$cgt") does not contain $CGT_PROVENANCE_ENTRY." >&2
+        echo "       scripts/build-cgt.sh either no longer writes the provenance record or no" >&2
+        echo "       longer includes it in the archive." >&2
+        return 1
+    fi
+
+    for key in "${REQUIRED_CGT_PROVENANCE_KEYS[@]}"; do
+        value="$(printf '%s\n' "$props" | sed -n "s/^${key}=//p" | head -n1)"
+        if [ -z "$value" ]; then
+            echo "Error: $(basename "$cgt") provenance record has no '$key' value." >&2
+            printf '%s\n' "$props" | sed 's/^/       /' >&2
+            return 1
+        fi
+    done
+
+    revision="$(printf '%s\n' "$props" | sed -n 's/^revision=//p' | head -n1)"
+    revision_source="$(printf '%s\n' "$props" | sed -n 's/^revision_source=//p' | head -n1)"
+    timestamp_source="$(printf '%s\n' "$props" | sed -n 's/^timestamp_source=//p' | head -n1)"
+
+    if [ "$revision" = "unknown" ] || [ "$revision_source" = "none" ]; then
+        echo "Warning: $addon recorded revision=unknown — the .cgt cannot be traced to a commit." >&2
+    fi
+    case "$revision" in
+        *+dirty)
+            echo "Warning: $addon was built from a dirty $addon/ directory, recorded as '$revision'." >&2
+            ;;
+    esac
+    if [ "$timestamp_source" = "wall-clock" ]; then
+        echo "Warning: $addon stamped a wall-clock timestamp — this .cgt is not reproducible." >&2
+    fi
+
+    echo "  provenance: revision=$revision ($revision_source) timestamp_source=$timestamp_source"
+}
+
 verify_provenance() {
     local plugin="$1"
     local cgp props key value revision revision_source timestamp_source recorded_libs
@@ -102,5 +160,11 @@ if [ "$#" -eq 0 ]; then
 fi
 
 for plugin in "$@"; do
-    verify_provenance "$plugin"
+    # templates.json is the same marker discover.py keys on, so the two agree on
+    # what a template is without either restating the rule.
+    if [ -f "$REPO_ROOT/$plugin/templates.json" ]; then
+        verify_cgt_provenance "$plugin"
+    else
+        verify_provenance "$plugin"
+    fi
 done

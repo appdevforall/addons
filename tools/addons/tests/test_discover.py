@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from addons import discover
 
 PREDICATE = "com.itsaky.androidide.plugins.build"
@@ -48,7 +50,6 @@ def test_only_selects_a_subset_by_path_or_name(tmp_path):
 
 
 def test_only_rejects_an_unknown_addon(tmp_path):
-    import pytest
     make_addon(tmp_path, "plugins/Voice-Alerts")
     with pytest.raises(RuntimeError, match="Nope"):
         discover.find_addons(tmp_path, only=["Nope"])
@@ -90,3 +91,85 @@ def test_a_bang_prefix_means_never_build(tmp_path):
     # compile coverage picks up the held-back one but never the broken one
     assert [p.name for p in discover.find_addons(tmp_path, include_skipped=True)] \
         == ["Shipping", "held-back"]
+
+
+def make_template(root: Path, path: str, with_index: bool = True) -> None:
+    d = root / path
+    d.mkdir(parents=True)
+    if with_index:
+        (d / "templates.json").write_text('{"templates": [{"path": "One"}]}')
+
+
+def test_finds_a_template_with_no_gradle_build(tmp_path):
+    """A template is discovered by templates.json, not build.gradle.kts.
+
+    This is the whole point of the second rule (ADFA-6252): a template has no
+    Gradle project, so the plugin predicate can never match it.
+    """
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    found = discover.find_addons(tmp_path)
+    assert [p.name for p in found] == ["Flutter-Starter-Kit"]
+    assert discover.is_template(found[0])
+
+
+def test_a_templates_dir_without_the_index_is_not_an_addon(tmp_path):
+    """templates/ also holds documentation; only a bundle source is an addon."""
+    make_template(tmp_path, "templates/Notes", with_index=False)
+    assert discover.find_addons(tmp_path) == []
+
+
+def test_templates_and_plugins_are_listed_together(tmp_path):
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    found = discover.find_addons(tmp_path)
+    assert [p.name for p in found] == ["Flutter-Starter-Kit", "Random-XKCD"]
+    assert [discover.is_template(p) for p in found] == [True, False]
+
+
+def test_a_plugin_is_not_a_template(tmp_path):
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    assert not discover.is_template(tmp_path / "plugins" / "Random-XKCD")
+
+
+def test_skip_txt_holds_back_a_template_too(tmp_path):
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    (tmp_path / "tools" / "addons").mkdir(parents=True)
+    (tmp_path / "tools" / "addons" / "skip.txt").write_text(
+        "Flutter-Starter-Kit  not ready\n")
+    assert discover.find_addons(tmp_path) == []
+
+
+def test_only_resolves_a_template_by_path_or_name(tmp_path):
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    by_name = discover.find_addons(tmp_path, ["Flutter-Starter-Kit"])
+    by_path = discover.find_addons(tmp_path, ["templates/Flutter-Starter-Kit"])
+    assert by_name == by_path
+
+
+def test_kind_selects_one_kind(tmp_path):
+    """Each build script asks for its own kind: Gradle cannot build a
+    template, and build-cgt.sh cannot build a plugin."""
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    names = lambda **kw: [p.name for p in discover.find_addons(tmp_path, **kw)]
+    assert names(kind="plugin") == ["Random-XKCD"]
+    assert names(kind="template") == ["Flutter-Starter-Kit"]
+    assert names() == ["Flutter-Starter-Kit", "Random-XKCD"]
+
+
+def test_name_of_other_kind_is_dropped_but_unknown_name_fails(tmp_path):
+    """F02: a single-template run must not fail the plugin step."""
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    assert discover.find_addons(tmp_path, ["Flutter-Starter-Kit"], kind="plugin") == []
+    with pytest.raises(RuntimeError):
+        discover.find_addons(tmp_path, ["No-Such-Addon"], kind="plugin")
+
+
+def test_name_matches_any_case(tmp_path):
+    """F03, F07, F08: slug, path, display name and stray whitespace all match."""
+    make_template(tmp_path, "templates/Flutter-Starter-Kit")
+    expected = discover.find_addons(tmp_path, ["Flutter-Starter-Kit"])
+    for name in ("flutter-starter-kit", "TEMPLATES/Flutter-Starter-Kit",
+                 " flutter-starter-kit\n", "Flutter Starter Kit"):
+        assert discover.find_addons(tmp_path, [name]) == expected, name

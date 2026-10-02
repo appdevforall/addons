@@ -41,7 +41,7 @@ the plugin's own data dir, and everything renders offline.
 ../../gradlew assemblePlugin      # -> build/plugin/ai-literacy-course.cgp (~119 MB)
 ```
 
-`scripts/update-libs.sh` runs `downloadAssets` automatically before
+`scripts/build-plugins.sh` runs `downloadAssets` automatically before
 `assemblePlugin`. Sideload the `.cgp` via **Preferences → Plugin Manager → +**.
 
 ## Source layout

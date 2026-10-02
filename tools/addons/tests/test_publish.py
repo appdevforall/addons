@@ -30,15 +30,22 @@ def test_headers_for_an_asset():
     assert head["CacheControl"] == "public, max-age=31536000, immutable"
 
 
-def test_the_catalog_goes_last(tmp_path):
+def test_the_catalogs_go_last(tmp_path):
+    """Ordering is the only atomicity R2 offers (design section 10.6).
+
+    Every published major is written, and all of them after the objects they
+    reference, so a reader mid-publish never sees an entry without its download.
+    """
     one = tmp_path / "a.cgp"
     one.write_bytes(b"a")
-    document = tmp_path / "catalog.json"
-    document.write_bytes(b"{}")
+    v1 = tmp_path / "catalog.v1.json"
+    v1.write_bytes(b"{}")
+    v2 = tmp_path / "catalog.json"
+    v2.write_bytes(b"{}")
     client = FakeClient()
     publish.publish(client, "addons", [("dl/a.cgp", one)],
-                    ("v1/catalog.json", document))
-    assert client.order == ["dl/a.cgp", "v1/catalog.json"]
+                    [("v1/catalog.json", v1), ("v2/catalog.json", v2)])
+    assert client.order == ["dl/a.cgp", "v1/catalog.json", "v2/catalog.json"]
 
 
 def test_bucket_comes_from_the_environment(monkeypatch):
@@ -139,7 +146,8 @@ def test_publish_emits_every_expected_key(tmp_path, monkeypatch):
     site.mkdir()
     for n, body in (("styles.css", "a{}"), ("app.js", "//"),
                     ("index.html", '<link href="assets/styles.css">'),
-                    ("catalog.schema.json", "{}")):
+                    ("catalog.schema.json", "{}"),
+                    ("catalog.v2.schema.json", "{}")):
         (site / n).write_text(body)
     (site / "assets").mkdir()
     (site / "assets" / "adfa-logo.svg").write_text("<svg/>")
@@ -149,6 +157,7 @@ def test_publish_emits_every_expected_key(tmp_path, monkeypatch):
     dist = tmp_path / "dist"
     dist.mkdir()
     (dist / "catalog.json").write_text("{}")
+    (dist / "catalog.v1.json").write_text("{}")
     (dist / "demo-addon.cgp").write_bytes(b"cgp")
     (dist / "demo-addon-src.tar.gz").write_bytes(b"tar")
 
@@ -164,9 +173,14 @@ def test_publish_emits_every_expected_key(tmp_path, monkeypatch):
                      "staging/7/p/demo-addon-night.png",
                      "staging/7/dl/demo-addon.cgp",
                      "staging/7/src/demo-addon-src.tar.gz",
-                     "staging/7/v1/catalog.schema.json"):
+                     "staging/7/v1/catalog.schema.json",
+                     "staging/7/v2/catalog.schema.json",
+                     "staging/7/v1/catalog.json"):
         assert expected in keys, f"{expected} was never uploaded"
-    assert keys[-1] == "staging/7/v1/catalog.json", "the catalog must go last"
+    # Both published majors, and both after everything they reference: a reader
+    # mid-publish must never find an entry whose download is not there yet.
+    assert keys[-2:] == ["staging/7/v1/catalog.json", "staging/7/v2/catalog.json"], \
+        "the catalogs must go last, newest last"
     assert any(k.startswith("staging/7/assets/styles.") and k.endswith(".css")
                for k in keys), "hashed stylesheet missing"
     # the page must reference the hashed asset, not the plain name

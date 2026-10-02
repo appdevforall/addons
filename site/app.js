@@ -131,11 +131,19 @@ function render() {
     node.querySelector(".icon-dark").srcset = safeUrl(addon.iconDarkUrl);
     node.querySelector('[data-slot="download"]').href = safeUrl(addon.download.url);
     node.querySelector('[data-slot="page"]').href = safeUrl(addon.pageUrl);
-    // the tarball is the source deliverable (R39); sourceUrl stays in the
-    // catalog as provenance for consumers that want the repository
+    // For a plugin the tarball is the source deliverable (R39); sourceUrl stays
+    // in the catalog as provenance for consumers that want the repository.
+    // A template has no tarball: its .cgt is plain text, so the download is
+    // already the source (ADFA-6252, schemaVersion 2 made the field optional).
+    // Reading it unguarded threw a TypeError here, and because this runs inside
+    // the card loop one such entry stopped the whole gallery rendering.
     const src = node.querySelector('[data-slot="source"]');
-    src.href = safeUrl(addon.sourceTarball.url);
-    src.title = `Source tarball, ${size(addon.sourceTarball.size)}`;
+    if (addon.sourceTarball) {
+      src.href = safeUrl(addon.sourceTarball.url);
+      src.title = `Source tarball, ${size(addon.sourceTarball.size)}`;
+    } else {
+      src.remove();
+    }
     cards.append(node);
   }
   renderActive();
@@ -175,7 +183,10 @@ document.getElementById("q").value = state.q;
 document.getElementById("type").value = state.type;
 document.getElementById("origin").value = state.origin;
 
-fetch("v1/catalog.json")
+// v2, not v1: this page ships with each publish, so it is never a stale consumer,
+// and only v2 carries template addons. v1 keeps being published for the app
+// (ADFA-6252, design section 10.2).
+fetch("v2/catalog.json")
   .then((response) => {
     if (!response.ok) throw new Error(response.status);
     return response.json();
