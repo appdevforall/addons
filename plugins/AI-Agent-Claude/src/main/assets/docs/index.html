@@ -58,8 +58,9 @@
       <b>Save Key</b>. The key is checked with Claude before it is saved.</li>
     <li><b>Model</b> — one field that is also a list: type any model id, or tap
       it to pick one your key can use. Typing is saved when you leave the field.
-      The default is <code>claude-opus-5-5</code>, the strongest for building
-      apps; <code>claude-sonnet-5-5</code> is faster and cheaper, and
+      The default is <code>claude-opus-5-5</code>, which suits building apps;
+      <code>claude-fable-5-1</code> is more capable and costs more,
+      <code>claude-sonnet-5-5</code> is faster and cheaper, and
       <code>claude-haiku-4-5</code> is fastest and cheapest.</li>
     <li><b>Test Connection &amp; List Models</b> — checks the key without saving
       it, and fills the model list from the same reply.</li>
@@ -76,8 +77,9 @@
   running the app — are declared to Claude directly, so its calls arrive as
   structured data rather than text that has to be written exactly right. A file
   whose contents contain quotes or line breaks cannot break a call.</p>
-  <p>Claude thinks before it answers. That thinking is never shown, but it takes
-  time, so a long pause before the first word of a reply is normal.</p>
+  <p>Most Claude models think before they answer (Haiku 4.5 does not). That
+  thinking is never shown, but it takes time, so a pause before the first word of
+  a reply is normal.</p>
 
   <h2>Cost</h2>
   <p>The Claude API is not free. It draws on prepaid credit in the Claude Console
@@ -103,8 +105,11 @@
       re-enter it.</li>
     <li><b>"Your Claude API credit balance is too low"</b> — add credit in the
       Claude Console.</li>
-    <li><b>"Claude is overloaded or unavailable"</b> — Claude is busy. The
-      request was already retried twice; try again in a moment.</li>
+    <li><b>"Claude is overloaded or unavailable"</b> — Claude is busy. If no
+      reply had appeared yet, the request was already retried twice; try again in
+      a moment.</li>
+    <li><b>"Claude stopped sending its reply partway through"</b> — Claude went
+      silent for two minutes. Try again, or ask for a smaller change.</li>
     <li><b>"This key is not in a workspace"</b> — Claude needs a workspace ID
       with this key. A <b>Workspace ID</b> field appears under the key: workspace
       IDs start with <code>wrkspc_</code> and are listed in the Claude Console

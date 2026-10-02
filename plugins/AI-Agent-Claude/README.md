@@ -40,7 +40,8 @@ single editable dropdown: type any id, or pick one the key can use.
 
 ## Request shape
 
-`ClaudeRequestBuilder` owns it, and each rule below is a 400 when got wrong:
+`ClaudeRequestBuilder` owns it. Most rules below exist because the alternative is
+a 400:
 
 - **History is text.** AI Core hands tool results back as user text and never the
   assistant `tool_use` block they answer, so they are sent as user text rather
@@ -48,16 +49,24 @@ single editable dropdown: type any id, or pick one the key can use.
   Consecutive same-role turns are merged and blank turns dropped; `SYSTEM` turns
   join the top-level `system`. Because no thinking block is ever replayed, the
   preserved-thinking history check never applies.
-- **No `thinking`, no `temperature`.** Omitting `thinking` runs each model's own
-  default (adaptive on Claude Opus 5.5, which rejects any other setting);
-  sampling parameters are removed on current Opus and Sonnet models.
-- **`max_tokens` is raised to 64K for a stream** (16K otherwise), because
-  thinking counts against it and `LlmConfig`'s default 2048 cuts turns off.
-- **Per-model fields** come from `ClaudeModelTraits`: `output_config.effort:
-  "high"` where the model takes it (not Haiku 4.5 or older lines), and
-  `fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta on the
-  models whose safety classifiers can decline a request (Fable 5.1, Opus 5.5,
-  Opus 5, Sonnet 5.5).
+- **Two kinds of turn.** A streamed turn is the agent's: it asks for
+  `thinking: {type: "adaptive"}` where the model takes it (on Opus 4.x and
+  Sonnet 4.6 an omitted `thinking` means none), effort `high`, and a 64K
+  budget, since thinking counts against `max_tokens`. A turn that is not
+  streamed is a small job (a chat title, an inline suggestion): no `thinking`,
+  effort `low`, and the caller's own budget, raised to 4K only on the 5.x models,
+  which think whether asked to or not.
+- **Never `temperature`:** it is a 400 on current Opus and Sonnet models.
+- **Per-model fields** come from `ClaudeModelTraits`, which reads what the live
+  catalog said each model accepts: output cap, adaptive thinking, effort. The
+  settings pane stores that with the model list. For a model the catalog has not
+  described, allow-lists decide, so an unknown model gets a bare request rather
+  than a field it may reject. `fallbacks: "default"` with the
+  `server-side-fallback-2026-07-01` beta goes only to the models whose safety
+  classifiers can decline a request (Fable 5.1, Opus 5.5, Opus 5, Sonnet 5.5).
+- **Aliases and dated ids are the same model.** The catalog lists some models
+  only by dated id (`claude-haiku-4-5-20251001`), so a saved alias is matched to
+  it rather than retired.
 - **`required_tool` is ignored.** Forced `tool_choice` is a 400 on current
   models, and the contract lets a backend that cannot force a call ignore it.
 - **Tools are not `strict`.** Strict mode needs closed schemas, which contributed
@@ -69,7 +78,15 @@ single editable dropdown: type any id, or pick one the key can use.
 
 - **`stop_reason: "refusal"`** is checked before anything else: the turn is
   reported as declined, and a tool call inside it is not run.
-- **Overload and rate limits** (529, 429, 5xx) are retried twice with backoff,
+- **A server-side fallback** drops any tool call the declined model began, since
+  the model that takes over never saw it. A tool call cut off by `max_tokens`
+  is dropped too, even when its input happens to parse.
+- **Stop** cancels the turn and closes its socket at once, so the API stops
+  generating rather than running on until its next line.
+- **A stream that goes silent** past the 120 s read timeout is reported as
+  Claude stopping mid-reply, not as a lost connection.
+- **Overload and rate limits** (408, 409, 429, 500, 502, 503, 504, 529) are
+  retried twice with backoff,
   honouring `retry-after` up to 10 s, but only before a stream has delivered
   anything, so a retry never repeats text on screen (`TransientRetry`).
 - An `error` event inside a 200 stream is raised as the HTTP status its type
@@ -111,6 +128,7 @@ via CodeOnTheGo's Plugin Manager, then restart the IDE.
 - `backend/ClaudeRequestBuilder.kt` — `messages[]` mapping and request JSON (pure)
 - `backend/ClaudeModelTraits.kt` — which optional fields each model accepts (pure)
 - `backend/ClaudeStreamEvent.kt` — one line of the event stream (pure)
+- `backend/TurnAssembler.kt` — folds a stream into a turn and decides how it ends (pure)
 - `backend/ClaudeToolProtocol.kt` — `tools[]` declaration and `tool_use` accumulation (pure)
 - `backend/TransientRetry.kt` — the retry schedule (pure)
 - `backend/ClaudeModelCatalog.kt` — reads `GET /v1/models` (pure)

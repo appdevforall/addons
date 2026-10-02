@@ -266,10 +266,10 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
                 <p>One field, and it accepts both: type a model id, or tap it to
                 choose from the list <b>Test Connection &amp; List Models</b>
                 fetched. Typing is saved as soon as you leave the field.</p>
-                <p>The default, <code>claude-opus-5-5</code>, is the strongest
-                model for building apps. <code>claude-sonnet-5-5</code> is faster
-                and cheaper; <code>claude-haiku-4-5</code> is fastest and
-                cheapest.</p>
+                <p>The default, <code>claude-opus-5-5</code>, suits building
+                apps. <code>claude-fable-5-1</code> is more capable and costs
+                more; <code>claude-sonnet-5-5</code> is faster and cheaper;
+                <code>claude-haiku-4-5</code> is fastest and cheapest.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(
