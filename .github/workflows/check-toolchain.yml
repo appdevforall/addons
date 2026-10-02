@@ -150,17 +150,16 @@ jobs:
           # Proves the bundle packages and that templates.json names only paths
           # that exist: build-cgt.sh derives its file list from that manifest and
           # fails when one is missing.
-          for dir in $(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover --include-skipped | grep '^templates/' || true); do
-            echo "==> $dir"
-            ./scripts/build-cgt.sh "$dir" "$GITHUB_WORKSPACE/dist"
-            ./scripts/verify-provenance.sh "$dir"
-            slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
+          ./scripts/build-templates.sh
+          for cgt in dist/*.cgt; do
+            [ -e "$cgt" ] || continue
+            slug="$(basename "$cgt" .cgt)"
             # The IDE looks templates.json up by that exact bare name, so a
             # nested one means no template is ever found.
-            unzip -l "$GITHUB_WORKSPACE/dist/${slug}.cgt" | grep -qE '[[:space:]]templates\.json$' \
+            unzip -l "$cgt" | grep -qE '[[:space:]]templates\.json$' \
               || { echo "::error::${slug}.cgt has no bare templates.json entry"; exit 1; }
             # Repository metadata must not reach a user-facing download.
-            if unzip -l "$GITHUB_WORKSPACE/dist/${slug}.cgt" | grep -qE '[[:space:]](addon\.json|.*\.html|icon_(day|night)\.png)$'; then
+            if unzip -l "$cgt" | grep -qE '[[:space:]](addon\.json|.*\.html|icon_(day|night)\.png)$'; then
               echo "::error::${slug}.cgt contains gallery metadata that belongs only in the repository"
               exit 1
             fi

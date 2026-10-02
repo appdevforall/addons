@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from addons import discover
 
 PREDICATE = "com.itsaky.androidide.plugins.build"
@@ -48,7 +50,6 @@ def test_only_selects_a_subset_by_path_or_name(tmp_path):
 
 
 def test_only_rejects_an_unknown_addon(tmp_path):
-    import pytest
     make_addon(tmp_path, "plugins/Voice-Alerts")
     with pytest.raises(RuntimeError, match="Nope"):
         discover.find_addons(tmp_path, only=["Nope"])
@@ -145,12 +146,28 @@ def test_only_resolves_a_template_by_path_or_name(tmp_path):
     assert by_name == by_path
 
 
-def test_plugins_only_excludes_templates(tmp_path):
-    """scripts/update-libs.sh runs Gradle in every entry it gets back, and a
-    template has no build.gradle.kts for assemblePlugin to act on."""
+def test_kind_selects_one_kind(tmp_path):
+    """Each build script asks for its own kind: Gradle cannot build a
+    template, and build-cgt.sh cannot build a plugin."""
     make_addon(tmp_path, "plugins/Random-XKCD")
     make_template(tmp_path, "templates/Flutter-Templates")
-    assert [p.name for p in discover.find_addons(tmp_path, plugins_only=True)] \
-        == ["Random-XKCD"]
-    assert [p.name for p in discover.find_addons(tmp_path)] \
-        == ["Flutter-Templates", "Random-XKCD"]
+    names = lambda **kw: [p.name for p in discover.find_addons(tmp_path, **kw)]
+    assert names(kind="plugin") == ["Random-XKCD"]
+    assert names(kind="template") == ["Flutter-Templates"]
+    assert names() == ["Flutter-Templates", "Random-XKCD"]
+
+
+def test_name_of_other_kind_is_dropped_but_unknown_name_fails(tmp_path):
+    """F02: a single-template run must not fail the plugin step."""
+    make_addon(tmp_path, "plugins/Random-XKCD")
+    make_template(tmp_path, "templates/Flutter-Templates")
+    assert discover.find_addons(tmp_path, ["Flutter-Templates"], kind="plugin") == []
+    with pytest.raises(RuntimeError):
+        discover.find_addons(tmp_path, ["No-Such-Addon"], kind="plugin")
+
+
+def test_name_matches_any_case(tmp_path):
+    """F03: the slug is the directory name lowercased, and callers pass either."""
+    make_template(tmp_path, "templates/Flutter-Templates")
+    assert discover.find_addons(tmp_path, ["flutter-templates"]) \
+        == discover.find_addons(tmp_path, ["TEMPLATES/Flutter-Templates"])

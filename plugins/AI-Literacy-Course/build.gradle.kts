@@ -251,7 +251,7 @@ val downloadPdfjs by tasks.registering {
     }
 }
 
-// Aggregator: scripts/update-libs.sh runs `downloadAssets` before assemblePlugin.
+// Aggregator: scripts/build-plugins.sh runs `downloadAssets` before assemblePlugin.
 val downloadAssets by tasks.registering {
     dependsOn(downloadCourse, downloadPdfjs)
 }

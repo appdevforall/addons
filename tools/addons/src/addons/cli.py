@@ -15,8 +15,11 @@ def main(argv: list[str] | None = None) -> int:
         "--include-skipped", action="store_true",
         help="also list skipped addons; for compile coverage, not publishing")
     discover_parser.add_argument(
-        "--plugins-only", action="store_true",
-        help="list only addons with a Gradle build; for callers that run Gradle")
+        "--kind", choices=("plugin", "template"),
+        help="list only this kind; each build script asks for its own")
+    discover_parser.add_argument(
+        "names", nargs="*",
+        help="directory names or repo-relative paths, any case; default all")
     sub.add_parser("check")
 
     catalog_parser = sub.add_parser("catalog")
@@ -39,9 +42,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "discover":
         # repo-relative, not bare names: callers cd into these and match them
         # against changed-file lists, so the location has to survive
-        for path in discover.find_addons(args.root,
+        try:
+            found = discover.find_addons(args.root, args.names or None,
                                          include_skipped=args.include_skipped,
-                                         plugins_only=args.plugins_only):
+                                         kind=args.kind)
+        except RuntimeError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 1
+        for path in found:
             print(path.relative_to(args.root).as_posix())
         return 0
 

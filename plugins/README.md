@@ -21,17 +21,21 @@ cd plugins/Voice-Alerts   # or any addon folder
 ../../gradlew assemblePluginDebug   # debug variant
 ```
 
-Build every plugin from scratch (after rebuilding libs):
+Build every plugin, or the ones you name:
 
 ```sh
-./scripts/update-libs.sh                          # default: github.com/appdevforall/CodeOnTheGo@stage
-./scripts/update-libs.sh --ref <branch-or-tag>
-./scripts/update-libs.sh --local ../CodeOnTheGo   # use an existing checkout instead of cloning
+./scripts/build-plugins.sh                              # every plugin, against the committed libs/
+./scripts/build-plugins.sh Voice-Alerts                 # only these (directory name or slug)
+./scripts/build-plugins.sh --ref <branch-or-tag>        # refresh libs/ from CodeOnTheGo first
+./scripts/build-plugins.sh --local ../CodeOnTheGo       # refresh libs/ from an existing checkout
 ```
 
-The script clones CoGo into `.cache/CodeOnTheGo/` on first run, rebuilds both jars, copies
-them into `libs/`, then runs `assemblePlugin` for every example. It auto-detects examples by
-scanning for `build.gradle.kts` files that apply `com.itsaky.androidide.plugins.build`.
+`build-plugins.sh` lists plugins with `addons discover --kind plugin`, which finds every
+`build.gradle.kts` that applies `com.itsaky.androidide.plugins.build`. With `--ref` or
+`--local` it first calls `scripts/update-libs.sh`, which clones CoGo into `.cache/CodeOnTheGo/`
+on first run, rebuilds both jars and copies them into `libs/`. `update-libs.sh` builds no
+addon by itself. Templates have their own script, `scripts/build-templates.sh`, and never need
+the jars.
 
 `local.properties` must contain `sdk.dir=...`. The committed `local.properties` at the repo
 root is harmless leftover; each plugin needs its own.
@@ -210,7 +214,7 @@ fetch onto ignored paths (`plugins/NDK-Installer/.gitignore`,
 
 `libs_revision` records which CoGo commit produced the jars the plugin was compiled against.
 The builder cannot see that checkout, so each build path exports `PLUGIN_LIBS_REVISION` first:
-`scripts/update-libs.sh` from the CodeOnTheGo checkout it just built, and **Publish addons**
+`scripts/build-plugins.sh` from the CodeOnTheGo checkout `update-libs.sh` just built, and **Publish addons**
 from the target commit of the `plugin-api-latest` release it downloaded. Compare two
 artifacts' `libs_revision` by prefix, not equality: `.cgp`s published before that change took
 theirs from a commit subject, and some of those carry a 9-character sha. Note that under **Update libs from CodeOnTheGo** the plugin's own `revision`
@@ -221,9 +225,7 @@ commit is created; `libs_revision` is what pins the pairing.
 missing `assets/cgp-build.properties`, missing any required key, or disagreeing with the
 exported `PLUGIN_LIBS_REVISION` fails the run. `revision=unknown`, `+dirty` and
 `timestamp_source=wall-clock` warn instead — all three are legitimate off-CI (no `.git`, no
-`git` binary). All three workflows call it — **Build addon artifacts** and **Update libs from
-CodeOnTheGo** through `scripts/update-libs.sh`, **Publish addons** directly, since it builds
-the addons itself. The last one is the one that matters most: those are the artifacts users
+`git` binary). All three workflows call it through `scripts/build-plugins.sh`. The last one is the one that matters most: those are the artifacts users
 install from the gallery.
 
 ---
@@ -289,7 +291,7 @@ fetches large files at build time with pinned-MD5 verification. These assets are
 committed to git** — each plugin gitignores its own download paths (`ai-literacy-course` pulls
 a ~110 MB course ZIP plus `pdfjs.zip`; `ndk-installer` pulls `ndk-cmake.tar.xz`). Committing
 one, even as a placeholder, makes every build dirty — see **Build provenance** above.
-`scripts/update-libs.sh` runs `downloadAssets` automatically before `assemblePlugin` when the
+`scripts/build-plugins.sh` runs `downloadAssets` automatically before `assemblePlugin` when the
 build file references it.
 
 **A bare `./gradlew assemblePlugin` does NOT run `downloadAssets`.** Both download plugins now

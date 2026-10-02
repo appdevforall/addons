@@ -71,8 +71,10 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
         run: echo "name=build-$(date -u +%Y-%m-%d)-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
-      - name: Run update-libs script
-        run: ./scripts/update-libs.sh
+      # Refreshes libs/ from CodeOnTheGo@stage, then proves every plugin still
+      # compiles against the new jars. Templates use no jars, so none are built.
+      - name: Refresh libs and build plugins
+        run: ./scripts/build-plugins.sh --ref stage
 
       - name: Commit updated jars
         id: commit

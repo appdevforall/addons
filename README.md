@@ -111,6 +111,9 @@ Go to [Actions → **Update libs from CodeOnTheGo**](../../actions/workflows/upd
 ./scripts/update-libs.sh --local ../CodeOnTheGo   # use an existing local checkout instead of cloning
 ```
 
+`update-libs.sh` only refreshes `libs/`. To refresh and then build every plugin against the new
+jars, run `./scripts/build-plugins.sh` with the same `--ref` or `--local` argument.
+
 First local run clones Code on the Go into `.cache/CodeOnTheGo/` (gitignored); subsequent runs `git pull` in place. Review the diff in `libs/` and commit if you're happy with it.
 
 ## Adding a new plugin example

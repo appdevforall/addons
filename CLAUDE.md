@@ -42,7 +42,18 @@ Naming is derived, not chosen twice: the directory name in MixedCase with single
 
 Every addon publishes to `addons.appdevforall.org` through Cloudflare R2, by the **Publish addons** workflow. The catalog, the gallery page and the download all derive from the directory name and `addon.json`. Nothing needs wiring up by hand.
 
-Build artifacts are **never committed**. A `.cgp` is built by Gradle; a `.cgt` is zipped by the Action.
+Build artifacts are **never committed**.
+
+## Building
+
+Each kind has its own script. Each script builds only its own kind and ignores a name of the other kind, so both take the same arguments. An unknown name fails.
+
+| Kind | Script | What it does |
+|---|---|---|
+| Plugin | `scripts/build-plugins.sh [--ref R \| --local PATH] [--out DIR] [NAME...]` | `assemblePlugin` per plugin, to `.cgp`. With `--ref`/`--local` it first calls `scripts/update-libs.sh` to refresh `libs/` from Code on the Go; without either it uses the committed `libs/` |
+| Template | `scripts/build-templates.sh [NAME...]` | `scripts/build-cgt.sh` per template, to `dist/<slug>.cgt`. Needs no Code on the Go jars and no Gradle |
+
+`update-libs.sh` is plugin-only and builds nothing by itself. Both scripts take their lists from `addons discover --kind plugin|template`, which is the single definition of each kind and matches a NAME by directory name or slug, in any case. Every workflow (**Build addon artifacts**, **Publish addons**, **Update libs from CodeOnTheGo**, **Check toolchain**) calls these scripts, so a local build and a CI build run the same code.
 
 ## Verification
 

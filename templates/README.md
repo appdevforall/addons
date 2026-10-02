@@ -223,13 +223,14 @@ on every pull request. Treat its output as the authority.
 ## 11. Build it and look inside
 
 ```sh
-./scripts/build-cgt.sh templates/My-Templates out
-unzip -l out/my-templates.cgt
+./scripts/build-templates.sh My-Templates
+unzip -l dist/my-templates.cgt
 ```
 
 This is the same script the publish workflow runs, so a local build and a published one agree.
-It takes the file list from `templates.json`, pins every mtime, and writes a stored, sorted
-archive.
+It calls `scripts/build-cgt.sh`, which takes the file list from `templates.json`, pins every
+mtime, and writes a stored, sorted archive. With no name it builds every template. A template
+needs no Code on the Go jars and no Gradle.
 
 Confirm `templates.json` appears bare at the root, with no directory in front of it. The IDE
 looks it up by that exact name and finds nothing otherwise. Confirm too that `addon.json`,
