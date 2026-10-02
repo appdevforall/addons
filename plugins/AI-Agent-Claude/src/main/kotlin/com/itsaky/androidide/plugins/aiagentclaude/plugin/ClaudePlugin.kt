@@ -253,9 +253,10 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
                 <p>A key that is not in a workspace is refused on every request
                 until it names one, so this field appears only after Claude has
                 said so, and a key in a workspace never needs it.</p>
-                <p>Copy the ID, which starts with <code>wrkspc_</code>, from the
-                workspace's page in the Claude Console. It is saved with the key
-                and removed when the key is cleared.</p>
+                <p>Workspace IDs start with <code>wrkspc_</code>. Find yours in
+                the Claude Console under <b>Workspaces</b>, then copy it into this
+                field. It is saved with the key and removed when the key is
+                cleared.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(

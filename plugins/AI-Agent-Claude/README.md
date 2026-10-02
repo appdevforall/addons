@@ -91,7 +91,8 @@ offline can be saved anyway and is marked unverified.
 **Keys outside a workspace.** Such a key is refused with a 400 on every request
 until it carries an `anthropic-workspace-id` header. The plugin cannot look the
 id up (listing workspaces needs an admin key), so when the key check reports
-this, the pane shows a **Workspace ID** field; the id is saved with the key,
+this, the pane shows a **Workspace ID** field and says where to find the id
+(the Claude Console's **Workspaces** page; ids start with `wrkspc_`); the id is saved with the key,
 sent on every request, and removed with the key. A key in a workspace never sees
 the field. Typed ids are checked by `WorkspaceIds` before they become a header:
 one printable token, no whitespace or line breaks.
