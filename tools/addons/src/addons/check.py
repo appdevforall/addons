@@ -45,7 +45,7 @@ def check_template(path: Path, directory: str) -> list[str]:
 
     for item in listed:
         name = item.get("path") if isinstance(item, dict) else None
-        if not name:
+        if not isinstance(name, str) or not name:
             problems.append(f"{directory}: a templates.json entry has no 'path'")
             continue
         # keep the archive flat and inside itself: these become zip entry names

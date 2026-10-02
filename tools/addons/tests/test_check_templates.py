@@ -142,3 +142,11 @@ def test_a_non_object_templates_json_fails_cleanly(tmp_path):
     make_template(tmp_path, index="[]")
     problems = check.check_names(tmp_path)
     assert any("must be a JSON object" in p for p in problems)
+
+
+def test_a_non_string_template_path_fails_cleanly(tmp_path):
+    """{"path": 5} is truthy, so without a type check it reaches the string
+    tests and raises TypeError instead of naming the bad entry."""
+    make_template(tmp_path, index='{"templates": [{"path": 5}]}')
+    problems = check.check_names(tmp_path)
+    assert any("has no 'path'" in p for p in problems)
