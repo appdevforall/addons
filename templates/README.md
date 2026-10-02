@@ -184,14 +184,15 @@ This is what the gallery shows.
   "template": {
     "id": "com.example.mytemplates",
     "version": "1.0.0",
-    "minAppVersion": "26.38"
+    "minAppVersion": "26.36"
   }
 }
 ```
 
 `template.id` must be unique and must never change across releases. `template.version` is a
 dotted number. `minAppVersion` is the oldest Code on the Go release your bundle works on,
-written as `YY.ww`.
+written as `YY.ww`. 26.36 is the first release with the Extensions Manager, so no bundle can
+go lower.
 
 Your gallery card shows **Download** and **Details**. It has no **Source** link, because a
 template ships no source tarball — the `.cgt` is plain text throughout, so the download

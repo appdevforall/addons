@@ -15,6 +15,6 @@
   "template": {
     "id": "org.appdevforall.fluttertemplates",
     "version": "1.0.0",
-    "minAppVersion": "26.38"
+    "minAppVersion": "26.36"
   }
 }
