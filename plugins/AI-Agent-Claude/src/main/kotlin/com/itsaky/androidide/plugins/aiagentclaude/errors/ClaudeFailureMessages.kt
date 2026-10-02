@@ -72,6 +72,9 @@ internal class ClaudeFailureMessages(private val context: PluginContext) {
             ClaudeFailure.Unreachable ->
                 resources.getString(R.string.claude_error_unreachable)
 
+            ClaudeFailure.Stalled ->
+                resources.getString(R.string.claude_error_stalled)
+
             is ClaudeFailure.Failed -> failure.reason?.let {
                 resources.getString(R.string.claude_error_failed_reason, it)
             } ?: resources.getString(R.string.claude_error_failed)

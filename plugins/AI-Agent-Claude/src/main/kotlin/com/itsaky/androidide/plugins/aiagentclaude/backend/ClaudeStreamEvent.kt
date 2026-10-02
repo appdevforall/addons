@@ -25,16 +25,21 @@ internal sealed interface ClaudeStreamEvent {
     data class ToolInput(val index: Int, val partialJson: String) : ClaudeStreamEvent
 
     /**
-     * A `thinking` block opened. Never shown, and empty by default on current models, but proof
-     * the model was working when a turn ends with no text.
+     * Any block other than `tool_use` or `fallback` opened at [index]: `text`, `thinking`, or a type
+     * added later. Tracked so the turn knows which block a `max_tokens` stop cut off; a `thinking`
+     * block is never shown, but is proof the model was working when a turn ends with no text.
+     *
+     * @property type the block's `type`
+     * @property text text the block opened with, which for a `text` block is reply text
      */
-    data object ThinkingStarted : ClaudeStreamEvent
+    data class BlockOpened(val index: Int, val type: String, val text: String = "") : ClaudeStreamEvent
 
     /**
-     * A `fallback` block: a safety classifier declined the requested model and the server moved
-     * the turn to [toModel]. Text already streamed stays valid, so this is only logged.
+     * A `fallback` block at [index]: a safety classifier declined the requested model and the
+     * server moved the turn to [toModel]. Text already streamed stays valid; a tool call the
+     * declined model began does not.
      */
-    data class FallbackSwitch(val toModel: String?) : ClaudeStreamEvent
+    data class FallbackSwitch(val index: Int, val toModel: String?) : ClaudeStreamEvent
 
     /** `message_delta` carrying why generation stopped (`end_turn`, `tool_use`, `max_tokens`, ...). */
     data class Stop(val reason: String) : ClaudeStreamEvent
@@ -115,14 +120,13 @@ internal sealed interface ClaudeStreamEvent {
                     }
                 }
 
-                // A text block can open with text already in it; every one seen so far is empty.
-                "text" -> block.optString("text").takeIf { it.isNotEmpty() }?.let(::Text) ?: Ignored
-                "thinking", "redacted_thinking" -> ThinkingStarted
                 "fallback" -> FallbackSwitch(
-                    block.optJSONObject("to")?.optString("model")?.takeIf { it.isNotBlank() }
+                    index,
+                    block.optJSONObject("to")?.optString("model")?.takeIf { it.isNotBlank() },
                 )
 
-                else -> Ignored
+                // A text block can open with text already in it; every one seen so far is empty.
+                else -> BlockOpened(index, block.optString("type"), block.optString("text"))
             }
         }
 

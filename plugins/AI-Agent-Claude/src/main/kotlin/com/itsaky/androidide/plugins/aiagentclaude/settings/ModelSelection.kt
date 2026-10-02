@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentclaude.settings
 
+import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeModelTraits
+
 /**
  * Decides whether the saved model still applies once the catalog changed.
  *
@@ -24,7 +26,9 @@ internal object ModelSelection {
         isLive: Boolean,
         preferred: String,
     ): String? {
-        if (!isLive || models.isEmpty() || models.contains(current)) return null
-        return models.firstOrNull { it == preferred } ?: models.first()
+        // An alias counts as listed when the catalog has its dated id: some models are listed only
+        // that way, and retiring the alias the user picked swaps in a pricier model unasked.
+        if (!isLive || models.isEmpty() || models.any { ClaudeModelTraits.sameModel(current, it) }) return null
+        return models.firstOrNull { ClaudeModelTraits.sameModel(preferred, it) } ?: models.first()
     }
 }

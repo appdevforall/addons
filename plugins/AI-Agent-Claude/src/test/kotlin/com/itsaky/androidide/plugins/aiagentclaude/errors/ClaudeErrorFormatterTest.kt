@@ -120,6 +120,13 @@ class ClaudeErrorFormatterTest {
     }
 
     @Test
+    fun givenAStreamThatWentSilent_whenClassified_thenItIsStalledNotUnreachable() {
+        // The status line said 2xx, so "check your internet connection" would be wrong advice.
+        val error = ClaudeStreamStalledException(java.net.SocketTimeoutException("Read timed out"))
+        assertEquals(ClaudeFailure.Stalled, classify(error))
+    }
+
+    @Test
     fun givenNoAnswer_whenClassified_thenItIsUnreachable() {
         assertEquals(ClaudeFailure.Unreachable, classify(IOException("Unable to resolve host")))
     }

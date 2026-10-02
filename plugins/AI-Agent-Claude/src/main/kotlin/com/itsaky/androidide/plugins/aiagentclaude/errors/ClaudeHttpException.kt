@@ -43,3 +43,10 @@ class ClaudeHttpException(
         }
     }
 }
+
+/**
+ * The API accepted the request, then went silent for longer than the read timeout. Its own type
+ * because the network was evidently up: reporting it as "check your internet connection" sends
+ * the user after the wrong problem.
+ */
+class ClaudeStreamStalledException(cause: Throwable) : IOException("Claude stopped responding", cause)

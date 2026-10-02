@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aiagentclaude.backend
 
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeHttpException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 /**
  * When a failed request is worth sending again, and after how long.
@@ -26,6 +28,37 @@ internal object TransientRetry {
      * served by an error they can act on than by a turn that sits silent.
      */
     private const val MAX_DELAY_MS = 10_000L
+
+    /**
+     * Runs [attempt], retrying it per [delayMs] for as long as [delivered] says nothing has
+     * reached the user. From the first delivered token a failure is final, since a retry would
+     * repeat what is already on screen.
+     *
+     * @param onRetry told about each retry before its wait, for the log
+     * @param sleep the wait; injectable so the schedule is testable without real time
+     * @return what the successful attempt returned
+     */
+    suspend fun <T> run(
+        delivered: () -> Boolean = { false },
+        onRetry: (error: Exception, retry: Int, waitMs: Long) -> Unit = { _, _, _ -> },
+        sleep: suspend (Long) -> Unit = { delay(it) },
+        attempt: suspend () -> T,
+    ): T {
+        var retries = 0
+        while (true) {
+            try {
+                return attempt()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val wait = if (delivered()) null else delayMs(e, retries)
+                if (wait == null) throw e
+                retries++
+                onRetry(e, retries, wait)
+                sleep(wait)
+            }
+        }
+    }
 
     /**
      * How long to wait before retrying after [error], or null to give up.

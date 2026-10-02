@@ -24,20 +24,30 @@ internal object ClaudeRequestBuilder {
     private const val LEADING_USER_TURN = "(Earlier conversation omitted.)"
 
     /**
-     * Output budget for a streamed turn. Thinking is always on for current models and counts
-     * against `max_tokens`, so the 2048 an [LlmConfig] carries by default would cut a turn off
-     * mid-thought; 64K is the ceiling every current model accepts.
+     * Output budget for a streamed turn, which is the agent's: thinking counts against
+     * `max_tokens`, so the 4096 AI Core asks for would cut a turn off mid-thought. Held at each
+     * model's own cap.
      */
-    const val STREAMING_MAX_TOKENS = 64_000
-
-    /** Output budget for a turn that is not streamed: kept under the HTTP read timeout. */
-    const val BLOCKING_MAX_TOKENS = 16_000
+    const val STREAMING_MAX_TOKENS = ClaudeModelTraits.MAX_OUTPUT_CEILING
 
     /**
-     * Effort for every request to a model that takes it. Claude Opus 5.5 defaults to `medium`;
-     * an agent that edits and builds a project is the workload `high` exists for.
+     * Least budget for a turn that is not streamed, on a model that thinks whether asked to or
+     * not: a 512-token chat title would otherwise be spent before the reply began. Other models
+     * get exactly the caller's budget, since these are small jobs that asked for a small answer.
      */
-    const val EFFORT = "high"
+    const val BLOCKING_THINKING_FLOOR = 4_096
+
+    /**
+     * Effort for a streamed turn. Claude Opus 5.5 defaults to `medium`; an agent that edits and
+     * builds a project is the workload `high` exists for.
+     */
+    const val STREAMING_EFFORT = "high"
+
+    /**
+     * Effort for a turn that is not streamed: titles and inline suggestions, which want a quick
+     * short answer, and on Opus 5.5 effort is the only way to keep its thinking short.
+     */
+    const val BLOCKING_EFFORT = "low"
 
     /**
      * The conversation split into what the Messages API takes: a top-level `system` string and a
@@ -110,15 +120,19 @@ internal object ClaudeRequestBuilder {
     /**
      * Builds the request body for [conversation].
      *
-     * Sends no `thinking` and no `temperature`: an omitted `thinking` runs each model's default,
-     * and both of the alternatives are 400s on a current model — see [ClaudeModelTraits]. The
-     * caller's `required_tool` is not honoured either: forcing a call with `tool_choice` is a 400
-     * on current models, and the contract lets a backend that cannot force one ignore it.
+     * A streamed turn is the agent's, so it asks for adaptive thinking where the model takes it:
+     * on Opus 4.x and Sonnet 4.6 an omitted `thinking` means none at all, and the agent would run
+     * without reasoning. A turn that is not streamed sends no `thinking`, so those models answer
+     * a small job directly; the 5.x models think regardless, which [maxTokens] makes room for.
+     * No `temperature` is ever sent: it is a 400 on current Opus and Sonnet models. The caller's
+     * `required_tool` is not honoured either: forcing a call with `tool_choice` is a 400 on
+     * current models, and the contract lets a backend that cannot force one ignore it.
      *
      * @param model the model id to request
-     * @param stream true to ask for the event stream
+     * @param stream true to ask for the event stream, i.e. an agent turn
      * @param config supplies the token cap and stop sequences
      * @param tools the tools to declare; omitted from the body when empty
+     * @param known what the live catalog says [model] accepts, or null when it says nothing
      */
     fun body(
         conversation: Conversation,
@@ -126,10 +140,11 @@ internal object ClaudeRequestBuilder {
         stream: Boolean,
         config: LlmConfig,
         tools: List<ToolDefinition> = emptyList(),
+        known: ModelCapabilities? = null,
     ): JSONObject {
         val body = JSONObject()
             .put("model", model)
-            .put("max_tokens", maxTokens(config, stream))
+            .put("max_tokens", maxTokens(config, model, stream, known))
             .put("messages", conversation.messages)
         if (stream) body.put("stream", true)
         conversation.system?.let { body.put("system", it) }
@@ -142,8 +157,14 @@ internal object ClaudeRequestBuilder {
         // tool list at cache-read price. A prefix too short to cache is simply not cached.
         body.put("cache_control", JSONObject().put("type", "ephemeral"))
 
-        if (ClaudeModelTraits.supportsEffort(model)) {
-            body.put("output_config", JSONObject().put("effort", EFFORT))
+        if (stream && ClaudeModelTraits.supportsAdaptiveThinking(model, known)) {
+            body.put("thinking", JSONObject().put("type", "adaptive"))
+        }
+        if (ClaudeModelTraits.supportsEffort(model, known)) {
+            body.put(
+                "output_config",
+                JSONObject().put("effort", if (stream) STREAMING_EFFORT else BLOCKING_EFFORT),
+            )
         }
         if (ClaudeModelTraits.supportsServerFallback(model)) {
             // A safety classifier can decline a benign coding request; this re-runs it on the
@@ -173,10 +194,16 @@ internal object ClaudeRequestBuilder {
         }
 
     /**
-     * The caller's cap, raised to room for thinking and held at the ceiling every model accepts.
+     * The output budget: the agent's full budget for a stream, the caller's own otherwise, raised
+     * only where thinking cannot be turned off, and never above what [model] accepts.
      */
-    private fun maxTokens(config: LlmConfig, stream: Boolean): Int {
-        val floor = if (stream) STREAMING_MAX_TOKENS else BLOCKING_MAX_TOKENS
-        return config.maxTokens.coerceIn(floor, STREAMING_MAX_TOKENS)
+    private fun maxTokens(config: LlmConfig, model: String, stream: Boolean, known: ModelCapabilities?): Int {
+        val cap = ClaudeModelTraits.outputCap(model, known)
+        val wanted = when {
+            stream -> STREAMING_MAX_TOKENS
+            ClaudeModelTraits.thinksByDefault(model) -> maxOf(config.maxTokens, BLOCKING_THINKING_FLOOR)
+            else -> config.maxTokens
+        }
+        return wanted.coerceIn(1, cap)
     }
 }

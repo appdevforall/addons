@@ -135,6 +135,32 @@ class ClaudeToolProtocolTest {
     }
 
     @Test
+    fun givenAFallback_whenDiscarded_thenEveryCallSoFarIsForgottenAndLaterOnesKept() {
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.start(0, "toolu_old", "read_file")
+        calls.appendInput(0, "{}")
+
+        assertEquals(1, calls.discardAll())
+        calls.start(2, "toolu_new", "read_file")
+        calls.appendInput(2, "{}")
+
+        assertEquals(listOf("toolu_new"), calls.requests().map { it.callId })
+        assertEquals(0, calls.droppedCalls)
+    }
+
+    @Test
+    fun givenTheBlockCutOff_whenDropped_thenOnlyThatCallGoesAndIsCounted() {
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.start(0, "toolu_1", "list_files")
+        calls.start(1, "toolu_2", "edit_file")
+
+        assertTrue(calls.dropAt(1))
+        assertFalse(calls.dropAt(7))
+        assertEquals(listOf("toolu_1"), calls.requests().map { it.callId })
+        assertEquals(1, calls.droppedCalls)
+    }
+
+    @Test
     fun givenInputThatIsNotAnObject_whenRead_thenItIsRejected() {
         assertNull(ClaudeToolProtocol.argsOf("[1, 2]"))
         assertNull(ClaudeToolProtocol.argsOf("{\"unterminated\": "))

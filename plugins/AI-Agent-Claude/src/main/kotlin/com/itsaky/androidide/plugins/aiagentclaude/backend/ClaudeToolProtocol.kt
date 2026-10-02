@@ -94,8 +94,8 @@ internal object ClaudeToolProtocol {
      */
     class CallAccumulator {
 
-        /** One call under construction. */
-        private class Entry(val id: String, val name: String) {
+        /** One call under construction, at content-block [index]. */
+        private class Entry(val index: Int, val id: String, val name: String) {
             val input = StringBuilder()
         }
 
@@ -121,10 +121,41 @@ internal object ClaudeToolProtocol {
          * @param name the tool the model chose.
          */
         fun start(index: Int, id: String, name: String) {
-            val entry = Entry(id, name)
+            val entry = Entry(index, id, name)
             entries += entry
             open[index] = entry
         }
+
+        /**
+         * Forgets every call begun so far. For a server-side fallback: the declined model's calls
+         * are not passed to the model that takes over, so running one would run a call nobody
+         * stands behind, and the new model may well make the same call again.
+         *
+         * @return how many calls were forgotten
+         */
+        fun discardAll(): Int {
+            val count = entries.size
+            entries.clear()
+            open.clear()
+            return count
+        }
+
+        /**
+         * Drops the call at content-block [index], if there is one: the block a `max_tokens` stop
+         * cut off. Counted in [droppedCalls], since it is a truncated call; its input may even
+         * look complete, as an empty one does.
+         *
+         * @return true when a call was dropped
+         */
+        fun dropAt(index: Int): Boolean {
+            val entry = open.remove(index) ?: return false
+            entries.remove(entry)
+            truncated++
+            return true
+        }
+
+        /** Calls dropped by [dropAt]; folded into [droppedCalls]. */
+        private var truncated = 0
 
         /**
          * Appends one `input_json_delta` fragment to the block at [index]. A fragment for an index
@@ -153,7 +184,7 @@ internal object ClaudeToolProtocol {
                 }
                 requests += ToolCallRequest(entry.id.ifBlank { entry.name }, entry.name, args)
             }
-            droppedCalls = dropped
+            droppedCalls = dropped + truncated
             return requests
         }
     }

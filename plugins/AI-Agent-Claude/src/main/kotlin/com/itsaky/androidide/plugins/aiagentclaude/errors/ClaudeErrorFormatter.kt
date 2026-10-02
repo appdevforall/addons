@@ -48,8 +48,9 @@ sealed interface ClaudeFailure {
 
     /**
      * The key belongs to no workspace, so the API wants an `anthropic-workspace-id` header with
-     * every request (HTTP 400). Its own state because the cure is a new key, not a new request,
-     * and the API's explanation is longer than a reason this class echoes.
+     * every request (HTTP 400). Its own state because the cure is entering a workspace ID in the
+     * settings pane, not resending, and the API's explanation is longer than a reason this class
+     * echoes.
      */
     data object KeyNeedsWorkspace : ClaudeFailure
 
@@ -65,8 +66,11 @@ sealed interface ClaudeFailure {
     /** An HTTP status with no specific handling. */
     data class Unexpected(val httpStatus: Int, val reason: String?) : ClaudeFailure
 
-    /** No response at all — no network, DNS failure, or timeout. */
+    /** No response at all — no network, DNS failure, or a connection that timed out. */
     data object Unreachable : ClaudeFailure
+
+    /** The API accepted the request and then sent nothing for longer than the read timeout. */
+    data object Stalled : ClaudeFailure
 
     /**
      * The model declined the request (`stop_reason: "refusal"`), and any fallback the API tried
@@ -132,6 +136,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             is ClaudeFailure.ServiceUnavailable,
             is ClaudeFailure.Unexpected,
             ClaudeFailure.Unreachable,
+            ClaudeFailure.Stalled,
             ClaudeFailure.Refused,
             is ClaudeFailure.EmptyReply,
             ClaudeFailure.ReasoningOnly,
@@ -226,6 +231,9 @@ object ClaudeErrorFormatter {
             status != null && status in 500..599 -> ClaudeFailure.ServiceUnavailable(status)
 
             status != null -> ClaudeFailure.Unexpected(status, safeReason(parsed, error))
+
+            // Before the generic IOException: the request was accepted, so the network is fine.
+            error is ClaudeStreamStalledException -> ClaudeFailure.Stalled
 
             // No status at all: the request never got an answer.
             error is IOException -> ClaudeFailure.Unreachable

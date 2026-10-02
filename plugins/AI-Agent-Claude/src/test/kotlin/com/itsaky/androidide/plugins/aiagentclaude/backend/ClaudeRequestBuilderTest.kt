@@ -115,32 +115,83 @@ class ClaudeRequestBuilderTest {
         }
     }
 
-    @Test
-    fun givenAStreamedRequest_whenBuilt_thenThinkingAndTemperatureAreNotSent() {
-        // Both are 400s on Claude Opus 5.5: thinking cannot be disabled, sampling is removed.
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config()
-        )
+    private fun hi() = ClaudeRequestBuilder.conversation(emptyList(), "Hi", null)
 
-        assertFalse(body.has("thinking"))
+    @Test
+    fun givenAStreamedRequest_whenBuilt_thenTemperatureIsNeverSent() {
+        // A 400 on current Opus and Sonnet models.
+        val body = ClaudeRequestBuilder.body(hi(), "claude-opus-5-5", true, config())
+
         assertFalse(body.has("temperature"))
         assertTrue(body.getBoolean("stream"))
         assertEquals("claude-opus-5-5", body.getString("model"))
     }
 
     @Test
-    fun givenTheDefaultTokenCap_whenBuilt_thenItIsRaisedToRoomForThinking() {
-        // LlmConfig defaults to 2048, which thinking alone can use up before a word of reply.
-        val conversation = ClaudeRequestBuilder.conversation(emptyList(), "Hi", null)
+    fun givenAnAgentTurnOnAnOpus4Model_whenBuilt_thenAdaptiveThinkingIsAskedFor() {
+        // On Opus 4.x an omitted `thinking` means none: the agent would run without reasoning.
+        val body = ClaudeRequestBuilder.body(hi(), "claude-opus-4-8", true, config())
+
+        assertEquals("adaptive", body.getJSONObject("thinking").getString("type"))
+    }
+
+    @Test
+    fun givenAnAgentTurnOnHaiku_whenBuilt_thenNoThinkingIsSent() {
+        // Haiku 4.5 thinks only with a budget, and adaptive is a 400 there.
+        assertFalse(ClaudeRequestBuilder.body(hi(), "claude-haiku-4-5", true, config()).has("thinking"))
+    }
+
+    @Test
+    fun givenASmallJob_whenBuilt_thenItGetsNoThinkingLowEffortAndTheCallersBudget() {
+        // A 512-token chat title is not an agent turn; raising it to an agent's budget at high
+        // effort made the next message wait behind it.
+        val title = config().apply { maxTokens = 512 }
+        val body = ClaudeRequestBuilder.body(hi(), "claude-opus-4-8", false, title)
+
+        assertFalse(body.has("thinking"))
+        assertEquals(ClaudeRequestBuilder.BLOCKING_EFFORT, body.getJSONObject("output_config").getString("effort"))
+        assertEquals(512, body.getInt("max_tokens"))
+    }
+
+    @Test
+    fun givenASmallJobOnAModelThatAlwaysThinks_whenBuilt_thenItGetsRoomToThinkFirst() {
+        // Opus 5.5 thinks whatever it is asked; 512 tokens could be spent before the reply began.
+        val title = config().apply { maxTokens = 512 }
 
         assertEquals(
-            ClaudeRequestBuilder.STREAMING_MAX_TOKENS,
-            ClaudeRequestBuilder.body(conversation, "claude-opus-5-5", true, config()).getInt("max_tokens")
+            ClaudeRequestBuilder.BLOCKING_THINKING_FLOOR,
+            ClaudeRequestBuilder.body(hi(), "claude-opus-5-5", false, title).getInt("max_tokens")
         )
+    }
+
+    @Test
+    fun givenAnAgentTurn_whenBuilt_thenItGetsTheFullBudget() {
+        // AI Core asks for 4096, which thinking alone can use up before a word of reply.
         assertEquals(
-            ClaudeRequestBuilder.BLOCKING_MAX_TOKENS,
-            ClaudeRequestBuilder.body(conversation, "claude-opus-5-5", false, config()).getInt("max_tokens")
+            ClaudeRequestBuilder.STREAMING_MAX_TOKENS,
+            ClaudeRequestBuilder.body(hi(), "claude-opus-5-5", true, config()).getInt("max_tokens")
         )
+    }
+
+    @Test
+    fun givenAModelWithASmallerCap_whenBuilt_thenTheBudgetIsHeldToIt() {
+        // Opus 4 takes 32K; asking it for 64K is a 400 on every turn.
+        assertEquals(32_000, ClaudeRequestBuilder.body(hi(), "claude-opus-4-20250514", true, config()).getInt("max_tokens"))
+        val listed = ModelCapabilities(maxTokens = 8_192)
+        assertEquals(
+            8_192,
+            ClaudeRequestBuilder.body(hi(), "claude-new-model", true, config(), known = listed).getInt("max_tokens")
+        )
+    }
+
+    @Test
+    fun givenWhatTheCatalogSaid_whenBuilt_thenItOverridesTheStaticRules() {
+        // A model the static tables would give effort and thinking, listed as taking neither.
+        val bare = ModelCapabilities(adaptiveThinking = false, effort = false)
+        val body = ClaudeRequestBuilder.body(hi(), "claude-opus-4-8", true, config(), known = bare)
+
+        assertFalse(body.has("thinking"))
+        assertFalse(body.has("output_config"))
     }
 
     @Test
@@ -160,7 +211,7 @@ class ClaudeRequestBuilderTest {
             ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config()
         )
 
-        assertEquals(ClaudeRequestBuilder.EFFORT, body.getJSONObject("output_config").getString("effort"))
+        assertEquals(ClaudeRequestBuilder.STREAMING_EFFORT, body.getJSONObject("output_config").getString("effort"))
         assertEquals("default", body.getString("fallbacks"))
         assertEquals(listOf(ClaudeModelTraits.SERVER_FALLBACK_BETA), ClaudeRequestBuilder.betas("claude-opus-5-5"))
     }

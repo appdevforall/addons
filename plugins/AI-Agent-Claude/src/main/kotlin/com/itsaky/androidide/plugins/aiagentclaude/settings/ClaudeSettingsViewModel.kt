@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeBackend
+import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeModelCatalog
 import com.itsaky.androidide.plugins.aiagentclaude.backend.WorkspaceIds
 import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailureLog
@@ -158,9 +159,32 @@ class ClaudeSettingsViewModel(
     }
 
     /** Stores a fetched catalog, so the next visit can offer the picker at once. */
-    private fun rememberModels(models: List<String>) {
+    private fun rememberModels(models: List<String>, entries: List<ClaudeModelCatalog.Entry>) {
         val encoded = RememberedModels.encode(models) ?: return
-        prefs()?.edit()?.putString(ClaudePreferences.KEY_REMEMBERED_MODELS, encoded)?.apply()
+        prefs()?.edit()
+            ?.putString(ClaudePreferences.KEY_REMEMBERED_MODELS, encoded)
+            // From the same listing, so the backend's view of each model matches the picker's.
+            ?.putString(ClaudePreferences.KEY_MODEL_CAPABILITIES, ClaudeModelCatalog.encodeCapabilities(entries))
+            ?.apply()
+    }
+
+    /**
+     * The catalog the last [verifyConnection] fetched, so the pane can adopt it rather than fetch
+     * again with the *saved* key — which is not the key just tested when the field holds a new one.
+     */
+    @Volatile
+    private var lastVerifiedCatalog: CatalogResult.Success? = null
+
+    /**
+     * Publishes the catalog the last successful [verifyConnection] returned, as live.
+     *
+     * @return false when there is none, so the caller can fetch with the saved settings instead
+     */
+    fun adoptVerifiedCatalog(): Boolean {
+        val catalog = lastVerifiedCatalog?.takeIf { it.models.isNotEmpty() } ?: return false
+        rememberModels(catalog.models, catalog.entries)
+        publishModels(ClaudeModelOptions(catalog.models, isLive = true))
+        return true
     }
 
     /**
@@ -184,6 +208,7 @@ class ClaudeSettingsViewModel(
             logger?.error("$TAG: connection check failed unexpectedly", e)
             CatalogResult.Failed(e)
         }
+        lastVerifiedCatalog = result as? CatalogResult.Success
         result.toConnectionVerification().also { verification ->
             if (verification is ConnectionVerification.Verified) {
                 logger?.debug("$TAG: the API offers ${verification.modelCount} models")
@@ -317,7 +342,7 @@ class ClaudeSettingsViewModel(
                             logger?.debug("$TAG: fetched ${result.models.size} models")
                             // Remembered before publishing, so a pane reopened straight after a
                             // successful test still finds the list.
-                            rememberModels(result.models)
+                            rememberModels(result.models, result.entries)
                             publishModels(ClaudeModelOptions(result.models, isLive = true))
                         }
                     }

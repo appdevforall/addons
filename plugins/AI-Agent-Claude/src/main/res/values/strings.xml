@@ -19,6 +19,7 @@
     <string name="claude_error_unexpected">Claude returned an error (HTTP %1$d).</string>
     <string name="claude_error_unexpected_reason">Claude returned an error (HTTP %1$d). %2$s</string>
     <string name="claude_error_unreachable">Could not reach Claude. Check your internet connection and try again.</string>
+    <string name="claude_error_stalled">Claude stopped sending its reply partway through. Try again; if it keeps happening, ask for a smaller change.</string>
     <string name="claude_error_refused">Claude declined to answer this request. Rephrase it, or try a different model in Agent settings.</string>
     <string name="claude_error_empty_reply">Claude answered but sent no reply text. Try again. The IDE log shows what arrived.</string>
     <string name="claude_error_reasoning_only">Claude spent the turn thinking and never wrote an answer. Try again, or ask a narrower question.</string>

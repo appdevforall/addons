@@ -1,8 +1,10 @@
 package com.itsaky.androidide.plugins.aiagentclaude.backend
 
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeHttpException
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.IOException
 
@@ -38,6 +40,38 @@ class TransientRetryTest {
         listOf(400, 401, 403, 404, 413).forEach { code ->
             assertNull("$code must not retry", TransientRetry.delayMs(status(code), retriesSoFar = 0))
         }
+    }
+
+    @Test
+    fun givenAnOverloadBeforeAnythingWasShown_whenRun_thenItIsRetriedAndSucceeds() {
+        var attempts = 0
+        val waits = mutableListOf<Long>()
+
+        val result = runBlocking {
+            TransientRetry.run(sleep = { waits += it }) {
+                attempts++
+                if (attempts < 3) throw status(529)
+                "ok"
+            }
+        }
+
+        assertEquals("ok", result)
+        assertEquals(listOf(1_000L, 2_000L), waits)
+    }
+
+    @Test
+    fun givenAFailureAfterTextWasShown_whenRun_thenItIsNotRetried() {
+        // A retry would show the user the same tokens twice.
+        var attempts = 0
+        assertThrows(ClaudeHttpException::class.java) {
+            runBlocking {
+                TransientRetry.run(delivered = { true }, sleep = {}) {
+                    attempts++
+                    throw status(529)
+                }
+            }
+        }
+        assertEquals(1, attempts)
     }
 
     @Test

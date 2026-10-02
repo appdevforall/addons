@@ -42,6 +42,7 @@ class ClaudeCredentialProblemTest {
             ClaudeFailure.ServiceUnavailable(529),
             ClaudeFailure.Unexpected(418, null),
             ClaudeFailure.Unreachable,
+            ClaudeFailure.Stalled,
             ClaudeFailure.EmptyReply(skippedChunks = 3),
             ClaudeFailure.ReasoningOnly,
             ClaudeFailure.TruncatedBeforeReply,

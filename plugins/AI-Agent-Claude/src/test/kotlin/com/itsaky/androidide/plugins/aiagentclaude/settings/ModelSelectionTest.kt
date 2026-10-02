@@ -37,6 +37,13 @@ class ModelSelectionTest {
     }
 
     @Test
+    fun givenAnAliasTheCatalogListsByDatedId_whenAdopting_thenItIsKept() {
+        // The real catalog lists Haiku only as claude-haiku-4-5-20251001; retiring the alias the
+        // user picked swapped in Opus 5.5, about four times the price (ADFA-6311, on device).
+        assertNull(adopt("claude-haiku-4-5", listOf("claude-opus-5-5", "claude-haiku-4-5-20251001")))
+    }
+
+    @Test
     fun givenARememberedCatalog_whenAdopting_thenTheModelIsKept() {
         // A remembered list can be months old; a model missing from it may still work, and the
         // fallback list is not a catalog at all.

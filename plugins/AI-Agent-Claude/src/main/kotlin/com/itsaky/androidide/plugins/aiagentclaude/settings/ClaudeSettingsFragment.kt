@@ -374,8 +374,9 @@ class ClaudeSettingsFragment : Fragment() {
             updateUiState(isEditing = false)
             statusTextView.text = savedApiKeyStatusText()
             showStatus(verificationText, resultText, resultIcon)
-            // A different key can reach a different set of models, so the picker is re-fetched.
-            viewModel.fetchModels()
+            // A different key can reach a different set of models. The check that just passed
+            // fetched this key's catalog already; only an unchecked key needs a fetch.
+            if (!verified || !viewModel.adoptVerifiedCatalog()) viewModel.fetchModels()
         }
 
         /**
@@ -762,8 +763,9 @@ class ClaudeSettingsFragment : Fragment() {
                 }
                 val (message, icon) = describe(verdict)
                 showStatus(statusText, message, icon)
-                // Same request either way, so a successful test has already earned the catalog.
-                if (verdict is ConnectionVerification.Verified) viewModel.fetchModels()
+                // Same request either way, so a successful test has already earned the catalog: the
+                // one for the key just tested, which may not be the saved one.
+                if (verdict is ConnectionVerification.Verified) viewModel.adoptVerifiedCatalog()
             }
         }
     }

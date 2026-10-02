@@ -28,8 +28,10 @@ internal class ClaudeHttpClient(
         private const val CONNECT_TIMEOUT_MS = 15_000
 
         /**
-         * Longest silence a stream may hold. The API sends `ping` events while the model thinks,
-         * so this bounds a dead connection, not a slow turn.
+         * Longest silence a stream may hold. The stream carries `ping` events, but how often they
+         * arrive during long thinking is not documented, so this is a guess sized well above a
+         * normal gap. A turn that does go quiet this long is reported as stalled, not as a lost
+         * connection (`ClaudeStreamStalledException`).
          */
         const val STREAM_READ_TIMEOUT_MS = 120_000
 

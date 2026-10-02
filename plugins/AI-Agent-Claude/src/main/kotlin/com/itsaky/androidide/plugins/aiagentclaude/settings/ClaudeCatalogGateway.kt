@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentclaude.settings
 
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeBackend
+import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeModelCatalog
 import com.itsaky.androidide.plugins.aiagentclaude.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentclaude.plugin.ClaudePlugin
 import java.util.concurrent.CancellationException
@@ -75,7 +76,7 @@ class BackendClaudeCatalogGateway(
      * @param request the catalog call to make; picks which credential is used
      */
     private fun await(
-        request: (ClaudeBackend) -> CompletableFuture<List<String>>
+        request: (ClaudeBackend) -> CompletableFuture<List<ClaudeModelCatalog.Entry>>
     ): CatalogResult {
         val backend = try {
             backendProvider()
@@ -92,7 +93,8 @@ class BackendClaudeCatalogGateway(
         }
 
         return try {
-            CatalogResult.Success(future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty())
+            val entries = future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty()
+            CatalogResult.Success(entries.map { it.id }, entries)
         } catch (e: ExecutionException) {
             // The API failure the backend reported; it carries the HTTP status as a field.
             CatalogResult.Failed(e.cause ?: e)

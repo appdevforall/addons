@@ -40,6 +40,12 @@ internal object ClaudePreferences {
     const val KEY_REMEMBERED_MODELS = "claude_remembered_models"
 
     /**
+     * What the same listing said each model accepts — output cap, adaptive thinking, effort — so
+     * a request asks only for what its model takes. Encoded by `ClaudeModelCatalog`.
+     */
+    const val KEY_MODEL_CAPABILITIES = "claude_model_capabilities"
+
+    /**
      * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a
      * setting: written by the backend, and cleared when a new credential is saved or a request goes
      * through on the stored one — not when the settings pane reads it, which happens on every
