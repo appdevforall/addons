@@ -21,4 +21,56 @@
         android:src="@drawable/ic_content_copy"
         android:tint="@color/plugin_on_surface_variant" />
 
+    <!-- ChatAdapter shows it on user messages only, and only while the agent is idle. -->
+    <ImageButton
+        android:id="@+id/btn_edit_message"
+        android:layout_width="@dimen/chat_message_action_size"
+        android:layout_height="@dimen/chat_message_action_size"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/desc_edit_message"
+        android:padding="@dimen/chat_message_action_padding"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_edit"
+        android:tint="@color/plugin_on_surface_variant"
+        android:visibility="gone" />
+
+    <!-- "< 2/3 >" on a user message with other versions, from editing an older prompt. -->
+    <LinearLayout
+        android:id="@+id/version_nav"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btn_previous_version"
+            android:layout_width="@dimen/chat_message_action_size"
+            android:layout_height="@dimen/chat_message_action_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/desc_previous_version"
+            android:padding="@dimen/chat_message_action_padding"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_chevron_left"
+            android:tint="@color/plugin_on_surface_variant" />
+
+        <TextView
+            android:id="@+id/version_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/plugin_on_surface_variant"
+            android:textSize="@dimen/chat_caption_text_size" />
+
+        <ImageButton
+            android:id="@+id/btn_next_version"
+            android:layout_width="@dimen/chat_message_action_size"
+            android:layout_height="@dimen/chat_message_action_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/desc_next_version"
+            android:padding="@dimen/chat_message_action_padding"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_chevron_right"
+            android:tint="@color/plugin_on_surface_variant" />
+    </LinearLayout>
+
 </LinearLayout>

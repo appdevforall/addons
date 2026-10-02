@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.adapters
 
+import android.animation.ValueAnimator
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +21,7 @@ import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.viewmodel.ChatBranches
 import io.noties.markwon.Markwon
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -48,6 +51,45 @@ class ChatAdapter(
     private val decimalSecondsFormatter = DecimalFormat("0.0")
     private val expandedMessageIds = mutableSetOf<String>()
     private val animatingHolders = mutableSetOf<DefaultMessageViewHolder>()
+    private val pulsingHolders = mutableSetOf<DefaultMessageViewHolder>()
+
+    /**
+     * Whether user messages offer Edit and version switching, from ChatViewModel.canChangePrompts;
+     * false while a run is in flight.
+     */
+    var canChangePrompts: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            notifyUserRowsChanged { true }
+        }
+
+    /** Every user message with other versions, and which of them it is; see ChatBranches. */
+    internal var promptVersions: Map<String, ChatBranches.Position> = emptyMap()
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            notifyUserRowsChanged { previous[it] != value[it] }
+        }
+
+    /** The user message loaded into the composer for editing, or null; ChatFragment owns the state. */
+    var editingMessageId: String? = null
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            notifyUserRowsChanged { it == previous || it == value }
+        }
+
+    /** Rebinds the actions of the user rows [changed] picks; a payload keeps their text as it is. */
+    private inline fun notifyUserRowsChanged(changed: (messageId: String) -> Boolean) {
+        currentList.forEachIndexed { position, message ->
+            if (message.sender == Sender.USER && changed(message.id)) {
+                notifyItemChanged(position, PromptActionsPayload)
+            }
+        }
+    }
 
     companion object {
         private const val VIEW_TYPE_DEFAULT = 0
@@ -56,7 +98,13 @@ class ChatAdapter(
 
         const val ACTION_RETRY = "retry"
         const val ACTION_COPY = "copy"
+        const val ACTION_EDIT = "edit"
+        const val ACTION_PREVIOUS_VERSION = "previous_version"
+        const val ACTION_NEXT_VERSION = "next_version"
         const val ACTION_OPEN_SETTINGS = "open_settings"
+
+        /** A version arrow with nowhere to go, or held back while the agent works. */
+        private const val DISABLED_ALPHA = 0.38f
     }
 
     sealed class MessageViewHolder(view: View) : RecyclerView.ViewHolder(view)
@@ -72,8 +120,15 @@ class ChatAdapter(
         val btnRetry: Button = view.findViewById(R.id.btn_retry)
         /** Fold toggle; only the user bubble layout has one. */
         val btnToggleExpand: ImageButton? = view.findViewById(R.id.btn_toggle_expand)
+        /** The bordered bubble; only the user bubble layout has one. */
+        val userBubble: View? = view.findViewById(R.id.user_bubble)
         val messageActions: LinearLayout = view.findViewById(R.id.message_actions)
         val btnCopyMessage: ImageButton = view.findViewById(R.id.btn_copy_message)
+        val btnEditMessage: ImageButton = view.findViewById(R.id.btn_edit_message)
+        val versionNav: LinearLayout = view.findViewById(R.id.version_nav)
+        val btnPreviousVersion: ImageButton = view.findViewById(R.id.btn_previous_version)
+        val versionLabel: TextView = view.findViewById(R.id.version_label)
+        val btnNextVersion: ImageButton = view.findViewById(R.id.btn_next_version)
 
         /**
          * Queued next step of the "..." animation, or null when it isn't running. Retained so
@@ -81,6 +136,9 @@ class ChatAdapter(
          * would keep this holder, its views and their Context reachable after the row is gone.
          */
         var generatingDotsStep: Runnable? = null
+
+        /** Pulses [userBubble]'s border while its prompt is being edited; null otherwise. */
+        var editPulse: ValueAnimator? = null
     }
 
     class SystemMessageViewHolder(view: View) : MessageViewHolder(view) {
@@ -151,6 +209,8 @@ class ChatAdapter(
         if (payloads.isEmpty()) {
             // No payload, do full bind
             onBindViewHolder(holder, position)
+        } else if (payloads.all { it === PromptActionsPayload }) {
+            if (holder is DefaultMessageViewHolder) updateMessageActions(holder, getItem(position))
         } else {
             // Handle payload update
             val payload = payloads[0]
@@ -265,11 +325,23 @@ class ChatAdapter(
 
     /** Wired once per holder: a streamed reply grows via payloads, so the tap reads the current item. */
     private fun wireMessageActions(holder: DefaultMessageViewHolder) {
-        holder.btnCopyMessage.setOnClickListener {
-            val pos = holder.bindingAdapterPosition
-            if (pos != RecyclerView.NO_POSITION) onMessageAction(ACTION_COPY, getItem(pos))
-        }
+        holder.btnCopyMessage.sendsAction(holder, ACTION_COPY)
         wireTooltip(holder.btnCopyMessage, AiCorePlugin.TOOLTIP_TAG_MESSAGE_COPY)
+        holder.btnEditMessage.sendsAction(holder, ACTION_EDIT)
+        wireTooltip(holder.btnEditMessage, AiCorePlugin.TOOLTIP_TAG_MESSAGE_EDIT)
+        holder.btnPreviousVersion.sendsAction(holder, ACTION_PREVIOUS_VERSION)
+        holder.btnNextVersion.sendsAction(holder, ACTION_NEXT_VERSION)
+        wireTooltip(holder.btnPreviousVersion, AiCorePlugin.TOOLTIP_TAG_MESSAGE_VERSIONS)
+        wireTooltip(holder.btnNextVersion, AiCorePlugin.TOOLTIP_TAG_MESSAGE_VERSIONS)
+        wireTooltip(holder.versionLabel, AiCorePlugin.TOOLTIP_TAG_MESSAGE_VERSIONS)
+    }
+
+    /** Taps report [action] on the item [holder] shows now, which a streamed reply may have grown. */
+    private fun View.sendsAction(holder: RecyclerView.ViewHolder, action: String) {
+        setOnClickListener {
+            val pos = holder.bindingAdapterPosition
+            if (pos != RecyclerView.NO_POSITION) onMessageAction(action, getItem(pos))
+        }
     }
 
     /**
@@ -283,6 +355,61 @@ class ChatAdapter(
         val copyable = message.sender == Sender.USER || message.sender == Sender.AGENT
         val show = copyable && message.status != MessageStatus.LOADING && !streaming
         holder.messageActions.visibility = if (show) View.VISIBLE else View.GONE
+        val isUser = message.sender == Sender.USER
+        holder.btnEditMessage.visibility = if (isUser && canChangePrompts) View.VISIBLE else View.GONE
+        // Disabled outright: the prompt is already in the composer, and Cancel carries the tooltip.
+        val editing = isUser && message.id == editingMessageId
+        holder.btnEditMessage.isEnabled = !editing
+        holder.btnEditMessage.alpha = if (editing) DISABLED_ALPHA else 1f
+        if (editing) startEditPulse(holder) else stopEditPulse(holder)
+        val version = promptVersions[message.id]?.takeIf { isUser }
+        holder.versionNav.visibility = if (version != null) View.VISIBLE else View.GONE
+        if (version != null) {
+            val context = holder.versionLabel.context
+            holder.versionLabel.text =
+                context.getString(R.string.message_version_label, version.index + 1, version.count)
+            holder.versionLabel.contentDescription =
+                context.getString(R.string.desc_message_version, version.index + 1, version.count)
+            // Dimmed rather than disabled: a disabled view drops long-press, and with it the tooltip.
+            val canGoOlder = canChangePrompts && version.index > 0
+            val canGoNewer = canChangePrompts && version.index < version.count - 1
+            holder.btnPreviousVersion.alpha = if (canGoOlder) 1f else DISABLED_ALPHA
+            holder.btnNextVersion.alpha = if (canGoNewer) 1f else DISABLED_ALPHA
+        }
+    }
+
+    /**
+     * Fades the bubble's border between its usual grey and the editing blue, and back, until
+     * [stopEditPulse]. Leaves a pulse already running alone, so a rebind doesn't restart it.
+     */
+    private fun startEditPulse(holder: DefaultMessageViewHolder) {
+        val bubble = holder.userBubble ?: return
+        if (holder.editPulse != null) return
+        bubble.setBackgroundResource(R.drawable.bg_user_message_editing)
+        // Mutated, so the pulse recolors this bubble only and not every user of the drawable.
+        val background = bubble.background.mutate() as GradientDrawable
+        val context = bubble.context
+        val strokeWidth = context.resources.getDimensionPixelSize(R.dimen.chat_user_bubble_editing_stroke_width)
+        holder.editPulse = ValueAnimator.ofArgb(
+            context.getColor(R.color.plugin_outline_variant),
+            context.getColor(R.color.plugin_editing),
+        ).apply {
+            duration = context.resources.getInteger(R.integer.chat_user_bubble_editing_pulse_ms).toLong()
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { background.setStroke(strokeWidth, it.animatedValue as Int) }
+            start()
+        }
+        pulsingHolders.add(holder)
+    }
+
+    /** Cancels the pulse, if any, and gives the bubble its usual border back. */
+    private fun stopEditPulse(holder: DefaultMessageViewHolder) {
+        val pulse = holder.editPulse ?: return
+        pulse.cancel()
+        holder.editPulse = null
+        pulsingHolders.remove(holder)
+        holder.userBubble?.setBackgroundResource(R.drawable.bg_user_message)
     }
 
     private fun bindExpandToggle(holder: DefaultMessageViewHolder, toggle: ImageButton, message: ChatMessage) {
@@ -417,18 +544,31 @@ class ChatAdapter(
     }
 
     /**
-     * Stop every live "…" animation. Call from the host fragment's `onDestroyView`:
+     * Stop every live "…" animation and edit pulse. Call from the host fragment's `onDestroyView`:
      * a message still streaming when the tab closes never reaches a terminal status
      * and its holder is never recycled, so nothing else cancels its Runnable.
      */
     fun stopAllAnimations() {
         animatingHolders.toList().forEach { hideGeneratingDots(it) }
+        pulsingHolders.toList().forEach { stopEditPulse(it) }
+    }
+
+    // A row scrolled off but still cached keeps its pulse; it only ticks while on screen.
+    override fun onViewDetachedFromWindow(holder: RecyclerView.ViewHolder) {
+        super.onViewDetachedFromWindow(holder)
+        (holder as? DefaultMessageViewHolder)?.editPulse?.pause()
+    }
+
+    override fun onViewAttachedToWindow(holder: RecyclerView.ViewHolder) {
+        super.onViewAttachedToWindow(holder)
+        (holder as? DefaultMessageViewHolder)?.editPulse?.resume()
     }
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
         if (holder is DefaultMessageViewHolder) {
             hideGeneratingDots(holder)
+            stopEditPulse(holder)
             // Here, not in bind: a rebind of the same row would flash its toggle off for a frame.
             holder.btnToggleExpand?.visibility = View.GONE
         }
@@ -520,4 +660,7 @@ class ChatAdapter(
 
     // Payload for partial updates
     data class TextUpdatePayload(val text: String, val status: MessageStatus)
+
+    /** Payload for a user row whose Edit or version controls changed; nothing else about it did. */
+    object PromptActionsPayload
 }

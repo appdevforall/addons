@@ -22,6 +22,12 @@ import java.util.UUID
  * @property generatedTitle the title the selected backend wrote after the first reply, or null
  *   until then (and for sessions stored before this field, for the same Gson reason). Never
  *   overrides [name]; see ChatViewModel's title generation.
+ * @property otherBranches every message of the versions not on screen, each with its parentId;
+ *   [messages] is always the version on screen. Null until an older prompt is first edited, and
+ *   for sessions stored before this field, for the same Gson reason.
+ * @property selectedBranches for a message that has several versions following it, the id of the
+ *   one last on screen, so switching back returns there; the chat's start is keyed by
+ *   ChatBranches.ROOT. Null alongside [otherBranches].
  */
 data class ChatSession(
     val id: String = UUID.randomUUID().toString(),
@@ -29,7 +35,9 @@ data class ChatSession(
     val messages: List<ChatMessage> = emptyList(),
     val projectKey: String? = null,
     val name: String? = null,
-    val generatedTitle: String? = null
+    val generatedTitle: String? = null,
+    val otherBranches: List<ChatMessage>? = null,
+    val selectedBranches: Map<String, String>? = null
 ) {
     /**
      * What names this chat in the session list: the [name] the user gave it, otherwise the

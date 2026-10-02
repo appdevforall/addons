@@ -22,4 +22,6 @@
 
     <!-- Lines a user message shows folded; a longer one gets an expand toggle. -->
     <integer name="user_message_collapsed_lines">4</integer>
+    <!-- One fade of the pulsing border on the prompt being edited, out or back. -->
+    <integer name="chat_user_bubble_editing_pulse_ms">900</integer>
 </resources>
