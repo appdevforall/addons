@@ -78,6 +78,12 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
         /** Saved-state key for [pendingExportSessionId], which must outlive the picker's round trip. */
         const val STATE_PENDING_EXPORT = "pending_export_session_id"
+
+        /** Saved-state keys for an edit in progress; see [restoreEdit]. */
+        const val STATE_EDITING_ID = "editing_message_id"
+        const val STATE_DRAFT_BEFORE_EDIT = "draft_before_edit"
+        const val STATE_FILES_BEFORE_EDIT = "files_before_edit"
+        const val STATE_EDIT_FILES = "edit_files"
     }
 
     private var _binding: FragmentChatBinding? = null
@@ -246,6 +252,36 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         composer?.saveState(outState)
         // The same holds while the export picker is up, which is exactly when the IDE is backgrounded.
         outState.putString(STATE_PENDING_EXPORT, pendingExportSessionId)
+        // A tab switch rebuilds this fragment and restores the edited text, so edit mode must follow.
+        val editingId = editingMessageId ?: return
+        outState.putString(STATE_EDITING_ID, editingId)
+        outState.putString(STATE_DRAFT_BEFORE_EDIT, draftBeforeEdit)
+        outState.putStringArrayList(STATE_FILES_BEFORE_EDIT, ArrayList(filesBeforeEdit.map { it.path }))
+        outState.putStringArrayList(STATE_EDIT_FILES, ArrayList(contextFiles.map { it.path }))
+    }
+
+    override fun onViewStateRestored(savedInstanceState: Bundle?) {
+        super.onViewStateRestored(savedInstanceState)
+        restoreEdit(savedInstanceState ?: return)
+    }
+
+    /**
+     * Re-enters the edit a tab switch interrupted, keeping the edited text the view just restored;
+     * ends it instead, draft back in place, when that prompt is gone or can no longer change.
+     */
+    private fun restoreEdit(state: Bundle) {
+        val id = state.getString(STATE_EDITING_ID) ?: return
+        val edited = binding.promptInputEdittext.text?.toString().orEmpty()
+        val editFiles = state.getStringArrayList(STATE_EDIT_FILES).orEmpty().map(::File)
+        editingMessageId = id
+        draftBeforeEdit = state.getString(STATE_DRAFT_BEFORE_EDIT).orEmpty()
+        filesBeforeEdit = state.getStringArrayList(STATE_FILES_BEFORE_EDIT).orEmpty().map(::File)
+        val message = viewModel.messages.value.firstOrNull { it.id == id }
+        if (message == null || !viewModel.canChangePrompts.value) return endEdit()
+        beginEdit(message)
+        binding.promptInputEdittext.setText(edited)
+        binding.promptInputEdittext.setSelection(edited.length)
+        replaceContextFiles(editFiles)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -43,7 +43,6 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.File
 import java.io.IOException
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
@@ -292,7 +291,7 @@ class ChatViewModel(
     private val generationEpoch = AtomicInteger(0)
 
     /** True while a generation is admitted and its coroutine has not yet unwound; gates re-entry. */
-    private val isGenerating = AtomicBoolean(false)
+    private val isGenerating = MutableStateFlow(false)
 
     /** Whether the current run's most recent tool batch failed; reset per run. */
     @Volatile
@@ -330,10 +329,12 @@ class ChatViewModel(
 
     /**
      * Whether the user's prompts offer Edit and version switching: false while a run is generating,
-     * executing a tool, or waiting on an approval, which counts as busy on its own.
+     * executing a tool, or waiting on an approval, which counts as busy on its own. A stopped run
+     * stays busy until its coroutine unwinds, which a blocking tool can hold up for minutes.
      */
-    val canChangePrompts: StateFlow<Boolean> = combine(_agentState, pendingApprovalRequest, ::isIdle)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val canChangePrompts: StateFlow<Boolean> =
+        combine(isGenerating, _agentState, pendingApprovalRequest, ::isIdle)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** Every prompt on screen with other versions, and which of them it is; see [ChatBranches]. */
     internal val promptVersions: StateFlow<Map<String, ChatBranches.Position>> =
@@ -348,16 +349,15 @@ class ChatViewModel(
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /** The one rule [canChangePrompts] and [isBusy] share: no run in flight, no approval open. */
-    private fun isIdle(state: AgentState, approval: ApprovalRequest?): Boolean =
-        !state.isRunning && approval == null
+    private fun isIdle(generating: Boolean, state: AgentState, approval: ApprovalRequest?): Boolean =
+        !generating && !state.isRunning && approval == null
 
     /**
      * Whether a prompt may not be edited or switched right now. Read from the sources rather than
-     * [canChangePrompts], which a collector can see a beat late; [isGenerating] covers a run claimed
-     * but not yet in [AgentState.Processing].
+     * [canChangePrompts], which a collector can see a beat late.
      */
     private fun isBusy(): Boolean =
-        isGenerating.get() || !isIdle(_agentState.value, pendingApprovalRequest.value)
+        !isIdle(isGenerating.value, _agentState.value, pendingApprovalRequest.value)
 
     private var _contextFiles = listOf<File>()
 
@@ -1274,7 +1274,7 @@ class ChatViewModel(
                 addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
             } finally {
                 // Allow re-entry once the coroutine unwinds.
-                isGenerating.set(false)
+                isGenerating.value = false
                 // The run can finish with the chat off screen, where nothing else writes.
                 // NonCancellable so a Stop still saves what the run produced before it, and so the
                 // activity line is closed rather than left reading as a tool still running.
@@ -1406,7 +1406,7 @@ class ChatViewModel(
             return
         }
         // Checked before the rewind, which would otherwise pull the transcript out of a live run.
-        if (isGenerating.get()) {
+        if (isGenerating.value) {
             logDebug("retryLastRun: a run is already in flight")
             return
         }
@@ -1450,7 +1450,7 @@ class ChatViewModel(
         if (!isGenerating.compareAndSet(false, true)) return EditResult.BUSY
         val cut = if (editForks(messageId)) forkAt(messageId) else rewind(messageId)
         if (!cut) {
-            isGenerating.set(false)
+            isGenerating.value = false
             return EditResult.NOT_EDITABLE
         }
         launchRun(llmService, newText, runFiles)
@@ -1499,10 +1499,7 @@ class ChatViewModel(
      */
     private fun adoptBranch(session: ChatSession, stage: String, detail: String) {
         _sessions.value = _sessions.value.map { if (it.id == session.id) session else it }
-        _messages.value = session.messages
-        _history.value = rebuildHistoryFrom(session.messages)
-        // The rewind point names a run on the branch just left.
-        forgetRetryPoint()
+        showTranscript(session.messages)
         traceHistoryCut(stage, detail)
         persistState()
     }
@@ -2031,23 +2028,27 @@ class ChatViewModel(
      * Makes [session] the live conversation: what the screen shows, what the model is given and
      * what the next message is appended to.
      *
-     * The one place those three move together. They were being set side by side at each of the
-     * three call sites, which is how restoring a transcript to the screen while handing the model
-     * an empty array (ADFA-5584) could be fixed in one of them and not the others.
-     *
      * @param session the conversation to make current; it must already be in [_sessions].
      */
     private fun adoptSession(session: ChatSession) {
         _currentSessionId.value = session.id
-        // Immutable snapshot, so a later mutation cannot reach collectors behind the StateFlow.
-        _messages.value = session.messages.toList()
-        // Emptying this is what had the model forget a conversation the user was looking at.
-        _history.value = rebuildHistoryFrom(session.messages)
+        showTranscript(session.messages)
         // Also dropped here: the readiness edge may have fired while another chat was current.
         if (_backendStatus.value.isAvailable) clearBackendSetupNotices()
+        persistState()
+    }
+
+    /**
+     * Puts [messages] on screen and rebuilds the model's history from them. The one place those
+     * move together: set side by side at each call site, ADFA-5584 (screen restored, model handed
+     * an empty history) was fixed in one of them and not the others.
+     */
+    private fun showTranscript(messages: List<ChatMessage>) {
+        // Immutable snapshot, so a later mutation cannot reach collectors behind the StateFlow.
+        _messages.value = messages.toList()
+        _history.value = rebuildHistoryFrom(messages)
         // The rewind point names a run this transcript does not have, and would truncate it.
         forgetRetryPoint()
-        persistState()
     }
 
     /**
@@ -2346,13 +2347,11 @@ class ChatViewModel(
      * partial ones [MessageStatus.COMPLETED]. Called on Stop.
      */
     private fun finalizeInProgressMessages() {
-        val finalized = _messages.value.mapNotNull { msg ->
-            if (msg.sender == Sender.AGENT && msg.durationMs == null) {
-                if (msg.text.isBlank()) null
-                else msg.copy(status = MessageStatus.COMPLETED, durationMs = 0L)
-            } else {
-                msg
-            }
+        val unfinished = { msg: ChatMessage -> msg.sender == Sender.AGENT && msg.durationMs == null }
+        // Through removeMessages, so a stored version that follows a dropped bubble is relinked.
+        removeMessages { unfinished(it) && it.text.isBlank() }
+        val finalized = _messages.value.map { msg ->
+            if (unfinished(msg)) msg.copy(status = MessageStatus.COMPLETED, durationMs = 0L) else msg
         }
         _messages.value = finalized
 
