@@ -167,7 +167,9 @@ def test_name_of_other_kind_is_dropped_but_unknown_name_fails(tmp_path):
 
 
 def test_name_matches_any_case(tmp_path):
-    """F03: the slug is the directory name lowercased, and callers pass either."""
+    """F03, F07, F08: slug, path, display name and stray whitespace all match."""
     make_template(tmp_path, "templates/Flutter-Templates")
-    assert discover.find_addons(tmp_path, ["flutter-templates"]) \
-        == discover.find_addons(tmp_path, ["TEMPLATES/Flutter-Templates"])
+    expected = discover.find_addons(tmp_path, ["Flutter-Templates"])
+    for name in ("flutter-templates", "TEMPLATES/Flutter-Templates",
+                 " flutter-templates\n", "Flutter Templates"):
+        assert discover.find_addons(tmp_path, [name]) == expected, name

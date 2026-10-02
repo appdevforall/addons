@@ -73,13 +73,16 @@ def find_addons(root: Path, only: list[str] | None = None,
     found = sorted(found, key=lambda p: p.name)
 
     if only is not None:
-        # accept the repo-relative path or the bare directory name, in any
-        # case: the slug the rest of the system uses is the name lowercased
+        # accept the repo-relative path, the directory name, the slug (the name
+        # lowercased) or the display name (hyphens as spaces), with stray
+        # whitespace: all fold to one key, and the key stays unique because
+        # every form derives from the directory name
+        key = lambda s: s.strip().lower().replace(" ", "-")
         chosen = []
         for name in only:
             match = next((p for p in found
-                          if name.lower() in (p.name.lower(),
-                                              p.relative_to(root).as_posix().lower())),
+                          if key(name) in (key(p.name),
+                                           key(p.relative_to(root).as_posix()))),
                          None)
             if match is None:
                 raise RuntimeError(f"{name}: not a known addon")
