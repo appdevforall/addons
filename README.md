@@ -8,6 +8,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 
 | Plugin                                             | Purpose                                                           |
 | -------------------------------------------------- | ----------------------------------------------------------------- |
+| [`plugins/AI-Agent-Claude/`](plugins/AI-Agent-Claude/) | Adds Anthropic's Claude as an inference backend for AI Core. |
 | [`plugins/AI-Agent-Gemini/`](plugins/AI-Agent-Gemini/) | Adds Google Gemini as an inference backend for AI Core. |
 | [`plugins/AI-Agent-Local/`](plugins/AI-Agent-Local/) | Runs GGUF models on the device itself, with no network access. |
 | [`plugins/AI-Agent-MCP/`](plugins/AI-Agent-MCP/) | Gives the AI Core agent the tools of Model Context Protocol servers. |
