@@ -4,18 +4,14 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentclaude.R
 
 /**
- * The wording for an [ClaudeFailure].
+ * The wording for a [ClaudeFailure].
  *
  * `context.androidContext` is plugin-scoped, so this plugin's string ids resolve here. Separate
  * from the backend, which decides *what* failed and has no business also owning how it is phrased.
  *
  * @param context this plugin's context, whose resources carry the strings
- * @param baseUrl the configured server, named in the "server not running" advice
  */
-internal class ClaudeFailureMessages(
-    private val context: PluginContext,
-    private val baseUrl: () -> String,
-) {
+internal class ClaudeFailureMessages(private val context: PluginContext) {
 
     /**
      * One user-facing sentence for [failure]. A failed lookup degrades to the generic message
@@ -44,6 +40,9 @@ internal class ClaudeFailureMessages(
             ClaudeFailure.KeyForbidden ->
                 resources.getString(CredentialFailure.KeyForbidden.messageRes)
 
+            ClaudeFailure.RequestTooLarge ->
+                resources.getString(R.string.claude_error_too_large)
+
             is ClaudeFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.claude_error_request_rejected_reason, it)
             } ?: resources.getString(R.string.claude_error_request_rejected)
@@ -55,6 +54,9 @@ internal class ClaudeFailureMessages(
                 resources.getString(R.string.claude_error_unexpected_reason, failure.httpStatus, it)
             } ?: resources.getString(R.string.claude_error_unexpected, failure.httpStatus)
 
+            ClaudeFailure.Refused ->
+                resources.getString(R.string.claude_error_refused)
+
             is ClaudeFailure.EmptyReply ->
                 resources.getString(R.string.claude_error_empty_reply)
 
@@ -63,9 +65,6 @@ internal class ClaudeFailureMessages(
 
             ClaudeFailure.TruncatedBeforeReply ->
                 resources.getString(R.string.claude_error_truncated)
-
-            ClaudeFailure.ServerNotRunning ->
-                resources.getString(R.string.claude_error_server_not_running, baseUrl())
 
             ClaudeFailure.Unreachable ->
                 resources.getString(R.string.claude_error_unreachable)
@@ -76,6 +75,6 @@ internal class ClaudeFailureMessages(
         }
     } catch (e: Exception) {
         context.logger.error("ClaudeFailureMessages: could not resolve a string for $failure", e)
-        "The request to the AI server failed."
+        "The request to Claude failed."
     }
 }

@@ -11,7 +11,7 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 
 /**
- * Registers the OpenAI-compatible backend with AI Core's inference router.
+ * Registers the Claude backend with AI Core's inference router.
  *
  * Owns the transport *and* the UI that configures it: the backend names a settings Fragment that
  * ships in this plugin, which whichever screen offers a backend selector mounts under its own
@@ -31,7 +31,7 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         /** Provider of [LlmInferenceService]; this plugin is useless without it. */
         private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 
-        private const val TOOLTIP_TAG_PLUGIN = "plugin_ai_backend_openai"
+        private const val TOOLTIP_TAG_PLUGIN = "plugin_ai_backend_claude"
 
         /**
          * Category the host registers this plugin's tooltips under. Must be `"plugin_"` + the full
@@ -40,11 +40,8 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_CATEGORY = "plugin_$PLUGIN_ID"
 
         // Tags for the controls on this backend's settings pane (see ClaudeSettingsFragment).
-        const val TOOLTIP_TAG_SETTINGS_SERVER = "ai_claude_server"
-        const val TOOLTIP_TAG_SETTINGS_PRESET = "ai_claude_preset"
         const val TOOLTIP_TAG_SETTINGS_KEY = "ai_claude_key"
         const val TOOLTIP_TAG_SETTINGS_MODEL = "ai_claude_model"
-        const val TOOLTIP_TAG_SETTINGS_EMBEDDING_MODEL = "ai_claude_embedding_model"
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_claude_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_claude_get_key"
 
@@ -104,12 +101,12 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
 
-            val openAi = ClaudeBackend(context)
-            backend = openAi
-            activeBackend = openAi
+            val claude = ClaudeBackend(context)
+            backend = claude
+            activeBackend = claude
 
             // Decrypt the key off-thread now, so a main-thread isAvailable() can't say "no key".
-            openAi.warmKeyCache()
+            claude.warmKeyCache()
 
             // Listen first, then try: a listener added after a successful attempt would still be
             // needed for a later AI Core restart, and one added before costs nothing.
@@ -134,7 +131,7 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
      */
     private fun registerBackend(): Boolean {
         if (registered) return true
-        val openAi = backend ?: return false
+        val claude = backend ?: return false
 
         val service = resolveInferenceService()
         if (service == null) {
@@ -143,12 +140,12 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         }
 
         return try {
-            service.registerBackend(openAi)
+            service.registerBackend(claude)
             registered = true
-            context.logger.info("ClaudePlugin: Registered '${openAi.getId()}' backend with AI Core")
+            context.logger.info("ClaudePlugin: Registered '${claude.getId()}' backend with AI Core")
             true
         } catch (e: Exception) {
-            context.logger.error("ClaudePlugin: Could not register the OpenAI backend", e)
+            context.logger.error("ClaudePlugin: Could not register the Claude backend", e)
             false
         }
     }
@@ -171,11 +168,11 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         return try {
             context.removePluginLifecycleListener(aiCoreLifecycle)
 
-            val openAi = backend
-            if (openAi != null && registered) {
-                resolveInferenceService()?.unregisterBackend(openAi.getId())
+            val claude = backend
+            if (claude != null && registered) {
+                resolveInferenceService()?.unregisterBackend(claude.getId())
                 registered = false
-                context.logger.info("ClaudePlugin: Unregistered '${openAi.getId()}' backend")
+                context.logger.info("ClaudePlugin: Unregistered '${claude.getId()}' backend")
             }
 
             // A disabled plugin must not keep the decrypted key on the host heap.
@@ -207,7 +204,7 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
 
         releaseBackend()
         pluginContext = null
-        context.logger.info("ClaudePlugin: Released OpenAI backend")
+        context.logger.info("ClaudePlugin: Released Claude backend")
     }
 
     override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
@@ -215,125 +212,75 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Sends prompts to OpenAI, or to any server that speaks the same protocol. Needs a network connection.",
+            summary = "Sends prompts to Anthropic's Claude. Needs an API key and a network connection.",
             detail = """
-                <p><b>AI Agent OpenAI</b> is a headless plugin that adds the
-                <code>openai</code> backend to <b>AI Core</b>, calling
-                <code>chat/completions</code> over HTTP.</p>
-                <p>It defaults to OpenAI's own API, but the server URL is a
-                setting — point it at Ollama or LM Studio on your PC, at a
-                <code>llama-server</code>, or at OpenRouter, and the same backend
-                talks to all of them.</p>
-                <p>Install <b>AI Core</b> as well, then configure the server in
-                <b>AI Core → Agent settings</b>. Prompts and any file contents a
-                plugin sends are transmitted to whichever server you configure.</p>
+                <p><b>AI Agent Claude</b> is a headless plugin that adds the
+                <code>claude</code> backend to <b>AI Core</b>, calling Anthropic's
+                Messages API over HTTPS.</p>
+                <p>The agent's tools are declared to Claude directly, so it reads
+                and edits your project through structured calls rather than
+                text it has to get exactly right.</p>
+                <p>Install <b>AI Core</b> as well, then add your key in
+                <b>AI Core &rarr; Agent settings</b>. Prompts and any file
+                contents a plugin sends are transmitted to Anthropic.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "AI Agent OpenAI guide",
+                    description = "AI Agent Claude guide",
                     uri = "index.html",
                     order = 0
                 )
             )
         ),
         PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_SERVER,
-            summary = "The server to send prompts to. Defaults to OpenAI; change it to use your own.",
-            detail = """
-                <p>Must end at the API root — <code>https://api.openai.com/v1</code>,
-                not the <code>/chat/completions</code> path. If you paste the full
-                endpoint URL, the extra path is removed for you.</p>
-                <p>Plain <code>http://</code> is accepted only for your own device
-                or a private network address, which is the Ollama-on-my-PC case. A
-                cleartext address on the open internet is refused, because your
-                project's source would travel unencrypted.</p>
-            """.trimIndent(),
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_PRESET,
-            summary = "Fills the server URL for a known server. Nothing is saved until you tap Save.",
-            detail = """
-                <p>Each preset is only a URL: OpenAI, Ollama, LM Studio,
-                <code>llama-server</code> and OpenRouter all speak the same
-                protocol, so one backend reaches all of them.</p>
-                <p>The local presets use <code>localhost</code>. To reach a server
-                on another machine, pick the preset and then edit the host — for
-                example <code>http://192.168.1.50:11434/v1</code>.</p>
-            """.trimIndent(),
-        ),
-        PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_KEY,
-            summary = "Your API key. Optional — a local Ollama or LM Studio server needs none.",
+            summary = "Your Claude API key. Required: Claude has no anonymous access.",
             detail = """
-                <p>Required for OpenAI itself and for OpenRouter; left blank for a
-                local server, where no credential is sent at all. This whole
-                section disappears when the server URL points at your own device or
-                network, because there is no key to enter.</p>
-                <p>The key is checked against the server before being saved, then
-                encrypted with the Android Keystore — only the ciphertext is
-                written to disk. A key that cannot be checked, because the server
+                <p>Keys start with <code>sk-ant-</code> and come from the Claude
+                Console, not from a Claude.ai subscription.</p>
+                <p>The key is checked against Claude before being saved, then
+                encrypted with the Android Keystore. Only the ciphertext is
+                written to disk. A key that cannot be checked, because the device
                 is offline, can still be saved but is marked unverified rather
                 than claiming a check that never happened.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_MODEL,
-            summary = "Which model to request. Type any name, or tap to pick one the server reported.",
+            summary = "Which Claude model to use. Type any id, or tap to pick one your key can use.",
             detail = """
-                <p>One field, and it accepts both: type a name, or tap it to choose
-                from the list <b>Test Connection &amp; List Models</b> fetched.
-                Typing is saved as soon as you leave the field.</p>
-                <p>Free text always works, which matters for a local server: the
-                model is whatever you pulled, such as
-                <code>qwen2.5-coder</code>. A server that does not implement a
-                model list is normal — just type the name.</p>
-                <p>Unlike Google's catalog, this list carries no "can chat" flag,
-                so obvious non-chat models (embeddings, audio, images) are filtered
-                out and anything unrecognised is kept.</p>
-            """.trimIndent(),
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_EMBEDDING_MODEL,
-            summary = "Which model turns your code into vectors for semantic search. Never used for chat.",
-            detail = """
-                <p>Semantic search compares meaning rather than words, which it
-                does by embedding every chunk of the project with this model. It
-                is a separate setting because embedding models and chat models are
-                different models: this list offers exactly what the <b>Model</b>
-                list above filters out.</p>
-                <p>Changing it changes the vector space, so the project is indexed
-                again from scratch. Vectors from two different models are not
-                comparable, and mixing them would quietly return worse results
-                rather than fail.</p>
-                <p>Free text always works, which matters for a local server —
-                <code>nomic-embed-text</code> on Ollama, for example.</p>
+                <p>One field, and it accepts both: type a model id, or tap it to
+                choose from the list <b>Test Connection &amp; List Models</b>
+                fetched. Typing is saved as soon as you leave the field.</p>
+                <p>The default, <code>claude-opus-5-5</code>, is the strongest
+                model for building apps. <code>claude-sonnet-5-5</code> is faster
+                and cheaper; <code>claude-haiku-4-5</code> is fastest and
+                cheapest.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_TEST,
-            summary = "Checks the server and key, and fills the model list — both are the same request.",
+            summary = "Checks your key and fills the model list. Both are the same request.",
             detail = """
-                <p>Tests the URL and the key together, without saving either, so a
-                typo is caught here rather than mid-chat. When the server answers
-                with a catalog, that same answer fills the <b>Model</b> list.</p>
-                <p><b>404</b> almost always means the URL is missing its
-                <code>/v1</code> suffix. <b>Nothing answered</b> means the server
-                is not running or is not reachable from this device — check that
-                Ollama is started and that the phone is on the same network.</p>
+                <p>Tests the key without saving it, so a typo is caught here rather
+                than mid-chat. When Claude answers, that same answer fills the
+                <b>Model</b> list with the models your key can use.</p>
+                <p><b>Couldn't reach Claude</b> means this device has no route to
+                the internet, or Claude is briefly overloaded. Try again in a
+                moment.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
-            summary = "Opens OpenAI's API keys page in your browser. OpenAI keys are not free.",
+            summary = "Opens the Claude Console's API keys page in your browser. API use is not free.",
             detail = """
-                <p>Opens <code>platform.openai.com/api-keys</code> in your own
-                browser — never an embedded WebView, so you can see OpenAI's URL
-                bar and sign-in works. Sign in, create a key, copy it, and paste
-                it into the field here.</p>
-                <p>OpenAI has no free tier: an API key needs a prepaid balance,
-                separate from a ChatGPT subscription. For a free option, run a
-                model on your own machine and point the server URL at it, or use
-                the <b>AI Agent Local</b> or <b>AI Agent Gemini</b> plugin
+                <p>Opens <code>platform.claude.com</code> in your own browser,
+                never an embedded WebView, so you can see the Console's URL bar
+                and sign-in works. Sign in, create a key, copy it, and paste it
+                into the field here.</p>
+                <p>The Claude API is billed to prepaid credit, separate from a
+                Claude.ai subscription. For a free option, use the
+                <b>AI Agent Local</b> or <b>AI Agent Gemini</b> plugin
                 instead.</p>
                 <p>This plugin never sees your password and never reads your
                 clipboard.</p>

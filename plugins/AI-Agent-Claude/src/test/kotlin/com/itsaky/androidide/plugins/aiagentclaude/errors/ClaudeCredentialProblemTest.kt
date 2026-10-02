@@ -32,12 +32,13 @@ class ClaudeCredentialProblemTest {
     @Test
     fun givenAFailureAboutAnythingElse_whenClassified_thenItIsNotACredentialProblem() {
         val others = listOf(
-            ClaudeFailure.ModelUnavailable("gpt-5"),
+            ClaudeFailure.ModelUnavailable("claude-opus-5-5"),
+            ClaudeFailure.RequestTooLarge,
+            ClaudeFailure.Refused,
             ClaudeFailure.RequestRejected("too long"),
             ClaudeFailure.RequestRejected(null),
-            ClaudeFailure.ServiceUnavailable(503),
+            ClaudeFailure.ServiceUnavailable(529),
             ClaudeFailure.Unexpected(418, null),
-            ClaudeFailure.ServerNotRunning,
             ClaudeFailure.Unreachable,
             ClaudeFailure.EmptyReply(skippedChunks = 3),
             ClaudeFailure.ReasoningOnly,

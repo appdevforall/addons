@@ -19,7 +19,7 @@ class ClaudeBackendTest {
 
     @Test
     fun givenTheBackend_whenAskedForItsIdentity_thenItRegistersAsClaude() {
-        assertEquals("openai", backend.getId())
+        assertEquals("claude", backend.getId())
     }
 
     @Test

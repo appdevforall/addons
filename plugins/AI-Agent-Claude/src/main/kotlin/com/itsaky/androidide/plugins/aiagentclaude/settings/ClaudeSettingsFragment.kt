@@ -19,13 +19,8 @@ import android.widget.Filter
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.annotation.DimenRes
 import androidx.annotation.DrawableRes
-import androidx.annotation.IdRes
-import androidx.annotation.StringRes
-import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -56,18 +51,12 @@ private val OUTLINED_BUTTON_IDS = setOf(
  *
  * Named to the host through `ClaudeBackend.getSettingsFragmentClassName()`, loaded with this
  * plugin's own classloader and inflated against this plugin's own resources — so the consumer needs
- * to know nothing about API keys, server URLs or model catalogs.
+ * to know nothing about API keys or model catalogs.
  */
 class ClaudeSettingsFragment : Fragment() {
 
     private lateinit var viewModel: ClaudeSettingsViewModel
     private var tooltipService: IdeTooltipService? = null
-
-    /**
-     * Re-reads the server URL and re-dresses the key section for it. Set once the key section is
-     * built, so the server section can call it whenever the URL changes.
-     */
-    private var onServerChanged: ((String) -> Unit)? = null
 
     /**
      * Set while this pane is on screen, so [onResume] can nudge the user towards **Save** after
@@ -119,15 +108,10 @@ class ClaudeSettingsFragment : Fragment() {
             ClaudeSettingsViewModelFactory { ClaudePlugin.getContext() }
         )[ClaudeSettingsViewModel::class.java]
 
-        // The key section publishes onServerChanged, so it is built before the server section that
-        // fires it, and before the first call below that dresses the pane for the saved server.
         view.applyPaneStyling(OUTLINED_BUTTON_IDS)
         setupApiKeyUi(view)
-        setupServerUi(view)
-        setupModelPicker(view, chatModelPicker())
-        setupModelPicker(view, embeddingModelPicker())
+        setupModelPicker(view)
         setupConnectionTest(view)
-        onServerChanged?.invoke(viewModel.getBaseUrl())
     }
 
     override fun onResume() {
@@ -150,7 +134,6 @@ class ClaudeSettingsFragment : Fragment() {
     override fun onDestroyView() {
         // Drops the captured pane views along with the callbacks.
         onPaneResume = null
-        onServerChanged = null
         apiKeyReveal = null
         setSecureWindow(false)
         super.onDestroyView()
@@ -170,7 +153,7 @@ class ClaudeSettingsFragment : Fragment() {
      *
      * Separate from [wireTooltip] because the end icon is a clickable child that consumes the
      * long-press before the box sees it — without this every end icon on the pane, the reveal
-     * control and the dropdown chevrons alike, would be a contributed element with no tooltip of
+     * control and the dropdown chevron alike, would be a contributed element with no tooltip of
      * its own.
      */
     private fun wireEndIconTooltip(box: TextInputLayout, tag: String) {
@@ -193,22 +176,12 @@ class ClaudeSettingsFragment : Fragment() {
         target.visibility = View.VISIBLE
     }
 
-    /** Sets [view]'s top margin to [dimenRes], for a gap that depends on what else is showing. */
-    private fun setTopMargin(view: View, @DimenRes dimenRes: Int) {
-        val params = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
-        val margin = resources.getDimensionPixelSize(dimenRes)
-        if (params.topMargin == margin) return
-        params.topMargin = margin
-        view.layoutParams = params
-    }
-
     /** Drop a status line that no longer describes what is on screen. */
     private fun hideStatus(target: TextView) {
         target.visibility = View.GONE
         target.text = ""
         target.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
     }
-
 
     /**
      * Put the dropdown chevron on [box]'s end icon.
@@ -228,109 +201,6 @@ class ClaudeSettingsFragment : Fragment() {
         box.isEndIconCheckable = false
     }
 
-    // --- Server -------------------------------------------------------------------------------
-
-    private fun setupServerUi(view: View) {
-        val presetBox = view.findViewById<TextInputLayout>(R.id.claude_preset_box)
-        val presetInput = view.findViewById<AutoCompleteTextView>(R.id.claude_preset_input)
-        val urlInput = view.findViewById<EditText>(R.id.claude_base_url_input)
-        val saveButton = view.findViewById<Button>(R.id.btn_save_server)
-        val statusText = view.findViewById<TextView>(R.id.claude_server_status_text)
-        val serverLabel = view.findViewById<TextView>(R.id.claude_server_label)
-
-        setupDropdownEndIcon(presetBox)
-
-        listOf<View>(urlInput, saveButton, serverLabel, statusText)
-            .forEach { wireTooltip(it, ClaudePlugin.TOOLTIP_TAG_SETTINGS_SERVER) }
-        wireTooltip(presetBox, ClaudePlugin.TOOLTIP_TAG_SETTINGS_PRESET)
-
-        urlInput.setText(viewModel.getBaseUrl())
-
-        val presetLabels = ServerPresets.ALL.map { getString(it.labelRes) }
-        // The field's own Context, not the activity's: the row layout is one of this plugin's
-        // resources, and it is the plugin Context that resolves those and tracks the IDE's theme.
-        presetInput.setAdapter(DropdownAdapter(presetInput.context, presetLabels))
-        // A picker, not a text field: the list is the only way to change it.
-        presetInput.keyListener = null
-        // Both dropdowns are repopulated from the saved settings on every view creation, so there is
-        // nothing for the framework to restore — and its replayed setText() is a filtering one,
-        // which is what left the list holding only the selected entry after a day/night switch.
-        presetInput.isSaveEnabled = false
-
-        /** Shows [url]'s preset without announcing a pick, so restoring never fills the URL field. */
-        fun showPresetFor(url: String) {
-            val label = presetLabels.getOrNull(ServerPresets.indexOf(url)) ?: return
-            presetInput.setText(label, false)
-        }
-
-        showPresetFor(viewModel.getBaseUrl())
-
-        // Tapping anywhere in the field opens the list; the end icon is only a second way in.
-        presetInput.setOnClickListener { presetInput.showDropDown() }
-        presetBox.setEndIconOnClickListener { presetInput.showDropDown() }
-        wireEndIconTooltip(presetBox, ClaudePlugin.TOOLTIP_TAG_SETTINGS_PRESET)
-        presetInput.setOnItemClickListener { _, _, position, _ ->
-            // A preset only fills the field; the user still has to save it.
-            ServerPresets.ALL.getOrNull(position)?.url?.let { urlInput.setText(it) }
-        }
-
-        // Re-dresses the key section as the URL is typed or a preset fills it, so picking Ollama
-        // stops asking for a key immediately rather than after a save.
-        urlInput.doAfterTextChanged { text ->
-            // The saved-server line described the previous URL, so it cannot stay under a
-            // different one — QA read a stale line as the state of the server now in the field.
-            hideStatus(statusText)
-            onServerChanged?.invoke(text?.toString().orEmpty())
-        }
-
-        saveButton.setOnClickListener {
-            when (val result = viewModel.saveBaseUrl(urlInput.text.toString())) {
-                is BaseUrlResult.Accepted -> {
-                    urlInput.setText(result.url)
-                    showPresetFor(result.url)
-                    showStatus(
-                        statusText,
-                        getString(R.string.msg_server_saved, result.url),
-                        R.drawable.ic_key_verified
-                    )
-                    if (result.cleartext && !result.loopback && !viewModel.isCleartextAcknowledged()) {
-                        warnAboutCleartext()
-                    }
-                }
-
-                is BaseUrlResult.Rejected -> showStatus(
-                    statusText,
-                    getString(rejectionMessage(result.reason)),
-                    R.drawable.ic_key_rejected
-                )
-            }
-        }
-    }
-
-    /** The string explaining why a URL was refused. */
-    private fun rejectionMessage(reason: BaseUrlResult.Reason): Int = when (reason) {
-        BaseUrlResult.Reason.BLANK -> R.string.msg_server_blank
-        BaseUrlResult.Reason.MALFORMED -> R.string.msg_server_malformed
-        BaseUrlResult.Reason.NO_HOST -> R.string.msg_server_no_host
-        BaseUrlResult.Reason.CLEARTEXT_PUBLIC -> R.string.msg_server_cleartext_public
-    }
-
-    /**
-     * Warn once that traffic to a LAN address is unencrypted.
-     *
-     * Allowed rather than blocked: reaching Ollama on the user's own PC is the point of the URL
-     * field, and that traffic never leaves the local network.
-     */
-    private fun warnAboutCleartext() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.title_cleartext_server)
-            .setMessage(R.string.msg_cleartext_server)
-            .setPositiveButton(R.string.action_understood) { _, _ ->
-                viewModel.markCleartextAcknowledged()
-            }
-            .show()
-    }
-
     // --- API key ------------------------------------------------------------------------------
 
     @SuppressLint("SetTextI18n")
@@ -345,8 +215,6 @@ class ClaudeSettingsFragment : Fragment() {
         val getKeyButton = view.findViewById<Button>(R.id.btn_get_key)
         val verificationText = view.findViewById<TextView>(R.id.claude_key_verification_text)
         val keyLabel = view.findViewById<TextView>(R.id.claude_api_key_label)
-        val keySection = view.findViewById<LinearLayout>(R.id.claude_key_section)
-        val keyNotNeededText = view.findViewById<TextView>(R.id.claude_key_not_needed_text)
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
         listOf<View>(
@@ -355,72 +223,20 @@ class ClaudeSettingsFragment : Fragment() {
         ).forEach { wireTooltip(it, ClaudePlugin.TOOLTIP_TAG_SETTINGS_KEY) }
         wireTooltip(getKeyButton, ClaudePlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
 
-        // Whether the *currently typed* server needs a key, so Save can judge a blank field
-        // against the server the user is configuring rather than the one last saved.
-        var keyRequirement = BaseUrlPolicy.keyRequirement(viewModel.getBaseUrl())
-
-        // Whether the field is open for a new key. Held here because the key section is re-dressed
-        // on every server change too, and both inputs decide the same set of visibilities.
-        var isEditingKey = true
-
-        /**
-         * Applies [keyRequirement] and [isEditingKey] to the whole key block.
-         *
-         * A server that needs no credential collapses the block to one muted line, *whether or not
-         * a key happens to be stored*: an empty, mandatory-looking key field beside a local Ollama
-         * is the single most confusing thing this pane can show. Only Remove survives, so a key
-         * saved for another server can still be cleared from here.
-         */
-        fun dressKeySection() {
-            val notNeeded = keyRequirement == KeyRequirement.NOT_NEEDED
-            val hasStoredKey = viewModel.hasStoredApiKey()
-            keySection.visibility = if (!notNeeded || hasStoredKey) View.VISIBLE else View.GONE
-            keyNotNeededText.visibility = if (notNeeded) View.VISIBLE else View.GONE
-            keyNotNeededText.setText(
-                if (hasStoredKey) R.string.msg_key_not_needed_but_saved else R.string.msg_key_not_needed
-            )
-            keyLabel.setText(
-                if (keyRequirement == KeyRequirement.REQUIRED) {
-                    R.string.label_claude_api_key_required
-                } else {
-                    R.string.label_claude_api_key_optional
-                }
-            )
-            // Entering a key this server will never be asked for only invites the "couldn't check
-            // this key" dialog QA ran into, so the whole entry path goes away for it — including a
-            // field the user had already opened when they switched servers.
-            val editing = isEditingKey && !notNeeded
-            apiKeyLayout.visibility = if (editing) View.VISIBLE else View.GONE
-            saveButton.visibility = if (editing) View.VISIBLE else View.GONE
-            editButton.visibility = if (!editing && !notNeeded) View.VISIBLE else View.GONE
-            clearButton.visibility = if (!editing && hasStoredKey) View.VISIBLE else View.GONE
-            statusTextView.visibility = if (!editing && hasStoredKey) View.VISIBLE else View.GONE
-            // Only OpenAI's own page is linked, so the button is meaningless elsewhere.
-            getKeyButton.visibility =
-                if (keyRequirement == KeyRequirement.REQUIRED) View.VISIBLE else View.GONE
-            // The muted line already carries the section's gap when it is up, so the block tucks
-            // under it instead of stacking a second one.
-            setTopMargin(keySection, if (notNeeded) R.dimen.space_sm else R.dimen.space_xl)
-        }
-
-        /** Dress the key section for [serverUrl], which may not be saved yet. */
-        onServerChanged = { serverUrl ->
-            keyRequirement = BaseUrlPolicy.keyRequirement(serverUrl)
-            // The verdict described the previous server. Left up, it contradicts the new one —
-            // QA saw "No API key needed" under an OpenAI URL that requires one.
-            hideStatus(verificationText)
-            dressKeySection()
-        }
-
+        /** Shows the field for a new key, or the saved key's status and its Edit/Clear actions. */
         fun updateUiState(isEditing: Boolean) {
-            isEditingKey = isEditing
-            dressKeySection()
+            val hasStoredKey = viewModel.hasStoredApiKey()
+            apiKeyLayout.visibility = if (isEditing) View.VISIBLE else View.GONE
+            saveButton.visibility = if (isEditing) View.VISIBLE else View.GONE
+            editButton.visibility = if (!isEditing) View.VISIBLE else View.GONE
+            clearButton.visibility = if (!isEditing && hasStoredKey) View.VISIBLE else View.GONE
+            statusTextView.visibility = if (!isEditing && hasStoredKey) View.VISIBLE else View.GONE
         }
 
         /**
-         * Report a request the server refused for credential reasons, if there is one. Read on
-         * resume as well, since a refusal can land while this pane is already open and that does
-         * not rebuild the view.
+         * Report a request the API refused for credential reasons, if there is one. Read on resume
+         * as well, since a refusal can land while this pane is already open and that does not
+         * rebuild the view.
          */
         fun showCredentialFailure() {
             viewModel.credentialFailure()?.let { failure ->
@@ -438,8 +254,7 @@ class ClaudeSettingsFragment : Fragment() {
             val hasKey = !savedApiKey.isNullOrBlank()
             // A keystore that would not answer this time leaves the key on disk and intact, so the
             // pane stays dressed as configured. Opening edit mode instead would make it identical
-            // to a fresh install, and for a server that needs no key a blank Save from there runs
-            // clearApiKey() over the key this same read just called recoverable.
+            // to a fresh install, inviting a Save over the key this same read called recoverable.
             val keptConfigured =
                 !hasKey &&
                     stored is KeystoreSecretStore.Stored.Unavailable &&
@@ -515,7 +330,7 @@ class ClaudeSettingsFragment : Fragment() {
 
         /**
          * Encrypt and store [apiKey], then reflect the outcome. Only ever reached for a key the
-         * server confirmed, or one the user chose to keep after an inconclusive check.
+         * API confirmed, or one the user chose to keep after an inconclusive check.
          */
         suspend fun persistKey(
             apiKey: String,
@@ -547,8 +362,8 @@ class ClaudeSettingsFragment : Fragment() {
 
         /**
          * Offer to keep a key that could not be checked. Distinct from a rejection: refusing a good
-         * key because the server is offline would leave the plugin unconfigurable, so this gets the
-         * muted "unchecked" icon and a key the server actually refused never reaches here.
+         * key because the network is down would leave the plugin unconfigurable, so this gets the
+         * muted "unchecked" icon and a key the API actually refused never reaches here.
          */
         fun confirmSaveUnverified(apiKey: String, reason: String) {
             showStatus(verificationText, reason, R.drawable.ic_key_unchecked)
@@ -572,21 +387,14 @@ class ClaudeSettingsFragment : Fragment() {
         saveButton.setOnClickListener {
             val apiKey = apiKeyInput.text.toString().trim()
             if (apiKey.isBlank()) {
-                if (keyRequirement == KeyRequirement.REQUIRED) {
-                    // Said on the pane, not in a toast: this is a rule about the field, so it
-                    // belongs beside the field and has to survive being read twice.
-                    showStatus(
-                        verificationText,
-                        getString(R.string.msg_api_key_required_for_openai),
-                        R.drawable.ic_key_rejected
-                    )
-                    apiKeyInput.requestFocus()
-                } else {
-                    // Blank is a legitimate configuration: the server is then called anonymously.
-                    viewModel.clearApiKey()
-                    dressKeySection()
-                    showStatus(verificationText, getString(R.string.msg_key_left_empty))
-                }
+                // Said on the pane, not in a toast: this is a rule about the field, so it belongs
+                // beside the field and has to survive being read twice.
+                showStatus(
+                    verificationText,
+                    getString(R.string.msg_api_key_required),
+                    R.drawable.ic_key_rejected
+                )
+                apiKeyInput.requestFocus()
                 return@setOnClickListener
             }
             setKeyEntryEnabled(false)
@@ -614,17 +422,23 @@ class ClaudeSettingsFragment : Fragment() {
                         resultIcon = R.drawable.ic_key_verified
                     )
 
+                    // The API accepted the key, so it travelled fine; it just lists no models.
+                    ConnectionVerification.NoModels -> persistKey(
+                        apiKey,
+                        verified = true,
+                        resultText = getString(R.string.msg_api_no_models),
+                        resultIcon = R.drawable.ic_key_unchecked
+                    )
+
                     // Nothing is written: a definitive refusal would only resurface mid-chat. Said
                     // aloud, because a user who is told the key was refused and then sees chat fail
                     // concludes the attempt destroyed the key they had, and re-buys a credential
                     // they never lost.
                     ConnectionVerification.Rejected -> {
-                        // "Kept, and chat is still using it" only for a key chat can actually
-                        // send and that is not the one just refused: getApiKeyFor applies the
-                        // backend's own origin rule, a key the Keystore will not open is not sent
-                        // either, and Edit prefills the stored key, so re-saving it unchanged
-                        // refuses the very credential chat is still sending.
-                        val stored = viewModel.getApiKeyFor(viewModel.getBaseUrl())
+                        // "Kept, and chat is still using it" only for a stored key chat can actually
+                        // send and that is not the one just refused: Edit prefills the stored key,
+                        // so re-saving it unchanged refuses the very credential chat is sending.
+                        val stored = viewModel.getApiKey()
                         val keptKeyInUse = stored is KeystoreSecretStore.Stored.Value &&
                             stored.plain.trim() != apiKey
                         showStatus(
@@ -641,19 +455,8 @@ class ClaudeSettingsFragment : Fragment() {
                         apiKeyInput.requestFocus()
                     }
 
-                    // The server answered, so the key travelled fine; it just has no catalog.
-                    ConnectionVerification.NoModels -> persistKey(
-                        apiKey,
-                        verified = true,
-                        resultText = getString(R.string.msg_server_no_models),
-                        resultIcon = R.drawable.ic_key_unchecked
-                    )
-
-                    ConnectionVerification.EndpointNotFound ->
-                        confirmSaveUnverified(apiKey, getString(R.string.msg_server_endpoint_404))
-
                     ConnectionVerification.Unreachable ->
-                        confirmSaveUnverified(apiKey, getString(R.string.msg_server_unreachable))
+                        confirmSaveUnverified(apiKey, getString(R.string.msg_api_unreachable))
 
                     ConnectionVerification.Unknown ->
                         confirmSaveUnverified(apiKey, getString(R.string.msg_key_uncheckable))
@@ -681,9 +484,6 @@ class ClaudeSettingsFragment : Fragment() {
                 } finally {
                     editButton.isEnabled = true
                 }
-                // A key that is stored and will not decrypt; an empty box alone looks like data
-                // loss. Told apart from "nothing stored" here, which this button rarely sees but
-                // must not report as a lost Keystore entry when it does.
                 if (stored is KeystoreSecretStore.Stored.Unavailable) {
                     // Said differently from an unreadable key: this one is still there and intact,
                     // so the pane stays as it is rather than opening an empty field the user would
@@ -695,6 +495,8 @@ class ClaudeSettingsFragment : Fragment() {
                     ).show()
                     return@launch
                 }
+                // A key that is stored and will not decrypt; an empty box alone looks like data
+                // loss.
                 if (stored is KeystoreSecretStore.Stored.Unreadable) {
                     Toast.makeText(
                         requireContext(),
@@ -721,7 +523,7 @@ class ClaudeSettingsFragment : Fragment() {
 
     /**
      * Status line for a stored key: dated when the save time is known, generic otherwise, and
-     * saying "verified" only for a key the server actually confirmed — a key kept through the
+     * saying "verified" only for a key the API actually confirmed — a key kept through the
      * save-anyway path was never checked and must not claim otherwise.
      */
     private fun savedApiKeyStatusText(): String {
@@ -736,99 +538,40 @@ class ClaudeSettingsFragment : Fragment() {
         }
     }
 
-    // --- Model pickers -------------------------------------------------------------------------
-
-    /**
-     * Everything one editable model dropdown needs, so the chat and embedding pickers are one
-     * implementation rather than two that drift.
-     *
-     * @param tooltipTag long-press help shared by the picker's label, field and hint
-     * @param helpHint hint shown while no catalog is offered, i.e. free text only
-     * @param liveHint hint shown once there is a list to tap
-     * @param switchedMessage toast shown when this server retires the saved model
-     * @param read the currently saved model
-     * @param write persists a model the user typed or picked
-     * @param options the catalog to offer
-     * @param selected the model the field must show, republished when the saved one is retired
-     */
-    private class ModelPicker(
-        @IdRes val boxId: Int,
-        @IdRes val inputId: Int,
-        @IdRes val labelId: Int,
-        @IdRes val hintId: Int,
-        val tooltipTag: String,
-        @StringRes val helpHint: Int,
-        @StringRes val liveHint: Int,
-        @StringRes val switchedMessage: Int,
-        val read: () -> String,
-        val write: (String) -> Unit,
-        val options: LiveData<ClaudeModelOptions>,
-        val selected: LiveData<String>,
-    )
-
-    /** The chat model: what a turn is generated with. */
-    private fun chatModelPicker() = ModelPicker(
-        boxId = R.id.claude_model_box,
-        inputId = R.id.claude_model_input,
-        labelId = R.id.claude_model_label,
-        hintId = R.id.claude_model_hint_text,
-        tooltipTag = ClaudePlugin.TOOLTIP_TAG_SETTINGS_MODEL,
-        helpHint = R.string.hint_claude_model_help,
-        liveHint = R.string.hint_claude_model_live,
-        switchedMessage = R.string.msg_model_switched,
-        read = viewModel::getModel,
-        write = viewModel::saveModel,
-        options = viewModel.models,
-        selected = viewModel.selectedModel,
-    )
-
-    /** The embedding model: what semantic search indexes and queries with. */
-    private fun embeddingModelPicker() = ModelPicker(
-        boxId = R.id.claude_embedding_model_box,
-        inputId = R.id.claude_embedding_model_input,
-        labelId = R.id.claude_embedding_model_label,
-        hintId = R.id.claude_embedding_model_hint_text,
-        tooltipTag = ClaudePlugin.TOOLTIP_TAG_SETTINGS_EMBEDDING_MODEL,
-        helpHint = R.string.hint_claude_embedding_model_help,
-        liveHint = R.string.hint_claude_embedding_model_live,
-        switchedMessage = R.string.msg_embedding_model_switched,
-        read = viewModel::getEmbeddingModel,
-        write = viewModel::saveEmbeddingModel,
-        options = viewModel.embeddingModels,
-        selected = viewModel.selectedEmbeddingModel,
-    )
+    // --- Model picker --------------------------------------------------------------------------
 
     /**
      * One editable dropdown, not a field beside a spinner.
      *
-     * Free text has to work — a local server's model is whatever the user pulled, and plenty of
-     * compatible servers do not implement `/v1/models` at all — but the discovered list belongs in
-     * the same control rather than a second one. The value is saved on pick, on IME Done and on
-     * focus loss, so there is no Save button either.
+     * Free text has to work — a model released after this plugin, or one the catalog has not
+     * been fetched for yet — but the discovered list belongs in the same control rather than a
+     * second one. The value is saved on pick, on IME Done and on focus loss, so there is no Save
+     * button either.
      */
-    private fun setupModelPicker(view: View, picker: ModelPicker) {
-        val modelBox = view.findViewById<TextInputLayout>(picker.boxId)
-        val modelInput = view.findViewById<AutoCompleteTextView>(picker.inputId)
-        val modelLabel = view.findViewById<TextView>(picker.labelId)
-        val modelHint = view.findViewById<TextView>(picker.hintId)
+    private fun setupModelPicker(view: View) {
+        val modelBox = view.findViewById<TextInputLayout>(R.id.claude_model_box)
+        val modelInput = view.findViewById<AutoCompleteTextView>(R.id.claude_model_input)
+        val modelLabel = view.findViewById<TextView>(R.id.claude_model_label)
+        val modelHint = view.findViewById<TextView>(R.id.claude_model_hint_text)
+        val tooltipTag = ClaudePlugin.TOOLTIP_TAG_SETTINGS_MODEL
 
         setupDropdownEndIcon(modelBox)
 
         listOf<View>(modelLabel, modelInput, modelHint)
-            .forEach { wireTooltip(it, picker.tooltipTag) }
+            .forEach { wireTooltip(it, tooltipTag) }
 
         modelInput.isSaveEnabled = false
         // Typing searches, so the first keystroke has to replace the model id already in the field
-        // rather than append to it — "gpt-4o-mini" + "claude" matches nothing, by construction.
+        // rather than append to it — "claude-opus-5-5" + "haiku" matches nothing, by construction.
         modelInput.setSelectAllOnFocus(true)
         // The suppressing overload throughout: a filtering write would narrow the list.
-        modelInput.setText(picker.read(), false)
+        modelInput.setText(viewModel.getModel(), false)
 
         /** Persist what is typed, ignoring a blank field rather than storing an unusable model. */
         fun commitTypedModel() {
             val typed = modelInput.text.toString().trim()
-            if (typed.isEmpty() || typed == picker.read()) return
-            picker.write(typed)
+            if (typed.isEmpty() || typed == viewModel.getModel()) return
+            viewModel.saveModel(typed)
         }
 
         modelInput.setOnEditorActionListener { _, _, _ ->
@@ -841,27 +584,26 @@ class ClaudeSettingsFragment : Fragment() {
         // Tapping the field opens the list; completionThreshold=0 alone waits for a keystroke.
         modelInput.setOnClickListener { modelInput.showDropDown() }
         modelBox.setEndIconOnClickListener { modelInput.showDropDown() }
-        wireEndIconTooltip(modelBox, picker.tooltipTag)
+        wireEndIconTooltip(modelBox, tooltipTag)
         modelInput.setOnItemClickListener { _, _, _, _ -> commitTypedModel() }
 
-        // A server that does not offer the saved model retires it; the field must show what will
-        // actually be requested, and silently keeping the old id is what 404s on the first message.
-        picker.selected.observe(viewLifecycleOwner) { model ->
+        // A catalog that no longer offers the saved model retires it; the field must show what
+        // will actually be requested, and silently keeping the old id is what 404s on the first
+        // message.
+        viewModel.selectedModel.observe(viewLifecycleOwner) { model ->
             val shown = modelInput.text.toString()
             if (shown == model || modelInput.hasFocus()) return@observe
             modelInput.setText(model, false)
             if (shown.isNotBlank()) {
                 Toast.makeText(
                     requireContext(),
-                    getString(picker.switchedMessage, model),
+                    getString(R.string.msg_model_switched, model),
                     Toast.LENGTH_LONG
                 ).show()
             }
         }
 
-        picker.options.observe(viewLifecycleOwner) { options ->
-            // Cleared, not left stale: an empty list means the server changed and the old catalog
-            // no longer describes it, so offering it would suggest models that will 404.
+        viewModel.models.observe(viewLifecycleOwner) { options ->
             modelInput.setAdapter(
                 if (options.models.isEmpty()) {
                     null
@@ -875,24 +617,23 @@ class ClaudeSettingsFragment : Fragment() {
             )
             // Keyed on whether there is a list, not on whether it is live: a remembered list is
             // still a list to tap, and telling the user to test the connection would be wrong.
-            modelHint.text =
-                getString(if (options.models.isEmpty()) picker.helpHint else picker.liveHint)
+            modelHint.text = getString(
+                if (options.models.isEmpty()) R.string.hint_claude_model_help else R.string.hint_claude_model_live
+            )
         }
     }
 
     // --- Connection test ----------------------------------------------------------------------
 
     /**
-     * The one server round trip this pane makes.
+     * The one API round trip this pane makes besides saving a key.
      *
-     * Testing the connection and listing the models were two buttons issuing the identical
-     * `GET {baseUrl}/models`, so they are one: the verdict is reported and, when the server
-     * answered with a catalog, it fills the model dropdown.
+     * Testing the connection and listing the models are the same `GET /v1/models`, so they are
+     * one button: the verdict is reported and, when the API answered, it fills the model dropdown.
      */
     private fun setupConnectionTest(view: View) {
         val testButton = view.findViewById<Button>(R.id.btn_test_connection)
         val statusText = view.findViewById<TextView>(R.id.claude_connection_status_text)
-        val urlInput = view.findViewById<EditText>(R.id.claude_base_url_input)
         val apiKeyInput = view.findViewById<EditText>(R.id.claude_api_key_input)
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.claude_api_key_layout)
 
@@ -910,15 +651,12 @@ class ClaudeSettingsFragment : Fragment() {
             showStatus(statusText, getString(R.string.msg_testing_connection))
             viewLifecycleOwner.lifecycleScope.launch {
                 // Tests what is on screen: a typo is worth catching before it is saved.
-                val url = urlInput.text.toString().trim().ifEmpty { viewModel.getBaseUrl() }
                 val typedKey = apiKeyInput.text.toString().trim()
                 val useTyped = apiKeyLayout.visibility == View.VISIBLE && typedKey.isNotEmpty()
-                // Scoped to the URL under test: probing a LAN server must not hand it the key the
-                // user entered for OpenAI.
-                val stored = if (useTyped) null else viewModel.getApiKeyFor(url)
+                val stored = if (useTyped) null else viewModel.getApiKey()
                 // A keystore that would not answer is not "no key stored": the key is intact and
                 // the pane above still reads "saved on ...". Testing without it would render the
-                // 401 as a refused key, or ask for one in a field that is not even shown.
+                // 401 as a refused key.
                 if (stored is KeystoreSecretStore.Stored.Unavailable) {
                     showStatus(
                         statusText,
@@ -935,10 +673,10 @@ class ClaudeSettingsFragment : Fragment() {
                 } else {
                     (stored as? KeystoreSecretStore.Stored.Value)?.plain?.trim().orEmpty()
                 }
-                // A server with no anonymous access can only answer 401 without a key, and
-                // reporting that as "the server refused this key" when there is no key sends the
-                // user off to mint a replacement for a key they never entered.
-                if (key.isEmpty() && BaseUrlPolicy.keyRequirement(url) == KeyRequirement.REQUIRED) {
+                // The API has no anonymous access, so without a key it can only answer 401, and
+                // reporting that as a refused key sends the user off to replace one they never
+                // entered.
+                if (key.isEmpty()) {
                     showStatus(
                         statusText,
                         getString(R.string.msg_api_key_needed_for_test),
@@ -949,11 +687,11 @@ class ClaudeSettingsFragment : Fragment() {
                     return@launch
                 }
                 val verdict = try {
-                    viewModel.verifyConnection(key, url)
+                    viewModel.verifyConnection(key)
                 } finally {
                     testButton.isEnabled = true
                 }
-                val (message, icon) = describe(verdict, keySent = key.isNotEmpty())
+                val (message, icon) = describe(verdict)
                 showStatus(statusText, message, icon)
                 // Same request either way, so a successful test has already earned the catalog.
                 if (verdict is ConnectionVerification.Verified) viewModel.fetchModels()
@@ -961,13 +699,8 @@ class ClaudeSettingsFragment : Fragment() {
         }
     }
 
-    /**
-     * One line and one icon for a connection verdict.
-     *
-     * @param keySent whether a credential actually accompanied the request, so a refusal is
-     *   reported as the wrong key only when there was one to be wrong
-     */
-    private fun describe(verdict: ConnectionVerification, keySent: Boolean): Pair<String, Int> = when (verdict) {
+    /** One line and one icon for a connection verdict. */
+    private fun describe(verdict: ConnectionVerification): Pair<String, Int> = when (verdict) {
         is ConnectionVerification.Verified -> resources.getQuantityString(
             R.plurals.msg_connection_ok,
             verdict.modelCount,
@@ -978,19 +711,13 @@ class ClaudeSettingsFragment : Fragment() {
             getString(R.string.msg_key_verified_rate_limited) to R.drawable.ic_key_verified
 
         ConnectionVerification.NoModels ->
-            getString(R.string.msg_server_no_models) to R.drawable.ic_key_unchecked
+            getString(R.string.msg_api_no_models) to R.drawable.ic_key_unchecked
 
-        ConnectionVerification.Rejected -> if (keySent) {
+        ConnectionVerification.Rejected ->
             getString(R.string.msg_key_rejected) to R.drawable.ic_key_rejected
-        } else {
-            getString(R.string.msg_server_needs_key) to R.drawable.ic_key_rejected
-        }
-
-        ConnectionVerification.EndpointNotFound ->
-            getString(R.string.msg_server_endpoint_404) to R.drawable.ic_key_rejected
 
         ConnectionVerification.Unreachable ->
-            getString(R.string.msg_server_unreachable) to R.drawable.ic_key_rejected
+            getString(R.string.msg_api_unreachable) to R.drawable.ic_key_rejected
 
         ConnectionVerification.Unknown ->
             getString(R.string.msg_key_uncheckable) to R.drawable.ic_key_unchecked
@@ -1019,10 +746,10 @@ class ClaudeSettingsFragment : Fragment() {
     }
 
     /**
-     * Open OpenAI's API keys page in the *system* browser.
+     * Open the Claude Console's API keys page in the *system* browser.
      *
      * A real browser, not a WebView: sign-in is blocked in embedded WebViews, and the user should
-     * see OpenAI's own URL bar. With no browser at all, the URL is copied instead.
+     * see the Console's own URL bar. With no browser at all, the URL is copied instead.
      */
     private fun openKeyPage() {
         val url = ClaudeKeyOnboarding.API_KEYS_URL
@@ -1059,20 +786,18 @@ class ClaudeSettingsFragment : Fragment() {
 }
 
 /**
- * Dropdown adapter for the pane's two pickers.
+ * Dropdown adapter for the model picker.
  *
- * Matches on **substring**, case-insensitively, and offers everything for a blank query: an
- * OpenRouter catalog is ~400 ids named `vendor/model`, where the stock prefix filter finds nothing
- * for "claude" and a list that cannot be narrowed is unusable. So the model field doubles as a
- * search box over what the server reported.
+ * Matches on **substring**, case-insensitively, and offers everything for a blank query, so
+ * "sonnet" finds `claude-sonnet-5-5` where the stock prefix filter would need the whole
+ * `claude-` prefix typed first. So the model field doubles as a search box over the catalog.
  *
  * Only user typing ever reaches the filter. Every programmatic write goes through
- * `setText(value, false)`, and the fields do not save their own state, so the text the framework
+ * `setText(value, false)`, and the field does not save its own state, so the text the framework
  * would otherwise replay on a day/night switch cannot narrow the list to the entry already selected.
  *
  * @param items the full list, kept so a query can always be re-run against it
- * @param noMatchLabel row to show when a search matches nothing, or null to just close the popup —
- *   only the searchable field needs it
+ * @param noMatchLabel row to show when a search matches nothing, or null to just close the popup
  */
 private class DropdownAdapter(
     context: Context,
@@ -1103,7 +828,7 @@ private class DropdownAdapter(
         @Suppress("UNCHECKED_CAST")
         override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
             val rows = results?.values as? List<String> ?: items
-            // Identity, not equality: a server is free to offer a model called "No model found".
+            // Identity, not equality: the API is free to offer a model called "No model found".
             showingNoMatch = noMatchLabel != null && rows.size == 1 && rows[0] === noMatchLabel
             clear()
             addAll(rows)

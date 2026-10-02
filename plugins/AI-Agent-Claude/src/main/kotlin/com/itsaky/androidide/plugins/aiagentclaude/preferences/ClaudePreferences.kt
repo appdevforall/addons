@@ -6,8 +6,8 @@ import com.itsaky.androidide.plugins.PluginContext
 /**
  * This plugin's own settings store.
  *
- * The base URL, API key and model describe *this* backend, so they live in this plugin's storage
- * rather than in AI Core's — a backend must be configurable whether or not any particular consumer
+ * The API key and model describe *this* backend, so they live in this plugin's storage rather
+ * than in AI Core's — a backend must be configurable whether or not any particular consumer
  * plugin happens to be installed.
  *
  * There is no migration from an older file: this backend has never shipped before, so there is
@@ -18,71 +18,20 @@ internal object ClaudePreferences {
     /** This plugin's preferences file. Namespaced to this plugin by the host. */
     private const val FILE = "ClaudeSettings"
 
-    /** Server base URL, e.g. `https://api.openai.com/v1`. Stored normalized. */
-    const val KEY_BASE_URL = "claude_base_url"
-
-    /** API key, stored as ciphertext only. Optional for a server that needs none. */
+    /** API key, stored as ciphertext only. */
     const val KEY_API_KEY = "claude_api_key"
 
     const val KEY_API_KEY_TIMESTAMP = "claude_api_key_timestamp"
     const val KEY_API_KEY_VERIFIED = "claude_api_key_verified"
 
-    /**
-     * The base URL [KEY_API_KEY] was saved for.
-     *
-     * Stored alongside so the key is only ever sent to the server it was issued by: pointing the
-     * URL at a private-range address afterwards would otherwise put an OpenAI bearer token on the
-     * local network in the clear.
-     */
-    const val KEY_API_KEY_URL = "claude_api_key_url"
-
-    /** Model id to request, e.g. `gpt-5` or `qwen2.5-coder`. */
+    /** Model id to request, e.g. `claude-opus-5-5`. */
     const val KEY_MODEL = "claude_model"
 
     /**
-     * The base URL [KEY_MODEL] was chosen for.
-     *
-     * Stored alongside so switching servers can tell a model this server offers from one carried
-     * over from the last server, which is what would 404 on the first message.
-     */
-    const val KEY_MODEL_URL = "claude_model_url"
-
-    /** Embedding model id to request, e.g. `text-embedding-3-small`. */
-    const val KEY_EMBEDDING_MODEL = "claude_embedding_model"
-
-    /**
-     * The base URL [KEY_EMBEDDING_MODEL] was chosen for.
-     *
-     * Stored alongside for the same reason as [KEY_MODEL_URL], and it matters more here: an
-     * embedding model carried over to another server produces vectors in a different space, which
-     * does not 404 — it silently ranks against the index built by the previous one.
-     */
-    const val KEY_EMBEDDING_MODEL_URL = "claude_embedding_model_url"
-
-    /** Set once the user has been warned about a cleartext URL, so the warning shows once. */
-    const val KEY_CLEARTEXT_ACKNOWLEDGED = "claude_cleartext_acknowledged"
-
-    /**
-     * The last model list a server returned, so reopening the settings pane offers the dropdown
+     * The last model list the API returned, so reopening the settings pane offers the dropdown
      * without another request. Encoded by `RememberedModels`.
      */
     const val KEY_REMEMBERED_MODELS = "claude_remembered_models"
-
-    /**
-     * The base URL [KEY_REMEMBERED_MODELS] was fetched from.
-     *
-     * Stored alongside so a list remembered from LM Studio is never offered after the URL is
-     * pointed at OpenAI — the two catalogs have nothing in common.
-     */
-    const val KEY_REMEMBERED_MODELS_URL = "claude_remembered_models_url"
-
-    /**
-     * The embedding half of the last model list a server returned, remembered under its own key so
-     * reopening the settings pane offers both pickers without another request. Encoded by
-     * `RememberedModels`, and guarded by the same [KEY_REMEMBERED_MODELS_URL]: both halves come
-     * from one listing, so one origin describes them both.
-     */
-    const val KEY_REMEMBERED_EMBEDDING_MODELS = "claude_remembered_embedding_models"
 
     /**
      * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a

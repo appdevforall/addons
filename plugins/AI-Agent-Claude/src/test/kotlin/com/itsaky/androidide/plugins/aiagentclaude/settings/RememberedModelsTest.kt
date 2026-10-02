@@ -20,8 +20,8 @@ class RememberedModelsTest {
 
     @Test
     fun givenBlanksAndDuplicates_whenEncoded_thenTheyAreDropped() {
-        val encoded = RememberedModels.encode(listOf("gpt-4o", " gpt-4o ", "", "   ", "gpt-5"))
-        assertEquals(listOf("gpt-4o", "gpt-5"), RememberedModels.decode(encoded))
+        val encoded = RememberedModels.encode(listOf("claude-opus-5-5", " claude-opus-5-5 ", "", "   ", "claude-haiku-4-5"))
+        assertEquals(listOf("claude-opus-5-5", "claude-haiku-4-5"), RememberedModels.decode(encoded))
     }
 
     @Test
@@ -38,7 +38,7 @@ class RememberedModelsTest {
 
     @Test
     fun givenAHugeCatalog_whenEncoded_thenItIsCapped() {
-        // OpenRouter lists hundreds; SharedPreferences is the wrong place for an unbounded list.
+        // SharedPreferences is the wrong place for an unbounded list, whatever the API returns.
         val many = (1..500).map { "model-$it" }
         val decoded = RememberedModels.decode(RememberedModels.encode(many))
         assertEquals(RememberedModels.MAX_REMEMBERED, decoded.size)
@@ -47,6 +47,6 @@ class RememberedModelsTest {
 
     @Test
     fun givenAnIdWithSurroundingWhitespace_whenDecoded_thenItIsTrimmed() {
-        assertEquals(listOf("gpt-4o", "gpt-5"), RememberedModels.decode(" gpt-4o \n gpt-5 "))
+        assertEquals(listOf("claude-opus-5-5", "claude-haiku-4-5"), RememberedModels.decode(" claude-opus-5-5 \n claude-haiku-4-5 "))
     }
 }

@@ -1,4 +1,4 @@
-# AI Agent OpenAI Plugin ProGuard Rules
+# AI Agent Claude Plugin ProGuard Rules
 
 # Keep plugin entry point
 -keep public class com.itsaky.androidide.plugins.aiagentclaude.plugin.ClaudePlugin {

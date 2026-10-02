@@ -1,26 +1,19 @@
 package com.itsaky.androidide.plugins.aiagentclaude.settings
 
 /**
- * Outcome of one model-catalog lookup against the OpenAI-compatible backend.
+ * Outcome of one model-catalog lookup against the Claude backend.
  *
- * A closed hierarchy, so callers cannot treat "the backend isn't installed" and "the server refused
+ * A closed hierarchy, so callers cannot treat "the backend isn't installed" and "the API refused
  * the key" alike.
  */
 sealed interface CatalogResult {
 
     /**
-     * The server answered. Either list may be empty, which many compatible servers do.
+     * The API answered.
      *
-     * Both halves come from one listing, so they describe the same snapshot of the same server —
-     * see `ModelCatalogFilter` for how one raw catalog splits into two pickers.
-     *
-     * @param models the chat models the server offers
-     * @param embeddingModels the embedding models the server offers
+     * @param models the models the key can use, possibly none
      */
-    data class Success(
-        val models: List<String>,
-        val embeddingModels: List<String>,
-    ) : CatalogResult
+    data class Success(val models: List<String>) : CatalogResult
 
     /** No backend was resolvable — this plugin is not active, or was disposed. */
     data object NoBackend : CatalogResult

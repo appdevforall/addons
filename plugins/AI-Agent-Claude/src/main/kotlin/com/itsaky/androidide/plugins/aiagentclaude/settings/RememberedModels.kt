@@ -2,7 +2,7 @@ package com.itsaky.androidide.plugins.aiagentclaude.settings
 
 /**
  * Encodes the last fetched model list for storage, so reopening the settings pane offers the
- * dropdown again without another request to the server.
+ * dropdown again without another request to the API.
  *
  * Pure, so the round trip is unit-testable. Newline-delimited rather than JSON: a model id never
  * contains a newline, and a parse that cannot throw is one less way to lose the list.
@@ -13,8 +13,8 @@ internal object RememberedModels {
     private const val SEPARATOR = "\n"
 
     /**
-     * Cap on remembered entries. A large OpenRouter catalog runs to hundreds of ids, and
-     * SharedPreferences is the wrong place for an unbounded list.
+     * Cap on remembered entries. Claude's catalog is short, but SharedPreferences is the wrong
+     * place for an unbounded list whatever the API returns.
      */
     const val MAX_REMEMBERED = 200
 

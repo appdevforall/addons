@@ -2,57 +2,32 @@
 <resources>
 
     <!-- Name shown in the backend selector, via LlmBackend.getName() -->
-    <string name="claude_backend_name">OpenAI</string>
-
-    <!-- Server presets (ServerPresets.ALL) -->
-    <string name="preset_openai">OpenAI</string>
-    <string name="preset_ollama">Ollama</string>
-    <string name="preset_lm_studio">LM Studio</string>
-    <string name="preset_llama_server">llama-server</string>
-    <string name="preset_openrouter">OpenRouter</string>
-    <string name="preset_custom">Custom…</string>
+    <string name="claude_backend_name">Claude</string>
 
     <!-- Generation and catalog errors (ClaudeErrorFormatter) -->
-    <string name="claude_error_model_unavailable">The server does not have a model called \"%1$s\". Tap Refresh under Model to see what it offers, or type another name.</string>
-    <string name="claude_error_quota">You have reached the server\'s rate limit. Wait a moment and try again.</string>
-    <string name="claude_error_billing">Your OpenAI account has no credit left. OpenAI API keys are prepaid and separate from a ChatGPT subscription — add credit, or point the server URL at a model running on your own machine.</string>
-    <string name="claude_error_key_refused">The server refused your API key. Re-enter it in Agent settings.</string>
-    <string name="claude_error_key_missing">This server needs an API key. Add one in Agent settings.</string>
-    <string name="claude_error_key_forbidden">Your API key is not allowed to use this model. Choose another model, or check the key\'s permissions.</string>
-    <string name="claude_error_request_rejected">The server rejected the request.</string>
-    <string name="claude_error_request_rejected_reason">The server rejected the request. %1$s</string>
-    <string name="claude_error_service_unavailable">The server is temporarily unavailable (HTTP %1$d). Try again in a moment.</string>
-    <string name="claude_error_unexpected">The server returned an error (HTTP %1$d).</string>
-    <string name="claude_error_unexpected_reason">The server returned an error (HTTP %1$d). %2$s</string>
-    <string name="claude_error_server_not_running">Nothing answered at %1$s. Check that the server is running and that this device can reach it.</string>
-    <string name="claude_error_unreachable">Could not reach OpenAI. Check your internet connection and try again.</string>
-    <string name="claude_error_empty_reply">The server answered but sent no reply text. Check the model is fully loaded in your server, then try again — see the IDE log for what the server sent.</string>
-    <string name="claude_error_reasoning_only">The model spent its whole reply on internal reasoning and never answered. Raise the response length limit in your server, or choose a model without a thinking mode.</string>
-    <string name="claude_error_truncated">The reply was cut off before any text arrived — the response length limit is too low for this model. Raise it in your server settings.</string>
-    <string name="claude_error_tools_unsupported">%1$s does not support tool calling, so the AI can answer but cannot change your project. Point the server setting at one that does.</string>
-    <string name="claude_error_failed">The request to the AI server failed.</string>
-    <string name="claude_error_failed_reason">The request to the AI server failed. %1$s</string>
+    <string name="claude_error_model_unavailable">Claude has no model called \"%1$s\" that this API key can use. Test the connection in Agent settings to list the models you can choose, or type another name.</string>
+    <string name="claude_error_quota">You have reached your Claude API rate limit. Wait a moment and try again.</string>
+    <string name="claude_error_billing">Your Claude API credit balance is too low. API usage is prepaid and separate from a Claude.ai subscription. Add credit in the Claude Console, or use a different AI backend.</string>
+    <string name="claude_error_key_refused">Claude refused your API key. Re-enter it in Agent settings.</string>
+    <string name="claude_error_key_missing">Claude needs an API key. Add one in Agent settings.</string>
+    <string name="claude_error_key_forbidden">Your API key is not allowed to do this. Choose another model, or check the key\'s workspace in the Claude Console.</string>
+    <string name="claude_error_too_large">This conversation is too long for Claude to accept. Start a new chat, or attach less of the project.</string>
+    <string name="claude_error_request_rejected">Claude rejected the request.</string>
+    <string name="claude_error_request_rejected_reason">Claude rejected the request. %1$s</string>
+    <string name="claude_error_service_unavailable">Claude is overloaded or unavailable right now (HTTP %1$d). Try again in a moment.</string>
+    <string name="claude_error_unexpected">Claude returned an error (HTTP %1$d).</string>
+    <string name="claude_error_unexpected_reason">Claude returned an error (HTTP %1$d). %2$s</string>
+    <string name="claude_error_unreachable">Could not reach Claude. Check your internet connection and try again.</string>
+    <string name="claude_error_refused">Claude declined to answer this request. Rephrase it, or try a different model in Agent settings.</string>
+    <string name="claude_error_empty_reply">Claude answered but sent no reply text. Try again. The IDE log shows what arrived.</string>
+    <string name="claude_error_reasoning_only">Claude spent the turn thinking and never wrote an answer. Try again, or ask a narrower question.</string>
+    <string name="claude_error_truncated">The reply hit its length limit before any text arrived. Try again, or ask for a smaller change.</string>
+    <string name="claude_error_failed">The request to Claude failed.</string>
+    <string name="claude_error_failed_reason">The request to Claude failed. %1$s</string>
 
-    <!-- Settings pane: server -->
-    <string name="label_claude_server">Server</string>
-    <string name="hint_claude_preset">Choose a server</string>
-    <string name="cd_show_presets">Show the server list</string>
-    <string name="hint_claude_server">https://api.openai.com/v1</string>
-    <string name="btn_save_server">Save Server</string>
-    <string name="msg_server_saved">Server set to %1$s</string>
-    <string name="msg_server_blank">Enter a server URL, for example https://api.openai.com/v1</string>
-    <string name="msg_server_malformed">That is not a valid URL. It must start with http:// or https://</string>
-    <string name="msg_server_no_host">That URL has no server name in it.</string>
-    <string name="msg_server_cleartext_public">Unencrypted http:// is only allowed for this device or a private network address. Use https:// for a server on the internet.</string>
-    <string name="title_cleartext_server">Unencrypted connection</string>
-    <string name="msg_cleartext_server">This server uses plain http://, so your prompts and any file contents travel across your local network unencrypted. That is usually fine for a machine you own at home. Avoid it on a network you do not trust.</string>
-    <string name="action_understood">Got it</string>
-
-    <!-- Settings pane: API key. The label tracks the chosen server (see BaseUrlPolicy). -->
-    <string name="label_claude_api_key">API Key</string>
-    <string name="label_claude_api_key_required">API Key (required for OpenAI)</string>
-    <string name="label_claude_api_key_optional">API Key (if this server needs one)</string>
-    <string name="hint_claude_api_key">Paste your key</string>
+    <!-- Settings pane: API key -->
+    <string name="label_claude_api_key">Claude API Key</string>
+    <string name="hint_claude_api_key">Paste your key (sk-ant-…)</string>
     <!-- Reveal toggle on the masked credential field. Deliberately the same wording in
          every AI plugin: one control, one announcement, whatever the field holds. -->
     <string name="cd_show_credential">Show credential</string>
@@ -61,69 +36,54 @@
     <string name="btn_edit_api_key">Edit</string>
     <string name="btn_clear_api_key">Clear</string>
     <string name="btn_get_key">Get API Key</string>
-    <string name="msg_api_key_required_for_openai">OpenAI needs an API key. Enter one, or change the server to a local model that needs none.</string>
-    <string name="msg_key_not_needed">No API key needed — this server runs without one.</string>
-    <string name="msg_key_not_needed_but_saved">No API key needed — this server runs without one. Your saved key is kept for the servers that do.</string>
-    <string name="msg_api_key_needed_for_test">OpenAI needs an API key before this test can tell you anything. Enter one above, or choose a server that runs without a key.</string>
-    <string name="msg_key_left_empty">No key saved — this server will be called without one.</string>
+    <string name="msg_api_key_required">Claude needs an API key. Enter one, or tap Get API Key to create one.</string>
+    <string name="msg_api_key_needed_for_test">Enter an API key above before testing. Claude does not answer without one.</string>
     <string name="msg_api_key_saved">API Key saved</string>
     <string name="msg_api_key_cleared">API Key cleared</string>
     <string name="msg_api_key_is_saved">API Key is saved</string>
     <string name="msg_api_key_saved_on">API Key saved on: %s</string>
     <string name="msg_api_key_verified_on">API Key saved and verified on: %s</string>
     <string name="msg_api_key_unreadable">The stored API key could not be read on this device. Please enter it again.</string>
-    <string name="msg_api_key_unavailable">The device keystore could not be reached, so the stored API key could not be read. It is still saved — please try again in a moment.</string>
-    <string name="msg_api_key_unavailable_for_test">The device keystore could not be reached, so the saved API key could not be read for this test. It is still saved — please try the test again in a moment.</string>
+    <string name="msg_api_key_unavailable">The device keystore could not be reached, so the stored API key could not be read. It is still saved. Please try again in a moment.</string>
+    <string name="msg_api_key_unavailable_for_test">The device keystore could not be reached, so the saved API key could not be read for this test. It is still saved. Please try the test again in a moment.</string>
     <string name="msg_api_key_save_failed">Couldn\'t save the API key on this device. Please try again.</string>
-    <string name="msg_verifying_key">Checking this key with the server…</string>
+    <string name="msg_verifying_key">Checking this key with Claude…</string>
     <string name="msg_key_verified">Verified, your API key works</string>
-    <string name="msg_key_verified_rate_limited">Key accepted — the server is rate-limiting right now</string>
-    <string name="msg_key_rejected">The server refused this key. It wasn\'t saved, check it and try again.</string>
-    <string name="msg_key_rejected_kept">The server refused this key. It wasn\'t saved \u2014 the key you had saved was kept, and chat is still using it.</string>
+    <string name="msg_key_verified_rate_limited">Key accepted. Claude is rate-limiting right now.</string>
+    <string name="msg_key_rejected">Claude refused this key. It wasn\'t saved. Check it and try again.</string>
+    <string name="msg_key_rejected_kept">Claude refused this key. It wasn\'t saved. The key you had saved was kept, and chat is still using it.</string>
     <string name="msg_key_chat_failure">A chat request was refused: %1$s</string>
-    <string name="msg_key_uncheckable">Couldn\'t check this — make sure the AI Core plugin is installed, enabled and up to date.</string>
+    <string name="msg_key_uncheckable">Couldn\'t check this. Make sure the AI Core plugin is installed, enabled and up to date.</string>
     <string name="title_save_unverified_key">Save without checking?</string>
-    <string name="msg_save_unverified_key">%s\n\nYour key has not been checked, so there is no way to tell yet whether it works. Save it now and it will be used as soon as the server answers.</string>
+    <string name="msg_save_unverified_key">%s\n\nYour key has not been checked, so there is no way to tell yet whether it works. Save it now and it will be used as soon as Claude can be reached.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save_anyway">Save anyway</string>
     <string name="msg_key_hint_paste_into_field">Copied your key? Paste it into the field above, then tap Save Key.</string>
     <string name="msg_key_hint_edit_first">Copied a new key? Tap Edit, then paste it into the field.</string>
-    <string name="msg_no_browser_for_key">No browser available. The link was copied — open it on another device: %s</string>
+    <string name="msg_no_browser_for_key">No browser available. The link was copied. Open it on another device: %s</string>
     <string name="msg_key_link_copy_failed">Couldn\'t open a browser. Get your key at %s</string>
-    <string name="claude_clip_label">OpenAI API key link</string>
+    <string name="claude_clip_label">Claude API key link</string>
 
     <!-- Settings pane: model. One editable dropdown; typing and picking both save. -->
     <string name="label_claude_model">Model</string>
-    <string name="hint_claude_model">gpt-5, qwen2.5-coder, …</string>
+    <string name="hint_claude_model">claude-opus-5-5, claude-sonnet-5-5, …</string>
     <string name="cd_show_models">Show the model list</string>
     <!-- One non-selectable row in the model dropdown when a search matches nothing. Typing a
          name the list does not hold is still valid, which is what the field hint says. -->
     <string name="msg_no_model_found">No model found</string>
-    <string name="hint_claude_model_help">Type any name the server accepts. Test the connection below to list what it offers.</string>
-    <string name="hint_claude_model_live">Tap to pick from the models this server reported, or type another name.</string>
-    <string name="msg_model_switched">This server doesn\'t offer your previous model. Switched to %1$s — pick another if you prefer.</string>
+    <string name="hint_claude_model_help">Type any Claude model id. Test the connection below to list the models your key can use.</string>
+    <string name="hint_claude_model_live">Tap to pick from the models your key can use, or type another id.</string>
+    <string name="msg_model_switched">Your key can\'t use your previous model. Switched to %1$s. Pick another if you prefer.</string>
     <string name="loading">Checking…</string>
-
-    <!-- Settings pane: embedding model. Same control as the chat model, other half of the catalog. -->
-    <string name="label_claude_embedding_model">Embedding Model</string>
-    <string name="hint_claude_embedding_model">text-embedding-3-small, nomic-embed-text, …</string>
-    <string name="cd_show_embedding_models">Show the embedding model list</string>
-    <string name="hint_claude_embedding_model_help">Used by semantic search, never for chat. Test the connection below to list what this server offers.</string>
-    <string name="hint_claude_embedding_model_live">Tap to pick from the embedding models this server reported, or type another name.</string>
-    <string name="msg_embedding_model_switched">This server doesn\'t offer your previous embedding model. Switched to %1$s — anything already indexed will be built again.</string>
 
     <!-- Settings pane: connection test, which also fills the model list -->
     <string name="btn_test_connection">Test Connection &amp; List Models</string>
-    <string name="msg_testing_connection">Contacting the server…</string>
-    <!-- "found N" rather than "offers N": a bare count next to a key check reads as an HTTP
-         status, and OpenRouter's catalog really does come back as 401 chat models. -->
+    <string name="msg_testing_connection">Contacting Claude…</string>
     <plurals name="msg_connection_ok">
-        <item quantity="one">Connected — found %1$d model</item>
-        <item quantity="other">Connected — found %1$d models</item>
+        <item quantity="one">Connected. Found %1$d model.</item>
+        <item quantity="other">Connected. Found %1$d models.</item>
     </plurals>
-    <string name="msg_server_no_models">The server answered but has no models loaded. For Ollama, pull a model first.</string>
-    <string name="msg_server_endpoint_404">The server answered 404. The URL is probably missing its /v1 at the end.</string>
-    <string name="msg_server_unreachable">Nothing answered. Check the server is running and that this device can reach it.</string>
-    <string name="msg_server_needs_key">This server needs an API key. Enter one above, then test again.</string>
+    <string name="msg_api_no_models">Key accepted, but Claude listed no models for it. Check the key\'s workspace in the Claude Console.</string>
+    <string name="msg_api_unreachable">Couldn\'t reach Claude. Check your internet connection, or try again if Claude is overloaded.</string>
 
 </resources>

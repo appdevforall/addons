@@ -6,10 +6,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * This backend's half of the native function-calling protocol: `tools[]` out, `tool_calls` in.
+ * This backend's half of the Messages API tool protocol: `tools[]` out, `tool_use` blocks in.
  *
  * Pure and free of Android types, so the shapes that decide whether a tool call runs at all are
- * unit-testable without a device or a network — see [ClaudeSystemPrompt] for the same reasoning.
+ * unit-testable without a device or a network.
  */
 internal object ClaudeToolProtocol {
 
@@ -20,64 +20,50 @@ internal object ClaudeToolProtocol {
     private const val MAX_SCHEMA_DEPTH = 12
 
     /**
-     * One `tool_calls` fragment as it arrives on the stream.
+     * The `tools[]` array declaring [tools] to the API.
      *
-     * A call is spread across as many chunks as its arguments need, so no single fragment is a
-     * call; [CallAccumulator] joins them.
-     *
-     * @property index the call's position in the turn, which is what fragments are joined on.
-     * @property id the provider's call id, present on the first fragment only.
-     * @property name the tool's name, likewise present once.
-     * @property arguments this fragment's slice of the arguments JSON, possibly a partial token.
-     */
-    data class ToolCallDelta(
-        val index: Int,
-        val id: String?,
-        val name: String?,
-        val arguments: String,
-    )
-
-    /**
-     * The `tools[]` array declaring [tools] to the server.
+     * Not `strict`: strict mode needs every schema closed with `additionalProperties: false`, which
+     * a contributed MCP schema rarely is, and the API answers an unconforming one with a 400.
      *
      * @param tools the tools to declare.
-     * @return one `{"type":"function","function":{…}}` entry per tool.
+     * @return one `{"name", "description", "input_schema"}` entry per tool.
      */
     fun toolsArray(tools: List<ToolDefinition>): JSONArray {
         val declarations = JSONArray()
         for (tool in tools) {
-            val function = JSONObject()
-                .put("name", tool.name)
-                .put("description", tool.description.orEmpty())
-                .put("parameters", parametersJson(tool.parametersSchema))
-            declarations.put(JSONObject().put("type", "function").put("function", function))
+            declarations.put(
+                JSONObject()
+                    .put("name", tool.name)
+                    .put("description", tool.description.orEmpty())
+                    .put("input_schema", inputSchemaJson(tool.parametersSchema))
+            )
         }
         return declarations
     }
 
     /**
-     * The `parameters` value for a tool.
+     * The `input_schema` value for a tool.
      *
-     * An empty schema becomes a bare object rather than being omitted: omitting `parameters`
-     * declares a tool that takes none, and the model would then call it with nothing.
+     * The API requires an object schema, so an empty one becomes a bare `{"type":"object"}` and a
+     * schema that names no type gets one; any other declared type is passed through for the API to
+     * judge, rather than silently rewritten into a contract the tool did not offer.
      *
      * @param schema the tool's JSON Schema, empty when it publishes none.
      * @return the schema to declare.
      */
-    fun parametersJson(schema: Map<String, Any>?): JSONObject {
+    fun inputSchemaJson(schema: Map<String, Any>?): JSONObject {
         if (schema.isNullOrEmpty()) return JSONObject().put("type", "object")
-        return schemaJson(schema, MAX_SCHEMA_DEPTH)
+        val json = schemaJson(schema, MAX_SCHEMA_DEPTH)
+        if (!json.has("type")) json.put("type", "object")
+        return json
     }
 
     /**
-     * Converts a JSON Schema to JSON.
-     *
-     * Passed through keyword for keyword, unlike the Gemini transport's whitelist: this protocol
-     * takes plain JSON Schema, which is the dialect a contributed tool already arrives in.
+     * Converts a JSON Schema to JSON, keyword for keyword: the Messages API takes plain JSON
+     * Schema, which is the dialect a contributed tool already arrives in.
      *
      * @param schema the tool's JSON Schema.
      * @param depth how much further nesting to render; a deeper subtree is dropped.
-     * @return the equivalent JSON.
      */
     private fun schemaJson(schema: Map<*, *>, depth: Int): JSONObject {
         val json = JSONObject()
@@ -98,96 +84,74 @@ internal object ClaudeToolProtocol {
     }
 
     /**
-     * The `tool_calls` fragments carried by one streamed `delta` (or one-shot `message`).
+     * Joins a stream's `tool_use` blocks back into whole calls.
      *
-     * @param delta the chunk's `delta` or `message` object, or null when it has neither.
-     * @return the fragments, empty when the chunk carries no call.
-     */
-    fun toolCallDeltas(delta: JSONObject?): List<ToolCallDelta> {
-        val calls = delta?.optJSONArray("tool_calls") ?: return emptyList()
-        val deltas = mutableListOf<ToolCallDelta>()
-        for (i in 0 until calls.length()) {
-            val call = calls.optJSONObject(i) ?: continue
-            val function = call.optJSONObject("function")
-            deltas += ToolCallDelta(
-                // Absent on servers that send a whole call per chunk; position in the array then.
-                index = if (call.has("index")) call.optInt("index") else i,
-                id = call.optString("id").takeIf { it.isNotBlank() },
-                name = function?.optString("name")?.takeIf { it.isNotBlank() },
-                arguments = function?.optString("arguments").orEmpty(),
-            )
-        }
-        return deltas
-    }
-
-    /**
-     * Joins streamed [ToolCallDelta] fragments back into whole calls.
+     * A block opens with its id and name (`content_block_start`) and its input follows as
+     * `input_json_delta` fragments, each a slice of one JSON object that only parses once the block
+     * is complete. Fragments are joined on the block's index, which is unique within one message.
      *
      * Not thread-safe: it belongs to the one reader loop consuming a single response body.
      */
     class CallAccumulator {
 
-        /** One call under construction, fed by every fragment carrying its index. */
-        private class Entry(val id: String?, var name: String?) {
-            val arguments = StringBuilder()
+        /** One call under construction. */
+        private class Entry(val id: String, val name: String) {
+            val input = StringBuilder()
         }
 
-        /** Every call this turn has begun, in arrival order. */
+        /** Every call this message has begun, in arrival order. */
         private val entries = mutableListOf<Entry>()
 
-        /** The call each index is still receiving fragments for. */
+        /** The call each content-block index is receiving fragments for. */
         private val open = HashMap<Int, Entry>()
 
         /**
-         * Calls whose arguments never parsed, as of the last [requests] call.
+         * Calls whose input never parsed, as of the last [requests] call.
          *
-         * The diagnostic for a turn that asked for a tool and ran none: a cut-off stream leaves
-         * arguments half-written, which is a truncated reply rather than an empty one.
+         * The diagnostic for a turn that asked for a tool and ran none: a stream cut off by
+         * `max_tokens` leaves the input half-written, which is a truncated reply, not an empty one.
          */
         var droppedCalls: Int = 0
             private set
 
         /**
-         * Folds one chunk's fragments in.
-         * @param deltas the fragments, in the order the chunk carried them.
+         * Opens the `tool_use` block at [index].
+         *
+         * @param id the API's `toolu_...` id, carried back to correlate the result.
+         * @param name the tool the model chose.
          */
-        fun accept(deltas: List<ToolCallDelta>) {
-            for (delta in deltas) {
-                val existing = open[delta.index]
-                // A new id at a live index means a second call, not more of the first one.
-                val entry = if (existing == null || (delta.id != null && delta.id != existing.id)) {
-                    Entry(delta.id, delta.name).also { entries += it; open[delta.index] = it }
-                } else {
-                    existing.apply { if (name == null) name = delta.name }
-                }
-                entry.arguments.append(delta.arguments)
-            }
+        fun start(index: Int, id: String, name: String) {
+            val entry = Entry(id, name)
+            entries += entry
+            open[index] = entry
+        }
+
+        /**
+         * Appends one `input_json_delta` fragment to the block at [index]. A fragment for an index
+         * no `tool_use` block opened belongs to some other block type and is ignored.
+         */
+        fun appendInput(index: Int, partialJson: String) {
+            open[index]?.input?.append(partialJson)
         }
 
         /**
          * The calls accumulated so far, in the order the stream began them.
          *
-         * A call whose arguments will not parse is left out and counted in [droppedCalls] rather
-         * than reported with empty arguments, which would run the tool on nothing.
+         * A call whose input will not parse is left out and counted in [droppedCalls] rather than
+         * reported with empty arguments, which would run the tool on nothing.
          *
-         * @return the whole calls; empty when the turn carried none.
+         * @return the whole calls; empty when the message carried none.
          */
         fun requests(): List<ToolCallRequest> {
             val requests = mutableListOf<ToolCallRequest>()
             var dropped = 0
             for (entry in entries) {
-                val name = entry.name
-                if (name.isNullOrBlank()) {
+                val args = argsOf(entry.input.toString())
+                if (entry.name.isBlank() || args == null) {
                     dropped++
                     continue
                 }
-                val args = argsOf(entry.arguments.toString())
-                if (args == null) {
-                    dropped++
-                    continue
-                }
-                // Paired by name when the server sent no id, never by an id it would not recognise.
-                requests += ToolCallRequest(entry.id ?: name, name, args)
+                requests += ToolCallRequest(entry.id.ifBlank { entry.name }, entry.name, args)
             }
             droppedCalls = dropped
             return requests
@@ -195,17 +159,20 @@ internal object ClaudeToolProtocol {
     }
 
     /**
-     * Reads one call's `arguments` string.
+     * Reads one call's accumulated input.
      *
-     * @param arguments the accumulated JSON; blank for a tool called with none.
-     * @return the arguments, or null when the JSON is incomplete or malformed.
+     * Parsed with org.json rather than matched as text: the API may escape the same string
+     * differently from one model to the next (unicode, forward slashes).
+     *
+     * @param input the accumulated JSON; blank for a tool called with none.
+     * @return the arguments, or null when the JSON is incomplete, malformed, or not an object.
      */
-    fun argsOf(arguments: String): Map<String, Any>? {
-        val text = arguments.trim()
+    fun argsOf(input: String): Map<String, Any>? {
+        val text = input.trim()
         if (text.isEmpty()) return emptyMap()
         val json = runCatching { JSONObject(text) }.getOrNull() ?: return null
         val args = mutableMapOf<String, Any>()
-        // Values stay as org.json types, as the Gemini transport also hands them over.
+        // Values stay as org.json types, as the other transports also hand them over.
         for (key in json.keys()) args[key] = json.get(key)
         return args
     }

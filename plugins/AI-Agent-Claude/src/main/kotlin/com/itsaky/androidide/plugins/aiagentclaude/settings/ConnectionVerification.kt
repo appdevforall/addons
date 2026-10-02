@@ -4,63 +4,53 @@ import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeHttpException
 import java.io.IOException
 
 /**
- * What a live check against the configured server established.
+ * What a live check against the Claude API established.
  *
  * [Rejected] is a confirmed refusal and blocks a key save; everything else establishes less than
- * that, and collapsing them together would either save bad keys or block a perfectly good local
- * server that simply does not implement `/v1/models`.
+ * that, and collapsing them together would either save bad keys or refuse a good one because the
+ * network was down.
  */
 sealed interface ConnectionVerification {
 
-    /** The server answered and offers [modelCount] plausible chat models. */
+    /** The API accepted the key and offers [modelCount] models. */
     data class Verified(val modelCount: Int) : ConnectionVerification
 
     /**
-     * The server answered but has no models to offer.
-     *
-     * Its own state because it is actionable and common: an Ollama install with nothing pulled
-     * yet. The URL and credential are fine; there is just nothing to run.
+     * The API accepted the key but listed no models. The key works; the account has nothing it
+     * may use yet.
      */
     data object NoModels : ConnectionVerification
 
     /**
-     * The server accepted the credential but is rate-limiting (HTTP 429).
+     * The API accepted the key but is rate-limiting (HTTP 429).
      *
      * Treated as confirmed on purpose — calling this "rejected" would send users off to mint a
      * second key that behaves identically.
      */
     data object RateLimited : ConnectionVerification
 
-    /** The server refused the credential (HTTP 401/403). The only state that blocks a save. */
+    /** The API refused the key (HTTP 401/403). The only state that blocks a save. */
     data object Rejected : ConnectionVerification
 
-    /**
-     * The server answered 404, so it is running but the path is wrong.
-     *
-     * Almost always a base URL missing its `/v1` suffix, which is the most common setup mistake
-     * for every compatible server — hence a distinct verdict with distinct advice.
-     */
-    data object EndpointNotFound : ConnectionVerification
-
-    /** Nothing answered — no network, nothing listening on that port, DNS failure, or a 5xx. */
+    /** Nothing answered, or the API is overloaded or failing (no network, DNS, 5xx, 529). */
     data object Unreachable : ConnectionVerification
 
     /** Nothing could be checked: the backend was not resolvable, or the failure was unrecognised. */
     data object Unknown : ConnectionVerification
 
     /**
-     * True when the server confirmed the credential works. This is the save rule in one place: a
-     * key is written only when this is true, or when the user overrides an *inconclusive* check.
+     * True when the API confirmed the key works. This is the save rule in one place: a key is
+     * written only when this is true, or when the user overrides an *inconclusive* check.
      */
     val isConfirmedValid: Boolean
-        get() = this is Verified || this is RateLimited
+        get() = this is Verified || this is RateLimited || this is NoModels
 }
 
 /**
- * Interpret a catalog lookup as a verdict on the server and credential that produced it.
+ * Interpret a catalog lookup as a verdict on the key that produced it.
  *
  * Pure: no Android state and no logging of its own — the gateway already reported the failure — so
- * every row of the mapping is unit-testable without a device or a live server.
+ * every row of the mapping is unit-testable without a device or a live API.
  */
 internal fun CatalogResult.toConnectionVerification(): ConnectionVerification = when (this) {
     is CatalogResult.Success ->
@@ -75,31 +65,19 @@ internal fun CatalogResult.toConnectionVerification(): ConnectionVerification = 
     is CatalogResult.Failed -> classifyFailure(cause)
 }
 
-/**
- * Map a lookup failure onto a verdict using the status the transport reports as a field.
- *
- * Note 404 does **not** reject: a compatible server that lacks `/v1/models` answers 404 with a
- * perfectly good key, and rejecting there would make it unconfigurable.
- */
+/** Map a lookup failure onto a verdict using the status the transport reports as a field. */
 private fun classifyFailure(cause: Throwable): ConnectionVerification =
-    when (val status = failureStatusOf(cause)) {
+    when (failureStatusOf(cause)) {
         null -> if (cause is IOException) {
             ConnectionVerification.Unreachable
         } else {
             ConnectionVerification.Unknown
         }
-        // Ordered before the 4xx range: a throttled key is valid, and must not read as refused.
+        // Ordered before the other 4xx: a throttled key is valid, and must not read as refused.
         429 -> ConnectionVerification.RateLimited
-        404 -> ConnectionVerification.EndpointNotFound
         401, 403 -> ConnectionVerification.Rejected
-        // The server's fault, not the credential's: a 5xx says nothing about the key.
+        // The API's fault, not the key's: an overload or a 5xx says nothing about the credential.
         in 500..599 -> ConnectionVerification.Unreachable
-        // Any other 4xx is the client's fault, but not necessarily the key's.
-        in 400..499 -> if (status == 400) {
-            ConnectionVerification.Unknown
-        } else {
-            ConnectionVerification.Rejected
-        }
         else -> ConnectionVerification.Unknown
     }
 
@@ -110,8 +88,8 @@ private const val MAX_CAUSE_DEPTH = 5
  * First status found walking [cause] and its causes, or null when no HTTP answer was involved.
  *
  * Reads [ClaudeHttpException.statusCode], never message text: a status matched out of a formatted
- * message made a log line's wording a contract, and the server's own error body — which that
- * message carries — could forge one.
+ * message made a log line's wording a contract, and the API's own error body — which that message
+ * carries — could forge one.
  */
 private fun failureStatusOf(cause: Throwable): Int? {
     var current: Throwable? = cause

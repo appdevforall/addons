@@ -1,7 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentclaude.settings
 
 import com.itsaky.androidide.plugins.PluginLogger
-import com.itsaky.androidide.plugins.aiagentclaude.backend.ModelCatalog
 import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeBackend
 import com.itsaky.androidide.plugins.aiagentclaude.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentclaude.plugin.ClaudePlugin
@@ -19,20 +18,16 @@ import java.util.concurrent.TimeoutException
  */
 interface ClaudeCatalogGateway {
 
-    /**
-     * Models available with the settings currently saved on disk. Used to populate the model
-     * picker, where "which server" is never in question.
-     */
+    /** Models available with the key saved on disk. Used to populate the model picker. */
     fun listModelsForSavedSettings(): CatalogResult
 
     /**
-     * Models available at [baseUrl] with [apiKey], neither of which need be — and during setup is
-     * not — the saved pair. This is what makes testing a server before persisting it possible.
+     * Models available with [apiKey], which need not be — and during setup is not — the saved
+     * one. This is what makes testing a key before persisting it possible.
      *
-     * @param apiKey the candidate key, or blank for a server that needs none
-     * @param baseUrl the candidate server, already normalized
+     * @param apiKey the candidate key
      */
-    fun listModels(apiKey: String, baseUrl: String): CatalogResult
+    fun listModels(apiKey: String): CatalogResult
 }
 
 /**
@@ -66,25 +61,25 @@ class BackendClaudeCatalogGateway(
         get() = ClaudePlugin.getContext()?.logger
 
     override fun listModelsForSavedSettings(): CatalogResult =
-        await { it.listCatalog() }
+        await { it.listModels() }
 
-    override fun listModels(apiKey: String, baseUrl: String): CatalogResult =
-        await { it.listCatalog(apiKey, baseUrl) }
+    override fun listModels(apiKey: String): CatalogResult =
+        await { it.listModels(apiKey) }
 
     /**
      * Runs [request] against the backend and awaits its future.
      *
      * Blocks on [CompletableFuture.get], so call it from an IO dispatcher — never the main thread.
      *
-     * @param request the catalog call to make; picks which server and credential are used
+     * @param request the catalog call to make; picks which credential is used
      */
     private fun await(
-        request: (ClaudeBackend) -> CompletableFuture<ModelCatalog>
+        request: (ClaudeBackend) -> CompletableFuture<List<String>>
     ): CatalogResult {
         val backend = try {
             backendProvider()
         } catch (e: Exception) {
-            logger?.error("$TAG: could not resolve the OpenAI backend", e)
+            logger?.error("$TAG: could not resolve the Claude backend", e)
             return CatalogResult.Failed(e)
         } ?: return CatalogResult.NoBackend
 
@@ -96,11 +91,9 @@ class BackendClaudeCatalogGateway(
         }
 
         return try {
-            val catalog = future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                ?: ModelCatalog.EMPTY
-            CatalogResult.Success(catalog.chat, catalog.embedding)
+            CatalogResult.Success(future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty())
         } catch (e: ExecutionException) {
-            // The API failure the backend reported; its message carries the HTTP status.
+            // The API failure the backend reported; it carries the HTTP status as a field.
             CatalogResult.Failed(e.cause ?: e)
         } catch (e: CancellationException) {
             logger?.warn("$TAG: listModels was cancelled by the backend", e)

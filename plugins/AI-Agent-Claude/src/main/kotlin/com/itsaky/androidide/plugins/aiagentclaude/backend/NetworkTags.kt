@@ -5,18 +5,15 @@ import android.net.TrafficStats
 /**
  * Thread stats tags for this plugin's sockets: ASCII bytes, so a raw `dumpsys netstats` dump stays
  * readable. Keep-alive pooling makes the split approximate — a pooled socket keeps the tag it was
- * born with, and inference and the catalog share a base URL.
+ * born with, and inference and the catalog share a host.
  */
 internal object NetworkTags {
 
-    /** Chat completions, streaming and not — `"OAIN"`. */
-    const val INFERENCE = 0x4F41494E
+    /** Messages, streaming and not — `"CLIN"`. */
+    const val INFERENCE = 0x434C494E
 
-    /** The model catalog — `"OACT"`. */
-    const val CATALOG = 0x4F414354
-
-    /** Embeddings — `"OAEM"`. */
-    const val EMBEDDING = 0x4F41454D
+    /** The model catalog — `"CLCT"`. */
+    const val CATALOG = 0x434C4354
 }
 
 /**

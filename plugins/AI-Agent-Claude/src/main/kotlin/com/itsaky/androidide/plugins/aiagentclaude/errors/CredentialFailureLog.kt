@@ -2,7 +2,6 @@ package com.itsaky.androidide.plugins.aiagentclaude.errors
 
 import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.aiagentclaude.preferences.ClaudePreferences
-import com.itsaky.androidide.plugins.aiagentclaude.settings.BaseUrlPolicy
 
 /**
  * Why the last request was refused for credential reasons, kept for the settings pane to report.
@@ -33,9 +32,9 @@ internal class CredentialFailureLog(private val prefs: () -> SharedPreferences?)
     }
 
     /**
-     * The recorded failure, or null unless it describes the credential that is on disk now, for
-     * the server in use now. Equal stamps mean nothing was saved or cleared between the refused
-     * request reading the key and now, so a refusal that landed after either is dropped.
+     * The recorded failure, or null unless it describes the credential that is on disk now. Equal
+     * stamps mean nothing was saved or cleared between the refused request reading the key and
+     * now, so a refusal that landed after either is dropped.
      */
     fun read(): CredentialFailure? {
         val prefs = prefs() ?: return null
@@ -45,11 +44,6 @@ internal class CredentialFailureLog(private val prefs: () -> SharedPreferences?)
         val keyStamp = prefs.getLong(ClaudePreferences.KEY_CREDENTIAL_FAILURE_KEY_STAMP, 0L)
         // Clear removes the key's timestamp too, so "not older than" would keep a keyless refusal.
         if (keyStamp != prefs.getLong(ClaudePreferences.KEY_API_KEY_TIMESTAMP, 0L)) return null
-        // The key is origin-scoped, so off-origin the backend sent none and the refusal is not it.
-        val savedFor = prefs.getString(ClaudePreferences.KEY_API_KEY_URL, null)
-        val baseUrl = prefs.getString(ClaudePreferences.KEY_BASE_URL, null)
-            ?: BaseUrlPolicy.DEFAULT_BASE_URL
-        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, baseUrl)) return null
         return CredentialFailure.ofTag(tag)
     }
 

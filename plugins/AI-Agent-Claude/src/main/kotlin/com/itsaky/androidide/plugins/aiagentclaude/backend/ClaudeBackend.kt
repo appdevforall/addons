@@ -1,27 +1,21 @@
 package com.itsaky.androidide.plugins.aiagentclaude.backend
 
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentclaude.R
-import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeErrorFormatter
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeFailure
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeFailureMessages
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeHttpException
+import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentclaude.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentclaude.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentclaude.preferences.ClaudePreferences
 import com.itsaky.androidide.plugins.aiagentclaude.prompt.ClaudeSystemPrompt
 import com.itsaky.androidide.plugins.aiagentclaude.security.ApiKeyCache
-import com.itsaky.androidide.plugins.aiagentclaude.settings.BaseUrlPolicy
-import com.itsaky.androidide.plugins.aiagentclaude.settings.BaseUrlResult
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import java.io.BufferedReader
-import java.io.IOException
 import java.net.HttpURLConnection
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.coroutineContext
@@ -31,10 +25,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -47,198 +41,65 @@ import org.json.JSONObject
 private const val TAG = "$LOG_PREFIX.AgentTrace"
 
 /**
- * OpenAI-compatible backend: one transport for every server that speaks `chat/completions`.
+ * Claude backend: Anthropic's Messages API, `POST /v1/messages`.
  *
- * The base URL is a setting, defaulting to OpenAI's own API. Across OpenAI, Ollama, LM Studio,
- * OpenRouter and llama-server the auth header, request JSON, SSE framing and error shape are
- * identical — only the host changes — so this is one backend rather than one per provider.
+ * What this class owns is the *conversation*: which model, which turns, what to do when the API
+ * is overloaded or a turn ends with nothing to show. Sockets are [ClaudeHttpClient]'s, the request
+ * shape is [ClaudeRequestBuilder]'s, the decrypted key is [ApiKeyCache]'s, and the wording of a
+ * failure is [ClaudeFailureMessages]'.
  *
- * What this class owns is the *conversation*: which model, which turns, what to do when a server
- * rejects a parameter or answers nothing. Sockets are [ClaudeHttpClient]'s, the decrypted key is
- * [ApiKeyCache]'s, and the wording of a failure is [ClaudeFailureMessages]'.
+ * Not an [EmbeddingBackend]: Anthropic offers no embeddings endpoint, and a backend that claimed
+ * one would leave semantic search failing on every index build.
  */
 class ClaudeBackend(
     private val context: PluginContext
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val http = ClaudeHttpClient()
 
     private val keyCache =
-        ApiKeyCache(::openAiPrefs, ClaudePreferences.KEY_API_KEY, context.logger, scope)
+        ApiKeyCache(::claudePrefs, ClaudePreferences.KEY_API_KEY, context.logger, scope)
 
-    private val failureMessages = ClaudeFailureMessages(context, ::getBaseUrl)
+    private val failureMessages = ClaudeFailureMessages(context)
 
     /**
      * Where a refused credential is left for the settings pane to report, so a key problem is not
      * only readable in a transcript the user has already navigated away from.
      */
-    private val credentialFailures = CredentialFailureLog(::openAiPrefs)
+    private val credentialFailures = CredentialFailureLog(::claudePrefs)
 
     @Volatile
     private var currentJob: Job? = null
 
-    /**
-     * Base URL that answered a tool declaration with a refusal, so the next turn does not pay the
-     * same round trip. Keyed by the URL itself, so pointing the setting elsewhere re-probes.
-     */
-    @Volatile
-    private var toolsRejectedBy: String? = null
-
-    /**
-     * Vector length this server actually returned, as (embedding model -> dimensions).
-     *
-     * Observed rather than tabulated: a compatible server can serve any model under any name, and
-     * `text-embedding-3-small` and `text-embedding-ada-002` are both 1536-d, so a hardcoded table
-     * would be both incomplete and unable to tell those two apart. Keyed by model so switching the
-     * setting cannot report the previous model's width.
-     */
-    @Volatile
-    private var observedDimensions: Pair<String, Int>? = null
-
     companion object {
         /** Backend id, as persisted by AI Core when the user selects this backend. */
-        const val BACKEND_ID = "openai"
+        const val BACKEND_ID = "claude"
 
-        /** Default model, matching the default base URL. Editable on this backend's settings pane. */
-        const val DEFAULT_MODEL = "gpt-5"
+        /** Default model. Editable on this backend's settings pane. */
+        const val DEFAULT_MODEL = "claude-opus-5-5"
 
-        /**
-         * Default embedding model. Separate from [DEFAULT_MODEL] because the two pickers offer
-         * disjoint halves of the same catalog — see [ModelCatalogFilter].
-         */
-        const val DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+        /** The Claude API. Fixed: there is no compatible third-party server to point this at. */
+        const val BASE_URL = "https://api.anthropic.com/v1"
 
-        /** Chat endpoint, appended to the configured base URL. */
-        private const val CHAT_COMPLETIONS_PATH = "/chat/completions"
-
-        /** Embeddings endpoint, appended to the configured base URL. */
-        private const val EMBEDDINGS_PATH = "/embeddings"
-
-        /** Model-catalog endpoint. Optional: many compatible servers do not implement it. */
-        private const val MODELS_PATH = "/models"
+        /** Messages endpoint, appended to [BASE_URL]. */
+        private const val MESSAGES_PATH = "/messages"
     }
 
     /** This plugin's own settings, written by its settings pane and read here at request time. */
-    private fun openAiPrefs(): SharedPreferences? = try {
+    private fun claudePrefs(): SharedPreferences? = try {
         ClaudePreferences.of(context)
     } catch (e: Exception) {
         context.logger.error("ClaudeBackend: Error getting preferences", e)
         null
     }
 
-    /**
-     * The configured server, normalized, falling back to OpenAI's own API.
-     *
-     * Re-normalized on read rather than trusted: a value written by an older build has not been
-     * through the policy.
-     */
-    private fun getBaseUrl(): String {
-        val stored = openAiPrefs()?.getString(ClaudePreferences.KEY_BASE_URL, null)
-        val accepted = BaseUrlPolicy.normalize(stored) as? BaseUrlResult.Accepted
-        return accepted?.url ?: BaseUrlPolicy.DEFAULT_BASE_URL
-    }
-
     /** The model to request, or the default when nothing is stored. */
     private fun getModelName(): String =
-        openAiPrefs()?.getString(ClaudePreferences.KEY_MODEL, DEFAULT_MODEL)
+        claudePrefs()?.getString(ClaudePreferences.KEY_MODEL, DEFAULT_MODEL)
             ?.trim()?.takeIf { it.isNotEmpty() }
             ?: DEFAULT_MODEL
-
-    /**
-     * The embedding model this server is configured to use.
-     *
-     * Read at call time, like the chat model: a consumer holds this backend for the life of the
-     * IDE, so a cached value would keep embedding with a model the user has already replaced.
-     */
-    override fun getEmbeddingModelId(): String =
-        openAiPrefs()?.getString(ClaudePreferences.KEY_EMBEDDING_MODEL, DEFAULT_EMBEDDING_MODEL)
-            ?.trim()?.takeIf { it.isNotEmpty() }
-            ?: DEFAULT_EMBEDDING_MODEL
-
-    /**
-     * Vector length this server last produced for the configured embedding model.
-     *
-     * @return the observed width, or 0 before the first successful response — the honest answer,
-     *   since only the server knows what a given id produces. Consumers that record provenance
-     *   should take the width from the vectors themselves.
-     */
-    override fun getEmbeddingDimensions(): Int {
-        val (model, dimensions) = observedDimensions ?: return 0
-        return if (model == getEmbeddingModelId()) dimensions else 0
-    }
-
-    /**
-     * Embeds [texts] in request order, splitting into as many requests as the API's limits need.
-     *
-     * @param texts the batch to embed; an empty list completes with an empty list and no request
-     * @return the vectors, one per input and in the same order; completed exceptionally with the
-     *   formatted failure when any request fails, so a caller indexing a project can abort rather
-     *   than store a partial space
-     */
-    override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> {
-        val future = CompletableFuture<List<FloatArray>>()
-        if (texts.isEmpty()) {
-            future.complete(emptyList())
-            return future
-        }
-        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
-        if (!scope.isActive) {
-            future.completeExceptionally(IllegalStateException("OpenAI backend is closed"))
-            return future
-        }
-
-        val job = scope.launch {
-            val keyStamp = storedKeyStamp()
-            try {
-                future.complete(embedBatches(texts))
-            } catch (e: CancellationException) {
-                future.cancel(true)
-                throw e
-            } catch (e: Exception) {
-                context.logger.error("ClaudeBackend: embedding ${texts.size} texts failed", e)
-                // The formatted sentence, not the raw body: this message reaches the user through
-                // whichever consumer asked, exactly as a refused chat turn's does.
-                future.completeExceptionally(IOException(formatErrorMessage(e, keyStamp), e))
-            }
-        }
-        future.cancelJobOnCancel(job)
-
-        return future
-    }
-
-    /**
-     * Issues one request per batch and concatenates the answers.
-     *
-     * Sequential rather than parallel: the batches of one index build are the same rate-limit
-     * bucket, so firing them at once buys a 429 instead of throughput.
-     *
-     * @param texts the whole batch, in the caller's order
-     * @return the vectors, in the caller's order
-     */
-    private suspend fun embedBatches(texts: List<String>): List<FloatArray> {
-        val model = getEmbeddingModelId()
-        val vectors = ArrayList<FloatArray>(texts.size)
-        for (batch in ClaudeEmbeddingProtocol.batches(texts)) {
-            coroutineContext.ensureActive()
-            val response = http.post(
-                url = getBaseUrl() + EMBEDDINGS_PATH,
-                // Blank is legitimate, unlike Gemini: a local server takes no key, as chat too.
-                apiKey = readApiKeyOrBlank(),
-                body = ClaudeEmbeddingProtocol.body(model, batch),
-                tag = NetworkTags.EMBEDDING,
-            ) { reader -> JSONObject(reader.readText()) }
-            vectors.addAll(ClaudeEmbeddingProtocol.vectors(response, batch.size))
-        }
-        vectors.firstOrNull()?.let { observedDimensions = model to it.size }
-        context.logger.info(
-            "ClaudeBackend: embedded ${texts.size} texts with $model " +
-                "(${vectors.firstOrNull()?.size ?: 0} dimensions)"
-        )
-        return vectors
-    }
 
     /**
      * Decrypt the stored key off-thread now, so a main-thread [isAvailable] can't report "no key"
@@ -249,7 +110,7 @@ class ClaudeBackend(
     override fun getId(): String = BACKEND_ID
 
     /** Falls back to a literal: an empty name would be an unlabelled row in the selector. */
-    override fun getName(): String = configLabel(R.string.claude_backend_name, fallback = "OpenAI")
+    override fun getName(): String = configLabel(R.string.claude_backend_name, fallback = "Claude")
 
     /**
      * Resolves a label against this plugin's own resources, degrading rather than throwing —
@@ -271,57 +132,71 @@ class ClaudeBackend(
     override fun getSystemPrompt(request: SystemPromptRequest): String =
         ClaudeSystemPrompt.build(request)
 
-    /**
-     * Room to plan, matching the high-autonomy prompt this backend asks for — or null for a
-     * reasoning model, several of which reject `temperature` outright.
-     */
-    override fun getDefaultTemperature(): Float? =
-        if (RequestTuning.isReasoningModel(getModelName())) null else 0.7f
+    /** Null: this backend sends no `temperature`, which current Claude models reject outright. */
+    override fun getDefaultTemperature(): Float? = null
 
     /**
-     * This backend draws its own settings, so the consumer needs no knowledge of API keys, base
-     * URLs or server presets.
+     * This backend draws its own settings, so the consumer needs no knowledge of API keys or
+     * model catalogs.
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentclaude.settings.ClaudeSettingsFragment"
 
-    /**
-     * Available when the server can plausibly be called.
-     *
-     * A key is required only for OpenAI's own API. For any other base URL a non-blank URL is
-     * enough: local Ollama and LM Studio need no credential, and demanding one would leave this
-     * backend permanently "not available" for the users who asked for a custom server.
-     */
+    /** Available once a key is stored: the Claude API has no anonymous access. */
     override fun isAvailable(): Boolean {
-        val baseUrl = getBaseUrl()
-        if (!BaseUrlPolicy.requiresApiKey(baseUrl)) {
-            context.logger.debug("ClaudeBackend.isAvailable() - custom server configured: $baseUrl")
-            return true
-        }
-        // Origin-checked, or the backend would report itself ready on a key it will not send.
-        val apiKey = readApiKeyOrBlank()
-        context.logger.debug("ClaudeBackend.isAvailable() - API key configured: ${apiKey.isNotBlank()}")
-        return apiKey.isNotBlank()
+        val hasKey = readApiKeyOrBlank().isNotBlank()
+        context.logger.debug("ClaudeBackend.isAvailable() - API key configured: $hasKey")
+        return hasKey
     }
 
-    override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
+    override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> =
+        generateBlocking(emptyList(), prompt, config)
+
+    override fun generateWithHistory(
+        history: List<ChatMessage>,
+        prompt: String,
+        config: LlmConfig
+    ): CompletableFuture<LlmResponse> {
+        context.logger.info("ClaudeBackend.generateWithHistory() called with ${history.size} messages")
+        return generateBlocking(history, prompt, config)
+    }
+
+    /**
+     * One request that is not streamed, completing with the whole reply.
+     *
+     * @param history the conversation so far, oldest first
+     * @param prompt the current user turn
+     * @param config its system prompt becomes the top-level `system`
+     */
+    private fun generateBlocking(
+        history: List<ChatMessage>,
+        prompt: String,
+        config: LlmConfig,
+    ): CompletableFuture<LlmResponse> {
         val future = CompletableFuture<LlmResponse>()
 
         val job = scope.launch {
             val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
-                context.logger.info("ClaudeBackend: Generating response for prompt (${prompt.length} chars)")
+                val conversation =
+                    ClaudeRequestBuilder.conversation(history, prompt, config.systemPrompt)
+                val reply = requestReply(conversation, config)
 
-                val messages = ClaudeRequestBuilder.messages(emptyList(), prompt, config.systemPrompt)
-                val text = requestText(messages, config)
+                when {
+                    reply.outcome.stopReason == "refusal" ->
+                        future.complete(LlmResponse.failure(failureMessages.of(ClaudeFailure.Refused)))
 
-                if (text.isBlank()) {
-                    future.complete(LlmResponse.failure(failureMessages.of(ClaudeFailure.Failed(null))))
-                } else {
-                    val tokenCount = text.split("\\s+".toRegex()).size  // Approximate token count
-                    context.logger.info("ClaudeBackend: Generated ${text.length} chars, ~$tokenCount tokens")
-                    future.complete(LlmResponse.success(text, tokenCount, System.currentTimeMillis() - startTime))
+                    reply.text.isBlank() ->
+                        future.complete(LlmResponse.failure(failureMessages.of(emptyReplyFailure(reply.outcome))))
+
+                    else -> {
+                        val tokenCount = reply.text.split("\\s+".toRegex()).size  // Approximate
+                        context.logger.info("ClaudeBackend: Generated ${reply.text.length} chars, ~$tokenCount tokens")
+                        future.complete(
+                            LlmResponse.success(reply.text, tokenCount, System.currentTimeMillis() - startTime)
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 future.cancel(true)
@@ -342,50 +217,7 @@ class ClaudeBackend(
         config: LlmConfig,
         callback: StreamCallback
     ) {
-        streamMessages(
-            ClaudeRequestBuilder.messages(emptyList(), prompt, config.systemPrompt),
-            config,
-            emptyList(),
-            callback.asToolCallback()
-        )
-    }
-
-    override fun generateWithHistory(
-        history: List<ChatMessage>,
-        prompt: String,
-        config: LlmConfig
-    ): CompletableFuture<LlmResponse> {
-        context.logger.info("ClaudeBackend.generateWithHistory() called with ${history.size} messages")
-
-        val future = CompletableFuture<LlmResponse>()
-
-        val job = scope.launch {
-            val keyStamp = storedKeyStamp()
-            try {
-                val startTime = System.currentTimeMillis()
-
-                val messages = ClaudeRequestBuilder.messages(history, prompt, config.systemPrompt)
-                val text = requestText(messages, config)
-
-                if (text.isBlank()) {
-                    future.complete(LlmResponse.failure(failureMessages.of(ClaudeFailure.Failed(null))))
-                } else {
-                    val tokenCount = text.split("\\s+".toRegex()).size
-                    context.logger.info("ClaudeBackend: Generated ${text.length} chars with history, ~$tokenCount tokens")
-                    future.complete(LlmResponse.success(text, tokenCount, System.currentTimeMillis() - startTime))
-                }
-            } catch (e: CancellationException) {
-                future.cancel(true)
-                throw e
-            } catch (e: Exception) {
-                context.logger.error("ClaudeBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
-            }
-        }
-        currentJob = job
-        future.cancelJobOnCancel(job)
-
-        return future
+        streamTurn(emptyList(), prompt, config, emptyList(), callback.asToolCallback())
     }
 
     /**
@@ -393,7 +225,7 @@ class ClaudeBackend(
      *
      * @param history the conversation so far, oldest first
      * @param prompt the current user turn
-     * @param config sampling settings; its system prompt becomes the leading `system` turn
+     * @param config its system prompt becomes the top-level `system`
      * @param callback receives tokens, completion, and errors
      */
     override fun generateStreamingWithHistory(
@@ -402,26 +234,20 @@ class ClaudeBackend(
         config: LlmConfig,
         callback: StreamCallback
     ) {
-        streamMessages(
-            ClaudeRequestBuilder.messages(history, prompt, config.systemPrompt),
-            config,
-            emptyList(),
-            callback.asToolCallback()
-        )
+        streamTurn(history, prompt, config, emptyList(), callback.asToolCallback())
     }
 
     /**
-     * Streams a turn with [tools] declared to the server, reporting each `tool_calls` entry through
+     * Streams a turn with [tools] declared to the API, reporting each `tool_use` block through
      * [ToolStreamCallback.onToolCall].
      *
      * This is the path the agent takes. Declaring the tools is what stops the model writing a call
-     * as prose the caller has to parse back: the arguments arrive already structured, so a file
-     * whose contents contain quotes or newlines can no longer break the call carrying it
-     * (ADFA-5410).
+     * as prose the caller has to parse back: the input arrives already structured, so a file whose
+     * contents contain quotes or newlines can no longer break the call carrying it (ADFA-5410).
      *
      * @param prompt the current user turn
      * @param history the conversation so far, oldest first
-     * @param config sampling settings; its system prompt becomes the leading `system` turn
+     * @param config its system prompt becomes the top-level `system`
      * @param tools the tools to declare; an empty list streams plain text
      * @param callback receives tokens, tool calls, completion, and errors
      */
@@ -432,16 +258,11 @@ class ClaudeBackend(
         tools: List<ToolDefinition>,
         callback: ToolStreamCallback
     ) {
-        streamMessages(
-            ClaudeRequestBuilder.messages(history, prompt, config.systemPrompt),
-            config,
-            tools,
-            callback
-        )
+        streamTurn(history, prompt, config, tools, callback)
     }
 
     /**
-     * Adapts a plain stream callback to the tool-aware one [streamMessages] takes.
+     * Adapts a plain stream callback to the tool-aware one [streamTurn] takes.
      *
      * @return a [ToolStreamCallback] that forwards every event and reports no tool calls
      */
@@ -453,15 +274,17 @@ class ClaudeBackend(
     }
 
     /**
-     * Streams one `chat/completions` request over the already-built [messages].
+     * Streams one Messages request.
      *
-     * @param messages the request's `messages[]` turns
-     * @param config sampling settings for this request
+     * @param history the conversation so far, oldest first
+     * @param prompt the current user turn
+     * @param config supplies the system prompt, token cap and stop sequences
      * @param tools the tools to declare, or empty to stream plain text
      * @param callback receives tokens, tool calls, completion, and errors
      */
-    private fun streamMessages(
-        messages: JSONArray,
+    private fun streamTurn(
+        history: List<ChatMessage>,
+        prompt: String,
         config: LlmConfig,
         tools: List<ToolDefinition>,
         callback: ToolStreamCallback
@@ -470,49 +293,48 @@ class ClaudeBackend(
             val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
+                val model = getModelName()
+                val conversation =
+                    ClaudeRequestBuilder.conversation(history, prompt, config.systemPrompt)
+                val body = ClaudeRequestBuilder.body(conversation, model, stream = true, config, tools)
+                Log.i(
+                    TAG,
+                    "REQUEST | model=$model turns=${conversation.messages.length()} " +
+                        "tools=${tools.size} " + tools.joinToString(",") { it.name }
+                )
 
                 val fullText = StringBuilder()
                 var chunkCount = 0
-                var outcome = StreamOutcome()
-                var calls = emptyList<ToolCallRequest>()
-                withToolRetry(tools) { declared ->
-                    // The retry exists because reasoning models and third-party servers disagree
-                    // about max_tokens/temperature; see RequestTuning.
-                    withParameterRetry(config) { tuning ->
-                        fullText.clear()
-                        chunkCount = 0
-                        val accumulator = ClaudeToolProtocol.CallAccumulator()
-                        val body = ClaudeRequestBuilder.body(
-                            messages,
-                            getModelName(),
-                            stream = true,
-                            config = config,
-                            tuning = tuning,
-                            tools = declared,
-                        )
-                        Log.i(
-                            TAG,
-                            "REQUEST | model=${getModelName()} turns=${messages.length()} " +
-                                "tools=${declared.size} " +
-                                declared.joinToString(",") { it.name }
-                        )
-                        outcome = streamOnce(body, accumulator) { chunk ->
-                            chunkCount++
-                            fullText.append(chunk)
-                            callback.onToken(chunk)
-                        }
-                        calls = accumulator.requests()
-                        outcome.droppedCalls = accumulator.droppedCalls
+                // A fresh accumulator per attempt, so a retried turn cannot report a call twice.
+                val (outcome, accumulator) = withTransientRetry(delivered = { chunkCount > 0 }) {
+                    val attemptCalls = ClaudeToolProtocol.CallAccumulator()
+                    val attemptOutcome = streamOnce(body, ClaudeRequestBuilder.betas(model), attemptCalls) { chunk ->
+                        chunkCount++
+                        fullText.append(chunk)
+                        callback.onToken(chunk)
                     }
+                    attemptOutcome to attemptCalls
                 }
+                val calls = accumulator.requests()
+                outcome.droppedCalls = accumulator.droppedCalls
 
                 val finalText = fullText.toString()
                 Log.i(
                     TAG,
-                    "STREAM | chars=${finalText.length} chunks=$chunkCount calls=${calls.size} " +
-                        "dropped=${outcome.droppedCalls} finish=${outcome.finishReason}"
+                    "STREAM | model=${outcome.servedBy ?: model} chars=${finalText.length} " +
+                        "chunks=$chunkCount calls=${calls.size} dropped=${outcome.droppedCalls} " +
+                        "stop=${outcome.stopReason}"
                 )
-                // Reported after the stream, so a call the retry replaced never reaches the caller.
+
+                // Checked before the calls: a declined turn's partial output is not an answer,
+                // and a tool call inside it is not one the model stands behind.
+                if (outcome.stopReason == "refusal") {
+                    context.logger.warn("ClaudeBackend: the model declined this request")
+                    callback.onError(failureMessages.of(ClaudeFailure.Refused))
+                    return@launch
+                }
+
+                // Reported after the stream, so a call is never acted on before it is complete.
                 for (call in calls) {
                     Log.i(
                         TAG,
@@ -525,14 +347,12 @@ class ClaudeBackend(
                 // A turn that called a tool and said nothing is the normal agent turn, so only a
                 // reply with neither text nor a call is empty.
                 if (calls.isEmpty() && finalText.isBlank()) {
-                    // The request succeeded and the stream ended, so this is not a failed request;
-                    // say which of the empty-reply cases it was instead of a generic error.
                     context.logger.warn(
                         "ClaudeBackend: stream produced no reply text " +
                             "(skipped=${outcome.skippedChunks}, " +
-                            "reasoningChars=${outcome.reasoningChars}, " +
+                            "thinkingBlocks=${outcome.thinkingBlocks}, " +
                             "droppedCalls=${outcome.droppedCalls}, " +
-                            "finishReason=${outcome.finishReason})"
+                            "stopReason=${outcome.stopReason})"
                     )
                     callback.onError(failureMessages.of(emptyReplyFailure(outcome)))
                 } else {
@@ -552,45 +372,78 @@ class ClaudeBackend(
     }
 
     /**
-     * What one streaming attempt observed beyond the reply text itself.
+     * What one turn observed beyond the reply text itself.
      *
-     * Collected so a stream that ends with no content can say *why* — the difference between a
-     * reasoning model that never answered, a server that reported an error inside a 200, and a
-     * shape this parser does not understand.
+     * Collected so a turn that ends with no content can say *why* — the difference between a
+     * model that only thought, a cap that cut it off, and a shape this parser does not understand.
      *
      * @param skippedChunks payloads the parser could not use
-     * @param reasoningChars thinking text seen, which is never part of the reply
-     * @param finishReason the last `finish_reason` the server sent, if any
-     * @param droppedCalls tool calls whose arguments never parsed, i.e. arrived half-written
+     * @param thinkingBlocks thinking blocks seen, which are never part of the reply
+     * @param stopReason the `stop_reason` the API reported, if any
+     * @param droppedCalls tool calls whose input never parsed, i.e. arrived half-written
+     * @param servedBy the model `message_start` named, which a fallback can make another one
      */
     private data class StreamOutcome(
         var skippedChunks: Int = 0,
-        var reasoningChars: Int = 0,
-        var finishReason: String? = null,
+        var thinkingBlocks: Int = 0,
+        var stopReason: String? = null,
         var droppedCalls: Int = 0,
+        var servedBy: String? = null,
     )
 
     /**
-     * POST [body] and feed each streamed chunk to [onChunk].
+     * Run [attempt], retrying an overloaded or rate-limited API per [TransientRetry].
      *
-     * Tokens already delivered before a mid-stream failure stay delivered; the caller resets its
-     * buffer before a retry, which only ever happens on a 400 raised before any token arrived.
+     * @param delivered true once [attempt] has shown the user anything; from then on a failure is
+     *   final, since a retry would repeat what is already on screen
+     * @return what the successful attempt returned
+     */
+    private suspend fun <T> withTransientRetry(
+        delivered: () -> Boolean = { false },
+        attempt: suspend () -> T,
+    ): T {
+        var retries = 0
+        while (true) {
+            try {
+                return attempt()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val wait = if (delivered()) null else TransientRetry.delayMs(e, retries)
+                if (wait == null) throw e
+                retries++
+                context.logger.warn(
+                    "ClaudeBackend: ${(e as? ClaudeHttpException)?.statusCode} from the API; " +
+                        "retry $retries of ${TransientRetry.MAX_RETRIES} in ${wait}ms"
+                )
+                delay(wait)
+            }
+        }
+    }
+
+    /**
+     * POST [body] and feed each streamed text delta to [onText].
      *
-     * @param accumulator collects the native tool-call fragments the stream carries
+     * Tokens already delivered before a mid-stream failure stay delivered.
+     *
+     * @param betas the `anthropic-beta` values [body] needs
+     * @param accumulator collects the `tool_use` blocks the stream carries
      * @return what else the stream carried, for diagnosing an empty reply
      */
     private suspend fun streamOnce(
         body: JSONObject,
+        betas: List<String>,
         accumulator: ClaudeToolProtocol.CallAccumulator,
-        onChunk: (String) -> Unit
+        onText: (String) -> Unit
     ): StreamOutcome {
         val outcome = StreamOutcome()
         // Hoisted: the reader below is an ordinary lambda, with no suspend context of its own.
         val requestContext = coroutineContext
         var cancelHandle: DisposableHandle? = null
         try {
-            postChat(
+            postMessages(
                 body = body,
+                betas = betas,
                 sse = true,
                 onConnected = { conn ->
                     cancelHandle = requestContext[Job]?.invokeOnCompletion { cause ->
@@ -600,35 +453,37 @@ class ClaudeBackend(
             ) { reader ->
                 for (line in reader.lineSequence()) {
                     requestContext.ensureActive()
-                    when (val event = SseChunk.parse(line)) {
-                        is SseChunk.Event.Token -> onChunk(event.text)
+                    when (val event = ClaudeStreamEvent.parse(line)) {
+                        is ClaudeStreamEvent.Text -> onText(event.text)
+                        is ClaudeStreamEvent.ToolStart -> accumulator.start(event.index, event.id, event.name)
+                        is ClaudeStreamEvent.ToolInput -> accumulator.appendInput(event.index, event.partialJson)
+                        ClaudeStreamEvent.ThinkingStarted -> outcome.thinkingBlocks++
+                        is ClaudeStreamEvent.Started -> outcome.servedBy = event.model
+                        is ClaudeStreamEvent.Stop -> outcome.stopReason = event.reason
 
-                        is SseChunk.Event.ToolCalls -> {
-                            accumulator.accept(event.deltas)
-                            // Prose the same chunk carried; usually empty, never dropped.
-                            if (event.text.isNotEmpty()) onChunk(event.text)
+                        // Text before the switch stays valid, so the turn simply continues.
+                        is ClaudeStreamEvent.FallbackSwitch -> {
+                            outcome.servedBy = event.toModel ?: outcome.servedBy
+                            Log.i(TAG, "FALLBACK | continued on ${event.toModel}")
                         }
 
-                        // Not shown, but proof the model was working; see StreamOutcome.
-                        is SseChunk.Event.Reasoning ->
-                            outcome.reasoningChars += event.text.length
+                        // A 200 whose stream carries the real error: raised as the HTTP failure it
+                        // stands for, so it classifies and retries the same way.
+                        is ClaudeStreamEvent.Failure -> throw ClaudeHttpException(
+                            ClaudeHttpException.statusForStreamError(event.errorType),
+                            JSONObject().put(
+                                "error",
+                                JSONObject().put("type", event.errorType).put("message", event.message)
+                            ).toString(),
+                        )
 
-                        // A 200 whose body carries the real error: raised so it reaches the same
-                        // classifier as an HTTP-level failure instead of ending the stream empty.
-                        is SseChunk.Event.Failure ->
-                            throw IOException("OpenAI stream error: ${event.message}")
+                        ClaudeStreamEvent.Done -> break
+                        ClaudeStreamEvent.Ignored -> Unit
 
-                        is SseChunk.Event.Finish -> outcome.finishReason = event.reason
-
-                        SseChunk.Event.Done -> break
-                        SseChunk.Event.Ignored -> Unit
-
-                        // One bad chunk must not abort a stream that is otherwise producing text.
-                        is SseChunk.Event.Malformed -> {
+                        // One bad line must not abort a stream that is otherwise producing text.
+                        is ClaudeStreamEvent.Malformed -> {
                             outcome.skippedChunks++
-                            context.logger.warn(
-                                "ClaudeBackend: skipping SSE chunk: ${event.detail}"
-                            )
+                            context.logger.warn("ClaudeBackend: skipping stream line: ${event.detail}")
                         }
                     }
                 }
@@ -642,184 +497,122 @@ class ClaudeBackend(
     /**
      * Which empty-reply case [outcome] describes.
      *
-     * Ordered by how actionable the advice is: reasoning that ate the budget and a truncating
-     * token cap both have a fix the user can apply, while an unrecognised shape only has a log.
+     * Ordered by how actionable the advice is: a cap that cut the turn off has a cause the user
+     * can see, while an unrecognised shape only has a log.
      */
     private fun emptyReplyFailure(outcome: StreamOutcome): ClaudeFailure = when {
-        outcome.reasoningChars > 0 -> ClaudeFailure.ReasoningOnly
-        outcome.finishReason == "length" -> ClaudeFailure.TruncatedBeforeReply
-        // Arguments that stop mid-JSON are a cut-off reply, whatever the server said stopped it.
+        outcome.stopReason == "max_tokens" -> ClaudeFailure.TruncatedBeforeReply
+        // Input that stops mid-JSON is a cut-off reply, whatever the API said stopped it.
         outcome.droppedCalls > 0 -> ClaudeFailure.TruncatedBeforeReply
+        outcome.thinkingBlocks > 0 -> ClaudeFailure.ReasoningOnly
         else -> ClaudeFailure.EmptyReply(outcome.skippedChunks)
     }
 
-    /**
-     * Run [attempt] with [tools] declared and, if this server refuses a tool declaration, run it
-     * once more with none.
-     *
-     * The refusal is remembered per server so only the first turn pays for it. What it costs is
-     * real: the system prompt for this run was built for native calling, so it teaches no envelope
-     * and the model has no other way to reach a tool — the turn answers in prose. Servers that
-     * take `tools` are the overwhelming majority, and this keeps the rest chatting rather than
-     * failing outright.
-     *
-     * @param tools the tools this turn wants declared; an empty list skips straight through
-     * @param attempt the request to make, given the tools to actually declare
-     */
-    private suspend fun withToolRetry(
-        tools: List<ToolDefinition>,
-        attempt: suspend (List<ToolDefinition>) -> Unit
-    ) {
-        val baseUrl = getBaseUrl()
-        if (tools.isEmpty() || toolsRejectedBy == baseUrl) {
-            attempt(emptyList())
-            return
-        }
-        try {
-            attempt(tools)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: ClaudeHttpException) {
-            if (!UnsupportedTools.rejectedIn(e.statusCode, e.body)) throw e
-            toolsRejectedBy = baseUrl
-            Log.w(TAG, "REQUEST | server refused a tool declaration; retrying with none")
-            context.logger.warn(
-                "ClaudeBackend: $baseUrl does not accept tool declarations; " +
-                    "the agent cannot call tools on this server"
-            )
-            // Said out loud, not only logged: from here the agent answers but never touches the
-            // project, which reads as the tools being broken. Once per server, since the flag
-            // above short-circuits every later turn.
-            notifyToolsUnsupported(baseUrl)
-            attempt(emptyList())
-        }
-    }
+    /** A whole reply read from a request that was not streamed. */
+    private class BlockingReply(val text: String, val outcome: StreamOutcome)
 
     /**
-     * Tells the user this server cannot call tools, as a Toast: the run continues, so there is no
-     * error message to carry it, and the chat's own turn is an ordinary prose answer.
+     * POST [conversation] without streaming and read back the reply.
      *
-     * @param baseUrl the server that refused, named in the message.
+     * @param config supplies the token cap and stop sequences
      */
-    private fun notifyToolsUnsupported(baseUrl: String) {
-        val appContext = context.androidContext.applicationContext
-        val message = appContext.getString(R.string.claude_error_tools_unsupported, baseUrl)
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(appContext, message, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /**
-     * Run [attempt] and, if the server rejected one optional parameter, run it once more without it.
-     *
-     * Compatible servers vary too much to hardcode which parameters each accepts, so the matrix is
-     * discovered from the one 400 that names the offender.
-     *
-     * @param config supplies the model, which decides the starting tuning
-     * @param attempt the request to make, given the tuning to use
-     */
-    private suspend fun withParameterRetry(
+    private suspend fun requestReply(
+        conversation: ClaudeRequestBuilder.Conversation,
         config: LlmConfig,
-        attempt: suspend (RequestTuning) -> Unit
-    ) {
+    ): BlockingReply {
         val model = getModelName()
-        val tuning = RequestTuning.forModel(model, BaseUrlPolicy.requiresApiKey(getBaseUrl()))
-        try {
-            attempt(tuning)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: ClaudeHttpException) {
-            if (e.statusCode != 400) throw e
-            val param = UnsupportedParameter.nameIn(e.body) ?: throw e
-            val adjusted = tuning.without(param) ?: throw e
-            context.logger.info(
-                "ClaudeBackend: server rejected '$param'; retrying once without it"
-            )
-            attempt(adjusted)
+        val body = ClaudeRequestBuilder.body(conversation, model, stream = false, config)
+        return withTransientRetry {
+            postMessages(body, ClaudeRequestBuilder.betas(model)) { reader ->
+                parseBlockingReply(JSONObject(reader.readText()))
+            }
         }
     }
 
     /**
-     * POST [messages] without streaming and return the reply text.
+     * Reads a whole Messages response.
      *
-     * @param messages the request's `messages[]` turns
-     * @param config sampling settings for this request
-     * @return the reply text, or "" when the server returned no choices
+     * Content is read by block `type`, never by position: a response can open with thinking or
+     * fallback blocks before its text.
      */
-    private suspend fun requestText(messages: JSONArray, config: LlmConfig): String {
-        var text = ""
-        withParameterRetry(config) { tuning ->
-            val body = ClaudeRequestBuilder.body(
-                messages, getModelName(), stream = false, config = config, tuning = tuning
-            )
-            text = postChat(body) { reader -> extractText(JSONObject(reader.readText())) }
+    private fun parseBlockingReply(response: JSONObject): BlockingReply {
+        val outcome = StreamOutcome(
+            stopReason = response.optString("stop_reason").takeIf { it.isNotBlank() && it != "null" },
+            servedBy = response.optString("model").takeIf { it.isNotBlank() },
+        )
+        val content = response.optJSONArray("content")
+        val text = buildString {
+            for (i in 0 until (content?.length() ?: 0)) {
+                val block = content?.optJSONObject(i) ?: continue
+                when (block.optString("type")) {
+                    "text" -> append(block.optString("text"))
+                    "thinking", "redacted_thinking" -> outcome.thinkingBlocks++
+                }
+            }
         }
-        return text
+        return BlockingReply(text, outcome)
     }
 
     /**
-     * POST [body] to the configured server's chat endpoint with the stored credential.
+     * POST [body] to the Messages endpoint with the stored credential.
      *
      * Every generation goes through here, streaming or not, which is why the recorded refusal is
-     * cleared here — on the status line, since a 2xx is the server accepting the key whether or not
+     * cleared here — on the status line, since a 2xx is the API accepting the key whether or not
      * the body that follows is read to the end, or cancelled, or dropped mid-stream.
      *
+     * @param betas the `anthropic-beta` values [body] needs
      * @param sse true to ask for the server-sent-events stream
      * @param onConnected receives the live connection, so the caller can disconnect it on cancel
      * @return whatever [readResponse] produced
      */
-    private fun <T> postChat(
+    private fun <T> postMessages(
         body: JSONObject,
+        betas: List<String>,
         sse: Boolean = false,
         onConnected: (HttpURLConnection) -> Unit = {},
         readResponse: (BufferedReader) -> T,
     ): T = http.post(
-        url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
+        url = BASE_URL + MESSAGES_PATH,
         apiKey = readApiKeyOrBlank(),
         body = body,
+        betas = betas,
         sse = sse,
+        readTimeoutMs = if (sse) ClaudeHttpClient.STREAM_READ_TIMEOUT_MS else ClaudeHttpClient.BLOCKING_READ_TIMEOUT_MS,
         onConnected = onConnected,
         onAccepted = { credentialFailures.clear() },
         readResponse = readResponse,
     )
 
     /**
-     * List what the configured server offers, split into the models each picker may show.
+     * List the models available with the stored key.
      *
-     * Completes with an empty catalog when the server answered with none, and exceptionally on a
-     * network/API failure — an HTTP one as an [ClaudeHttpException], so the caller can tell a
-     * refused key from an unreachable server.
+     * Completes exceptionally on a network/API failure — an HTTP one as a [ClaudeHttpException], so
+     * the caller can tell a refused key from an unreachable API.
      */
-    internal fun listCatalog(): CompletableFuture<ModelCatalog> = listCatalog(readApiKeyOrBlank(), getBaseUrl())
+    internal fun listModels(): CompletableFuture<List<String>> = listModels(readApiKeyOrBlank())
 
     /**
-     * List what a caller-supplied credential and server offer.
+     * List the models a caller-supplied key can use.
      *
-     * Lets the settings pane check a just-typed key or URL *before* either is persisted; the no-arg
-     * [listCatalog] reads what is on disk. Nothing here touches the stored key or its cache.
+     * Lets the settings pane check a just-typed key *before* it is persisted; the no-arg
+     * [listModels] reads what is on disk. Nothing here touches the stored key or its cache.
      *
-     * One request answers both pickers: a second round trip would let the chat and embedding lists
-     * disagree about what the server offers.
-     *
-     * @param apiKey the candidate key, or blank for a server that needs none; never logged
-     * @param baseUrl the candidate server, normalized by the caller
+     * @param apiKey the candidate key; never logged
      */
-    internal fun listCatalog(apiKey: String, baseUrl: String): CompletableFuture<ModelCatalog> {
-        val future = CompletableFuture<ModelCatalog>()
+    internal fun listModels(apiKey: String): CompletableFuture<List<String>> {
+        val future = CompletableFuture<List<String>>()
         // close() cancels the scope, making launch a silent no-op; fail loudly instead.
         if (!scope.isActive) {
-            future.completeExceptionally(IllegalStateException("OpenAI backend is closed"))
+            future.completeExceptionally(IllegalStateException("Claude backend is closed"))
             return future
         }
 
         val job = scope.launch {
             try {
-                val catalog = fetchAvailableModels(apiKey.trim(), baseUrl)
-                context.logger.info(
-                    "ClaudeBackend: $baseUrl offers ${catalog.chat.size} chat and " +
-                        "${catalog.embedding.size} embedding models"
-                )
-                future.complete(catalog)
+                val body = http.get(BASE_URL + ClaudeModelCatalog.PATH, apiKey.trim())
+                val models = ClaudeModelCatalog.ids(body)
+                context.logger.info("ClaudeBackend: the API offers ${models.size} models")
+                future.complete(models)
             } catch (e: CancellationException) {
                 future.cancel(true)
                 throw e
@@ -840,37 +633,10 @@ class ClaudeBackend(
      * field on the backend is overwritten by any other key read before the refusal lands.
      */
     private fun storedKeyStamp(): Long =
-        openAiPrefs()?.getLong(ClaudePreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
+        claudePrefs()?.getLong(ClaudePreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
 
-    /**
-     * The saved key, but only for the server it was saved for.
-     *
-     * A key entered for OpenAI must not travel to whatever server the URL is pointed at next: a
-     * loopback or private-range server is reached over plain `http`, so the bearer token would
-     * cross the local network in the clear. A key stored before the origin was recorded is still
-     * sent — it cannot be shown to belong elsewhere, and dropping it would break an upgrade.
-     */
-    private fun readApiKeyOrBlank(): String {
-        val savedFor = openAiPrefs()?.getString(ClaudePreferences.KEY_API_KEY_URL, null)
-        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, getBaseUrl())) {
-            context.logger.debug("ClaudeBackend: saved key belongs to another server; sending none")
-            return ""
-        }
-        return keyCache.read().orEmpty()
-    }
-
-    /** Fetch and split `GET {baseUrl}/models`. Runs on the caller's (IO) coroutine. */
-    private fun fetchAvailableModels(apiKey: String, baseUrl: String): ModelCatalog {
-        val body = http.get(baseUrl + MODELS_PATH, apiKey)
-        val data = JSONObject(body).optJSONArray("data") ?: return ModelCatalog.EMPTY
-        val ids = (0 until data.length()).mapNotNull { index ->
-            data.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }
-        }
-        return ModelCatalog(
-            chat = ModelCatalogFilter.chatModels(ids),
-            embedding = ModelCatalogFilter.embeddingModels(ids),
-        )
-    }
+    /** The saved key, or blank when none is stored or it cannot be decrypted. */
+    private fun readApiKeyOrBlank(): String = keyCache.read().orEmpty()
 
     /** Cancel any in-flight generation (user pressed Stop). */
     override fun cancelStreaming() {
@@ -886,22 +652,6 @@ class ClaudeBackend(
     }
 
     /**
-     * Extract the reply text of a non-streamed response.
-     *
-     * @param response a `chat/completions` response
-     * @return the reply text, or "" when there are no choices
-     */
-    private fun extractText(response: JSONObject): String {
-        val choices = response.optJSONArray("choices") ?: return ""
-        return buildString {
-            for (i in 0 until choices.length()) {
-                val message = choices.optJSONObject(i)?.optJSONObject("message") ?: continue
-                append(message.optString("content"))
-            }
-        }
-    }
-
-    /**
      * Turn a failure into one user-facing sentence.
      *
      * [ClaudeErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
@@ -911,12 +661,10 @@ class ClaudeBackend(
      *   save or clear is not reported against a credential that was never tried
      */
     private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
-        val baseUrl = getBaseUrl()
         val failure = ClaudeErrorFormatter.classify(
             error = e,
             modelName = getModelName(),
             hasApiKey = readApiKeyOrBlank().isNotBlank(),
-            isClaudeHost = BaseUrlPolicy.requiresApiKey(baseUrl),
         )
         val message = failureMessages.of(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and

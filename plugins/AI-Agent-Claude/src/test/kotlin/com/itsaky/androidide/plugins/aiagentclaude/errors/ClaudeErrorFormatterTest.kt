@@ -2,135 +2,156 @@ package com.itsaky.androidide.plugins.aiagentclaude.errors
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
 /**
  * Failure classification. Each branch is what the user is told, and the class exists so a raw JSON
- * error body never reaches the chat transcript.
+ * error body never reaches the chat transcript. Bodies are the Messages API's error shape:
+ * `{"type":"error","error":{"type":...,"message":...}}`.
  */
 class ClaudeErrorFormatterTest {
 
+    private fun body(type: String, message: String) =
+        """{"type":"error","error":{"type":"$type","message":"$message"}}"""
+
+    private fun http(status: Int, type: String, message: String) =
+        ClaudeHttpException(status, body(type, message))
+
     private fun classify(
-        message: String?,
-        model: String = "gpt-5",
+        error: Throwable,
+        model: String = "claude-opus-5-5",
         hasApiKey: Boolean = true,
-        isClaudeHost: Boolean = true,
-        error: Throwable = IOException(message),
-    ): ClaudeFailure = ClaudeErrorFormatter.classify(error, model, hasApiKey, isClaudeHost)
+    ): ClaudeFailure = ClaudeErrorFormatter.classify(error, model, hasApiKey)
 
     @Test
     fun givenA404_whenClassified_thenTheModelIsNamedAsUnavailable() {
-        val failure = classify("OpenAI HTTP 404: {\"error\":{\"message\":\"no such model\"}}")
-        assertEquals(ClaudeFailure.ModelUnavailable("gpt-5"), failure)
+        val failure = classify(http(404, "not_found_error", "model: claude-nope"), model = "claude-nope")
+        assertEquals(ClaudeFailure.ModelUnavailable("claude-nope"), failure)
     }
 
     @Test
-    fun givenAModelNotFoundCode_whenClassified_thenTheModelIsNamedAsUnavailable() {
-        val body = """OpenAI HTTP 400: {"error":{"code":"model_not_found","message":"nope"}}"""
-        assertTrue(classify(body) is ClaudeFailure.ModelUnavailable)
+    fun givenA429_whenClassified_thenItIsQuotaExceeded() {
+        assertEquals(
+            ClaudeFailure.QuotaExceeded,
+            classify(http(429, "rate_limit_error", "Number of request tokens has exceeded your rate limit"))
+        )
     }
 
     @Test
-    fun givenA429AboutRate_whenClassified_thenItIsQuotaExceeded() {
-        val body = """OpenAI HTTP 429: {"error":{"message":"Rate limit reached for requests"}}"""
-        assertEquals(ClaudeFailure.QuotaExceeded, classify(body))
+    fun givenA400AboutTheCreditBalance_whenClassified_thenItIsBillingRequired() {
+        // The API reports an empty balance as a 400, not a status of its own, and "the request
+        // was rejected" would send the user hunting for a fault in their prompt.
+        val error = http(
+            400,
+            "invalid_request_error",
+            "Your credit balance is too low to access the Anthropic API.",
+        )
+        assertEquals(ClaudeFailure.BillingRequired, classify(error))
     }
 
     @Test
-    fun givenA429AboutMoney_whenClassified_thenItIsBillingRequired() {
-        // The distinction matters: "wait a moment" is useless advice for a spent balance.
-        val body = """OpenAI HTTP 429: {"error":{"message":"You exceeded your current quota,""" +
-            """ please check your plan and billing details.","code":"insufficient_quota"}}"""
-        assertEquals(ClaudeFailure.BillingRequired, classify(body))
+    fun givenA402_whenClassified_thenItIsBillingRequired() {
+        assertEquals(ClaudeFailure.BillingRequired, classify(http(402, "billing_error", "payment required")))
     }
 
     @Test
     fun givenA401WithAKeySent_whenClassified_thenTheKeyWasRefused() {
-        val body = """OpenAI HTTP 401: {"error":{"code":"invalid_api_key","message":"bad key"}}"""
-        assertEquals(ClaudeFailure.KeyRefused, classify(body, hasApiKey = true))
+        val error = http(401, "authentication_error", "invalid x-api-key")
+        assertEquals(ClaudeFailure.KeyRefused, classify(error, hasApiKey = true))
     }
 
     @Test
     fun givenA401WithNoKeySent_whenClassified_thenTheKeyIsReportedMissing() {
-        // A server that needs a credential the user did not configure: telling them the key is
-        // "wrong" would send them off to check a key that does not exist.
-        val body = """OpenAI HTTP 401: {"error":{"message":"missing bearer token"}}"""
-        assertEquals(ClaudeFailure.KeyMissing, classify(body, hasApiKey = false))
+        // Telling the user the key is "wrong" would send them off to check a key that does not exist.
+        val error = http(401, "authentication_error", "x-api-key header is required")
+        assertEquals(ClaudeFailure.KeyMissing, classify(error, hasApiKey = false))
     }
 
     @Test
     fun givenA403_whenClassified_thenTheKeyIsForbidden() {
-        assertEquals(ClaudeFailure.KeyForbidden, classify("OpenAI HTTP 403: {}"))
+        assertEquals(ClaudeFailure.KeyForbidden, classify(http(403, "permission_error", "no access")))
     }
 
     @Test
-    fun givenA400_whenClassified_thenTheRequestWasRejectedWithTheServersReason() {
-        val body = """OpenAI HTTP 400: {"error":{"message":"messages must not be empty"}}"""
-        val failure = classify(body)
-        assertEquals(ClaudeFailure.RequestRejected("messages must not be empty"), failure)
+    fun givenA413_whenClassified_thenTheRequestIsTooLarge() {
+        assertEquals(ClaudeFailure.RequestTooLarge, classify(http(413, "request_too_large", "too big")))
     }
 
     @Test
-    fun givenA500_whenClassified_thenTheServiceIsUnavailable() {
+    fun givenA400_whenClassified_thenTheRequestWasRejectedWithTheApisReason() {
+        val failure = classify(http(400, "invalid_request_error", "messages: text content blocks must be non-empty"))
         assertEquals(
-            ClaudeFailure.ServiceUnavailable(503),
-            classify("OpenAI HTTP 503: {\"error\":{\"message\":\"overloaded\"}}")
+            ClaudeFailure.RequestRejected("messages: text content blocks must be non-empty"),
+            failure
+        )
+    }
+
+    @Test
+    fun givenAnOverload_whenClassified_thenTheServiceIsUnavailable() {
+        assertEquals(
+            ClaudeFailure.ServiceUnavailable(529),
+            classify(http(529, "overloaded_error", "Overloaded"))
+        )
+    }
+
+    @Test
+    fun givenAStreamErrorEvent_whenItsTypeIsMappedToAStatus_thenItClassifiesLikeTheHttpFailure() {
+        // An error that arrives inside a 200 stream has no status of its own; it has to land in
+        // the same branch as the same failure arriving on the status line.
+        val status = ClaudeHttpException.statusForStreamError("overloaded_error")
+        assertEquals(
+            ClaudeFailure.ServiceUnavailable(529),
+            classify(ClaudeHttpException(status, body("overloaded_error", "Overloaded")))
         )
     }
 
     @Test
     fun givenAnUnhandledStatus_whenClassified_thenItIsUnexpected() {
-        val failure = classify("OpenAI HTTP 418: {\"error\":{\"message\":\"teapot\"}}")
-        assertEquals(ClaudeFailure.Unexpected(418, "teapot"), failure)
+        assertEquals(ClaudeFailure.Unexpected(418, "teapot"), classify(http(418, "api_error", "teapot")))
     }
 
     @Test
-    fun givenNoAnswerFromALocalServer_whenClassified_thenTheServerIsReportedNotRunning() {
-        // The most likely failure for a LAN server, and "check your internet" is wrong advice.
-        val failure = classify("Connection refused", isClaudeHost = false)
-        assertEquals(ClaudeFailure.ServerNotRunning, failure)
-    }
-
-    @Test
-    fun givenNoAnswerFromClaude_whenClassified_thenItIsUnreachable() {
-        assertEquals(ClaudeFailure.Unreachable, classify("Unable to resolve host", isClaudeHost = true))
+    fun givenNoAnswer_whenClassified_thenItIsUnreachable() {
+        assertEquals(ClaudeFailure.Unreachable, classify(IOException("Unable to resolve host")))
     }
 
     @Test
     fun givenANonIoFailure_whenClassified_thenItIsAGenericFailure() {
-        val failure = ClaudeErrorFormatter.classify(
-            IllegalStateException("backend closed"), "gpt-5", true, true
+        assertEquals(
+            ClaudeFailure.Failed("backend closed"),
+            classify(IllegalStateException("backend closed"))
         )
-        assertEquals(ClaudeFailure.Failed("backend closed"), failure)
     }
 
     @Test
-    fun givenAJsonBodyInTheMessage_whenAReasonIsEchoed_thenNoBraceIsCarriedOnward() {
+    fun givenAStatusOnlyInTheMessage_whenClassified_thenItIsStillRead() {
+        // A failure that reached the handler without the transport's field still carries its text.
+        assertEquals(ClaudeFailure.KeyForbidden, classify(IOException("Claude HTTP 403: {}")))
+    }
+
+    @Test
+    fun givenAJsonBodyWithNoErrorObject_whenAReasonIsEchoed_thenNoBraceIsCarriedOnward() {
         // The whole point of this class: a raw body must never reach the transcript.
-        val body = """OpenAI HTTP 400: {"unexpected":"shape","with":{"nesting":true}}"""
-        val failure = classify(body) as ClaudeFailure.RequestRejected
+        val failure = classify(ClaudeHttpException(400, """{"unexpected":"shape"}""")) as ClaudeFailure.RequestRejected
         assertNull(failure.reason)
     }
 
     @Test
-    fun givenAnOverlongServerMessage_whenAReasonIsEchoed_thenItIsDropped() {
-        val long = "x".repeat(400)
-        val body = """OpenAI HTTP 400: {"error":{"message":"$long"}}"""
-        val failure = classify(body) as ClaudeFailure.RequestRejected
+    fun givenAnOverlongApiMessage_whenAReasonIsEchoed_thenItIsDropped() {
+        val failure = classify(http(400, "invalid_request_error", "x".repeat(400))) as ClaudeFailure.RequestRejected
         assertNull(failure.reason)
     }
 
     @Test
-    fun givenAMultilineServerMessage_whenParsed_thenItIsCollapsedToOneLine() {
-        val body = "OpenAI HTTP 400: {\"error\":{\"message\":\"first\\n\\n  second\"}}"
-        assertEquals("first second", ClaudeErrorFormatter.parse(body).apiMessage)
+    fun givenAMultilineApiMessage_whenParsed_thenItIsCollapsedToOneLine() {
+        val message = "Claude HTTP 400: {\"error\":{\"message\":\"first\\n\\n  second\"}}"
+        assertEquals("first second", ClaudeErrorFormatter.parse(message).apiMessage)
     }
 
     @Test
     fun givenNoJsonBody_whenParsed_thenOnlyTheStatusIsRead() {
-        val parsed = ClaudeErrorFormatter.parse("OpenAI HTTP 502: <html>Bad Gateway</html>")
+        val parsed = ClaudeErrorFormatter.parse("Claude HTTP 502: <html>Bad Gateway</html>")
         assertEquals(502, parsed.httpStatus)
         assertNull(parsed.apiMessage)
     }
@@ -139,7 +160,6 @@ class ClaudeErrorFormatterTest {
     fun givenNoMessageAtAll_whenParsed_thenEveryFieldIsNull() {
         val parsed = ClaudeErrorFormatter.parse(null)
         assertNull(parsed.httpStatus)
-        assertNull(parsed.apiCode)
         assertNull(parsed.apiType)
         assertNull(parsed.apiMessage)
     }

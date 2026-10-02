@@ -1,195 +1,219 @@
 package com.itsaky.androidide.plugins.aiagentclaude.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Role
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
+import org.json.JSONArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The request body. This is the shape a server 400s over, and the `messages[]` mapping is what
- * gives this backend real multi-turn fidelity rather than a flattened transcript.
+ * The request shape, which is what the Messages API 400s over: turns that do not alternate, an
+ * empty text block, or a parameter the model rejects.
  */
 class ClaudeRequestBuilderTest {
 
-    private fun config(
-        temperature: Float = 0.7f,
-        maxTokens: Int = 4096,
-        systemPrompt: String? = null,
-    ) = LlmConfig("openai").apply {
-        this.temperature = temperature
-        this.maxTokens = maxTokens
-        this.systemPrompt = systemPrompt
-    }
+    private fun config() = LlmConfig("claude")
 
-    private val defaultTuning = RequestTuning(RequestTuning.MAX_TOKENS, sendTemperature = true)
+    private fun roles(messages: JSONArray) =
+        (0 until messages.length()).map { messages.getJSONObject(it).getString("role") }
+
+    private fun contents(messages: JSONArray) =
+        (0 until messages.length()).map { messages.getJSONObject(it).getString("content") }
 
     @Test
-    fun givenNoHistory_whenBuildingMessages_thenOnlyThePromptIsSent() {
-        val messages = ClaudeRequestBuilder.messages(emptyList(), "Hello", null)
-        assertEquals(1, messages.length())
-        assertEquals("user", messages.getJSONObject(0).getString("role"))
-        assertEquals("Hello", messages.getJSONObject(0).getString("content"))
+    fun givenAPlainPrompt_whenMapped_thenItIsOneUserTurnWithTheSystemPromptApart() {
+        val conversation = ClaudeRequestBuilder.conversation(emptyList(), "Hi", "Be brief.")
+
+        assertEquals("Be brief.", conversation.system)
+        assertEquals(listOf("user"), roles(conversation.messages))
+        assertEquals(listOf("Hi"), contents(conversation.messages))
     }
 
     @Test
-    fun givenASystemPrompt_whenBuildingMessages_thenItLeadsAsARealSystemTurn() {
-        val messages = ClaudeRequestBuilder.messages(emptyList(), "Hi", "You are helpful.")
-        assertEquals(2, messages.length())
-        assertEquals("system", messages.getJSONObject(0).getString("role"))
-        assertEquals("You are helpful.", messages.getJSONObject(0).getString("content"))
-        assertEquals("user", messages.getJSONObject(1).getString("role"))
-    }
-
-    @Test
-    fun givenABlankSystemPrompt_whenBuildingMessages_thenNoSystemTurnIsSent() {
-        val messages = ClaudeRequestBuilder.messages(emptyList(), "Hi", "   ")
-        assertEquals(1, messages.length())
-        assertEquals("user", messages.getJSONObject(0).getString("role"))
-    }
-
-    @Test
-    fun givenHistory_whenBuildingMessages_thenRolesArePreservedInOrder() {
+    fun givenToolResultsAsUserTurns_whenMapped_thenConsecutiveUserTurnsAreMerged() {
+        // AI Core records a native call's turn only when the model also wrote prose, so a tool
+        // result routinely follows the user's own message, and the API wants roles to alternate.
         val history = listOf(
-            ChatMessage(ChatMessage.Role.USER, "first"),
-            ChatMessage(ChatMessage.Role.ASSISTANT, "reply"),
-            ChatMessage(ChatMessage.Role.SYSTEM, "note"),
+            ChatMessage(Role.USER, "Rename count"),
+            ChatMessage(Role.USER, "<tool_response>read_file ok</tool_response>"),
         )
-        val messages = ClaudeRequestBuilder.messages(history, "latest", null)
+        val conversation = ClaudeRequestBuilder.conversation(history, "<tool_response>edit ok</tool_response>", null)
 
-        assertEquals(4, messages.length())
-        assertEquals("user", messages.getJSONObject(0).getString("role"))
-        assertEquals("first", messages.getJSONObject(0).getString("content"))
-        assertEquals("assistant", messages.getJSONObject(1).getString("role"))
-        // A real system role, unlike the Gemini transport which must fake one with a user turn.
-        assertEquals("system", messages.getJSONObject(2).getString("role"))
-        assertEquals("latest", messages.getJSONObject(3).getString("content"))
-    }
-
-    @Test
-    fun givenAToolResult_whenBuildingMessages_thenItRidesInAsAUserTurn() {
-        // A `tool` role is only legal after an assistant turn carrying the matching `tool_calls`,
-        // which ChatMessage gives the assistant turn no way to hold.
-        val history = listOf(ChatMessage.toolResult("call_1", "read_file", "file contents"))
-        val messages = ClaudeRequestBuilder.messages(history, "next", null)
-
-        assertEquals("user", messages.getJSONObject(0).getString("role"))
-        assertEquals("file contents", messages.getJSONObject(0).getString("content"))
-    }
-
-    @Test
-    fun givenStreamingRequested_whenBuildingTheBody_thenStreamIsTrue() {
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-4o",
-            stream = true,
-            config = config(),
-            tuning = defaultTuning,
-        )
-        assertTrue(body.getBoolean("stream"))
-        assertEquals("gpt-4o", body.getString("model"))
-    }
-
-    @Test
-    fun givenTheLegacyTuning_whenBuildingTheBody_thenMaxTokensCarriesTheCap() {
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "qwen2.5-coder",
-            stream = false,
-            config = config(maxTokens = 2048),
-            tuning = defaultTuning,
-        )
-        assertEquals(2048, body.getInt(RequestTuning.MAX_TOKENS))
-        assertFalse(body.has(RequestTuning.MAX_COMPLETION_TOKENS))
-    }
-
-    @Test
-    fun givenAReasoningTuning_whenBuildingTheBody_thenTemperatureIsAbsentAndTheModernCapIsUsed() {
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-5",
-            stream = true,
-            config = config(),
-            tuning = RequestTuning(RequestTuning.MAX_COMPLETION_TOKENS, sendTemperature = false),
-        )
-        assertEquals(4096, body.getInt(RequestTuning.MAX_COMPLETION_TOKENS))
-        assertFalse("temperature must be omitted for a reasoning model", body.has("temperature"))
-        assertFalse(body.has(RequestTuning.MAX_TOKENS))
-    }
-
-    @Test
-    fun givenNoTokenCap_whenBuildingTheBody_thenNoCapIsSentAtAll() {
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-4o",
-            stream = false,
-            config = config(maxTokens = 0),
-            tuning = defaultTuning,
-        )
-        assertFalse(body.has(RequestTuning.MAX_TOKENS))
-        assertFalse(body.has(RequestTuning.MAX_COMPLETION_TOKENS))
-    }
-
-    @Test
-    fun givenStopSequences_whenBuildingTheBody_thenTheyAreSent() {
-        val withStops = config().apply { stopSequences = listOf("</tool_call>", "") }
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-4o",
-            stream = false,
-            config = withStops,
-            tuning = defaultTuning,
-        )
-        // The empty entry is dropped: an empty stop string ends every generation immediately.
-        assertEquals(1, body.getJSONArray("stop").length())
-        assertEquals("</tool_call>", body.getJSONArray("stop").getString(0))
-    }
-
-    @Test
-    fun givenOnlyEmptyStopSequences_whenBuildingTheBody_thenNoStopIsSent() {
-        val withStops = config().apply { stopSequences = listOf("") }
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-4o",
-            stream = false,
-            config = withStops,
-            tuning = defaultTuning,
-        )
-        assertFalse(body.has("stop"))
-    }
-
-    @Test
-    fun givenTools_whenBuildingTheBody_thenTheyAreDeclaredToTheServer() {
-        val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-4o",
-            stream = true,
-            config = config(),
-            tuning = defaultTuning,
-            tools = listOf(ToolDefinition("read_file", "Read a file", emptyMap())),
-        )
-
-        val declared = body.getJSONArray("tools")
-        assertEquals(1, declared.length())
+        assertEquals(listOf("user"), roles(conversation.messages))
         assertEquals(
-            "read_file",
-            declared.getJSONObject(0).getJSONObject("function").getString("name")
+            "Rename count\n\n<tool_response>read_file ok</tool_response>\n\n<tool_response>edit ok</tool_response>",
+            contents(conversation.messages).single()
         )
     }
 
     @Test
-    fun givenNoTools_whenBuildingTheBody_thenNoToolsFieldIsSent() {
-        // Plain chat, and a server that rejects an empty `tools` array would 400 on the request.
+    fun givenAToolRoleResult_whenMapped_thenItTravelsAsUserText() {
+        // A tool_result block needs the assistant tool_use it answers, which history cannot carry.
+        val history = listOf(
+            ChatMessage(Role.USER, "List files"),
+            ChatMessage(Role.ASSISTANT, "Listing."),
+            ChatMessage.toolResult("toolu_1", "list_files", "app/ build.gradle.kts"),
+        )
+        val conversation = ClaudeRequestBuilder.conversation(history, "Thanks", null)
+
+        assertEquals(listOf("user", "assistant", "user"), roles(conversation.messages))
+        assertEquals("app/ build.gradle.kts\n\nThanks", contents(conversation.messages).last())
+    }
+
+    @Test
+    fun givenBlankTurns_whenMapped_thenTheyAreDropped() {
+        // The API rejects an empty text content block outright.
+        val history = listOf(
+            ChatMessage(Role.USER, "Hello"),
+            ChatMessage(Role.ASSISTANT, "   "),
+            ChatMessage(Role.USER, "Still there?"),
+        )
+        val conversation = ClaudeRequestBuilder.conversation(history, "Answer me", null)
+
+        assertEquals(listOf("user"), roles(conversation.messages))
+    }
+
+    @Test
+    fun givenASystemTurnInHistory_whenMapped_thenItJoinsTheSystemPrompt() {
+        val history = listOf(ChatMessage(Role.SYSTEM, "The project uses Compose."))
+        val conversation = ClaudeRequestBuilder.conversation(history, "Add a button", "You are an agent.")
+
+        assertEquals("You are an agent.\n\nThe project uses Compose.", conversation.system)
+        assertEquals(listOf("user"), roles(conversation.messages))
+    }
+
+    @Test
+    fun givenNoSystemPrompt_whenMapped_thenNoneIsSent() {
+        val conversation = ClaudeRequestBuilder.conversation(emptyList(), "Hi", "  ")
+
+        assertNull(conversation.system)
+        assertFalse(ClaudeRequestBuilder.body(conversation, "claude-opus-5-5", true, config()).has("system"))
+    }
+
+    @Test
+    fun givenAHistoryOpeningOnTheAssistant_whenMapped_thenAUserTurnLeads() {
+        val history = listOf(ChatMessage(Role.ASSISTANT, "Earlier answer"))
+        val conversation = ClaudeRequestBuilder.conversation(history, "Follow up", null)
+
+        assertEquals(listOf("user", "assistant", "user"), roles(conversation.messages))
+    }
+
+    @Test
+    fun givenABlankPromptAfterAnAssistantTurn_whenMapped_thenItIsRefusedBeforeSending() {
+        // Current models reject an assistant prefill, so a conversation ending on the assistant
+        // would only come back as an opaque 400.
+        val history = listOf(ChatMessage(Role.USER, "Hi"), ChatMessage(Role.ASSISTANT, "Hello"))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ClaudeRequestBuilder.conversation(history, "", null)
+        }
+    }
+
+    @Test
+    fun givenAStreamedRequest_whenBuilt_thenThinkingAndTemperatureAreNotSent() {
+        // Both are 400s on Claude Opus 5.5: thinking cannot be disabled, sampling is removed.
         val body = ClaudeRequestBuilder.body(
-            ClaudeRequestBuilder.messages(emptyList(), "Hi", null),
-            "gpt-4o",
-            stream = true,
-            config = config(),
-            tuning = defaultTuning,
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config()
+        )
+
+        assertFalse(body.has("thinking"))
+        assertFalse(body.has("temperature"))
+        assertTrue(body.getBoolean("stream"))
+        assertEquals("claude-opus-5-5", body.getString("model"))
+    }
+
+    @Test
+    fun givenTheDefaultTokenCap_whenBuilt_thenItIsRaisedToRoomForThinking() {
+        // LlmConfig defaults to 2048, which thinking alone can use up before a word of reply.
+        val conversation = ClaudeRequestBuilder.conversation(emptyList(), "Hi", null)
+
+        assertEquals(
+            ClaudeRequestBuilder.STREAMING_MAX_TOKENS,
+            ClaudeRequestBuilder.body(conversation, "claude-opus-5-5", true, config()).getInt("max_tokens")
+        )
+        assertEquals(
+            ClaudeRequestBuilder.BLOCKING_MAX_TOKENS,
+            ClaudeRequestBuilder.body(conversation, "claude-opus-5-5", false, config()).getInt("max_tokens")
+        )
+    }
+
+    @Test
+    fun givenAnOversizedTokenCap_whenBuilt_thenItIsHeldAtTheCeiling() {
+        val conversation = ClaudeRequestBuilder.conversation(emptyList(), "Hi", null)
+        val huge = config().apply { maxTokens = 1_000_000 }
+
+        assertEquals(
+            ClaudeRequestBuilder.STREAMING_MAX_TOKENS,
+            ClaudeRequestBuilder.body(conversation, "claude-haiku-4-5", true, huge).getInt("max_tokens")
+        )
+    }
+
+    @Test
+    fun givenACurrentModel_whenBuilt_thenEffortAndFallbacksAreSentWithTheirBeta() {
+        val body = ClaudeRequestBuilder.body(
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config()
+        )
+
+        assertEquals(ClaudeRequestBuilder.EFFORT, body.getJSONObject("output_config").getString("effort"))
+        assertEquals("default", body.getString("fallbacks"))
+        assertEquals(listOf(ClaudeModelTraits.SERVER_FALLBACK_BETA), ClaudeRequestBuilder.betas("claude-opus-5-5"))
+    }
+
+    @Test
+    fun givenHaiku_whenBuilt_thenNeitherEffortNorFallbacksAreSent() {
+        // Effort is a 400 on Haiku 4.5, and so is a fallbacks parameter it does not list.
+        val body = ClaudeRequestBuilder.body(
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-haiku-4-5", true, config()
+        )
+
+        assertFalse(body.has("output_config"))
+        assertFalse(body.has("fallbacks"))
+        assertTrue(ClaudeRequestBuilder.betas("claude-haiku-4-5").isEmpty())
+    }
+
+    @Test
+    fun givenTools_whenBuilt_thenTheyAreDeclared() {
+        val tools = listOf(ToolDefinition("read_file", "Read a file", null))
+        val body = ClaudeRequestBuilder.body(
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config(), tools
+        )
+
+        assertEquals("read_file", body.getJSONArray("tools").getJSONObject(0).getString("name"))
+    }
+
+    @Test
+    fun givenNoTools_whenBuilt_thenNoToolsKeyIsSent() {
+        val body = ClaudeRequestBuilder.body(
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config()
         )
 
         assertFalse(body.has("tools"))
+    }
+
+    @Test
+    fun givenStopSequences_whenBuilt_thenOnlyTheNonEmptyOnesAreSent() {
+        val withStops = config().apply { stopSequences = listOf("", "END") }
+        val body = ClaudeRequestBuilder.body(
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, withStops
+        )
+
+        assertEquals(1, body.getJSONArray("stop_sequences").length())
+        assertEquals("END", body.getJSONArray("stop_sequences").getString(0))
+    }
+
+    @Test
+    fun givenAnyRequest_whenBuilt_thenThePrefixIsMarkedForCaching() {
+        // An agent run re-sends the same system prompt and tool list on every turn.
+        val body = ClaudeRequestBuilder.body(
+            ClaudeRequestBuilder.conversation(emptyList(), "Hi", null), "claude-opus-5-5", true, config()
+        )
+
+        assertEquals("ephemeral", body.getJSONObject("cache_control").getString("type"))
     }
 }

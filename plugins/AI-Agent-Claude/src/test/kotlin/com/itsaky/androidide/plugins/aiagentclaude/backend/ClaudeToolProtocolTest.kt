@@ -1,7 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentclaude.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,7 +10,7 @@ import org.junit.Test
 /**
  * Unit tests for [ClaudeToolProtocol]. Focus: ADFA-5410, where a tool call written as reply text
  * could not be read back once its arguments carried quotes. Declaring the tools is what stops
- * that, so the declaration and the `tool_calls` accumulation are both pinned down here.
+ * that, so the declaration and the `tool_use` accumulation are both pinned down here.
  */
 class ClaudeToolProtocolTest {
 
@@ -22,11 +21,8 @@ class ClaudeToolProtocolTest {
             "required" to required,
         )
 
-    private fun deltas(json: String) =
-        ClaudeToolProtocol.toolCallDeltas(JSONObject(json))
-
     @Test
-    fun givenAToolWithArguments_whenDeclared_thenItsSchemaTravelsWithIt() {
+    fun givenAToolWithArguments_whenDeclared_thenItsSchemaTravelsAsInputSchema() {
         val declarations = ClaudeToolProtocol.toolsArray(
             listOf(
                 ToolDefinition(
@@ -42,160 +38,106 @@ class ClaudeToolProtocolTest {
 
         assertEquals(1, declarations.length())
         val entry = declarations.getJSONObject(0)
-        assertEquals("function", entry.getString("type"))
-        val function = entry.getJSONObject("function")
-        assertEquals("read_file", function.getString("name"))
-        assertEquals("Read a file", function.getString("description"))
-        val parameters = function.getJSONObject("parameters")
-        // Lower case, unlike the Gemini transport: this protocol takes plain JSON Schema.
-        assertEquals("object", parameters.getString("type"))
+        assertEquals("read_file", entry.getString("name"))
+        assertEquals("Read a file", entry.getString("description"))
+        // Not OpenAI's {"type":"function","function":{...}} wrapper: the API rejects that shape.
+        assertFalse(entry.has("function"))
+        val inputSchema = entry.getJSONObject("input_schema")
+        assertEquals("object", inputSchema.getString("type"))
         assertEquals(
             "string",
-            parameters.getJSONObject("properties").getJSONObject("file_path").getString("type")
+            inputSchema.getJSONObject("properties").getJSONObject("file_path").getString("type")
         )
-        assertEquals("file_path", parameters.getJSONArray("required").getString(0))
+        assertEquals("file_path", inputSchema.getJSONArray("required").getString(0))
     }
 
     @Test
-    fun givenAToolWithNoSchema_whenDeclared_thenParametersIsStillAnObject() {
-        // Omitting `parameters` declares a tool that takes none, and the model would then call it
-        // with nothing at all.
-        val declarations = ClaudeToolProtocol.toolsArray(
-            listOf(ToolDefinition("run_app", "Build and run", emptyMap()))
-        )
+    fun givenAToolWithNoSchema_whenDeclared_thenInputSchemaIsStillAnObject() {
+        // The API requires an object schema; omitting it is a 400 for the whole request.
+        val entry = ClaudeToolProtocol.toolsArray(listOf(ToolDefinition("list_files", "List", null)))
+            .getJSONObject(0)
 
-        val parameters = declarations.getJSONObject(0).getJSONObject("function")
-            .getJSONObject("parameters")
-        assertEquals("object", parameters.getString("type"))
+        assertEquals("object", entry.getJSONObject("input_schema").getString("type"))
     }
 
     @Test
-    fun givenASchemaCarryingKeywordsGeminiWouldReject_whenConverted_thenTheySurvive() {
-        val parameters = ClaudeToolProtocol.parametersJson(
-            mapOf(
-                "type" to "object",
-                "additionalProperties" to false,
-                "properties" to mapOf("q" to mapOf("type" to "string")),
-                "required" to listOf("q"),
-            )
-        )
+    fun givenASchemaThatNamesNoType_whenDeclared_thenItIsMadeAnObject() {
+        val json = ClaudeToolProtocol.inputSchemaJson(mapOf("properties" to mapOf<String, Any>()))
 
-        assertFalse(parameters.getBoolean("additionalProperties"))
-        assertEquals("q", parameters.getJSONArray("required").getString(0))
+        assertEquals("object", json.getString("type"))
     }
 
     @Test
-    fun givenAnAbsurdlyNestedSchema_whenConverted_thenItStopsRatherThanRecursingForever() {
-        // A contributed (MCP) schema is provider-supplied; unbounded recursion would take the host
-        // process down with it.
-        var schema = mapOf<String, Any>("type" to "string")
-        repeat(200) { schema = mapOf("type" to "object", "properties" to mapOf("next" to schema)) }
+    fun givenAPathologicallyDeepSchema_whenDeclared_thenItIsCutOffRatherThanRecursedForever() {
+        var deep: Map<String, Any> = mapOf("type" to "string")
+        repeat(50) { deep = mapOf("type" to "object", "properties" to mapOf("x" to deep)) }
 
-        val parameters = ClaudeToolProtocol.parametersJson(schema)
-
-        assertEquals("object", parameters.getString("type"))
+        // Completing at all is the assertion; a contributed schema must not kill the host.
+        assertTrue(ClaudeToolProtocol.inputSchemaJson(deep).has("type"))
     }
 
     @Test
-    fun givenArgumentsSplitAcrossChunks_whenAccumulated_thenTheCallIsWholeAgain() {
-        val accumulator = ClaudeToolProtocol.CallAccumulator()
+    fun givenAStreamedCall_whenItsFragmentsAreJoined_thenOneWholeCallComesBack() {
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.start(1, "toolu_01", "edit_file")
+        calls.appendInput(1, "{\"file_path\": \"a.kt\", ")
+        calls.appendInput(1, "\"old_string\": \"say \\\"hi\\\"\\n\"}")
 
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"create_file","arguments":"{\"file_path\":\"a.kt\","}}]}""")
-        )
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"index":0,"function":{"arguments":"\"content\":\"val s = \\\"hi\\\"\"}"}}]}""")
-        )
-        val calls = accumulator.requests()
-
-        assertEquals(1, calls.size)
-        assertEquals("call_1", calls[0].callId)
-        assertEquals("create_file", calls[0].name)
-        assertEquals("a.kt", calls[0].args.orEmpty()["file_path"])
-        // The payload ADFA-5410 lost: a quoted string inside an argument value.
-        assertEquals("""val s = "hi"""", calls[0].args.orEmpty()["content"])
-        assertEquals(0, accumulator.droppedCalls)
+        val request = calls.requests().single()
+        assertEquals("toolu_01", request.callId)
+        assertEquals("edit_file", request.name)
+        assertEquals("a.kt", request.args?.get("file_path"))
+        // Quotes and a newline inside a value survive, which is what text-mode calling lost.
+        assertEquals("say \"hi\"\n", request.args?.get("old_string"))
+        assertEquals(0, calls.droppedCalls)
     }
 
     @Test
-    fun givenTwoCallsInOneTurn_whenAccumulated_thenEachKeepsItsOwnArguments() {
-        val accumulator = ClaudeToolProtocol.CallAccumulator()
+    fun givenTwoCallsInOneMessage_whenJoined_thenEachKeepsItsOwnInputInOrder() {
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.start(1, "toolu_a", "read_file")
+        calls.start(2, "toolu_b", "list_files")
+        calls.appendInput(2, "{\"directory\": \"app\"}")
+        calls.appendInput(1, "{\"file_path\": \"b.kt\"}")
 
-        accumulator.accept(
-            deltas("""{"tool_calls":[
-                {"index":0,"id":"a","function":{"name":"read_file","arguments":"{\"file_path\":\"x\"}"}},
-                {"index":1,"id":"b","function":{"name":"open_file","arguments":"{\"file_path\":\"y\"}"}}
-            ]}""")
-        )
-        val calls = accumulator.requests()
-
-        assertEquals(listOf("read_file", "open_file"), calls.map { it.name })
-        assertEquals("x", calls[0].args.orEmpty()["file_path"])
-        assertEquals("y", calls[1].args.orEmpty()["file_path"])
+        val requests = calls.requests()
+        assertEquals(listOf("toolu_a", "toolu_b"), requests.map { it.callId })
+        assertEquals("b.kt", requests[0].args?.get("file_path"))
+        assertEquals("app", requests[1].args?.get("directory"))
     }
 
     @Test
-    fun givenWholeCallsWithNoIndex_whenAccumulated_thenANewIdStartsANewCall() {
-        // Some compatible servers send a complete call per chunk and number none of them.
-        val accumulator = ClaudeToolProtocol.CallAccumulator()
+    fun givenACallWithNoInput_whenJoined_thenItRunsWithNoArguments() {
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.start(0, "toolu_01", "sync_gradle")
 
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"id":"a","function":{"name":"read_file","arguments":"{}"}}]}""")
-        )
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"id":"b","function":{"name":"list_files","arguments":"{}"}}]}""")
-        )
-
-        assertEquals(listOf("read_file", "list_files"), accumulator.requests().map { it.name })
+        assertEquals(emptyMap<String, Any>(), calls.requests().single().args)
     }
 
     @Test
-    fun givenACallCutOffMidArguments_whenAccumulated_thenItIsDroppedRatherThanRunOnNothing() {
-        val accumulator = ClaudeToolProtocol.CallAccumulator()
+    fun givenACallCutOffMidInput_whenJoined_thenItIsDroppedAndCounted() {
+        // Reporting it with empty arguments would run the tool on nothing.
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.start(0, "toolu_01", "edit_file")
+        calls.appendInput(0, "{\"file_path\": \"a.k")
 
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"edit_file","arguments":"{\"file_path\":\"a"}}]}""")
-        )
-        val calls = accumulator.requests()
-
-        assertTrue(calls.isEmpty())
-        assertEquals(1, accumulator.droppedCalls)
+        assertTrue(calls.requests().isEmpty())
+        assertEquals(1, calls.droppedCalls)
     }
 
     @Test
-    fun givenACallWithNoArguments_whenAccumulated_thenItRunsWithNone() {
-        val accumulator = ClaudeToolProtocol.CallAccumulator()
+    fun givenAFragmentForABlockThatIsNotAToolCall_whenJoined_thenItIsIgnored() {
+        val calls = ClaudeToolProtocol.CallAccumulator()
+        calls.appendInput(5, "{\"stray\": true}")
 
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"gradle_sync","arguments":""}}]}""")
-        )
-        val calls = accumulator.requests()
-
-        assertEquals(1, calls.size)
-        assertTrue(calls[0].args.orEmpty().isEmpty())
-        assertEquals(0, accumulator.droppedCalls)
+        assertTrue(calls.requests().isEmpty())
+        assertEquals(0, calls.droppedCalls)
     }
 
     @Test
-    fun givenACallWithNoId_whenAccumulated_thenItIsIdentifiedByName() {
-        val accumulator = ClaudeToolProtocol.CallAccumulator()
-
-        accumulator.accept(
-            deltas("""{"tool_calls":[{"index":0,"function":{"name":"respond","arguments":"{\"message\":\"done\"}"}}]}""")
-        )
-
-        assertEquals("respond", accumulator.requests()[0].callId)
-    }
-
-    @Test
-    fun givenAChunkWithNoToolCalls_whenRead_thenNoFragmentsComeBack() {
-        assertTrue(deltas("""{"content":"Hello"}""").isEmpty())
-        assertTrue(ClaudeToolProtocol.toolCallDeltas(null).isEmpty())
-    }
-
-    @Test
-    fun givenMalformedArguments_whenRead_thenTheyAreRefusedRatherThanGuessedAt() {
-        assertNull(ClaudeToolProtocol.argsOf("""{"file_path":}"""))
-        assertEquals(emptyMap<String, Any>(), ClaudeToolProtocol.argsOf("  "))
+    fun givenInputThatIsNotAnObject_whenRead_thenItIsRejected() {
+        assertNull(ClaudeToolProtocol.argsOf("[1, 2]"))
+        assertNull(ClaudeToolProtocol.argsOf("{\"unterminated\": "))
+        assertEquals(emptyMap<String, Any>(), ClaudeToolProtocol.argsOf("   "))
     }
 }

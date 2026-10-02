@@ -6,71 +6,69 @@ import org.json.JSONObject
 import java.io.IOException
 
 /**
- * What an OpenAI-compatible server said went wrong, as far as it could be determined.
+ * What the Claude API said went wrong, as far as it could be determined.
  *
- * Every field is nullable because the failure may not be an API response at all — a DNS failure, a
- * refused TCP connection to a LAN box, or a proxy's HTML error page reaches the same code path.
+ * Every field is nullable because the failure may not be an API response at all — a DNS failure,
+ * a dropped connection, or a captive portal's HTML page reaches the same code path.
  */
 data class ClaudeApiError(
-    /** HTTP status lifted from the `… HTTP <code>: <body>` message, or null if there wasn't one. */
+    /** HTTP status lifted from the `... HTTP <code>: <body>` message, or null if there wasn't one. */
     val httpStatus: Int?,
-    /** The server's machine-readable `error.code`, e.g. `invalid_api_key`, or null. */
-    val apiCode: String?,
-    /** The server's `error.type`, e.g. `invalid_request_error`, or null. */
+    /** The API's `error.type`, e.g. `authentication_error`, or null. */
     val apiType: String?,
-    /** The server's human-readable `error.message`, collapsed to one line, or null. */
+    /** The API's human-readable `error.message`, collapsed to one line, or null. */
     val apiMessage: String?,
 )
 
 /**
- * An OpenAI-compatible failure reduced to the thing the user needs to be told.
+ * A Claude failure reduced to the thing the user needs to be told.
  *
  * Carries no text: the wording lives in `strings.xml`, which also lets every branch be unit-tested
  * without a Context. Any reason is already single-lined, length-capped, and never a JSON body.
  */
 sealed interface ClaudeFailure {
 
-    /** The model is unknown to this server (HTTP 404, or `model_not_found`). */
+    /** The model is unknown, or not available to this account (HTTP 404). */
     data class ModelUnavailable(val modelName: String) : ClaudeFailure
 
-    /** Rate limit or spent quota (HTTP 429). The key itself is fine. */
+    /** Rate limit (HTTP 429). The key itself is fine. */
     data object QuotaExceeded : ClaudeFailure
 
-    /** The account has no credit left (HTTP 429 whose body names billing or credit). */
+    /** The account has no credit left (HTTP 402, or a 400 that says the balance is too low). */
     data object BillingRequired : ClaudeFailure
 
-    /** The credential was refused (HTTP 401, or `invalid_api_key`). */
+    /** The credential was refused (HTTP 401). */
     data object KeyRefused : ClaudeFailure
 
-    /** The server needs a key and none was configured (HTTP 401 with nothing sent). */
+    /** No key was configured, so none was sent (HTTP 401 with nothing sent). */
     data object KeyMissing : ClaudeFailure
 
-    /** The key is valid but not allowed to use this model or endpoint (HTTP 403). */
+    /** The key is valid but not allowed to do this (HTTP 403). */
     data object KeyForbidden : ClaudeFailure
+
+    /** The conversation is larger than the API accepts (HTTP 413). */
+    data object RequestTooLarge : ClaudeFailure
 
     /** HTTP 400 about the request rather than the credential. */
     data class RequestRejected(val reason: String?) : ClaudeFailure
 
-    /** Server-side outage (HTTP 5xx). Says nothing about the key or the model. */
+    /** API overloaded (529) or failing (5xx). Says nothing about the key or the model. */
     data class ServiceUnavailable(val httpStatus: Int) : ClaudeFailure
 
     /** An HTTP status with no specific handling. */
     data class Unexpected(val httpStatus: Int, val reason: String?) : ClaudeFailure
 
-    /**
-     * No response at all — no network, DNS failure, timeout, or nothing listening.
-     *
-     * Distinguished from [Unreachable] because a custom LAN server that is simply not running is
-     * the single most likely failure for an ADFA-3452 user, and "check the server is running" is
-     * better advice than "check your internet connection".
-     */
-    data object ServerNotRunning : ClaudeFailure
-
-    /** No response and the server was OpenAI itself, i.e. the device has no route out. */
+    /** No response at all — no network, DNS failure, or timeout. */
     data object Unreachable : ClaudeFailure
 
     /**
-     * The server streamed successfully but produced no reply text.
+     * The model declined the request (`stop_reason: "refusal"`), and any fallback the API tried
+     * declined it too. The request did not fail, so this is not reported as an error with it.
+     */
+    data object Refused : ClaudeFailure
+
+    /**
+     * The stream ended successfully but carried no reply text.
      *
      * Its own state because the request did **not** fail: reporting a network-shaped error here
      * sends the user hunting for a connection problem that does not exist.
@@ -79,13 +77,10 @@ sealed interface ClaudeFailure {
      */
     data class EmptyReply(val skippedChunks: Int) : ClaudeFailure
 
-    /**
-     * The model produced only thinking text and never got to an answer — almost always the token
-     * cap being consumed by reasoning.
-     */
+    /** The model thought and never got to an answer before the turn ended. */
     data object ReasoningOnly : ClaudeFailure
 
-    /** The token cap cut the turn off before any reply text arrived (`finish_reason: length`). */
+    /** The token cap cut the turn off before any reply text arrived (`stop_reason: max_tokens`). */
     data object TruncatedBeforeReply : ClaudeFailure
 
     /** Everything else, including failures that never reached the network. */
@@ -109,7 +104,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
         /**
          * The credential failure [failure] is, or null when it is about something else.
          *
-         * The settings pane reports only these: a 500, a spent quota or an unreachable server says
+         * The settings pane reports only these: a 500, a rate limit or an unreachable API says
          * nothing about the key, and reporting one as a credential problem would send the user off
          * to replace a key that works. [ClaudeFailure.QuotaExceeded] and
          * [ClaudeFailure.BillingRequired] are deliberately outside it — the key was accepted, the
@@ -123,11 +118,12 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             is ClaudeFailure.ModelUnavailable,
             ClaudeFailure.QuotaExceeded,
             ClaudeFailure.BillingRequired,
+            ClaudeFailure.RequestTooLarge,
             is ClaudeFailure.RequestRejected,
             is ClaudeFailure.ServiceUnavailable,
             is ClaudeFailure.Unexpected,
-            ClaudeFailure.ServerNotRunning,
             ClaudeFailure.Unreachable,
+            ClaudeFailure.Refused,
             is ClaudeFailure.EmptyReply,
             ClaudeFailure.ReasoningOnly,
             ClaudeFailure.TruncatedBeforeReply,
@@ -144,7 +140,7 @@ internal val ClaudeFailure.isCredentialProblem: Boolean
     get() = CredentialFailure.of(this) != null
 
 /**
- * Classifies an OpenAI-compatible failure so it can be reported as one translated sentence.
+ * Classifies a Claude failure so it can be reported as one translated sentence.
  *
  * The log keeps the full body; **no [ClaudeFailure] ever carries a JSON payload** — putting the raw
  * error body in the chat transcript is the bug this class exists to prevent.
@@ -152,20 +148,20 @@ internal val ClaudeFailure.isCredentialProblem: Boolean
 object ClaudeErrorFormatter {
 
     /**
-     * Matches the status in an `OpenAI HTTP 404: {…}` message. A fallback: a status that arrived as
-     * an [ClaudeHttpException] field is read from the field, never from text.
+     * Matches the status in a `Claude HTTP 404: {...}` message. A fallback: a status that arrived
+     * as a [ClaudeHttpException] field is read from the field, never from text.
      */
     private val HTTP_STATUS = Regex("""HTTP (\d{3})""")
 
-    /** Longest slice of the server's own wording carried onward; keeps a stray body out of the UI. */
+    /** Longest slice of the API's own wording carried onward; keeps a stray body out of the UI. */
     private const val MAX_ECHOED_REASON = 160
 
     /**
-     * Pull the status code and, when the message carries a JSON error body, the server's own
-     * `code`/`type`/`message` out of it. A non-JSON, truncated or absent body yields nulls rather
-     * than throwing, because this runs while already handling a failure.
+     * Pull the status code and, when the message carries a JSON error body, the API's own
+     * `type`/`message` out of it. A non-JSON, truncated or absent body yields nulls rather than
+     * throwing, because this runs while already handling a failure.
      *
-     * @param rawMessage the throwable message, typically `OpenAI HTTP <code>: <body>`
+     * @param rawMessage the throwable message, typically `Claude HTTP <code>: <body>`
      */
     fun parse(rawMessage: String?): ClaudeApiError {
         val raw = rawMessage.orEmpty()
@@ -173,7 +169,6 @@ object ClaudeErrorFormatter {
 
         return ClaudeApiError(
             httpStatus = HTTP_STATUS.find(raw)?.groupValues?.get(1)?.toIntOrNull(),
-            apiCode = error?.optString("code")?.takeIf { it.isNotBlank() },
             apiType = error?.optString("type")?.takeIf { it.isNotBlank() },
             apiMessage = error?.optString("message")?.takeIf { it.isNotBlank() }?.toSingleLine(),
         )
@@ -186,13 +181,11 @@ object ClaudeErrorFormatter {
      *   transport problem from an API refusal when there is no status to read
      * @param modelName the model the request was for, so an unknown-model failure can name it
      * @param hasApiKey whether a key was actually sent, to tell "wrong key" from "no key"
-     * @param isClaudeHost whether the target was OpenAI itself, which changes the no-answer advice
      */
     fun classify(
         error: Throwable,
         modelName: String,
         hasApiKey: Boolean,
-        isClaudeHost: Boolean,
     ): ClaudeFailure {
         val parsed = parse(error.message)
         // The transport reports its status as a field; the pattern below only has to cover a
@@ -200,43 +193,45 @@ object ClaudeErrorFormatter {
         val status = (error as? ClaudeHttpException)?.statusCode ?: parsed.httpStatus
 
         return when {
-            status == 404 || parsed.apiCode == "model_not_found" ->
+            status == 404 || parsed.apiType == "not_found_error" ->
                 ClaudeFailure.ModelUnavailable(modelName)
 
-            status == 429 && parsed.mentionsBilling() -> ClaudeFailure.BillingRequired
+            status == 402 || parsed.apiType == "billing_error" || parsed.mentionsCredit() ->
+                ClaudeFailure.BillingRequired
 
-            status == 429 || parsed.apiCode == "rate_limit_exceeded" ->
-                ClaudeFailure.QuotaExceeded
+            status == 429 || parsed.apiType == "rate_limit_error" -> ClaudeFailure.QuotaExceeded
 
             status == 401 && !hasApiKey -> ClaudeFailure.KeyMissing
 
-            status == 401 || parsed.apiCode == "invalid_api_key" -> ClaudeFailure.KeyRefused
+            status == 401 || parsed.apiType == "authentication_error" -> ClaudeFailure.KeyRefused
 
-            status == 403 -> ClaudeFailure.KeyForbidden
+            status == 403 || parsed.apiType == "permission_error" -> ClaudeFailure.KeyForbidden
+
+            status == 413 || parsed.apiType == "request_too_large" -> ClaudeFailure.RequestTooLarge
 
             status == 400 -> ClaudeFailure.RequestRejected(safeReason(parsed, error))
 
+            // 529 is the API's "overloaded", which is the common one.
             status != null && status in 500..599 -> ClaudeFailure.ServiceUnavailable(status)
 
             status != null -> ClaudeFailure.Unexpected(status, safeReason(parsed, error))
 
             // No status at all: the request never got an answer.
-            error is IOException ->
-                if (isClaudeHost) ClaudeFailure.Unreachable else ClaudeFailure.ServerNotRunning
+            error is IOException -> ClaudeFailure.Unreachable
 
             else -> ClaudeFailure.Failed(safeReason(parsed, error))
         }
     }
 
-    /** True when a 429 is about money rather than request rate. */
-    private fun ClaudeApiError.mentionsBilling(): Boolean {
-        val text = "${apiCode.orEmpty()} ${apiType.orEmpty()} ${apiMessage.orEmpty()}".lowercase()
-        return listOf("billing", "credit", "quota", "insufficient_quota", "payment")
-            .any { text.contains(it) }
-    }
+    /**
+     * True when the API is saying the account is out of money. It reports that as a 400
+     * `invalid_request_error` whose message names the credit balance, not as a status of its own.
+     */
+    private fun ClaudeApiError.mentionsCredit(): Boolean =
+        apiMessage?.lowercase()?.contains("credit balance") == true
 
     /**
-     * The server's own explanation, but only when it is short and safe to show.
+     * The API's own explanation, but only when it is short and safe to show.
      *
      * Falls back to the throwable's message when there was no JSON body, and never when that
      * message contains one — carrying a `{` onward is the bug this class exists to prevent.
@@ -252,11 +247,8 @@ object ClaudeErrorFormatter {
     }
 
     /**
-     * The `error` object of a server error body, wherever it starts inside [raw].
-     *
-     * Shared with the unsupported-parameter recovery, which reads a field of the same object out of
-     * the same kind of body; two hand-rolled copies of "find the brace, hope it parses" is one too
-     * many. Never throws: it runs while a failure is already being handled.
+     * The `error` object of an API error body, wherever it starts inside [raw]. Never throws: it
+     * runs while a failure is already being handled.
      *
      * @param raw a throwable message or a raw response body
      */
