@@ -13,7 +13,7 @@
 !pebble-custom-function-template-installer  ships stale copies of the shared jars; never built on main either
 cotg-ndk  held until the contributor confirms the name and the credit
 AI-Core  no addon.json, so it has no gallery card yet (ADFA-6167 moved it, it did not publish it)
-AI-Agent-Claude  no addon.json, so it has no gallery card yet
+AI-Agent-Claude  needs AI-Core, which is held back; publish the pair together
 AI-Agent-Gemini  no addon.json, so it has no gallery card yet
 AI-Agent-Local  no addon.json, so it has no gallery card yet
 AI-Agent-MCP  no addon.json, so it has no gallery card yet
