@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A user message: the agent row's views inside a bordered bubble at the end edge. The bubble wraps
+  its text, growing leftwards, and only breaks lines once it reaches the MaxWidthLinearLayout cap.
+  Under it, end-aligned like the bubble, a row of per-message actions.
+  Framework attributes only: a library's app: attributes are silently dropped in plugin layouts.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="@dimen/chat_user_message_spacing_bottom">
+
+    <com.itsaky.androidide.plugins.aicore.views.MaxWidthLinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:background="@drawable/bg_user_message"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/chat_user_bubble_padding_horizontal"
+        android:paddingEnd="@dimen/chat_user_bubble_padding_horizontal"
+        android:paddingTop="@dimen/chat_user_bubble_padding_vertical"
+        android:paddingBottom="@dimen/chat_user_bubble_padding_vertical">
+
+        <include layout="@layout/view_chat_message_body" />
+
+        <!-- Own row under the text, so it never covers it. ChatAdapter shows it past 4 lines. -->
+        <ImageButton
+            android:id="@+id/btn_toggle_expand"
+            android:layout_width="@dimen/chat_user_bubble_toggle_size"
+            android:layout_height="@dimen/chat_user_bubble_toggle_size"
+            android:layout_gravity="end"
+            android:layout_marginEnd="@dimen/chat_user_bubble_toggle_inset"
+            android:layout_marginBottom="@dimen/chat_user_bubble_toggle_inset"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/desc_expand_user_message"
+            android:padding="@dimen/chat_user_bubble_toggle_padding"
+            android:src="@drawable/ic_expand_more"
+            android:tint="@color/plugin_on_surface_variant"
+            android:visibility="gone" />
+
+    </com.itsaky.androidide.plugins.aicore.views.MaxWidthLinearLayout>
+
+    <include
+        layout="@layout/view_chat_message_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end" />
+
+</LinearLayout>

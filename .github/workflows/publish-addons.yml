@@ -51,41 +51,33 @@ jobs:
       - name: Check names and metadata
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
 
-      - name: Resolve the libs revision
+      - name: Fetch plugin-api-latest from CodeOnTheGo
         id: libs
         env:
           GH_TOKEN: ${{ github.token }}
+          COGO_REPO: appdevforall/CodeOnTheGo
+          COGO_RELEASE: plugin-api-latest
         run: |
-          # This workflow builds the addons itself instead of going through
-          # scripts/update-libs.sh, so nothing here knows which CodeOnTheGo commit
-          # produced libs/. "Update libs from CodeOnTheGo" records it in the subject
-          # of the commit it pushes, so the newest libs/ commit that names one wins.
-          # Ordinary commits touch libs/ too (a missing jar, a pipeline change), and
-          # keying on the single most recent one would let any of them block the whole
-          # release path until someone dispatched Update libs, which also bumps the
-          # toolchain as a side effect. Only "none of the recent ones names a sha"
-          # fails the run: these are the artifacts the gallery serves, and an empty
-          # export makes the builder omit the key and verify-provenance.sh skip its
-          # check, so the pairing would be lost on a green run. The subject is
-          # hand-writable, so the sha is validated rather than taken on trust, and
-          # capped at the 12 characters update-libs.sh records, so the two forms of
-          # one commit compare by prefix (subjects written before the --short=12
-          # change carry 9).
-          subjects="$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=libs/&sha=${GITHUB_SHA}&per_page=50" --jq '.[].commit.message | split("\n")[0]')"
-          revision=""
-          while IFS= read -r subject; do
-            candidate="${subject##*CodeOnTheGo@}"
-            if [[ "$subject" == *CodeOnTheGo@* && "$candidate" =~ ^[0-9a-f]{7,40}$ ]]; then
-              revision="${candidate:0:12}"
-              break
-            fi
-          done <<< "$subjects"
-          if [ -z "$revision" ]; then
-            echo "No recent commit touching libs/ names a CodeOnTheGo revision." >&2
-            echo "One of them must carry 'CodeOnTheGo@<sha>' in its subject." >&2
+          set -euo pipefail
+          target() { gh release view "$COGO_RELEASE" -R "$COGO_REPO" --json targetCommitish -q .targetCommitish; }
+          before="$(target)"
+          if ! [[ "$before" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "$COGO_RELEASE targets '$before', not a commit sha." >&2
             exit 1
           fi
+          fetched="$(mktemp -d)"
+          gh release download "$COGO_RELEASE" -R "$COGO_REPO" -D "$fetched" \
+            -p plugin-api.jar -p gradle-plugin.jar -p checksums.txt
+          ( cd "$fetched" && sha256sum --check --strict checksums.txt )
+          after="$(target)"
+          if [ "$before" != "$after" ]; then
+            echo "$COGO_RELEASE was republished during the download ($before -> $after). Re-run." >&2
+            exit 1
+          fi
+          cp "$fetched/plugin-api.jar" "$fetched/gradle-plugin.jar" libs/
+          revision="${before:0:12}"
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "Building against $COGO_REPO@$revision ($COGO_RELEASE)." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build, package, and stage
         id: stage

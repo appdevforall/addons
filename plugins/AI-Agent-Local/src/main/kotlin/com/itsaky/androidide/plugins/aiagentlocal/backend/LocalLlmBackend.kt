@@ -713,7 +713,7 @@ class LocalLlmBackend(
 
         val future = CompletableFuture<LlmResponse>()
 
-        currentGenerateJob = scope.launch {
+        val job = scope.launch {
             try {
                 // Serialize against other generations on the shared native context.
                 generationMutex.withLock {
@@ -767,6 +767,8 @@ class LocalLlmBackend(
                 future.complete(LlmResponse.failure("Error: ${e.message}"))
             }
         }
+        currentGenerateJob = job
+        future.cancelJobOnCancel(job)
 
         return future
     }
@@ -944,4 +946,16 @@ class LocalLlmBackend(
         }
         cleanup.invokeOnCompletion { cleanupScope.cancel() }
     }
+}
+
+/**
+ * Cancel [job] when this future is cancelled by its caller.
+ *
+ * [CompletableFuture.cancel] only flips the future's own state, so without this a caller that gives
+ * up leaves the generation holding the native context until it runs out of tokens.
+ *
+ * @param job the coroutine producing this future's value
+ */
+private fun <T> CompletableFuture<T>.cancelJobOnCancel(job: Job) {
+    whenComplete { _, _ -> if (isCancelled) job.cancel() }
 }

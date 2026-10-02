@@ -68,7 +68,15 @@ local copy. **A plugin folder is not standalone in isolation** — copy the root
 if you move one elsewhere. When CoGo's API changes, refresh via the script above or the
 **Update libs from CodeOnTheGo** GitHub Action (which commits the refreshed jars and cuts a
 release). Publishing addons is a separate workflow, **Publish addons**, which uploads to
-Cloudflare R2.
+Cloudflare R2. It does **not** build against the committed `libs/`: it overwrites both jars
+with the assets of CoGo's
+[`plugin-api-latest`](https://github.com/appdevforall/CodeOnTheGo/releases/tag/plugin-api-latest)
+release (cut by hand with CoGo's **Release plugin-api** workflow, from CoGo `main`) after
+checking them against its `checksums.txt`. So a plugin that adopts a new API publishes once
+that API is in a `plugin-api-latest` release, whether or not `libs/` has been refreshed. PR CI
+and local builds still use the committed `libs/`, which **Update libs** fills from CoGo
+`stage`, so an API that is on `stage` but not yet released passes PR CI and fails **Publish
+addons**.
 
 ---
 
@@ -203,10 +211,9 @@ fetch onto ignored paths (`plugins/NDK-Installer/.gitignore`,
 `libs_revision` records which CoGo commit produced the jars the plugin was compiled against.
 The builder cannot see that checkout, so each build path exports `PLUGIN_LIBS_REVISION` first:
 `scripts/update-libs.sh` from the CodeOnTheGo checkout it just built, and **Publish addons**
-from the subject of the most recent commit touching `libs/` that names one (ordinary commits
-touch it too, so it scans back rather than reading only the newest). Compare two artifacts'
-`libs_revision` by prefix, not equality: subjects written before `--short=12` carry a
-9-character sha. Note that under **Update libs from CodeOnTheGo** the plugin's own `revision`
+from the target commit of the `plugin-api-latest` release it downloaded. Compare two
+artifacts' `libs_revision` by prefix, not equality: `.cgp`s published before that change took
+theirs from a commit subject, and some of those carry a 9-character sha. Note that under **Update libs from CodeOnTheGo** the plugin's own `revision`
 is the commit *before* the `chore: update libs` commit, because plugins are built before that
 commit is created; `libs_revision` is what pins the pairing.
 

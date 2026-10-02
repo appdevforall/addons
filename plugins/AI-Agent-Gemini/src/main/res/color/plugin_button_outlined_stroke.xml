@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outlined button border: the outline role, and M3's 12% on-surface while disabled. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.12" android:color="@color/plugin_on_surface" android:state_enabled="false" />
+    <item android:color="@color/plugin_outline" />
+</selector>

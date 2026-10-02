@@ -79,10 +79,23 @@ class RunAppHandlerTest {
     fun givenTheCallbackReportsSuccess_whenRunning_thenItReturnsSuccessWithTheMessage() = runTest {
         answerWith(true to "Build successful")
 
-        val result = handler.execute(emptyMap())
+        val result = RunAppHandler(context, hasLogTools = true).execute(emptyMap())
 
         assertTrue(result.success)
         assertEquals("Build succeeded", result.message)
+        assertTrue(result.data.orEmpty().startsWith("Build successful"))
+        assertTrue(
+            "the agent must be pointed at the app's log",
+            result.data.orEmpty().contains("read_app_logs"),
+        )
+    }
+
+    @Test
+    fun givenNoLogTools_whenTheBuildSucceeds_thenItDoesNotNameReadAppLogs() = runTest {
+        answerWith(true to "Build successful")
+
+        val result = handler.execute(emptyMap())
+
         assertEquals("Build successful", result.data)
     }
 
@@ -119,7 +132,8 @@ class RunAppHandlerTest {
         val result = handler.execute(emptyMap())
 
         assertTrue(result.success)
-        assertEquals("first", result.data)
+        assertTrue(result.data.orEmpty().startsWith("first"))
+        assertFalse(result.data.orEmpty().contains("second"))
     }
 
     @Test

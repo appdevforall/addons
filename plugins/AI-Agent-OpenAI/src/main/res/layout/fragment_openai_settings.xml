@@ -156,7 +156,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_clear_api_key"
-                style="@style/PluginButton.Filled"
+                style="@style/PluginButton.Outlined"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -165,7 +165,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_edit_api_key"
-                style="@style/PluginButton.Filled"
+                style="@style/PluginButton.Outlined"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/space_sm"
@@ -186,13 +186,22 @@
         <!-- Hidden for a server with no keys to get, where the link means nothing. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_get_key"
-            style="@style/PluginButton.Filled"
+            style="@style/PluginButton.Outlined"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/space_sm"
             android:text="@string/btn_get_key" />
 
     </LinearLayout>
+
+    <!-- Divider: ends the key section before the models. The Model header's top margin below
+         mirrors this one's, so the line sits centred in the gap. Colour and thickness are set in
+         code: app: attributes are dropped inside the host. -->
+    <com.google.android.material.divider.MaterialDivider
+        android:id="@+id/openai_models_divider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl" />
 
     <!-- Model. One editable dropdown: type any name, or pick one the server reported. -->
 
@@ -277,7 +286,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_test_connection"
-        style="@style/PluginButton.Filled"
+        style="@style/PluginButton.Outlined"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/space_xl"

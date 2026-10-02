@@ -307,7 +307,7 @@ class OpenAiBackend(
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         val future = CompletableFuture<LlmResponse>()
 
-        currentJob = scope.launch {
+        val job = scope.launch {
             val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
@@ -331,6 +331,8 @@ class OpenAiBackend(
                 future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
+        currentJob = job
+        future.cancelJobOnCancel(job)
 
         return future
     }
@@ -357,7 +359,7 @@ class OpenAiBackend(
 
         val future = CompletableFuture<LlmResponse>()
 
-        currentJob = scope.launch {
+        val job = scope.launch {
             val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
@@ -380,6 +382,8 @@ class OpenAiBackend(
                 future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
+        currentJob = job
+        future.cancelJobOnCancel(job)
 
         return future
     }

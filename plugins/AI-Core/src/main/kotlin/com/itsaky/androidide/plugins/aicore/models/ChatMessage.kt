@@ -45,5 +45,11 @@ data class ChatMessage(
      * bubble, e.g. a localized "the action failed"). Null on a message stored before this
      * existed, and on every turn the two agree on.
      */
-    val historyText: String? = null
+    val historyText: String? = null,
+    /**
+     * Whether this row only reports that the backend is not configured yet. The chat drops those
+     * once the backend answers as ready, so a key saved afterwards leaves no stranded warning
+     * behind. False for every message stored before this field existed.
+     */
+    val isSetupError: Boolean = false
 )

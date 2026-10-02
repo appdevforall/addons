@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text field outline. Focus uses the neutral accent, not the plugin hue, to match the buttons. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.38" android:color="@color/plugin_on_surface" android:state_enabled="false" />
+    <item android:color="@color/plugin_secondary" android:state_focused="true" />
+    <item android:color="@color/plugin_on_surface" android:state_hovered="true" />
+    <item android:color="@color/plugin_outline" />
+</selector>

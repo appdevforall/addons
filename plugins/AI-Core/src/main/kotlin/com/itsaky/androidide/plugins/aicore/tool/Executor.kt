@@ -27,6 +27,8 @@ class Executor(
             "read_file",
             "list_files",
             "search_project",
+            "read_app_logs",
+            "read_ide_logs",
         )
 
         /**

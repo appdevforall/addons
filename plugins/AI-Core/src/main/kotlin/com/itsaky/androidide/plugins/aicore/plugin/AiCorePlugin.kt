@@ -44,14 +44,22 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_TAB = "agent_chat_tab"
 
         // Tags for the interactive controls on the Agent chat screen (see ChatFragment).
+        /** The toolbar title, which names the conversation that is on screen. */
+        const val TOOLTIP_TAG_CHAT_TITLE = "agent_chat_title"
         const val TOOLTIP_TAG_CONTEXT_FILES = "agent_context_files"
         const val TOOLTIP_TAG_CHAT_INPUT = "agent_chat_input"
         const val TOOLTIP_TAG_CHAT_SEND = "agent_chat_send"
         /** The toolbar button that opens the sidebar; it took the overflow menu's place and tag. */
         const val TOOLTIP_TAG_CHAT_MENU = "agent_chat_menu"
         const val TOOLTIP_TAG_CHAT_SESSIONS = "agent_chat_sessions"
+        /** The Export entry in a chat row's options menu. */
+        const val TOOLTIP_TAG_CHAT_EXPORT = "agent_chat_export"
+        /** The Import chat entry in the header's + menu. */
+        const val TOOLTIP_TAG_CHAT_IMPORT = "agent_chat_import"
 
         // Tags for the sidebar's own actions (see ChatSidebarController).
+        /** The header's + button, whose menu holds New chat and Import chat. */
+        const val TOOLTIP_TAG_SIDEBAR_ADD = "agent_sidebar_add"
         const val TOOLTIP_TAG_SIDEBAR_NEW_CHAT = "agent_sidebar_new_chat"
         const val TOOLTIP_TAG_SIDEBAR_CLEAR_CHAT = "agent_sidebar_clear_chat"
         const val TOOLTIP_TAG_SIDEBAR_SETTINGS = "agent_sidebar_settings"
@@ -68,6 +76,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_MESSAGE_RETRY = "agent_message_retry"
         const val TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS = "agent_message_open_settings"
         const val TOOLTIP_TAG_SYSTEM_LOG = "agent_system_log"
+        const val TOOLTIP_TAG_USER_MESSAGE_EXPAND = "agent_user_message_expand"
+        const val TOOLTIP_TAG_MESSAGE_COPY = "agent_message_copy"
 
         // Tags for the interactive controls on the AI Settings screen (see AiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_BACK = "ai_settings_back"
@@ -260,6 +270,21 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             )
         ),
         PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_TITLE,
+            summary = "The chat you are in — titled automatically after its first reply until you rename it.",
+            detail = """
+                <p>The header names the conversation on screen, so switching
+                chats from the sidebar says which one you landed in.</p>
+                <p>After the first reply in a new chat, the AI backend writes a
+                short title for it; "Naming chat…" shows while it does.
+                <b>Rename</b> on its row in the sidebar gives it a name of your
+                own, and emptying that name goes back to the automatic title.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
             tag = TOOLTIP_TAG_CONTEXT_FILES,
             summary = "Attach project files so the agent sees their contents with your next message.",
             detail = """
@@ -289,6 +314,9 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>Anything that writes to the project asks for your approval
                 first, as does starting a Gradle sync or generating from a
                 template.</p>
+                <p>The field scrolls on its own once the prompt outgrows it, and
+                with a hardware keyboard attached <b>Shift+Enter</b> sends while
+                <b>Enter</b> starts a new line.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -315,8 +343,11 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>Slides a panel in over the conversation. It has three parts,
                 and only the middle one scrolls:</p>
                 <ul>
-                  <li><b>New chat</b>, at the top — starts a fresh conversation.
-                      The one you were in is kept and appears in the list below.</li>
+                  <li>The <b>+</b> button, at the top — opens a menu with
+                      <b>New chat</b>, which starts a fresh conversation and keeps
+                      the one you were in in the list below, and <b>Import
+                      chat</b>, which opens a chat exported earlier from a
+                      <code>.txt</code> file.</li>
                   <li><b>Recent</b>, in the middle — every conversation you have
                       had in this project, newest first, loading more as you
                       scroll. Tap one to carry on where it stopped.</li>
@@ -328,6 +359,23 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 </ul>
                 <p>The button on the left of the panel's top row closes it again,
                 as does tapping the dimmed chat beside it or pressing <b>Back</b>.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SIDEBAR_ADD,
+            summary = "Start a chat: a new one, or one imported from a .txt file.",
+            detail = """
+                <p>Opens a menu with two ways to start a conversation:</p>
+                <ul>
+                  <li><b>New chat</b> — an empty conversation. The one you were
+                      in is kept in <b>Recent</b> below.</li>
+                  <li><b>Import chat</b> — reads a <code>.txt</code> file made
+                      with <b>Export</b> and opens it as a new chat.</li>
+                </ul>
+                <p>Long-press either entry for more about it.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -397,14 +445,51 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>The list holds the newest conversations to begin with and
                 loads more as you scroll, so a project with a long history still
                 opens at once.</p>
-                <p>The <b>⋮</b> button on a row renames or deletes that chat.
-                Renaming it empty gives it its first message back as a name.
+                <p>The <b>⋮</b> button on a row renames, exports or deletes that
+                chat. Renaming it empty gives it its first message back as a name.
                 Deleting cannot be undone, and deleting the last chat leaves you an
                 empty one to carry on in.</p>
                 <p><b>Long-press</b> a row to pick several at once: every row gets
                 a checkbox, tapping a row ticks it rather than opening it, and the
                 bin at the top of the panel removes everything ticked in one go.
                 The <b>✕</b> beside it goes back to the ordinary list.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_EXPORT,
+            summary = "Save this chat as a .txt file you choose the place for.",
+            detail = """
+                <p>Opens the system file picker with a file name taken from the
+                chat's title. Pick a folder — on the device, or a cloud drive the
+                picker offers — and the chat is written there as plain text.</p>
+                <p>Every message is listed in order under a line naming who sent
+                it: <b>USER</b>, <b>AGENT</b>, or <b>SYSTEM</b> and <b>TOOL</b> for
+                the notices in between. Anyone can read it without extra tools,
+                and <b>Import</b> reads it back as a chat.</p>
+                <p>Cancelling the picker saves nothing. Export is dimmed for a
+                chat with no messages yet, since there is nothing to save.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_IMPORT,
+            summary = "Import a chat exported earlier, as a new chat in this project.",
+            detail = """
+                <p>In the <b>+</b> menu at the top of the sidebar, after
+                <b>New chat</b>. It opens the system file picker. Choose a <code>.txt</code> file
+                made with <b>Export</b> — on this device or another — and it is
+                added to the top of <b>Recent</b> as a new chat and opened, with
+                the same messages in the same order.</p>
+                <p>It never changes a chat you already have: importing the same
+                file twice gives you two chats.</p>
+                <p>A file that was not exported from the Agent, or was edited so it
+                no longer reads as one, is refused with a message and nothing is
+                added. Cancelling the picker does nothing.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -552,6 +637,32 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>They stay collapsed to keep the conversation readable — tap the
                 header to expand or collapse one. They are part of the saved
                 session, not messages sent to the model.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_USER_MESSAGE_EXPAND,
+            summary = "Show the rest of your message, or fold it back to four lines.",
+            detail = """
+                <p>A message of yours longer than four lines is shown folded, so a
+                long prompt doesn't push the agent's reply off screen.</p>
+                <p>The arrow points down while folded: tap it to show the whole
+                message. It points up once expanded: tap it again to fold it. The
+                whole message is always sent to the model, folded or not.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MESSAGE_COPY,
+            summary = "Copy this message's text to the clipboard.",
+            detail = """
+                <p>Copies the whole message, including any lines folded out of
+                view, so you can paste it into a file or send it again.</p>
+                <p>More actions for a message will appear beside this one.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
