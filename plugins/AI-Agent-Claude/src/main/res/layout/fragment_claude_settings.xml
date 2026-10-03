@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material fields and buttons throughout, on the shared house spacing scale: QA reported the pane
+  did not look like part of Code on the Go, which was the bare framework widgets — unstyled grey
+  button slabs and underlined EditTexts. The root android:theme is what guarantees the plugin's
+  own button/input styles win over whatever theme the host builds the inflation Context from.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:theme="@style/ThemeOverlay.Plugin">
+
+    <!-- API key -->
+
+    <LinearLayout
+        android:id="@+id/claude_key_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/claude_api_key_status_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_sm"
+            android:textAppearance="@style/Plugin.Text.Body"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/claude_api_key_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/claude_api_key_label"
+                style="@style/Plugin.SectionHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_claude_api_key" />
+
+            <!-- The reveal toggle is the box's own end icon rather than a loose ImageButton: it
+                 gets a real touch target, and the fragment still owns the click so the window can
+                 be flagged secure while the key is legible. Nothing endIcon-related is declared
+                 here — SecretRevealController sets the mode, drawable, description and listener in
+                 code, because an end icon declared as app:endIconDrawable here draws blank inside
+                 the host. -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/claude_api_key_box"
+                style="@style/PluginTextInputLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_claude_api_key">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/claude_api_key_input"
+                    style="@style/PluginTextInputEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Only for a key that belongs to no workspace: shown once Claude has refused the key
+                 for that, or while an id is saved, so a key that needs none never sees it. -->
+            <LinearLayout
+                android:id="@+id/claude_workspace_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/claude_workspace_label"
+                    style="@style/Plugin.SectionHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_claude_workspace" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/claude_workspace_box"
+                    style="@style/PluginTextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/hint_claude_workspace">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/claude_workspace_input"
+                        style="@style/PluginTextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text|textNoSuggestions"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:id="@+id/claude_workspace_hint_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:text="@string/hint_claude_workspace_help"
+                    android:textAppearance="@style/Plugin.Text.Small" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/claude_key_verification_text"
+            style="@style/Plugin.StatusLine"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_clear_api_key"
+                style="@style/PluginButton.Outlined"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_clear_api_key"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_edit_api_key"
+                style="@style/PluginButton.Outlined"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_sm"
+                android:layout_weight="1"
+                android:text="@string/btn_edit_api_key"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_save_api_key"
+                style="@style/PluginButton.Filled"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_save_api_key" />
+
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_get_key"
+            style="@style/PluginButton.Outlined"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:text="@string/btn_get_key" />
+
+    </LinearLayout>
+
+    <!-- Divider: ends the key section before the model. The Model header's top margin below
+         mirrors this one's, so the line sits centred in the gap. Colour and thickness are set in
+         code: app: attributes are dropped inside the host. -->
+    <com.google.android.material.divider.MaterialDivider
+        android:id="@+id/claude_models_divider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl" />
+
+    <!-- Model. One editable dropdown: type any name, or pick one the API reported. -->
+
+    <TextView
+        android:id="@+id/claude_model_label"
+        style="@style/Plugin.SectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:text="@string/label_claude_model" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/claude_model_box"
+        style="@style/PluginTextInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_claude_model"
+        app:endIconContentDescription="@string/cd_show_models"
+        app:endIconMode="custom">
+
+        <AutoCompleteTextView
+            android:id="@+id/claude_model_input"
+            style="@style/PluginTextInputEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:completionThreshold="0"
+            android:imeOptions="actionDone"
+            android:inputType="text"
+            android:maxLines="1"
+            android:popupBackground="@color/plugin_surface" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/claude_model_hint_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:text="@string/hint_claude_model_help"
+        android:textAppearance="@style/Plugin.Text.Small" />
+
+    <!-- Connection test, which is also what fills the model dropdown: both are GET /v1/models. -->
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_test_connection"
+        style="@style/PluginButton.Outlined"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:text="@string/btn_test_connection" />
+
+    <TextView
+        android:id="@+id/claude_connection_status_text"
+        style="@style/Plugin.StatusLine"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_sm"
+        android:visibility="gone" />
+
+</LinearLayout>

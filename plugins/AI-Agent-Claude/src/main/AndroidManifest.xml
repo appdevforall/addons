@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Makes live HTTPS calls to api.anthropic.com (ClaudeBackend, raw HttpURLConnection). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="AI Agent Claude Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.itsaky.androidide.plugins.aiagentclaude" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="AI Agent Claude" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <!-- Build provenance (ADFA-5256): the commit and commit-date this .cgp was
+             built from. Both placeholders are always supplied by the plugin builder. -->
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Claude inference backend for AI Core. Talks to Anthropic's Messages API with your Claude API key, with native tool calling for the agent." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <!-- 26.39: AI Core's own minimum, and this plugin does nothing without AI Core. The
+             plugin-api surface it uses itself is older: KeystoreSecretStore, which
+             SecureApiKeyStore builds on, shipped in 26.36. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.39" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- network.access: HTTPS calls to api.anthropic.com. No filesystem or native code —
+             the API key lives in this plugin's own SharedPreferences, encrypted. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="network.access" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.itsaky.androidide.plugins.aiagentclaude.plugin.ClaudePlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>
