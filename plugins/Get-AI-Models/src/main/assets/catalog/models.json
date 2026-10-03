@@ -102,6 +102,23 @@
       "baseModel": "h2oai/h2o-danube3-500m-base",
       "description": "H2O's small pretrained model, Apache-2.0. A base model, NOT instruction-tuned, so it continues text instead of answering, and it has an 8k context window. Strengths: very small, permissively licensed, trained on a well-described corpus. Weaknesses: unusable as an assistant as shipped, no chat template, no tool use, and below the 16k context floor. Listed at the ticket owner's request; it meets neither the instruction-tuned nor the context gate.",
       "behaviouralGatesVerified": false
+    },
+    {
+      "id": "qwen2-5-coder-1-5b-instruct-q4_k_m",
+      "name": "Qwen2.5-Coder 1.5B Instruct",
+      "quantization": "Q4_K_M",
+      "parameters": "1.5B",
+      "fileName": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+      "sizeBytes": 1117320768,
+      "sha256": "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/f86cb2c1fa58255f8052cc32aeede1b7482d4361/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+      "minRamBytes": 4294967296,
+      "publisher": "Qwen (Alibaba Cloud) - official GGUF release",
+      "contextTokens": 32768,
+      "license": "apache-2.0",
+      "baseModel": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+      "description": "The only model here trained specifically on code, and the one to pick for help with Kotlin and Java. Strengths: noticeably better at code syntax and less prone to inventing APIs than the general chat models in this catalog, a 32k context window, a chat template with the Qwen tool-call format, and Apache-2.0 on both the model and the official GGUF. Weaknesses: the largest download here at about 1 GB, and it needs more memory than the sub-1B models, so it is slower on a mid-range phone; at 1.5B parameters with Q4_K_M rounding it still gets multi-step reasoning and less common libraries wrong, and it is weaker at general conversation than at code.",
+      "behaviouralGatesVerified": false
     }
   ]
 }
