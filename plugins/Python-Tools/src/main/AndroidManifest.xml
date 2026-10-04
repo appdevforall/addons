@@ -27,11 +27,11 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="1.0.0" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,system.commands,project.structure" />
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure,native.code" />
 
         <meta-data
             android:name="plugin.main_class"
