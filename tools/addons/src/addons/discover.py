@@ -31,8 +31,32 @@ def read_skip(root: Path, only_never_build: bool = False) -> set[str]:
     return names
 
 
+def is_template(addon: Path) -> bool:
+    """A template addon is a directory under templates/ holding templates.json.
+
+    Deliberately not the plugin rule. A template has no Gradle build, nothing
+    to compile and no .cgp — it zips to a .cgt (ADFA-6252). Keying on
+    templates.json rather than on the area alone means templates/ can also hold
+    documentation without every markdown file becoming an addon.
+    """
+    return addon.parent.name == "templates" and (addon / "templates.json").is_file()
+
+
+def find_templates(root: Path, skip: set[str]) -> list[Path]:
+    return [f.parent for f in root.glob("templates/*/templates.json")
+            if f.parent.name not in skip]
+
+
 def find_addons(root: Path, only: list[str] | None = None,
-                include_skipped: bool = False) -> list[Path]:
+                include_skipped: bool = False,
+                kind: str | None = None) -> list[Path]:
+    """Every addon, or only those named in `only`, optionally of one kind.
+
+    kind is "plugin" or "template". Each build script asks for its own kind
+    (ADFA-6252): a plugin runs Gradle, a template zips, and neither can build
+    the other. Names are resolved against every addon before the kind filter,
+    so a name of the other kind is dropped while an unknown name still fails.
+    """
     skip = (read_skip(root, only_never_build=True) if include_skipped
             else read_skip(root))
     found = []
@@ -45,17 +69,26 @@ def find_addons(root: Path, only: list[str] | None = None,
         for f in root.glob(pattern):
             if PREDICATE in f.read_text(errors="ignore") and f.parent.name not in skip:
                 found.append(f.parent)
+    found.extend(find_templates(root, skip))
     found = sorted(found, key=lambda p: p.name)
-    if only is None:
-        return found
 
-    # accept either the repo-relative path or the bare directory name
-    wanted, chosen = list(only), []
-    for name in only:
-        match = next((p for p in found
-                      if p.name == name
-                      or p.relative_to(root).as_posix() == name), None)
-        if match is None:
-            raise RuntimeError(f"{name}: not a known addon")
-        chosen.append(match)
-    return sorted(set(chosen), key=lambda p: p.name)
+    if only is not None:
+        # accept the repo-relative path, the directory name, the slug (the name
+        # lowercased) or the display name (hyphens as spaces), with stray
+        # whitespace: all fold to one key, and the key stays unique because
+        # every form derives from the directory name
+        key = lambda s: s.strip().lower().replace(" ", "-")
+        chosen = []
+        for name in only:
+            match = next((p for p in found
+                          if key(name) in (key(p.name),
+                                           key(p.relative_to(root).as_posix()))),
+                         None)
+            if match is None:
+                raise RuntimeError(f"{name}: not a known addon")
+            chosen.append(match)
+        found = sorted(set(chosen), key=lambda p: p.name)
+
+    if kind is not None:
+        found = [p for p in found if is_template(p) == (kind == "template")]
+    return found
