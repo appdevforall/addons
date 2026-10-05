@@ -16,6 +16,7 @@ import com.itsaky.androidide.plugins.aiagentopenai.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
+import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.OpenAiPromptConfig
 import com.itsaky.androidide.plugins.aiagentopenai.security.ApiKeyCache
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlPolicy
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlResult
@@ -56,11 +57,14 @@ private const val TAG = "$LOG_PREFIX.AgentTrace"
  * What this class owns is the *conversation*: which model, which turns, what to do when a server
  * rejects a parameter or answers nothing. Sockets are [OpenAiHttpClient]'s, the decrypted key is
  * [ApiKeyCache]'s, and the wording of a failure is [OpenAiFailureMessages]'.
+ *
+ * @param promptConfig the loaded prompt config, or null while it loads; must return without blocking
  */
 class OpenAiBackend(
-    private val context: PluginContext
+    private val context: PluginContext,
+    private val promptConfig: () -> OpenAiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend {
+    EmbeddingBackend, WebSearchBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -265,11 +269,23 @@ class OpenAiBackend(
     }
 
     /**
-     * Written for a large cloud model; see [OpenAiSystemPrompt] for why the wording belongs here
-     * rather than with the caller.
+     * Written for a large cloud model; see [OpenAiSystemPrompt] for why the wording belongs here.
+     * Null until the templates are loaded, which ai-core answers with its default prompt; never
+     * blocks, since the caller's thread is ai-core's to choose.
      */
-    override fun getSystemPrompt(request: SystemPromptRequest): String =
-        OpenAiSystemPrompt.build(request)
+    override fun getSystemPrompt(request: SystemPromptRequest): String? {
+        val config = promptConfig()
+        if (config == null) {
+            context.logger.warn("OpenAiBackend: prompt config not loaded; ai-core default used")
+            return null
+        }
+        return try {
+            OpenAiSystemPrompt.build(request, config)
+        } catch (e: IllegalArgumentException) {
+            context.logger.error("OpenAiBackend: prompt did not render; ai-core default used", e)
+            null
+        }
+    }
 
     /**
      * Room to plan, matching the high-autonomy prompt this backend asks for — or null for a
@@ -284,6 +300,9 @@ class OpenAiBackend(
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentopenai.settings.OpenAiSettingsFragment"
+
+    /** Only OpenAI's own Responses API searches; a compatible server refuses the request. */
+    override fun canSearchWeb(): Boolean = BaseUrlPolicy.isOpenAiApi(getBaseUrl())
 
     /**
      * Available when the server can plausibly be called.
@@ -313,8 +332,15 @@ class OpenAiBackend(
                 val startTime = System.currentTimeMillis()
                 context.logger.info("OpenAiBackend: Generating response for prompt (${prompt.length} chars)")
 
-                val messages = OpenAiRequestBuilder.messages(emptyList(), prompt, config.systemPrompt)
-                val text = requestText(messages, config)
+                val text = if (OpenAiWebSearch.isRequested(config)) {
+                    if (!BaseUrlPolicy.isOpenAiApi(getBaseUrl())) {
+                        future.complete(LlmResponse.failure(webSearchUnsupported()))
+                        return@launch
+                    }
+                    requestWebSearch(prompt, config)
+                } else {
+                    requestText(OpenAiRequestBuilder.messages(emptyList(), prompt, config.systemPrompt), config)
+                }
 
                 if (text.isBlank()) {
                     future.complete(LlmResponse.failure(failureMessages.of(OpenAiFailure.Failed(null))))
@@ -755,6 +781,27 @@ class OpenAiBackend(
             text = postChat(body) { reader -> extractText(JSONObject(reader.readText())) }
         }
         return text
+    }
+
+    /**
+     * Searches the web for [query] over the Responses API; the caller has checked the server is OpenAI.
+     *
+     * @param query what to look up
+     * @param config supplies the reporting instructions as its system prompt
+     * @return the answer with its sources, or "" when the reply carried no text
+     */
+    private fun requestWebSearch(query: String, config: LlmConfig): String = http.post(
+        url = getBaseUrl() + OpenAiWebSearch.RESPONSES_PATH,
+        apiKey = readApiKeyOrBlank(),
+        body = OpenAiWebSearch.body(getModelName(), query, config.systemPrompt),
+        onAccepted = { credentialFailures.clear() },
+    ) { reader -> OpenAiWebSearch.answer(JSONObject(reader.readText())) }
+
+    /** Why a search cannot run against a compatible server, worded for whoever reads the tool result. */
+    private fun webSearchUnsupported(): String = try {
+        context.androidContext.getString(R.string.openai_error_web_search_unsupported, getBaseUrl())
+    } catch (e: Exception) {
+        "Web search needs OpenAI's own API; ${getBaseUrl()} has none."
     }
 
     /**

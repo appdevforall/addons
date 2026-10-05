@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.sources
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.tool.AgentTools
 import com.itsaky.androidide.plugins.aicore.tool.ToolApprovalManager
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
@@ -42,7 +43,7 @@ class ToolSourceStoreTest {
     private fun toolsFrom(store: ToolSourceStore): AgentTools = AgentTools.build(
         builtInHandlers = builtIns,
         store = store,
-        approvalManager = ToolApprovalManager(),
+        approvalManager = ToolApprovalManager({ shippedConfig }),
         terminalTool = TERMINAL_TOOL,
     )
 

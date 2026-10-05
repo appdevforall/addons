@@ -14,7 +14,6 @@ class ReadBuildOutputHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "read_build_output"
-    override val description = "Read the current build output and status"
     override val requiresApproval = false
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {

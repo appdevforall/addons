@@ -95,6 +95,7 @@
     <string name="msg_enter_message">Please enter a message</string>
     <string name="msg_copied">Copied</string>
     <string name="msg_generating">Generating…</string>
+    <string name="msg_reviewing">Checking the answer…</string>
 
     <!-- Message Actions -->
     <string name="action_copy_text">Copy Text</string>
@@ -170,6 +171,7 @@
     <string name="settings_title">AI Settings</string>
     <string name="cd_settings_back">Close settings</string>
     <string name="label_ai_backend">AI Backend</string>
+    <string name="summary_web_search">The Agent can search the web and read pages you link. Searches use your API key and may be billed by your provider.</string>
 
     <string name="settings_backend">Backend</string>
     <string name="settings_model">Model</string>

@@ -1,0 +1,101 @@
+# What each tool is for, as the model reads it in the tool list and in native tool definitions;
+# the approval dialog shows the same description. The code keeps only each tool's name and the
+# shape of its arguments. Every built-in tool must be described here, with every argument it takes.
+
+# The tool the agent answers the user with, whatever it is named.
+terminal_tool:
+  description: >-
+    Send the user your reply or final answer. It MUST carry a "message" holding the text itself —
+    calling {{TERMINAL_TOOL}} with no "message" shows the user nothing.
+  arguments:
+    message: The reply to show the user.
+
+# Keyed by tool name. A tool from another plugin brings its own description and is not listed.
+built_in_tools:
+  read_file:
+    description: Read the contents of a file
+    arguments:
+      file_path: Project-relative path of the file to read.
+  list_files:
+    description: List files and directories in a given path
+    arguments:
+      directory: Project-relative directory to list. Empty or omitted lists the project root.
+  search_project:
+    description: Search for files by name or content in the project
+    arguments:
+      query: Text to search for; a file name unless searching contents.
+      project_dir: Project-relative directory to search under. Defaults to the whole project.
+      search_in_contents: Search inside files instead of matching their names.
+  open_file:
+    description: Open a file in the IDE editor
+    arguments:
+      file_path: Project-relative path of the file to open.
+  read_build_output:
+    description: Read the current build output and status
+  create_file:
+    description: Create a new file with given content
+    arguments:
+      file_path: Project-relative path of the file to create.
+      content: The file's full contents.
+  update_file:
+    description: Update an existing file with new content
+    arguments:
+      file_path: Project-relative path of the file to overwrite.
+      content: The file's new full contents.
+  edit_file:
+    description: >-
+      Edit an existing file by replacing an exact snippet: give file_path, old_string (text to
+      find, copied exactly including indentation) and new_string (its replacement; empty deletes
+      it). old_string must match exactly once unless replace_all is true. Prefer this over
+      update_file for changing a file.
+    arguments:
+      file_path: Project-relative path of the file to edit.
+      old_string: The exact text to find, copied byte-for-byte from the file including indentation.
+      new_string: What to put in its place; empty deletes it.
+      replace_all: Replace every occurrence. When false the text must match exactly once.
+  add_dependency:
+    description: Add a Maven dependency to the project build file
+    arguments:
+      dependency: Maven coordinate to add, as group:artifact:version.
+      build_file: Project-relative build file to add it to. Defaults to the app module's.
+  run_app:
+    # Success is weaker than "the app is running": the user still has to accept the system install
+    # prompt, and without saying so the model reports the launch.
+    description: >-
+      Build the app and install it on this device. The user has to confirm a system install
+      prompt, so success means the install started, not that the app is on screen
+  gradle_sync:
+    description: Sync the Gradle project (reload dependencies and rebuild cache)
+  generate_from_template:
+    description: Generate files from Pebble templates with variable substitution
+    arguments:
+      template_name: Name of the registered template to generate from.
+      variables: Template variables, as a flat object of name to value.
+  web_search:
+    description: >-
+      Search the web for current or outside information — news, releases, documentation, a
+      library's latest version, whether an API is deprecated — and get back what the results say
+      with their sources.
+    arguments:
+      query: >-
+        What to look up, phrased as a search query: one claim per query, naming exactly the
+        library, API or version it is about.
+  fetch_url:
+    # The user approves each fetch, so the description says it reaches the internet.
+    description: >-
+      Fetch a web page, repository page or raw file from the internet and return its text. Use it
+      for a URL the user gives or one a web search found.
+    arguments:
+      url: The full http or https URL to fetch.
+  read_app_logs:
+    description: Read the App Logs of the user's running app, from the newest crash or error
+    arguments:
+      min_level: >-
+        Lowest level to include: verbose, debug, info, warning or error. Defaults to all levels.
+      filter: Case-insensitive text a line must contain, matched against its tag and message.
+  read_ide_logs:
+    description: Read the IDE Logs of Code on the Go and its plugins, from the newest error
+    arguments:
+      min_level: >-
+        Lowest level to include: verbose, debug, info, warning or error. Defaults to all levels.
+      filter: Case-insensitive text a line must contain, matched against its tag and message.

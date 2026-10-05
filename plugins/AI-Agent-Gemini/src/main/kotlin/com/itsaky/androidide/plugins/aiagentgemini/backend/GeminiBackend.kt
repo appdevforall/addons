@@ -13,6 +13,7 @@ import com.itsaky.androidide.plugins.aiagentgemini.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
+import com.itsaky.androidide.plugins.aiagentgemini.prompt.config.GeminiPromptConfig
 import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
@@ -25,7 +26,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,11 +54,14 @@ private const val TAG = "$LOG_PREFIX.AgentTrace"
  * but plugins run in the host IDE's classloader where `okhttp3` resolves to the host's older
  * OkHttp (no such overload) — that mismatch crashed generation with a NoSuchMethodError.
  * HttpURLConnection has no third-party dependency, so it works regardless of the host's OkHttp.
+ *
+ * @param promptConfig the loaded prompt config, or null while it loads; must return without blocking
  */
 class GeminiBackend(
-    private val context: PluginContext
+    private val context: PluginContext,
+    private val promptConfig: () -> GeminiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend {
+    EmbeddingBackend, WebSearchBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -113,6 +120,12 @@ class GeminiBackend(
 
         /** `finishReason` for a reply the model's output cap cut short. */
         private const val FINISH_REASON_MAX_TOKENS = "MAX_TOKENS"
+
+        /** `finishReason` for a tool call Gemini could not put into valid form. */
+        private const val FINISH_REASON_MALFORMED_FUNCTION_CALL = "MALFORMED_FUNCTION_CALL"
+
+        /** `finishReason` of an ordinary end of reply. */
+        private const val FINISH_REASON_STOP = "STOP"
     }
 
     /** This plugin's own settings, written by its settings pane and read here at request time. */
@@ -325,11 +338,23 @@ class GeminiBackend(
     override fun getName(): String = "Gemini API"
 
     /**
-     * Written for a large cloud model; see [GeminiSystemPrompt] for why the wording belongs here
-     * rather than with the caller.
+     * Written for a large cloud model; see [GeminiSystemPrompt] for why the wording belongs here.
+     * Null until the config is loaded or when it cannot render, which ai-core
+     * answers with its default prompt; never blocks, since the caller's thread is ai-core's.
      */
-    override fun getSystemPrompt(request: SystemPromptRequest): String =
-        GeminiSystemPrompt.build(request)
+    override fun getSystemPrompt(request: SystemPromptRequest): String? {
+        val config = promptConfig()
+        if (config == null) {
+            context.logger.warn("GeminiBackend: prompt config not loaded; ai-core default used")
+            return null
+        }
+        return try {
+            GeminiSystemPrompt.build(request, config)
+        } catch (e: IllegalArgumentException) {
+            context.logger.error("GeminiBackend: prompt did not render; ai-core default used", e)
+            null
+        }
+    }
 
     /** Room to plan, matching the high-autonomy prompt this backend asks for. */
     override fun getDefaultTemperature(): Float = 0.7f
@@ -340,6 +365,9 @@ class GeminiBackend(
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentgemini.settings.GeminiSettingsFragment"
+
+    /** Searches through Google Search grounding; see [GeminiWebSearch]. */
+    override fun canSearchWeb(): Boolean = true
 
     override fun isAvailable(): Boolean {
         // Available once a (decryptable) API key is configured.
@@ -363,8 +391,17 @@ class GeminiBackend(
                 val startTime = System.currentTimeMillis()
                 context.logger.info("GeminiBackend: Generating response for prompt (${prompt.length} chars)")
 
-                val contents = JSONArray().put(contentJson("user", buildPrompt(prompt, config)))
-                val text = requestText(getModelName(), apiKey, buildRequestJson(contents, config))
+                val contents = JSONArray().put(contentJson("user", prompt))
+                val body = buildRequestJson(contents, config)
+                val text = if (GeminiWebSearch.isRequested(config)) {
+                    val response = requestJson(
+                        getModelName(), METHOD_GENERATE_CONTENT, apiKey, GeminiWebSearch.declareSearch(body)
+                    )
+                    val resolved = resolveSources(GeminiWebSearch.sourceUris(response))
+                    GeminiWebSearch.withSources(extractText(response), response, resolved)
+                } else {
+                    requestText(getModelName(), apiKey, body)
+                }
 
                 if (text.isBlank()) {
                     future.complete(LlmResponse.failure("Empty response from Gemini API"))
@@ -392,29 +429,26 @@ class GeminiBackend(
         config: LlmConfig,
         callback: StreamCallback
     ) {
-        val contents = JSONArray().put(contentJson("user", buildPrompt(prompt, config)))
+        val contents = JSONArray().put(contentJson("user", prompt))
         streamContents(contents, config, emptyList(), callback.asToolCallback())
     }
 
     /**
      * Builds the `contents[]` array for a multi-turn request.
      *
-     * Gemini has no system role, so the system prompt is carried as a leading user turn the model
-     * acknowledges — the same shape [generateWithHistory] uses, kept in one place so the two
-     * transports cannot drift apart.
-     *
      * Consecutive same-role turns are merged into one content, because the transcript no longer
      * always alternates: the agent loop drops an ASSISTANT turn that carried only a native call
      * and no prose, leaving the user message and the tool results it produced adjacent.
      *
+     * The system prompt is NOT one of these turns: [buildRequestJson] sends it as the request's
+     * `systemInstruction`, where the API privileges it over anything a later turn says.
+     *
      * @param history the conversation so far, oldest first
      * @param prompt the current user turn, appended last
-     * @param config supplies the optional system prompt
      */
     internal fun buildContents(
         history: List<ChatMessage>,
-        prompt: String,
-        config: LlmConfig
+        prompt: String
     ): JSONArray {
         val turns = mutableListOf<Pair<String, String>>()
         // Folds a turn into the previous one when the role repeats, so the roles alternate.
@@ -425,10 +459,6 @@ class GeminiBackend(
             } else {
                 turns.add(role to text)
             }
-        }
-        config.systemPrompt?.let { systemPrompt ->
-            add("user", systemPrompt)
-            add("model", "Understood.")
         }
         for (msg in history) {
             val role = when (msg.role) {
@@ -481,6 +511,7 @@ class GeminiBackend(
                 Log.i(
                     TAG,
                     "REQUEST | model=${getModelName()} turns=${contents.length()} " +
+                        "sys=${body.has("systemInstruction")} " +
                         "tools=${tools.size} declared=${declaredToolCount(body)} " +
                         tools.joinToString(",") { it.name }
                 )
@@ -551,12 +582,21 @@ class GeminiBackend(
                         callback.onError(userMessage(GeminiFailure.ReplyTruncated))
 
                     toolCallCount == 0 && finalText.isBlank() ->
-                        callback.onError("Empty response from Gemini API")
+                        callback.onError(userMessage(GeminiFailure.NoReply(finishReason)))
 
                     else -> {
-                        val tokenCount = finalText.split("\\s+".toRegex()).size
+                        // Prose the cap cut off mid-sentence otherwise reads as a finished answer.
+                        val cutOff = toolCallCount == 0 && finishReason == FINISH_REASON_MAX_TOKENS
+                        val reply = if (cutOff) {
+                            val note = "\n\n" + cutOffNote()
+                            callback.onToken(note)
+                            finalText + note
+                        } else {
+                            finalText
+                        }
+                        val tokenCount = reply.split("\\s+".toRegex()).size
                         callback.onComplete(
-                            LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime)
+                            LlmResponse.success(reply, tokenCount, System.currentTimeMillis() - startTime)
                         )
                     }
                 }
@@ -590,7 +630,7 @@ class GeminiBackend(
 
                 val startTime = System.currentTimeMillis()
 
-                val contents = buildContents(history, prompt, config)
+                val contents = buildContents(history, prompt)
 
                 val text = requestText(getModelName(), apiKey, buildRequestJson(contents, config))
 
@@ -775,21 +815,11 @@ class GeminiBackend(
     }
 
     /**
-     * Build the full prompt including system instructions.
-     */
-    private fun buildPrompt(userPrompt: String, config: LlmConfig): String {
-        val systemPrompt = config.systemPrompt ?: "You are a helpful coding assistant."
-        return """$systemPrompt
-
-User: $userPrompt"""
-    }
-
-    /**
      * Streams a reply for a multi-turn conversation, sending [history] as real `contents[]` turns.
      *
      * @param history the conversation so far, oldest first
      * @param prompt the current user turn
-     * @param config sampling settings; its system prompt becomes the leading turn pair
+     * @param config sampling settings; its system prompt is sent as the request's systemInstruction
      * @param callback receives tokens, completion, and errors
      */
     override fun generateStreamingWithHistory(
@@ -798,7 +828,7 @@ User: $userPrompt"""
         config: LlmConfig,
         callback: StreamCallback
     ) {
-        streamContents(buildContents(history, prompt, config), config, emptyList(), callback.asToolCallback())
+        streamContents(buildContents(history, prompt), config, emptyList(), callback.asToolCallback())
     }
 
     /**
@@ -811,7 +841,7 @@ User: $userPrompt"""
      *
      * @param prompt the current user turn
      * @param history the conversation so far, oldest first
-     * @param config sampling settings; its system prompt becomes the leading turn pair
+     * @param config sampling settings; its system prompt is sent as the request's systemInstruction
      * @param tools the tools to declare; an empty list streams plain text
      * @param callback receives tokens, tool calls, completion, and errors
      */
@@ -822,7 +852,7 @@ User: $userPrompt"""
         tools: List<ToolDefinition>,
         callback: ToolStreamCallback
     ) {
-        streamContents(buildContents(history, prompt, config), config, tools, callback)
+        streamContents(buildContents(history, prompt), config, tools, callback)
     }
 
     /** Cancel any in-flight generation (user pressed Stop). */
@@ -858,6 +888,20 @@ User: $userPrompt"""
      */
     private fun requestText(model: String, apiKey: String, body: JSONObject): String =
         extractText(requestJson(model, METHOD_GENERATE_CONTENT, apiKey, body))
+
+    /**
+     * Each source link's real target, resolved in parallel; see [GroundingRedirect].
+     *
+     * @param uris the links as the grounding metadata gave them.
+     * @return each link mapped to its target, which is the link itself when it could not be read.
+     */
+    private suspend fun resolveSources(uris: List<String>): Map<String, String> = coroutineScope {
+        uris.map { uri ->
+            async(Dispatchers.IO) {
+                uri to withTrafficTag(NetworkTags.SEARCH_SOURCES) { GroundingRedirect.target(uri) }
+            }
+        }.awaitAll().toMap()
+    }
 
     /**
      * POST [body] to a model method and return the parsed response.
@@ -945,12 +989,16 @@ User: $userPrompt"""
     /**
      * Build a generateContent request body.
      *
+     * The system prompt goes in `systemInstruction`, not in `contents`: sent as a user turn it
+     * carried no more weight than text the model later read out of a file (ADFA-6223).
+     *
      * @param contents the `contents` array of role/parts turns
-     * @param config supplies temperature and max output tokens
+     * @param config supplies the system prompt, temperature, max output tokens and any tool the
+     *   turn must call; see [GeminiToolProtocol.requiredToolConfig]
      * @param tools the tools to declare; omitted from the body when empty
      * @return the request JSON
      */
-    private fun buildRequestJson(
+    internal fun buildRequestJson(
         contents: JSONArray,
         config: LlmConfig,
         tools: List<ToolDefinition> = emptyList(),
@@ -963,6 +1011,10 @@ User: $userPrompt"""
                     .put("temperature", config.temperature.toDouble())
                     .put("maxOutputTokens", config.maxTokens)
             )
+        // systemInstruction takes no role; sending one is accepted but says nothing.
+        config.systemPrompt?.takeIf { it.isNotBlank() }?.let { systemPrompt ->
+            body.put("systemInstruction", partsJson(systemPrompt))
+        }
         if (tools.isEmpty()) return body
         // A schema this side cannot express must not cost the user the whole request: dropping the
         // declarations degrades to the text envelope the prompt still describes.
@@ -970,7 +1022,9 @@ User: $userPrompt"""
             Log.w(TAG, "REQUEST | could not declare tools, falling back to text calls", it)
             return body
         }
-        return body.put("tools", JSONArray().put(JSONObject().put("functionDeclarations", declarations)))
+        body.put("tools", JSONArray().put(JSONObject().put("functionDeclarations", declarations)))
+        GeminiToolProtocol.requiredToolConfig(config, tools)?.let { body.put("toolConfig", it) }
+        return body
     }
 
     /**
@@ -997,9 +1051,17 @@ User: $userPrompt"""
      * @return a `{role, parts:[{text}]}` object
      */
     private fun contentJson(role: String, text: String): JSONObject =
-        JSONObject()
-            .put("role", role)
-            .put("parts", JSONArray().put(JSONObject().put("text", text)))
+        partsJson(text).put("role", role)
+
+    /**
+     * Build a `{parts:[{text}]}` object — a turn without its role, which is what
+     * `systemInstruction` takes.
+     *
+     * @param text the single text part
+     * @return the parts object
+     */
+    private fun partsJson(text: String): JSONObject =
+        JSONObject().put("parts", JSONArray().put(JSONObject().put("text", text)))
 
     /**
      * Adapts a plain stream callback to the tool-aware one [streamContents] takes.
@@ -1088,6 +1150,13 @@ User: $userPrompt"""
             GeminiFailure.ReplyTruncated ->
                 resources.getString(R.string.gemini_error_truncated)
 
+            is GeminiFailure.NoReply -> when (failure.finishReason) {
+                FINISH_REASON_MALFORMED_FUNCTION_CALL ->
+                    resources.getString(R.string.gemini_error_malformed_call)
+                null, FINISH_REASON_STOP -> resources.getString(R.string.gemini_error_empty)
+                else -> resources.getString(R.string.gemini_error_empty_reason, failure.finishReason)
+            }
+
             is GeminiFailure.Failed -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_failed_reason, it)
             } ?: resources.getString(R.string.gemini_error_failed)
@@ -1095,6 +1164,14 @@ User: $userPrompt"""
     } catch (e: Exception) {
         context.logger.error("GeminiBackend: could not resolve error string for $failure", e)
         "The Gemini request failed."
+    }
+
+    /** The line appended to a reply the output cap cut short, from the plugin's own resources. */
+    private fun cutOffNote(): String = try {
+        context.androidContext.getString(R.string.gemini_note_reply_cut_off)
+    } catch (e: Exception) {
+        context.logger.error("GeminiBackend: could not resolve the cut-off note", e)
+        "[Reply cut off at the output limit.]"
     }
 }
 

@@ -17,10 +17,9 @@ class ReadFileHandler(
 ) : ToolHandler {
     override val toolName = "read_file"
     override val parametersSchema = ToolSchema.objectOf(
-        "file_path" to ToolSchema.string("Project-relative path of the file to read."),
+        "file_path" to ToolSchema.string(),
         required = listOf("file_path"),
     )
-    override val description = "Read the contents of a file"
     override val requiresApproval = false
     override val pathArgs = listOf("file_path", "path")
     override val resolvesPathsInternally = true

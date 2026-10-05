@@ -24,8 +24,14 @@ object AiBackend {
     /** Sentinel [LlmInferenceService.LlmConfig.backendId] meaning "route to the user-selected backend". */
     const val AUTO = "auto"
 
+    /** Id AI Agent Local registers its on-device backend under. */
+    const val LOCAL_ID = "local"
+
     /** Backend preferred when nothing is stored, matching the pre-split default. */
-    const val DEFAULT_ID = "local"
+    const val DEFAULT_ID = LOCAL_ID
+
+    /** Id AI Agent Gemini registers its backend under. */
+    const val GEMINI_ID = "gemini"
 
     /**
      * Preference values written before the value *was* the backend id. Additive-only: removing an

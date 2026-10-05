@@ -28,7 +28,8 @@ import java.util.UUID
  * I'll read the build file first.
  * ```
  *
- * `--- MODEL WROTE` opens [ChatMessage.historyText], present only when it differs from the bubble.
+ * `--- MODEL WROTE` opens [ChatMessage.historyText], present only when it differs from the bubble,
+ * and `--- CALLS MADE` opens [ChatMessage.toolLog], present only on a run's activity row.
  * A message line that would read as a header or that marker is escaped with one leading backslash,
  * and so is one already starting with backslashes before one — so every line reads back as written.
  */
@@ -47,6 +48,8 @@ object ChatTranscript {
     private const val FORMAT_VERSION = "1"
     private const val HEADER_PREFIX = "--- "
     private const val HISTORY_MARKER = "--- MODEL WROTE"
+    // Not "--- TOOL …": that is a TOOL message's header.
+    private const val TOOL_LOG_MARKER = "--- CALLS MADE"
     private const val KEY_FORMAT = "format"
     private const val KEY_NAME = "name"
     private const val TOKEN_DURATION = "duration="
@@ -83,6 +86,7 @@ object ChatTranscript {
             append('\n').append(header(message)).append('\n')
             appendBody(message.text)
             message.historyText?.let { append(HISTORY_MARKER).append('\n').appendBody(it) }
+            message.toolLog?.let { append(TOOL_LOG_MARKER).append('\n').appendBody(it) }
         }
     }
 
@@ -164,10 +168,14 @@ object ChatTranscript {
             }
             // Only the separator export writes (or the empty string after the file's last newline).
             if (body.lastOrNull() == "") body.removeAt(body.lastIndex)
-            val marker = body.indexOfFirst(::isHistoryMarker)
-            val text = if (marker < 0) body else body.subList(0, marker)
-            val history = if (marker < 0) null else body.subList(marker + 1, body.size)
-            messages += message(header, text.joinBody(), history?.joinBody())
+            val historyAt = body.indexOfFirst(::isHistoryMarker)
+            val logAt = body.indexOfFirst(::isToolLogMarker)
+            messages += message(
+                header,
+                text = body.section(-1, historyAt, logAt).joinBody(),
+                historyText = if (historyAt < 0) null else body.section(historyAt, logAt).joinBody(),
+                toolLog = if (logAt < 0) null else body.section(logAt, historyAt).joinBody(),
+            )
         }
         return ChatSession(createdAt = now, messages = messages, projectKey = projectKey, name = name)
     }
@@ -221,10 +229,19 @@ object ChatTranscript {
 
     private fun isHistoryMarker(line: String): Boolean = line.trimEnd() == HISTORY_MARKER
 
-    private fun isStructural(line: String): Boolean = isHeader(line) || isHistoryMarker(line)
+    private fun isToolLogMarker(line: String): Boolean = line.trimEnd() == TOOL_LOG_MARKER
+
+    private fun isStructural(line: String): Boolean =
+        isHeader(line) || isHistoryMarker(line) || isToolLogMarker(line)
 
     private fun StringBuilder.appendBody(text: String): StringBuilder = apply {
         text.split('\n').forEach { append(escape(it)).append('\n') }
+    }
+
+    /** The lines after [start] up to the next of [others] past it, or the end; -1 starts at the top. */
+    private fun List<String>.section(start: Int, vararg others: Int): List<String> {
+        val end = others.filter { it > start }.minOrNull() ?: size
+        return subList(start + 1, end)
     }
 
     private fun List<String>.joinBody(): String = joinToString("\n", transform = ::unescape)
@@ -240,7 +257,7 @@ object ChatTranscript {
         }
     }
 
-    private fun message(header: MatchResult, text: String, historyText: String?): ChatMessage {
+    private fun message(header: MatchResult, text: String, historyText: String?, toolLog: String?): ChatMessage {
         val (sender, stamp, tokens) = header.destructured
         val timestamp = try {
             Instant.parse(stamp).toEpochMilli()
@@ -267,6 +284,7 @@ object ChatTranscript {
             timestamp = timestamp,
             durationMs = durationMs,
             historyText = historyText,
+            toolLog = toolLog,
         )
     }
 

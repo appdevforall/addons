@@ -3,11 +3,16 @@ package com.itsaky.androidide.plugins.aicore.plugin
 import android.content.res.Resources
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.fragments.AiSettingsFragment
 import com.itsaky.androidide.plugins.aicore.fragments.ChatFragment
+import com.itsaky.androidide.plugins.aicore.prompt.PromptConfigChecks
+import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
+import com.itsaky.androidide.plugins.aicore.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.aicore.services.LlmInferenceServiceImpl
 import com.itsaky.androidide.plugins.aicore.services.ToolSourceRegistryImpl
+import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModelStore
@@ -115,6 +120,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         context.logger.info("AI Core Plugin: registered LlmInferenceService in SharedServices")
 
         registerToolSourceRegistry()
+        preloadPromptConfig()
 
         PathGuard.setProjectRootProvider {
             try {
@@ -151,8 +157,31 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         }
     }
 
+    /** Reads and validates the prompt config now, so the first chat turn does no disk I/O. */
+    private fun preloadPromptConfig() {
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        sharedPromptConfig.reload(source, ::reportLoadedConfig) { error ->
+            context.logger.error("AI Core Plugin: prompt config failed to load", error)
+        }
+    }
+
+    /**
+     * Logs that the config loaded, and any name typo its layouts would hit at render time.
+     *
+     * @param config the config just loaded.
+     */
+    private fun reportLoadedConfig(config: AgentPromptConfig) {
+        context.logger.info("AI Core Plugin: loaded prompt config with ${config.rules.size} rule groups")
+        val problems = PromptConfigChecks.problems(config, BuiltInToolHandlers.create(context))
+        for (problem in problems) {
+            context.logger.warn("AI Core Plugin: $problem; chat turns will fail")
+        }
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("AI Core Plugin deactivating...")
+
+        sharedPromptConfig.clear()
 
         // Backends belong to their own plugins; dropping the service drops the whole registry, and
         // each backend plugin unregisters itself on its own deactivation.

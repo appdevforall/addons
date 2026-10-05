@@ -19,13 +19,10 @@ class GenerateFromTemplateHandler(
 ) : ToolHandler {
     override val toolName = "generate_from_template"
     override val parametersSchema = ToolSchema.objectOf(
-        "template_name" to ToolSchema.string("Name of the registered template to generate from."),
-        "variables" to ToolSchema.freeform(
-            "Template variables, as a flat object of name to value."
-        ),
+        "template_name" to ToolSchema.string(),
+        "variables" to ToolSchema.freeform(),
         required = listOf("template_name"),
     )
-    override val description = "Generate files from Pebble templates with variable substitution"
 
     /**
      * A tool that generates files into the project asks first. Declared true although [execute]

@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aicore.viewmodel
 
+import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
 
 /**
  * What the one activity line says while a run works through its tool calls.
@@ -13,6 +15,12 @@ object AgentActivity {
 
     /** Longest subject shown; past this the line wraps and stops being a line. */
     const val SUBJECT_LIMIT = 40
+
+    /** Longest argument value [logEntry] keeps; a file's whole content is not the point of the log. */
+    const val LOG_ARG_LIMIT = 200
+
+    /** Longest web result [logEntry] keeps: a whole search report, Sources list included. */
+    const val LOG_RESULT_LIMIT = 12000
 
     /**
      * Argument names that say what a call acts on, most specific first. A tool whose arguments
@@ -46,6 +54,30 @@ object AgentActivity {
         // "." and ".." are how a model spells the project root: a name, but not one worth showing.
         if (leaf.isEmpty() || leaf == "." || leaf == "..") return null
         return if (leaf.length <= SUBJECT_LIMIT) leaf else leaf.take(SUBJECT_LIMIT) + "…"
+    }
+
+    /**
+     * One call and its result, as the exported chat records them: without it a transcript cannot
+     * tell a fact the search returned from one the model remembered (ADFA-6223). A web tool keeps
+     * its full result; a project tool only its message, so the export does not copy the project.
+     *
+     * @param call the call that ran.
+     * @param result what it returned.
+     * @return the entry, its first line naming the call and its arguments.
+     */
+    fun logEntry(call: ToolCall, result: ToolResult): String = buildString {
+        append(if (result.success) "✓ " else "✗ ").append(call.name).append('(')
+        append(call.args.entries.joinToString(", ") { (key, value) -> "$key=${clip(value, LOG_ARG_LIMIT)}" })
+        append(")\n").append(result.message)
+        val extra = if (result.success) result.data else result.error_details
+        if (call.name in WebAccess.TOOL_NAMES || !result.success) {
+            extra?.takeIf { it.isNotBlank() }?.let { append('\n').append(clip(it, LOG_RESULT_LIMIT)) }
+        }
+    }
+
+    private fun clip(value: Any?, limit: Int): String {
+        val text = value?.toString().orEmpty()
+        return if (text.length <= limit) text else text.take(limit) + "…[${text.length - limit} more chars]"
     }
 
     /**

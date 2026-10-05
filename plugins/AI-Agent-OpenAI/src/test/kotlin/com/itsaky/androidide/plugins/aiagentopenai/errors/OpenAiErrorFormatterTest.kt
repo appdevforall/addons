@@ -47,6 +47,13 @@ class OpenAiErrorFormatterTest {
     }
 
     @Test
+    fun givenA402_whenClassified_thenItIsBillingRequired() {
+        // What compatible gateways answer for an empty balance; a status of its own, not a 429.
+        val body = """OpenAI HTTP 402: {"error":{"message":"Insufficient credits"}}"""
+        assertEquals(OpenAiFailure.BillingRequired, classify(body))
+    }
+
+    @Test
     fun givenA401WithAKeySent_whenClassified_thenTheKeyWasRefused() {
         val body = """OpenAI HTTP 401: {"error":{"code":"invalid_api_key","message":"bad key"}}"""
         assertEquals(OpenAiFailure.KeyRefused, classify(body, hasApiKey = true))
@@ -96,6 +103,14 @@ class OpenAiErrorFormatterTest {
     @Test
     fun givenNoAnswerFromOpenAi_whenClassified_thenItIsUnreachable() {
         assertEquals(OpenAiFailure.Unreachable, classify("Unable to resolve host", isOpenAiHost = true))
+    }
+
+    @Test
+    fun givenASilentServerAfterTheRequestWasSent_whenClassified_thenItTimedOutRatherThanUnreachable() {
+        // A reasoning model thinking past the read timeout; the network is fine.
+        val error = OpenAiTimeoutException(180_000, java.net.SocketTimeoutException("timeout"))
+
+        assertEquals(OpenAiFailure.TimedOut(180), classify(null, error = error))
     }
 
     @Test
