@@ -19,6 +19,7 @@ import com.itsaky.androidide.plugins.extensions.PluginBuildAction
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.ToolbarActionIds
 import com.itsaky.androidide.plugins.extensions.TreeSitterGrammar
+import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeCommandService
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeProjectService
@@ -51,7 +52,7 @@ import java.util.concurrent.atomic.AtomicReference
  * plugin must not steal the toolbar from Java/Kotlin/Android projects, and it must be usable on a
  * fresh device without Python pre-installed.
  */
-class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension, LanguageExtension {
+class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension, LanguageExtension, UIExtension {
 
     private var pluginContext: PluginContext? = null
     private var templateService: IdeTemplateService? = null
@@ -128,6 +129,9 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension,
         scheduleTooltipBinding()
         return ToolbarActionIds.BUILD_HIDEABLE
     }
+
+    override fun getHiddenToolbarActionIds(): Set<String> =
+        if (isPythonProjectOpen()) setOf(QUICK_BUILD_ACTION_ID) else emptySet()
 
     override fun getBuildActions(): List<PluginBuildAction> {
         if (!isPythonProjectOpen()) return emptyList()
@@ -541,6 +545,7 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension,
         private const val INSTALL_TIMEOUT_MS = 20 * 60_000L
         private const val WHEELHOUSE_ASSET = "python/wheelhouse.zip"
         private const val BUNDLED_PACKAGES = "flask gunicorn"
+        private const val QUICK_BUILD_ACTION_ID = "ide.editor.build.quickBuild"
 
         internal const val PLUGIN_ID = "com.appdevforall.python.plugin"
         internal const val ACTION_RUN_APP = "python.run.app"
