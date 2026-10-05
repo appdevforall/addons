@@ -16,6 +16,16 @@
     <string name="desc_expand_user_message">Show the whole message</string>
     <string name="desc_collapse_user_message">Show less of the message</string>
     <string name="desc_copy_message">Copy message</string>
+    <string name="desc_edit_message">Edit and resend this message</string>
+    <string name="chat_editing_message">Editing message</string>
+    <string name="chat_editing_message_fork">Editing message · the original is kept as a version</string>
+    <string name="desc_cancel_edit">Cancel editing</string>
+    <string name="desc_previous_version">Previous version</string>
+    <string name="desc_next_version">Next version</string>
+    <!-- Which version of a message is on screen, of how many: "2/3". -->
+    <string name="message_version_label">%1$d/%2$d</string>
+    <!-- What a screen reader says for that label. -->
+    <string name="desc_message_version">Version %1$d of %2$d</string>
     <string name="desc_chat_sidebar">Chats, settings and a new chat</string>
 
     <!-- Sidebar actions -->
@@ -94,6 +104,9 @@
     <string name="msg_chat_cleared">Chat cleared</string>
     <string name="msg_enter_message">Please enter a message</string>
     <string name="msg_copied">Copied</string>
+    <string name="msg_edit_stop_first">Stop the agent before editing this message</string>
+    <string name="msg_edit_unavailable">This message is no longer in the chat</string>
+    <string name="msg_version_stop_first">Stop the agent before switching versions</string>
     <string name="msg_generating">Generating…</string>
     <string name="msg_reviewing">Checking the answer…</string>
 

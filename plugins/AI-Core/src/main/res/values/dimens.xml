@@ -51,9 +51,13 @@
     <dimen name="chat_message_actions_spacing">2dp</dimen>
     <dimen name="chat_message_action_size">40dp</dimen>
     <dimen name="chat_message_action_padding">11dp</dimen>
+    <!-- The pencil at the start of the composer's "Editing message" banner. -->
+    <dimen name="chat_edit_banner_icon_size">16dp</dimen>
     <dimen name="chat_user_bubble_padding_horizontal">14dp</dimen>
     <dimen name="chat_user_bubble_padding_vertical">10dp</dimen>
     <dimen name="chat_user_bubble_corner_radius">18dp</dimen>
+    <!-- Border of the prompt being edited, which ChatAdapter pulses. -->
+    <dimen name="chat_user_bubble_editing_stroke_width">1.5dp</dimen>
     <!-- Chat history rows (see ChatSidebarController). -->
     <dimen name="session_row_min_height">56dp</dimen>
     <dimen name="session_row_icon_size">20dp</dimen>

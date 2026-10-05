@@ -83,6 +83,10 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_SYSTEM_LOG = "agent_system_log"
         const val TOOLTIP_TAG_USER_MESSAGE_EXPAND = "agent_user_message_expand"
         const val TOOLTIP_TAG_MESSAGE_COPY = "agent_message_copy"
+        /** Edit on a user message, and the composer's cancel-edit button. */
+        const val TOOLTIP_TAG_MESSAGE_EDIT = "agent_message_edit"
+        /** The "< 2/3 >" version switcher on a user message whose older prompt was edited. */
+        const val TOOLTIP_TAG_MESSAGE_VERSIONS = "agent_message_versions"
 
         // Tags for the interactive controls on the AI Settings screen (see AiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_BACK = "ai_settings_back"
@@ -691,7 +695,47 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             detail = """
                 <p>Copies the whole message, including any lines folded out of
                 view, so you can paste it into a file or send it again.</p>
-                <p>More actions for a message will appear beside this one.</p>
+                <p>On your own messages, <b>Edit</b> sits beside it.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MESSAGE_EDIT,
+            summary = "Edit this message and run the agent again from there.",
+            detail = """
+                <p><b>Edit</b> puts the message back in the message box, with the
+                files that were attached to it. Change it and tap <b>Send</b>, or
+                tap <b>&times;</b> to cancel and leave the chat as it was.</p>
+                <p>On your <b>latest</b> message, sending replaces it: the original
+                and everything the agent did after it are removed.</p>
+                <p>On an <b>earlier</b> message, sending starts a new version of the
+                chat from that point. The original is kept, and
+                <b>&lsaquo; 2/2 &rsaquo;</b> under the message switches between
+                them. The agent only sees the messages above the one you edited.</p>
+                <p><b>Changes the agent already made to your files are not
+                undone.</b> Check them, or ask the agent to revert them.</p>
+                <p>Not available while the agent is working or waiting for your
+                approval: stop it first.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MESSAGE_VERSIONS,
+            summary = "Switch between the versions of this message.",
+            detail = """
+                <p>This message was edited, so the chat has more than one version
+                from here on. <b>&lsaquo;</b> and <b>&rsaquo;</b> show the other
+                versions; <b>2/3</b> says which one you are looking at.</p>
+                <p>Each version is its own conversation: the agent remembers only
+                the version on screen, never what was said in the others.</p>
+                <p><b>Files are not switched.</b> Changes the agent made to your
+                project in one version stay when you show another.</p>
+                <p>Not available while the agent is working or waiting for your
+                approval: stop it first.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)

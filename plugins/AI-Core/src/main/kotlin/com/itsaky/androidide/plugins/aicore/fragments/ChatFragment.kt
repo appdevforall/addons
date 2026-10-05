@@ -35,6 +35,7 @@ import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.managers.ProjectKey
 import com.itsaky.androidide.plugins.aicore.models.AgentState
+import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
 import com.itsaky.androidide.plugins.aicore.models.SessionRow
 import com.itsaky.androidide.plugins.aicore.models.isRunning
@@ -77,6 +78,12 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
         /** Saved-state key for [pendingExportSessionId], which must outlive the picker's round trip. */
         const val STATE_PENDING_EXPORT = "pending_export_session_id"
+
+        /** Saved-state keys for an edit in progress; see [restoreEdit]. */
+        const val STATE_EDITING_ID = "editing_message_id"
+        const val STATE_DRAFT_BEFORE_EDIT = "draft_before_edit"
+        const val STATE_FILES_BEFORE_EDIT = "files_before_edit"
+        const val STATE_EDIT_FILES = "edit_files"
     }
 
     private var _binding: FragmentChatBinding? = null
@@ -125,6 +132,16 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     ) { uri ->
         if (uri != null) readImport(uri)
     }
+
+    /**
+     * The sent prompt loaded back into the composer for editing, or null outside edit mode. Send
+     * then replaces that prompt instead of adding a new one.
+     */
+    private var editingMessageId: String? = null
+
+    /** What the composer held before Edit borrowed it, put back when the edit ends either way. */
+    private var draftBeforeEdit: String = ""
+    private var filesBeforeEdit: List<File> = emptyList()
 
     /** The message list's layout-declared padding, before any cutout inset is added. */
     private val basePadding = Rect()
@@ -195,6 +212,11 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         if (::chatAdapter.isInitialized) {
             chatAdapter.stopAllAnimations()
         }
+        // The composer goes with the view, so the next prompt must carry the draft's files again.
+        if (editingMessageId != null) viewModel.setContextFiles(filesBeforeEdit)
+        editingMessageId = null
+        draftBeforeEdit = ""
+        filesBeforeEdit = emptyList()
         super.onDestroyView()
         // runInFlight=true here, followed by that run still reporting, is the tab-switch fix
         // working; the run being gone from the trace after it is the bug coming back. Guarded
@@ -230,6 +252,36 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         composer?.saveState(outState)
         // The same holds while the export picker is up, which is exactly when the IDE is backgrounded.
         outState.putString(STATE_PENDING_EXPORT, pendingExportSessionId)
+        // A tab switch rebuilds this fragment and restores the edited text, so edit mode must follow.
+        val editingId = editingMessageId ?: return
+        outState.putString(STATE_EDITING_ID, editingId)
+        outState.putString(STATE_DRAFT_BEFORE_EDIT, draftBeforeEdit)
+        outState.putStringArrayList(STATE_FILES_BEFORE_EDIT, ArrayList(filesBeforeEdit.map { it.path }))
+        outState.putStringArrayList(STATE_EDIT_FILES, ArrayList(contextFiles.map { it.path }))
+    }
+
+    override fun onViewStateRestored(savedInstanceState: Bundle?) {
+        super.onViewStateRestored(savedInstanceState)
+        restoreEdit(savedInstanceState ?: return)
+    }
+
+    /**
+     * Re-enters the edit a tab switch interrupted, keeping the edited text the view just restored;
+     * ends it instead, draft back in place, when that prompt is gone or can no longer change.
+     */
+    private fun restoreEdit(state: Bundle) {
+        val id = state.getString(STATE_EDITING_ID) ?: return
+        val edited = binding.promptInputEdittext.text?.toString().orEmpty()
+        val editFiles = state.getStringArrayList(STATE_EDIT_FILES).orEmpty().map(::File)
+        editingMessageId = id
+        draftBeforeEdit = state.getString(STATE_DRAFT_BEFORE_EDIT).orEmpty()
+        filesBeforeEdit = state.getStringArrayList(STATE_FILES_BEFORE_EDIT).orEmpty().map(::File)
+        val message = viewModel.messages.value.firstOrNull { it.id == id }
+        if (message == null || !viewModel.canChangePrompts.value) return endEdit()
+        beginEdit(message)
+        binding.promptInputEdittext.setText(edited)
+        binding.promptInputEdittext.setSelection(edited.length)
+        replaceContextFiles(editFiles)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -562,12 +614,14 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         binding.btnAddContext.setOnClickListener {
             showFilePicker()
         }
+        binding.btnCancelEdit.setOnClickListener { endEdit() }
 
         // Anchored on the bar, not promptInputEdittext: long-press there is the paste menu.
         wireTooltip(binding.btnAddContext, AiCorePlugin.TOOLTIP_TAG_CONTEXT_FILES)
         wireTooltip(binding.inputBarCard, AiCorePlugin.TOOLTIP_TAG_CHAT_INPUT)
         wireTooltip(binding.sendButton, AiCorePlugin.TOOLTIP_TAG_CHAT_SEND)
         wireTooltip(binding.backendStatusText, AiCorePlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
+        wireTooltip(binding.btnCancelEdit, AiCorePlugin.TOOLTIP_TAG_MESSAGE_EDIT)
     }
 
     /**
@@ -580,9 +634,77 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private fun sendPrompt() {
         val message = binding.promptInputEdittext.text?.toString() ?: return
         if (message.isBlank()) return
+        editingMessageId?.let { id ->
+            sendEdit(id, message)
+            return
+        }
         if (!viewModel.sendMessage(message)) return
         composer?.hideKeyboard()
         binding.promptInputEdittext.text?.clear()
+    }
+
+    /**
+     * Confirms an edit: the chat rewinds or forks at [messageId] and runs on [text]. A refused send
+     * stays in edit mode with the text in place, as a refused plain send keeps its prompt.
+     */
+    private fun sendEdit(messageId: String, text: String) {
+        when (viewModel.editPrompt(messageId, text)) {
+            ChatViewModel.EditResult.STARTED -> {
+                composer?.hideKeyboard()
+                endEdit()
+            }
+            ChatViewModel.EditResult.BUSY -> showInfoSnackbar(getString(R.string.msg_edit_stop_first))
+            ChatViewModel.EditResult.NOT_EDITABLE -> {
+                endEdit()
+                showInfoSnackbar(getString(R.string.msg_edit_unavailable))
+            }
+            ChatViewModel.EditResult.REFUSED -> Unit
+        }
+    }
+
+    /**
+     * Loads a sent prompt and the files that went with it into the composer. Nothing is discarded
+     * until Send; the draft the composer held is kept aside and comes back when the edit ends.
+     */
+    private fun beginEdit(message: ChatMessage) {
+        val binding = _binding ?: return
+        if (!viewModel.canChangePrompts.value) {
+            showInfoSnackbar(getString(R.string.msg_edit_stop_first))
+            return
+        }
+        // Moving the edit to another prompt keeps the draft from before the first one.
+        if (editingMessageId == null) {
+            draftBeforeEdit = binding.promptInputEdittext.text?.toString().orEmpty()
+            filesBeforeEdit = contextFiles.toList()
+        }
+        editingMessageId = message.id
+        chatAdapter.editingMessageId = message.id
+        AgentTrace.detail("UI", "edit started files=${message.contextFiles?.size ?: 0}")
+        // Files deleted since the prompt was sent are left out rather than attached as empty.
+        replaceContextFiles(message.contextFiles.orEmpty().map(::File).filter { it.isFile })
+        binding.promptInputEdittext.setText(message.text)
+        binding.promptInputEdittext.setSelection(binding.promptInputEdittext.length())
+        // Only an older prompt forks, so only there does Send keep the original.
+        binding.editBannerText.setText(
+            if (viewModel.editForks(message.id)) R.string.chat_editing_message_fork
+            else R.string.chat_editing_message
+        )
+        binding.editBanner.isVisible = true
+        composer?.focusInput()
+    }
+
+    /** Leaves edit mode, putting back the draft and files the composer held before it began. */
+    private fun endEdit() {
+        if (editingMessageId == null) return
+        editingMessageId = null
+        if (::chatAdapter.isInitialized) chatAdapter.editingMessageId = null
+        val binding = _binding ?: return
+        binding.editBanner.isVisible = false
+        binding.promptInputEdittext.setText(draftBeforeEdit)
+        binding.promptInputEdittext.setSelection(binding.promptInputEdittext.length())
+        replaceContextFiles(filesBeforeEdit)
+        draftBeforeEdit = ""
+        filesBeforeEdit = emptyList()
     }
 
     /**
@@ -670,6 +792,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 launch { observeMessages() }
                 launch { observeAgentState() }
                 launch { observePendingApprovalRequest() }
+                launch { observeEditableMessage() }
             }
         }
     }
@@ -698,6 +821,33 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 }
             }
         }
+    }
+
+    /**
+     * Keeps Edit and the version arrows in step with whether the agent is idle, and leaves edit
+     * mode once the prompt being edited is gone — a chat switch, a Retry, another version shown.
+     */
+    private suspend fun observeEditableMessage() {
+        combine(
+            viewModel.canChangePrompts,
+            viewModel.promptVersions,
+            viewModel.messages,
+            ::Triple,
+        ).collect { (canChange, versions, messages) ->
+            chatAdapter.canChangePrompts = canChange
+            chatAdapter.promptVersions = versions
+            val editing = editingMessageId ?: return@collect
+            if (messages.none { it.id == editing }) endEdit()
+        }
+    }
+
+    /** Shows the older ([step] -1) or newer (1) version of a prompt, if the agent is idle. */
+    private fun switchVersion(message: ChatMessage, step: Int) {
+        if (!viewModel.canChangePrompts.value) {
+            showInfoSnackbar(getString(R.string.msg_version_stop_first))
+            return
+        }
+        viewModel.switchPromptVersion(message.id, step)
     }
 
     /** True while the newest message is fully visible, i.e. the user is not reading back. */
@@ -825,6 +975,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         contextFiles.forEach(::addChipForFile)
     }
 
+    /** Swaps every attached-file chip for [files], and hands the ViewModel the same list. */
+    private fun replaceContextFiles(files: List<File>) {
+        val binding = _binding ?: return
+        contextFiles.clear()
+        binding.contextChipGroup.removeAllViews()
+        updateContextChipVisibility()
+        addContextFiles(files)
+    }
+
     private fun addContextFiles(files: List<File>) {
         files.forEach { file ->
             if (!contextFiles.contains(file)) {
@@ -858,9 +1017,11 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         binding.contextChipScroll.isVisible = binding.contextChipGroup.childCount > 0
     }
 
-    private fun onMessageAction(action: String, message: com.itsaky.androidide.plugins.aicore.models.ChatMessage) {
+    private fun onMessageAction(action: String, message: ChatMessage) {
         when (action) {
             ChatAdapter.ACTION_RETRY -> {
+                // First, so the retried prompt carries the draft's files and not the edit's.
+                endEdit()
                 // The prompt behind this row, not its text: the row may be a tool failure.
                 viewModel.retryLastRun()
             }
@@ -869,6 +1030,9 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 openSettingsFragment()
             }
             ChatAdapter.ACTION_COPY -> copyToClipboard(message.text)
+            ChatAdapter.ACTION_EDIT -> beginEdit(message)
+            ChatAdapter.ACTION_PREVIOUS_VERSION -> switchVersion(message, -1)
+            ChatAdapter.ACTION_NEXT_VERSION -> switchVersion(message, 1)
         }
     }
 

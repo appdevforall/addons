@@ -117,6 +117,16 @@ internal class ComposerAutoHideController(
         })
     }
 
+    /** Opens the composer, if folded away, and puts the caret and keyboard in its input field. */
+    fun focusInput() {
+        val binding = _binding ?: return
+        setVisible(true)
+        binding.promptInputEdittext.requestFocus()
+        val imm = binding.root.context
+            .getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(binding.promptInputEdittext, InputMethodManager.SHOW_IMPLICIT)
+    }
+
     /** Dismisses the soft keyboard raised by the input field. */
     fun hideKeyboard() {
         val binding = _binding ?: return

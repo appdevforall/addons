@@ -56,5 +56,15 @@ data class ChatMessage(
      * once the backend answers as ready, so a key saved afterwards leaves no stranded warning
      * behind. False for every message stored before this field existed.
      */
-    val isSetupError: Boolean = false
+    val isSetupError: Boolean = false,
+    /**
+     * Absolute paths of the context files attached when this user prompt was sent, so Edit can put
+     * the same chips back. Null on every other message, and on a prompt stored before this existed.
+     */
+    val contextFiles: List<String>? = null,
+    /**
+     * The message this one follows, set only on messages kept in ChatSession.otherBranches; null
+     * there means it opens the chat. On the branch on screen, order alone says what follows what.
+     */
+    val parentId: String? = null
 )
