@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="Go Tools"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.appdevforall.go.plugin" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Go Tools" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Adds two Go project templates to Code On the Go (a starter module and a net/http server), with on-device Go toolchain install and built-in run, tidy, and test actions." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.41" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure,native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.appdevforall.go.plugin.GoToolsPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

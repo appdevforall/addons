@@ -1,0 +1,33 @@
+# ${{APP_NAME}}
+
+A Go HTTP server created with Code on the Go.
+
+## Run
+
+Tap **Run app** in the editor toolbar, then open
+<http://localhost:${{PORT}}> in a browser on this device.
+
+## Routes
+
+| Path | Returns |
+|---|---|
+| `/` | an HTML landing page |
+| `/api/status` | JSON: app name, ok flag, server time |
+
+## Stopping the server
+
+While the server runs, the toolbar button becomes **Cancel Run app**. Tap it to
+stop. The server also shuts down gracefully on `SIGINT` and `SIGTERM`, finishing
+in-flight requests within 5 seconds.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  go.mod          # module ${{MODULE_PATH}}
+  main.go         # routes, JSON handler, graceful shutdown
+  README.md
+```
+
+Only the standard library is used, so this builds and runs with no network
+connection.

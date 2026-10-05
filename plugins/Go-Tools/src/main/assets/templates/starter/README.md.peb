@@ -1,0 +1,33 @@
+# ${{APP_NAME}}
+
+A Go module created with Code on the Go.
+
+## Run
+
+Tap **Run app** in the editor toolbar, or from the terminal:
+
+```bash
+go run .
+```
+
+## Test
+
+Tap **Run tests**, or:
+
+```bash
+go test ./...
+```
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  go.mod          # module ${{MODULE_PATH}}
+  main.go         # entry point
+  main_test.go    # table-driven test for greet
+  README.md
+```
+
+This project imports only the standard library, so it builds and runs with no
+network connection. Once you add a third-party import, tap **Tidy modules** to
+fetch it - that step does need to be online.

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go Tools - Commands</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>Go Tools</h1>
+<p class="lede">Build, run, and test Go programs on the device, straight from the editor toolbar.</p>
+
+<p>Go Tools adds two project templates and four toolbar commands. The commands appear only while a
+Go project is open; in a Java, Kotlin, or Android project the toolbar is left alone. Because Gradle
+plays no part in a Go project, the Gradle actions (Quick Run, Sync, Debug, Run Tasks, Launch App)
+are hidden while you work in one.</p>
+
+<div class="callout">
+<p>A project counts as Go when its root holds a <code>go.mod</code> or any <code>.go</code> file,
+and no Gradle build script.</p>
+</div>
+
+<h2>Getting the Go toolchain</h2>
+<p>The Go toolchain ships inside the plugin. The first time the plugin activates it unpacks Go into
+its own private directory - no download, no network, and nothing is installed into the shared
+Termux prefix. It takes about 250 MB on the device and happens once.</p>
+<div class="callout">
+<p>Go is deliberately <b>not</b> installed with <code>pkg</code> or <code>apt</code>. The bundled
+Termux does not ship the mirror list <code>pkg</code> needs, and Code on the Go's package repository
+carries a curated subset that does not include <code>golang</code>. The plugin is also pinned to
+Termux's build of Go rather than the one from go.dev, because the stock build cannot compile a
+project stored on the device's shared storage - see <a href="#storage">Shared storage</a>.</p>
+</div>
+
+<h2>The commands</h2>
+<table>
+  <tr><th>Command</th><th>What it runs</th><th>Stopped after</th></tr>
+  <tr><td><a href="#run-app">Run app</a></td><td><code>go build</code> on the project root, then the binary</td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-current-file">Run current file</a></td><td><code>go build</code> on the open file, then the binary</td><td>30 minutes</td></tr>
+  <tr><td><a href="#tidy-modules">Tidy modules</a></td><td><code>go mod tidy</code></td><td>10 minutes</td></tr>
+  <tr><td><a href="#run-tests">Run tests</a></td><td><code>go test ./...</code></td><td>15 minutes</td></tr>
+</table>
+<p>Every command streams its output into the <b>Build Output</b> panel at the bottom of the editor,
+and the panel opens itself when a command starts. While a command is running its toolbar button
+turns into a Cancel button: tap it to stop the process.</p>
+
+<h3 id="run-app">Run app</h3>
+<p>Compiles the main package in the project root and executes the binary it produced.</p>
+<p>The plugin builds and then executes, rather than using <code>go run</code>, for one reason:
+<code>go run</code> compiles your program and launches it as a <i>child</i> process, so the process
+the IDE is tracking is the compiler, not your program. Cancelling it stops the compiler and leaves
+your program running as an orphan - which matters most for a server, the thing you are most likely
+to want to stop. Building first makes the tracked process your program, so Cancel really stops
+it.</p>
+<p>The binary is written into the IDE's temporary directory and overwritten on every run. If the
+build fails because a module is missing, <code>go mod tidy</code> runs for you and you are asked to
+tap Run again.</p>
+
+<h3 id="run-current-file">Run current file</h3>
+<p>Appears while a <code>.go</code> file that is not a test file is open, and builds exactly that
+file by its full path - useful for a scratch program that is not the module's entry point.</p>
+<p>A single-file build sees only the file you point it at, so that file must declare
+<code>package main</code> with a <code>main</code> function and must not call into other files of
+the same package. For anything larger, use <b>Run app</b>.</p>
+
+<h3 id="tidy-modules">Tidy modules</h3>
+<p>Runs <code>go mod tidy</code> in the project root. It reads every import in the module, adds what
+is missing to <code>go.mod</code>, drops what is no longer used, and refreshes
+<code>go.sum</code>.</p>
+<div class="callout">
+<p><b>This is the one command that needs a network connection.</b> Modules are downloaded from the
+Go module proxy. A project that imports only the standard library never needs it - which is why both
+bundled templates are standard-library only, and run fine with no connection at all.</p>
+</div>
+
+<h3 id="run-tests">Run tests</h3>
+<p>Runs <code>go test ./...</code> from the project root, covering every package in the module. Go's
+test runner is part of the toolchain, so nothing extra is installed and tests work offline.</p>
+
+<h2>Build environment</h2>
+<p>Commands run with two settings that matter on a phone:</p>
+<ul>
+  <li><code>CGO_ENABLED=0</code> - the toolchain comes straight from go.dev and is not patched for
+  Android's NDK layout, so its cgo path does not find a usable C compiler even though clang ships
+  with the IDE. Pure-Go builds need none of that, and every standard-library package used by the
+  bundled templates builds without cgo.</li>
+  <li><code>GOFLAGS=-buildvcs=false</code> - Go stamps version-control metadata into binaries, and
+  fails the build when it finds a <code>.git</code> directory but no <code>git</code> executable.
+  That is the normal state on a device, so the stamping is turned off.</li>
+  <li><code>GOROOT</code>, <code>GOPATH</code>, <code>GOCACHE</code> point into the plugin's data
+  directory, and <code>TMPDIR</code>/<code>GOTMPDIR</code> point at the IDE's temporary directory.
+  Without the last two, Go tries to create its work directory under <code>/tmp</code>, which no app
+  can write to on Android, and every build fails before it starts.</li>
+</ul>
+
+<h2>The templates</h2>
+<p><b>Go Starter</b> is a minimal module: a <code>greet</code> function, a <code>main</code> that
+calls it, and a table-driven test so <b>Run tests</b> has something to run on the first tap.</p>
+<p><b>Go HTTP Server</b> is a <code>net/http</code> server with an HTML landing page, a JSON
+<code>/api/status</code> route, request timeouts, and graceful shutdown on <code>SIGTERM</code>. Run
+it and open <code>http://localhost:8080</code> in a browser on the same device.</p>
+<p>Both ask for a module path when you create them (what goes on the <code>module</code> line of
+<code>go.mod</code>), and both import only the standard library.</p>
+
+<h2 id="storage">Shared storage and the toolchain build</h2>
+<p>Your projects live on the device's shared storage. When Go loads a module it takes a file lock on
+<code>go.mod</code>, and shared storage on Android does not implement those locks. The toolchain
+published on go.dev fails immediately on every command with
+<code>RLock ... function not implemented</code>. Termux's build of Go handles it, which is the build
+this plugin carries.</p>
+<p>This only shows up on a real project: a test run from the app's private directory succeeds with
+either build. If Go ever stops working after a toolchain change, this is the first thing to
+check.</p>
+
+</body>
+</html>

@@ -1,0 +1,93 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+)
+
+const (
+	appName = "${{APP_NAME}}"
+	port    = "${{PORT}}"
+)
+
+type status struct {
+	App  string `json:"app"`
+	OK   bool   `json:"ok"`
+	Time string `json:"time"`
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleIndex)
+	mux.HandleFunc("/api/status", handleStatus)
+
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		log.Printf("%s listening on http://localhost:%s", appName, port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server failed: %v", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
+	log.Println("stopped")
+}
+
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write([]byte(indexPage)); err != nil {
+		log.Printf("write index: %v", err)
+	}
+}
+
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	body := status{App: appName, OK: true, Time: time.Now().Format(time.RFC3339)}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		log.Printf("encode status: %v", err)
+	}
+}
+
+const indexPage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${{APP_NAME}}</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 34rem; padding: 0 1rem; line-height: 1.6; }
+  code { background: #f2f2f2; padding: 0.1rem 0.35rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>${{APP_NAME}}</h1>
+<p>Your Go server is running. Try <a href="/api/status"><code>/api/status</code></a>.</p>
+<p>Edit <code>main.go</code>, then tap <b>Run app</b> again to restart.</p>
+</body>
+</html>
+`

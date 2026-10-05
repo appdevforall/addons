@@ -1,0 +1,15 @@
+{
+  "summary": "Adds Go project templates, and builds, runs, and tests them on the device.",
+  "description": "Installs the Go toolchain through Termux on first use, adds a starter module and a net/http server template, and puts build, run, tidy, and test actions on the editor toolbar for Go projects.",
+  "tags": [
+    "go",
+    "golang",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
