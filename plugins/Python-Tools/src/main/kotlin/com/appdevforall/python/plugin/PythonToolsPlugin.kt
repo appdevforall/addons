@@ -32,6 +32,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipInputStream
@@ -259,11 +260,13 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension,
                 is CommandResult.Success ->
                     if (result.stdout.contains("Successfully installed")) notify("Project dependencies installed.")
                 is CommandResult.Failure -> {
-                    requirementsSyncedRoot.compareAndSet(path, null)
                     Log.e(TAG, "pip install -r requirements.txt failed: ${result.stderr.take(2000)}")
-                    notify("Could not install project dependencies (exit ${result.exitCode}). It needs a network connection.")
+                    notify(
+                        "Could not install project dependencies (exit ${result.exitCode}). It needs a network " +
+                            "connection; tap ${actionLabel(ACTION_SYNC_DEPS)} to try again.",
+                    )
                 }
-                is CommandResult.Cancelled -> requirementsSyncedRoot.compareAndSet(path, null)
+                is CommandResult.Cancelled -> Log.i(TAG, "pip install -r requirements.txt cancelled")
             }
         }
     }
@@ -489,7 +492,11 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension,
                     if (!out.canonicalPath.startsWith(target.canonicalPath + File.separator)) {
                         throw SecurityException("Wheelhouse entry escapes its directory: ${entry.name}")
                     }
-                    if (!out.exists()) out.outputStream().use { zip.copyTo(it) }
+                    if (!out.exists()) {
+                        val partial = File(target, "${entry.name}.partial")
+                        partial.outputStream().use { zip.copyTo(it) }
+                        if (!partial.renameTo(out)) throw IOException("Could not move ${partial.name} into place")
+                    }
                 }
             }
             true

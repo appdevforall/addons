@@ -138,6 +138,9 @@ val downloadGrammar =
         val source = grammarSource
         val outputDir = grammarDir
         val archive = layout.buildDirectory.file("tree-sitter/${source.name}-${source.version}.tgz")
+        inputs.property("grammarVersion", source.version)
+        inputs.property("grammarUrl", source.url)
+        inputs.property("grammarSha256", source.sha256)
         outputs.dir(outputDir)
 
         doLast {
