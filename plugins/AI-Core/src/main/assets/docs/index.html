@@ -115,6 +115,31 @@
     device.
   </div>
 
+  <h2>Web search</h2>
+  <p>The agent always knows your device's date and time, and it can look
+  things up online with two tools:</p>
+  <ul>
+    <li><b>web_search</b> searches through your backend's own provider: Google
+      Search for <b>Gemini</b>, and web search for <b>OpenAI</b> when the server
+      URL is OpenAI's own API. It uses your API key, so your provider may bill
+      searches. On-device models and other OpenAI-compatible servers (Ollama,
+      LM Studio, OpenRouter) cannot search.</li>
+    <li><b>fetch_url</b> reads a web page, a GitHub repository or a raw file
+      you link. It works with every backend and asks you before each fetch,
+      showing the address. Long pages are cut to the first few thousand
+      characters the agent can take in.</li>
+  </ul>
+  <p>Pasting code or asking whether something is deprecated or the latest
+  version makes the agent search before it answers, so a review reflects the
+  libraries as they are today rather than as the model remembers them. Each
+  of those messages costs one search.</p>
+  <p>When an answer contains code, the agent checks it once more before it is
+  done: that the code compiles, that each branch does what it should, and that
+  every version it names came from a search. While that runs the chat shows
+  <b>Checking the answer…</b>, and the answer may then change in place. This
+  costs one more request, and is skipped when the agent changed your project
+  or runs on the device.</p>
+
   <h2>Tools from other plugins</h2>
   <p>Other plugins can give the agent tools of their own. <b>AI Agent MCP</b> is
   one: it connects to Model Context Protocol servers — issue trackers,

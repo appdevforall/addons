@@ -1,0 +1,5 @@
+# The files the user attached, appended to the message they were attached to. Belongs to the user
+# turn rather than the system prompt; layout.yml's context_files decides how each file is framed.
+
+context_files:
+  heading: CONTEXT FILES

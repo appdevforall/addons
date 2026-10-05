@@ -140,8 +140,9 @@ explicitly, waiving the instruction-tuned, open-licence and 16k-context gates fo
 so `CatalogLoader` no longer enforces the licence or context gates, and the unit tests no longer
 assert them. `docs/CURATION.md` records exactly which gate each entry breaks.
 
-Version 1.0.0 ships 6 files, all under 1 GB: Qwen2.5 0.5B (base), Qwen3 0.6B, Qwen3.5 0.8B,
-Llama 3.2 1B Instruct, SmolLM2 360M Instruct, and H2O Danube3 500M (base). Five are Apache-2.0;
+The catalog lists 7 files: Qwen2.5 0.5B (base), Qwen3 0.6B, Qwen3.5 0.8B, Llama 3.2 1B Instruct,
+SmolLM2 360M Instruct, H2O Danube3 500M (base), all under 1 GB, and Qwen2.5-Coder 1.5B Instruct
+(1.04 GiB), the only code-trained model. Six are Apache-2.0;
 Llama 3.2 1B is under the Llama 3.2 Community Licence.
 
 **The two behavioural gates are not yet proven.** Per the ticket, the admission harness that runs a

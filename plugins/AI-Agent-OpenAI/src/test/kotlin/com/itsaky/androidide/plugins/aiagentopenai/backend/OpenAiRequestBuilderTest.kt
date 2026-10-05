@@ -192,4 +192,47 @@ class OpenAiRequestBuilderTest {
 
         assertFalse(body.has("tools"))
     }
+
+    @Test
+    fun givenARequiredDeclaredTool_whenBuildingTheBody_thenToolChoiceNamesIt() {
+        val config = config().apply { extraParams = mapOf("required_tool" to "web_search") }
+
+        val body = OpenAiRequestBuilder.body(
+            OpenAiRequestBuilder.messages(emptyList(), "review", null), "gpt-4o", stream = true,
+            config = config, tuning = defaultTuning, tools = SEARCH_TOOLS,
+        )
+
+        val choice = body.getJSONObject("tool_choice")
+        assertEquals("function", choice.getString("type"))
+        assertEquals("web_search", choice.getJSONObject("function").getString("name"))
+    }
+
+    @Test
+    fun givenATuningThatDroppedToolChoice_whenBuildingTheBody_thenTheToolsAreStillDeclared() {
+        val config = config().apply { extraParams = mapOf("required_tool" to "web_search") }
+
+        val body = OpenAiRequestBuilder.body(
+            OpenAiRequestBuilder.messages(emptyList(), "review", null), "gpt-4o", stream = true,
+            config = config, tuning = defaultTuning.without(RequestTuning.TOOL_CHOICE)!!, tools = SEARCH_TOOLS,
+        )
+
+        assertFalse(body.has("tool_choice"))
+        assertTrue(body.has("tools"))
+    }
+
+    @Test
+    fun givenARequiredToolThatIsNotDeclared_whenBuildingTheBody_thenNoToolChoiceIsSent() {
+        val config = config().apply { extraParams = mapOf("required_tool" to "fetch_url") }
+
+        val body = OpenAiRequestBuilder.body(
+            OpenAiRequestBuilder.messages(emptyList(), "review", null), "gpt-4o", stream = true,
+            config = config, tuning = defaultTuning, tools = SEARCH_TOOLS,
+        )
+
+        assertFalse(body.has("tool_choice"))
+    }
+
+    private companion object {
+        val SEARCH_TOOLS = listOf(ToolDefinition("web_search", "Search the web", emptyMap()))
+    }
 }

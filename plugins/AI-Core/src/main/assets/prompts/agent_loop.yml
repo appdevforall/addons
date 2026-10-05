@@ -1,0 +1,52 @@
+# What the agent is told after each tool batch, in the turn that carries the results back to it.
+# layout.yml's tool_results decides where each text goes.
+
+agent_loop:
+  # A failed tool's result; MESSAGE is what the tool reported, verbatim.
+  failed: "FAILED: {{MESSAGE}}"
+  # A result cut to the size limit; KEPT is its start, COUNT how many characters were dropped.
+  truncated: |-
+    {{KEPT}}
+    …[truncated {{COUNT}} chars]
+  # The second sentence is there because a search that said firebase-vertexai was replaced by
+  # firebase-ai was followed by code importing firebase-vertexai (ADFA-6223).
+  grounding: >-
+    Treat the tool result(s) above as fact: report only what they actually say, and never invent,
+    assume, or contradict them. Where a result names a replacement, a removal or a newer version,
+    it overrides what you remember — in your prose and in every line of code and every dependency
+    you write — and an API a result calls deprecated or removed never appears in your code. The
+    parts of the request no tool covers — explanation, design, code — you still write from your
+    own knowledge.
+  after_success: >-
+    The action succeeded. If that was the whole request, you are DONE — reply with the
+    "{{TERMINAL_TOOL}}" tool briefly confirming what happened. If parts of the request are still
+    undone, do the next one now: call its tool, or write that part of the answer yourself. Never
+    reply only to say what you will do next, and do not call a tool for a step the user did not
+    ask for.
+  after_failure: If the task is complete, give the user your final answer. Otherwise, call the next tool.
+  # Sent once when a run that has used tools replies without the terminal tool: only that tool
+  # finishes such a run, so the reply is read as unfinished rather than as the final answer.
+  unfinished: >-
+    Your reply called no tool, so the run is still open. If every part of the request is now
+    answered, call the "{{TERMINAL_TOOL}}" tool with a one-line summary — do not repeat what you
+    already wrote. Otherwise do the next part now.
+  # Sent once when a run that had to check the web first answered without searching; TOOL is the
+  # search tool. A backend that forces the call never sends it (see VerificationPolicy).
+  required_tool: >-
+    Your reply did not call "{{TOOL}}", and this request needs it: your training data is older than
+    today's date, and the libraries and APIs involved may have been deprecated, removed or replaced
+    since. Being sure of an API is not a reason to skip the check. Call "{{TOOL}}" now, one query
+    per library or API, asking whether it is deprecated and what replaces it; then answer again
+    from what the results say, correcting anything in your reply they contradict.
+
+# What the agent is told when the user does not approve a tool call. TOOL is the tool's name.
+approval:
+  denied: "User denied permission to execute {{TOOL}}"
+  # The user asked for a change without saying what.
+  corrected: "User rejected this {{TOOL}} call and asked you to revise it."
+  # INSTRUCTION is what the user typed, verbatim.
+  corrected_with_instruction: >-
+    User rejected this {{TOOL}} call and asked you to revise it: "{{INSTRUCTION}}". Apply that
+    instruction and try again.
+  # MINUTES is how long the dialog waited.
+  timed_out: "Approval request timed out (no response within {{MINUTES}} minutes). Please try again."

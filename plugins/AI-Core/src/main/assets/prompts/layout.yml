@@ -1,0 +1,107 @@
+# Where each text from the other files goes, by the name it is rendered under (see README.md).
+# A line holding only a section tag (#, ^ or /) vanishes, so tags can sit on their own lines.
+
+layout:
+  system_prompt: |
+    {{IDENTITY}}
+
+    {{#RULES}}
+    {{^FIRST}}
+
+    {{/FIRST}}
+    {{HEADING}}:
+    {{#ITEMS}}
+    - {{TEXT}}
+    {{/ITEMS}}
+    {{/RULES}}
+
+    {{TOOLS_HEADING}}:
+    {{#TOOLS}}
+    - {{NAME}}: {{DESCRIPTION}}
+    {{/TOOLS}}
+    {{#TOOL_CALL_SYNTAX}}
+
+    {{TOOL_CALL_FORMAT_INSTRUCTION}}
+    {{TOOL_CALL_SYNTAX}}
+
+    {{TOOL_CALL_FORMAT_EXAMPLE_HEADING}}:
+    {{TOOL_CALL_FORMAT_EXAMPLE}}
+    {{/TOOL_CALL_SYNTAX}}
+
+    {{LAYOUT_IDE_CONTEXT}}
+  # Also appended to a backend's own prompt, so the session lines reach every backend.
+  ide_context: |
+    {{SESSION_CURRENT_TIME}}
+    {{#CAN_SEARCH_WEB}}
+    {{SESSION_WEB_SEARCH}}
+    {{/CAN_SEARCH_WEB}}
+    {{SESSION_WEB_ACCESS}}
+    {{#HAS_IDE_CONTEXT}}
+
+    {{IDE_CONTEXT_HEADING}}:
+    {{#CURRENT_FILE}}
+    - {{IDE_CONTEXT_CURRENT_FILE}}
+    {{/CURRENT_FILE}}
+    {{#OTHER_FILES}}
+    - {{IDE_CONTEXT_OTHER_FILES}}
+    {{/OTHER_FILES}}
+    {{#MODULES}}
+    {{#SOURCE_DIR}}
+    - {{IDE_CONTEXT_MODULE_SOURCE_DIR}}
+    {{/SOURCE_DIR}}
+    {{#LAYOUT_DIR}}
+    - {{IDE_CONTEXT_MODULE_LAYOUT_DIR}}
+    {{/LAYOUT_DIR}}
+    {{#MANIFEST}}
+    - {{IDE_CONTEXT_MODULE_MANIFEST}}
+    {{/MANIFEST}}
+    {{/MODULES}}
+    {{#HAS_MODULES}}
+    {{IDE_CONTEXT_MODULES_KNOWN}}
+    {{/HAS_MODULES}}
+    {{IDE_CONTEXT_CLOSING}}
+    {{/HAS_IDE_CONTEXT}}
+
+  # The turn after each tool batch. TOOL_RESPONSES is the results in <tool_response> envelopes,
+  # which stay in code: chat models are trained on the tag, and ToolCallExtractor spots a model
+  # imitating it. ALL_SUCCEEDED is whether every tool in the batch succeeded.
+  tool_results: |-
+    {{TOOL_RESPONSES}}{{AGENT_LOOP_GROUNDING}} {{#ALL_SUCCEEDED}}{{AGENT_LOOP_AFTER_SUCCESS}}{{/ALL_SUCCEEDED}}{{^ALL_SUCCEEDED}}{{AGENT_LOOP_AFTER_FAILURE}}{{/ALL_SUCCEEDED}}
+
+  # The attached files, appended to the user's message after a blank line. FILES is the files that
+  # could be read, each with NAME and CONTENT; CONTENT is inserted verbatim.
+  context_files: |-
+    {{CONTEXT_FILES_HEADING}}:
+
+    {{#FILES}}
+    === {{NAME}} ===
+    {{CONTENT}}
+
+    {{/FILES}}
+
+  # The user turn of the chat-title request. USER_TEXT and REPLY_TEXT are the first exchange, each
+  # cut to its start and inserted verbatim. It ends on the cue so a completion model answers with
+  # just the title.
+  chat_title: |-
+    Conversation:
+    Developer: {{USER_TEXT}}
+    Assistant: {{REPLY_TEXT}}
+
+    Title:
+
+  # The user turn of the answer review. REQUEST is what the user asked, EVIDENCE what the run's
+  # tools returned (each call and its result), DRAFT the answer to check; all inserted verbatim.
+  answer_review: |-
+    REQUEST:
+    {{REQUEST}}
+
+    EVIDENCE:
+    {{#HAS_EVIDENCE}}
+    {{EVIDENCE}}
+    {{/HAS_EVIDENCE}}
+    {{^HAS_EVIDENCE}}
+    {{ANSWER_REVIEW_NO_EVIDENCE}}
+    {{/HAS_EVIDENCE}}
+
+    DRAFT:
+    {{DRAFT}}

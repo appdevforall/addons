@@ -19,7 +19,6 @@ class GradleSyncHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "gradle_sync"
-    override val description = "Sync the Gradle project (reload dependencies and rebuild cache)"
 
     /**
      * Approved like the build tool it is, not like a read: a sync starts a real Gradle build, can

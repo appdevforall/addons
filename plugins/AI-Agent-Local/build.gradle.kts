@@ -77,7 +77,10 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+
     testImplementation(files("../../libs/plugin-api.jar"))
+    // plugin-api's prompt loader parses YAML with the host's copy; JVM tests need their own, same version
+    testImplementation("org.snakeyaml:snakeyaml-engine:2.10")
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
     // LiveData's postValue needs the arch-core executor swapped for a synchronous one; the

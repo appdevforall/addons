@@ -1,8 +1,11 @@
 package com.itsaky.androidide.plugins.aicore.viewmodel
 
+import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -82,5 +85,42 @@ class AgentActivityTest {
     @Test
     fun givenNoToolsAtAll_whenSummarised_thenThereIsNothingToName() {
         assertEquals(emptyList<String>(), AgentActivity.distinctNames(listOf("", "  ")))
+    }
+
+    @Test
+    fun givenAWebSearch_whenLogged_thenTheQueryAndTheWholeReportAreKept() {
+        val call = ToolCall("web_search", mapOf("query" to "Ktor JsonFeature deprecated"))
+        val report = "JsonFeature was removed in Ktor 2.0.\n\nSources:\n- https://ktor.io/docs/migrating-2.html"
+
+        val entry = AgentActivity.logEntry(call, ToolResult.success("Searched the web for: q", report))
+
+        assertEquals("✓ web_search(query=Ktor JsonFeature deprecated)\nSearched the web for: q\n$report", entry)
+    }
+
+    @Test
+    fun givenAProjectRead_whenLogged_thenOnlyItsMessageIsKept() {
+        val call = ToolCall("read_file", mapOf("file_path" to "app/Secret.kt"))
+
+        val entry = AgentActivity.logEntry(call, ToolResult.success("Read 3 lines", "val key = 1"))
+
+        assertEquals("✓ read_file(file_path=app/Secret.kt)\nRead 3 lines", entry)
+    }
+
+    @Test
+    fun givenAFailure_whenLogged_thenItsDetailsAreKept() {
+        val entry = AgentActivity.logEntry(ToolCall("open_file", emptyMap()), ToolResult.failure("not found", "no such file"))
+
+        assertTrue(entry.startsWith("✗ open_file()"))
+        assertTrue(entry.endsWith("no such file"))
+    }
+
+    @Test
+    fun givenALongArgument_whenLogged_thenItIsClipped() {
+        val call = ToolCall("create_file", mapOf("content" to "x".repeat(AgentActivity.LOG_ARG_LIMIT + 50)))
+
+        val entry = AgentActivity.logEntry(call, ToolResult.success("created"))
+
+        assertTrue(entry.contains("…[50 more chars]"))
+        assertFalse(entry.contains("x".repeat(AgentActivity.LOG_ARG_LIMIT + 1)))
     }
 }

@@ -23,6 +23,16 @@ import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.prompt.BackendPrompts
+import com.itsaky.androidide.plugins.aicore.prompt.ContextFilesPrompt
+import com.itsaky.androidide.plugins.aicore.prompt.IdeContextReader
+import com.itsaky.androidide.plugins.aicore.prompt.PromptToolCatalog
+import com.itsaky.androidide.plugins.aicore.prompt.ServiceBackendPrompts
+import com.itsaky.androidide.plugins.aicore.prompt.SessionContext
+import com.itsaky.androidide.plugins.aicore.prompt.SystemPromptFactory
+import com.itsaky.androidide.plugins.aicore.prompt.ToolDescriptions
+import com.itsaky.androidide.plugins.aicore.prompt.ToolResultsPrompt
+import com.itsaky.androidide.plugins.aicore.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
 import com.itsaky.androidide.plugins.aicore.tool.AgentTools
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
@@ -32,12 +42,12 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
-import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
-import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
-import com.itsaky.androidide.plugins.services.IdeEditorService
+import com.itsaky.androidide.plugins.aicore.tool.web.BackendWebSearch
+import com.itsaky.androidide.plugins.aicore.tool.web.VerificationPolicy
+import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.File
@@ -103,11 +113,17 @@ class ChatViewModel(
         /** Sampling temperature for a backend that declares no preference of its own. */
         private const val DEFAULT_TEMPERATURE = 0.2f
 
+        /** Output cap elsewhere: older OpenAI models and small servers reject a larger one. */
+        private const val DEFAULT_MAX_TOKENS = 4096
+
+        /**
+         * Output cap for Gemini, whose 2.5 models spend thinking tokens from it: 4096 cut
+         * multi-part answers and whole-file tool calls short (ADFA-6223).
+         */
+        private const val GEMINI_MAX_TOKENS = 16384
+
         /** Quiet period a debounced persist waits out; see [schedulePersist]. */
         private const val PERSIST_DEBOUNCE_MS = 1_000L
-
-        /** Max open files named in the prompt's IDE-context block. */
-        private const val MAX_CONTEXT_OPEN_FILES = 8
 
         /**
          * How many of a restored transcript's messages the model is given back; one exchange
@@ -120,15 +136,6 @@ class ChatViewModel(
          * otherwise push the next send past a small local model's created context.
          */
         private const val MAX_RESTORED_HISTORY_CHARS = 8_000
-
-        /**
-         * Path used in the tool-call examples when the IDE has nothing open, so there is no real one
-         * to show. A concrete path is what a small model needs to copy the *shape* from — a
-         * placeholder like "path/to/File.ext" measurably degrades its calls — so this is the
-         * dominant CoGo project layout rather than a language-neutral token. Whenever a file *is*
-         * open, [IdeSnapshot.exampleFilePath] uses that instead and this is never seen.
-         */
-        private const val FALLBACK_EXAMPLE_PATH = "app/src/main/java/com/example/MainActivity.kt"
     }
 
     private fun getLlmService(): LlmInferenceService? {
@@ -230,9 +237,46 @@ class ChatViewModel(
     }
 
     // Tool execution infrastructure
-    private val approvalManager = ToolApprovalManager()
-    private val agentLoop = AgentLoop(terminalTool = RESPOND_TOOL)
+    private val approvalManager = ToolApprovalManager(sharedPromptConfig) { handler ->
+        ToolDescriptions.describe(sharedPromptConfig.config(), RESPOND_TOOL, handler)
+    }
+    private val toolResultsPrompt = ToolResultsPrompt(sharedPromptConfig, RESPOND_TOOL)
+    private val agentLoop = AgentLoop(
+        formatToolResults = toolResultsPrompt,
+        terminalTool = RESPOND_TOOL,
+        unfinishedTurn = toolResultsPrompt::unfinished,
+        requiredToolTurn = toolResultsPrompt::requiredTool,
+    )
     val toolExecutionTracker = ToolExecutionTracker()
+
+    /** What the active backend answers about prompts and the tool-calling protocol. */
+    private val backendPrompts: BackendPrompts = ServiceBackendPrompts(
+        backendId = { currentBackendId },
+        getService = ::getLlmService,
+        logWarn = { message, error -> logWarn(message, error) },
+    )
+
+    /** Searches the web through whichever backend the run is against; see [BackendWebSearch]. */
+    private val webSearch = BackendWebSearch(
+        config = sharedPromptConfig,
+        backendId = { currentBackendId },
+        backend = { getLlmService()?.getBackend(currentBackendId) },
+    )
+
+    /** Builds the system prompt for a run; see [SystemPromptFactory]. */
+    private val systemPromptFactory = SystemPromptFactory(
+        config = sharedPromptConfig,
+        ideContext = IdeContextReader(getContext),
+        backend = backendPrompts,
+        session = { SessionContext.current() },
+        terminalTool = RESPOND_TOOL,
+        toolCallSyntax = TOOL_CALL_SYNTAX,
+    )
+
+    /** Renders the user's attached files into the turn they were attached to. */
+    private val contextFilesPrompt = ContextFilesPrompt(sharedPromptConfig) { message, error ->
+        logWarn(message, error)
+    }
 
     /** This plugin's own handlers, fixed for the ViewModel's life; the contributed ones are not. */
     private val builtInHandlers: List<ToolHandler>
@@ -305,6 +349,26 @@ class ChatViewModel(
 
     /** Every tool name this run executed, in order, for the activity line's closing summary. */
     private val runToolNames = mutableListOf<String>()
+
+    /** Each executed call with its result, for the activity row's [ChatMessage.toolLog]. Main thread only. */
+    private val runToolLog = mutableListOf<String>()
+
+    /**
+     * A reply of this run that holds code, for [reviewAnswer] to check once the run is done.
+     *
+     * @property messageId the bubble it was shown in.
+     * @property displayText the bubble's text.
+     * @property historyText what the model wrote, as the transcript keeps it.
+     */
+    private data class CodeReply(val messageId: String, val displayText: String, val historyText: String)
+
+    /** This run's last reply holding code; written on the stream's thread, read after the loop. */
+    @Volatile
+    private var runCodeReply: CodeReply? = null
+
+    /** Whether this run changed the project; its answer then reports that, and is not reviewed. */
+    @Volatile
+    private var runChangedProject = false
 
     /** The prompt the last run was started with, for [retryLastRun]; null before the first send. */
     @Volatile
@@ -408,7 +472,7 @@ class ChatViewModel(
     fun isStorageInitialized(): Boolean = ::storageManager.isInitialized
 
     init {
-        builtInHandlers = getContext()?.let(BuiltInToolHandlers::create).orEmpty()
+        builtInHandlers = getContext()?.let { BuiltInToolHandlers.create(it, webSearch::search) }.orEmpty()
         agentTools = buildAgentTools()
         ToolSourceStore.shared.addChangeListener(toolSourcesChanged)
     }
@@ -686,112 +750,6 @@ class ChatViewModel(
     }
 
     /**
-     * Build context string from selected files.
-     *
-     * @param files the attachments the run started with, not the live list the composer edits.
-     */
-    private fun buildContextString(files: List<File>): String {
-        if (files.isEmpty()) return ""
-
-        val contextBuilder = StringBuilder()
-        contextBuilder.append("\n\nCONTEXT FILES:\n\n")
-
-        files.forEach { file ->
-            if (file.exists() && file.isFile) {
-                try {
-                    val content = file.readText()
-                    contextBuilder.append("=== ${file.name} ===\n")
-                    contextBuilder.append(content)
-                    contextBuilder.append("\n\n")
-                } catch (e: Exception) {
-                    logWarn("could not read context file ${file.name}", e)
-                }
-            }
-        }
-
-        return contextBuilder.toString()
-    }
-
-    /**
-     * Builds the system prompt for the active backend.
-     *
-     * The wording comes from the backend, which knows its own model; this side supplies the tool
-     * contract and appends the IDE context. A backend with no prompt of its own gets
-     * [buildDefaultSystemPrompt], so a third-party `.cgp` works without shipping prompt text.
-     *
-     * @param tools the snapshot this run is using; the prompt must describe those tools and no others.
-     */
-    private suspend fun buildSystemPrompt(tools: AgentTools): String {
-        // One editor read serves both the IDE CONTEXT block and the paths in the examples.
-        val ide = readIdeSnapshot()
-        val modules = withContext(Dispatchers.IO) {
-            ProjectLayout.describe(File(PathGuard.projectRoot()))
-        }
-        // Paths, not a count: an empty or wrong one here is what sends the agent walking the tree,
-        // and these are project-relative directory names rather than the user's content.
-        AgentTrace.stage(
-            "LAYOUT",
-            "modules=${modules.size}" + modules.joinToString("") {
-                " ${it.name}[src=${it.sourceDir} layout=${it.layoutDir} manifest=${it.manifest}]"
-            },
-        )
-        val examplePath = ide.exampleFilePath()
-        val base = backendSystemPrompt(tools, examplePath)
-            ?: buildDefaultSystemPrompt(tools, examplePath)
-        return base + ide.contextBlock(modules)
-    }
-
-    /**
-     * Asks the active backend for its system prompt.
-     *
-     * @param tools the snapshot this run is using.
-     * @param examplePath the path the tool-call examples should use.
-     * @return the backend's prompt, or null when it has none, is unreachable, or throws — one bad
-     *   backend must degrade to the default prompt, not break every message
-     */
-    private fun backendSystemPrompt(tools: AgentTools, examplePath: String): String? {
-        val backend = try {
-            getLlmService()?.getBackend(currentBackendId)
-        } catch (e: Throwable) {
-            logWarn("could not resolve backend '$currentBackendId'", e)
-            null
-        } ?: return null
-
-        return try {
-            backend.getSystemPrompt(
-                LlmInferenceService.SystemPromptRequest(
-                    promptToolDefinitions(tools),
-                    // Null tells the backend this side parses no envelope; see SystemPromptRequest.
-                    TOOL_CALL_SYNTAX.takeUnless { callsToolsNatively() },
-                    examplePath,
-                )
-            )?.takeIf { it.isNotBlank() }
-        } catch (e: Throwable) {
-            logWarn(
-                "backend '$currentBackendId' supplied no system prompt; using the default",
-                e
-            )
-            null
-        }
-    }
-
-    /**
-     * Whether the active backend carries tool calls in its provider's own function-calling API
-     * rather than in the reply text.
-     *
-     * Decides both halves of the protocol at once — the schemas sent with the request and the
-     * envelope the prompt teaches — so the two can never disagree about which one is live.
-     *
-     * @return true when the backend declares [LlmInferenceService.ToolCallingBackend]
-     */
-    private fun callsToolsNatively(): Boolean = try {
-        getLlmService()?.getBackend(currentBackendId) is LlmInferenceService.ToolCallingBackend
-    } catch (e: Throwable) {
-        logWarn("could not resolve backend '$currentBackendId'", e)
-        false
-    }
-
-    /**
      * The sampling temperature the active backend asks for.
      *
      * @return the backend's preference, or null when it declares none or cannot be reached
@@ -803,66 +761,9 @@ class ChatViewModel(
         null
     }
 
-    /**
-     * The tools to present in the system prompt: the snapshot's budgeted list, plus [RESPOND_TOOL],
-     * which is not a handler but is how the model addresses the user.
-     *
-     * The cap is applied when the snapshot is built, not here, so the grammar the local backend is
-     * constrained by and the list the prompt describes can never disagree. It lands on this side of
-     * the boundary at all because every backend renders the list itself, this repo's or not.
-     *
-     * @param tools the snapshot this run is using.
-     * @return the definitions to hand the backend.
-     */
-    private fun promptToolDefinitions(tools: AgentTools): List<LlmInferenceService.ToolDefinition> {
-        return tools.promptTools.definitions + LlmInferenceService.ToolDefinition(
-            RESPOND_TOOL,
-            "Send the user your reply or final answer. It MUST carry a \"message\" holding the " +
-                "text itself — a respond call with no \"message\" shows the user nothing.",
-            // Schema, not emptyMap(): under native calling a parameterless declaration is one the
-            // model cannot put the answer in, which is the empty respond the description warns of.
-            ToolSchema.objectOf(
-                "message" to ToolSchema.string("The reply to show the user."),
-                required = listOf("message"),
-            ),
-        )
-    }
-
-    /**
-     * Prompt used for a backend that supplies none of its own.
-     *
-     * Deliberately short: it states the protocol this side parses and nothing about model
-     * behaviour, which is the part only the backend can know. A backend that needs more should
-     * override `getSystemPrompt`.
-     */
-    private fun buildDefaultSystemPrompt(tools: AgentTools, examplePath: String): String {
-        val toolDescriptions = promptToolDefinitions(tools)
-            .joinToString("\n") { "- ${it.name}: ${it.description}" }
-
-        val head = """
-        You are a coding assistant inside CodeOnTheGo.
-
-        Reply with exactly ONE tool call and nothing else. After a tool call, stop and wait — the
-        real result arrives next turn. Never invent tool output, and never claim an action you did
-        not perform through a tool. For a greeting or a question you can answer directly, use
-        "$RESPOND_TOOL".
-
-        Tools:
-        $toolDescriptions
-        """.trimIndent()
-
-        // Under native calling the provider carries the call; teaching an envelope as well invites
-        // the model to emit both, and the text one would then run the tool a second time.
-        if (callsToolsNatively()) return head
-
-        return head + "\n\n" + """
-        TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:
-        $TOOL_CALL_SYNTAX
-
-        Example:
-        <tool_call>{"tool":"open_file","args":{"file_path":"$examplePath"}}</tool_call>
-        """.trimIndent()
-    }
+    /** How many tokens a reply may use on the current backend. */
+    private fun replyTokenCap(): Int =
+        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS
 
     /**
      * The advice for a reply that meant to call a tool and produced nothing runnable.
@@ -873,93 +774,6 @@ class ChatViewModel(
     private fun unparsedReplyMessage(reason: ToolCallExtractor.UnparsedReply): Int = when (reason) {
         ToolCallExtractor.UnparsedReply.TRUNCATED -> R.string.agent_reply_truncated
         ToolCallExtractor.UnparsedReply.MALFORMED -> R.string.agent_reply_malformed
-    }
-
-    /**
-     * What the IDE has open, project-relative, read once per prompt.
-     * @property currentFile the focused file, or null when nothing is open.
-     * @property otherFiles other open tabs, capped at [MAX_CONTEXT_OPEN_FILES].
-     */
-    private data class IdeSnapshot(val currentFile: String?, val otherFiles: List<String>)
-
-    /**
-     * Reads the open-file state from the editor service.
-     * @return the snapshot; empty when there is no editor service or the call fails.
-     */
-    private suspend fun readIdeSnapshot(): IdeSnapshot {
-        val editor = getContext()?.services?.get(IdeEditorService::class.java)
-            ?: return IdeSnapshot(null, emptyList())
-        val root = File(PathGuard.projectRoot())
-
-        // Editor state is read on the main thread, like every other editor-service call here.
-        val (current, open) = withContext(Dispatchers.Main) {
-            runCatching { editor.getCurrentFile() to editor.getOpenFiles() }
-                .getOrDefault(null to emptyList())
-        }
-
-        fun relative(file: File): String = runCatching { file.relativeToOrSelf(root).path }
-            .getOrDefault(file.name)
-
-        return IdeSnapshot(
-            currentFile = current?.let(::relative),
-            otherFiles = open.orEmpty()
-                .filter { it != current }
-                .take(MAX_CONTEXT_OPEN_FILES)
-                .map(::relative),
-        )
-    }
-
-    /**
-     * The path the tool-call examples should use: a file the IDE really has open, so the examples
-     * carry this project's own language and layout instead of teaching an Android/Java one. Falls
-     * back to [FALLBACK_EXAMPLE_PATH] only when nothing is open.
-     * @return a project-relative path.
-     */
-    private fun IdeSnapshot.exampleFilePath(): String =
-        currentFile ?: otherFiles.firstOrNull() ?: FALLBACK_EXAMPLE_PATH
-
-    /**
-     * Describes what the user is looking at: the focused file and other open tabs, project-relative,
-     * plus where [modules] keep their code. Most requests are about the file on screen and the IDE
-     * knows that path exactly; without it the model reconstructs one, which is where invented
-     * `.java` paths for Kotlin files came from.
-     *
-     * @param modules the project's modules, so the agent spends no turns rediscovering them.
-     * @return a prompt block, or empty when there is nothing to say.
-     */
-    private fun IdeSnapshot.contextBlock(modules: List<ProjectLayout.Module>): String {
-        if (currentFile == null && otherFiles.isEmpty() && modules.isEmpty()) return ""
-
-        return buildString {
-            append("\n\nIDE CONTEXT (real paths — use these verbatim, do not rewrite them):\n")
-            currentFile?.let { append("- File the user is viewing: ").append(it).append("\n") }
-            if (otherFiles.isNotEmpty()) {
-                append("- Other open files: ").append(otherFiles.joinToString(", ")).append("\n")
-            }
-            for (module in modules) {
-                module.sourceDir?.let {
-                    append("- New classes for module '").append(module.name).append("' go in: ")
-                        .append(it).append("\n")
-                }
-                module.layoutDir?.let {
-                    append("- Layouts for module '").append(module.name).append("': ")
-                        .append(it).append("\n")
-                }
-                module.manifest?.let {
-                    append("- Manifest for module '").append(module.name).append("': ")
-                        .append(it).append("\n")
-                }
-            }
-            if (modules.isNotEmpty()) {
-                append(
-                    "These directories already exist — do not call list_files to rediscover them.\n"
-                )
-            }
-            append(
-                "If the user names a file that appears above, use that exact path and do not " +
-                    "guess a different folder or extension."
-            )
-        }
     }
 
     /**
@@ -991,11 +805,20 @@ class ChatViewModel(
         val results = tools.executor.execute(toolCalls) { call ->
             withContext(Dispatchers.Main) { showActivity(call) }
         }
+        if (toolCalls.any { tools.router.getHandler(it.name)?.mutatesProject == true }) {
+            runChangedProject = true
+        }
 
         // Record whether this batch's last tool failed (read by runModelTurn).
         lastToolFailedThisRun = results.lastOrNull()?.success == false
 
         withContext(Dispatchers.Main) {
+            results.forEachIndexed { index, result ->
+                toolCalls.getOrNull(index)?.let { runToolLog += AgentActivity.logEntry(it, result) }
+            }
+            activityMessageId?.let { id ->
+                _messages.value.firstOrNull { it.id == id }?.let { putActivity(it.text, it.status) }
+            }
             results.forEachIndexed { index, result ->
                 if (result.success) return@forEachIndexed
                 val toolCall = toolCalls[index]
@@ -1161,6 +984,9 @@ class ChatViewModel(
         lastToolFailedThisRun = false
         activityMessageId = null
         runToolNames.clear()
+        runToolLog.clear()
+        runCodeReply = null
+        runChangedProject = false
         // Created here, on Main, so the retry point below names the prompt it belongs to.
         val userChatMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
@@ -1194,18 +1020,29 @@ class ChatViewModel(
                 // Queued behind a title still being written; the prompt shows as generating meanwhile.
                 awaitTitleRequest()
 
+                // One list for both halves of the protocol: the prompt describes it and a
+                // natively calling backend is sent it, so the two can never name different tools.
+                val canSearch = runCatching {
+                    (getLlmService()?.getBackend(currentBackendId) as? LlmInferenceService.WebSearchBackend)
+                        ?.canSearchWeb()
+                }.getOrNull() == true
+                // Offered only where it can succeed; elsewhere every search is a wasted round trip.
+                val toolDefinitions =
+                    PromptToolCatalog.definitions(tools, RESPOND_TOOL, sharedPromptConfig.config())
+                        .filter { canSearch || it.name != WebAccess.WEB_SEARCH_TOOL }
+
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
                     // The grammar shapes a local tool call but not its values, so paths get sampled.
                     temperature = backendTemperature() ?: DEFAULT_TEMPERATURE
-                    maxTokens = 4096  // headroom for complete tool calls
-                    systemPrompt = buildSystemPrompt(tools)
+                    maxTokens = replyTokenCap()
+                    systemPrompt = systemPromptFactory.create(toolDefinitions)
                     // Local backend constrains generation to this grammar; cloud ignores it.
                     extraParams = mapOf(EXTRA_PARAM_GRAMMAR to tools.grammar)
                 }
 
                 val messageWithContext = buildString {
                     append(userMessage)
-                    append(buildContextString(runFiles))
+                    append(contextFilesPrompt.render(runFiles))
                 }
                 val history = _history.value.toMutableList()
                 history.add(
@@ -1214,17 +1051,21 @@ class ChatViewModel(
                         messageWithContext
                     )
                 )
+                // Code to judge, or a question about what is current: search before answering.
+                val requiredTool = WebAccess.WEB_SEARCH_TOOL.takeIf { search ->
+                    toolDefinitions.any { it.name == search } &&
+                        VerificationPolicy.requiresWebCheck(userMessage, runFiles.isNotEmpty())
+                }
+                requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }
+                var firstTurn = true
 
                 try {
-                    // The same list the system prompt describes, so a native declaration and the
-                    // prose the model reads can never name different tools.
-                    val toolDefinitions = promptToolDefinitions(tools)
                     // Which protocol is live for this run. `native=false` against a backend that
                     // should call natively is the first thing to check when a call reaches the chat
                     // as text instead of running.
                     AgentTrace.stage(
                         "PROTOCOL",
-                        "native=${callsToolsNatively()} tools=${toolDefinitions.size} " +
+                        "native=${backendPrompts.callsToolsNatively()} tools=${toolDefinitions.size} " +
                             toolDefinitions.joinToString(",") { it.name },
                     )
                     val loopResult = agentLoop.run(
@@ -1233,7 +1074,10 @@ class ChatViewModel(
                             withContext(Dispatchers.Main) {
                                 setState(AgentState.Processing(str(R.string.msg_generating)))
                             }
-                            runModelTurn(llmService, turns, config, toolDefinitions, epoch)
+                            val turnConfig = requiredTool?.takeIf { firstTurn }
+                                ?.let { VerificationPolicy.requiring(config, it) } ?: config
+                            firstTurn = false
+                            runModelTurn(llmService, turns, turnConfig, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
                         // Read through the handler, so a path spelled `path` or left to a default
@@ -1244,8 +1088,12 @@ class ChatViewModel(
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
+                        requiredTool = requiredTool,
                         events = AgentRunReporter(runNotices),
                     )
+                    if (loopResult.completed && generationEpoch.get() == epoch) {
+                        runCodeReply?.let { draft -> reviewAnswer(llmService, userMessage, draft, history, epoch) }
+                    }
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
                     if (loopResult.completed && generationEpoch.get() == epoch) {
                         titleRequestStarted = withContext(Dispatchers.Main) {
@@ -1285,6 +1133,73 @@ class ChatViewModel(
                     if (!titleRequestStarted) titleSessionId?.let(::settleTitle)
                 }
             }
+        }
+    }
+
+    /**
+     * Checks [draft] in a second request and, when that returns a corrected answer, shows it in
+     * the draft's bubble and keeps it in [history] in the draft's place. Every other outcome — a
+     * failure, a timeout, a reply cut off before its end marker — leaves the draft as it was.
+     *
+     * Skipped when the run changed the project, since that answer reports work already done, and
+     * on the on-device backend, where writing the answer a second time takes minutes.
+     *
+     * @param llmService the inference service the run used.
+     * @param request what the user asked.
+     * @param draft the run's last reply holding code.
+     * @param history the run's transcript, updated in place.
+     * @param epoch the run's epoch; a Stop or a newer message makes the result stale.
+     */
+    private suspend fun reviewAnswer(
+        llmService: LlmInferenceService,
+        request: String,
+        draft: CodeReply,
+        history: MutableList<LlmInferenceService.ChatMessage>,
+        epoch: Int,
+    ) {
+        if (runChangedProject || currentBackendId == AiBackend.LOCAL_ID) return
+        withContext(Dispatchers.Main) { setState(AgentState.Processing(str(R.string.msg_reviewing))) }
+        val evidence = withContext(Dispatchers.Main) { runToolLog.joinToString("\n\n") }
+        val started = System.currentTimeMillis()
+        val response = try {
+            val prompts = sharedPromptConfig.config()
+            val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
+                temperature = AnswerReview.TEMPERATURE
+                maxTokens = replyTokenCap()
+                systemPrompt = AnswerReview.systemPrompt(prompts, SessionContext.current().currentTime)
+            }
+            withTimeoutOrNull(AnswerReview.TIMEOUT_MS) {
+                llmService.generateCompletion(
+                    AnswerReview.prompt(prompts, request, evidence, draft.displayText),
+                    config,
+                ).await()
+            }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            logWarn("answer review failed", e)
+            return
+        }
+        val ms = System.currentTimeMillis() - started
+        if (response == null || !response.success) {
+            AgentTrace.stage("REVIEW", "kept draft ms=$ms (${response?.error ?: "timed out"})")
+            return
+        }
+        val corrected = AnswerReview.corrected(response.text.orEmpty(), draft.displayText)
+        AgentTrace.stage("REVIEW", "changed=${corrected != null} ms=$ms chars=${corrected?.length ?: 0}")
+        if (corrected == null || generationEpoch.get() != epoch) return
+        // The draft's turn, so a follow-up question builds on the answer the user was shown.
+        val turn = history.indexOfLast {
+            it.role == LlmInferenceService.ChatMessage.Role.ASSISTANT && it.content == draft.historyText
+        }
+        if (turn >= 0) {
+            history[turn] = LlmInferenceService.ChatMessage(LlmInferenceService.ChatMessage.Role.ASSISTANT, corrected)
+        }
+        withContext(Dispatchers.Main) {
+            val shown = _messages.value.firstOrNull { it.id == draft.messageId } ?: return@withContext
+            val updated = shown.copy(text = corrected, historyText = null)
+            _messages.value = _messages.value.map { if (it.id == draft.messageId) updated else it }
+            syncMessageToSession(updated)
         }
     }
 
@@ -1350,14 +1265,16 @@ class ChatViewModel(
         userText: String,
         replyText: String,
     ) {
-        val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
-            temperature = ChatTitle.TEMPERATURE
-            maxTokens = ChatTitle.MAX_TOKENS
-            systemPrompt = ChatTitle.SYSTEM_PROMPT
-        }
         val response = try {
+            // Inside the try: a config that failed to load costs the title, not the chat.
+            val prompts = sharedPromptConfig.config()
+            val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
+                temperature = ChatTitle.TEMPERATURE
+                maxTokens = ChatTitle.MAX_TOKENS
+                systemPrompt = ChatTitle.systemPrompt(prompts)
+            }
             withTimeoutOrNull(ChatTitle.TIMEOUT_MS) {
-                llmService.generateCompletion(ChatTitle.prompt(userText, replyText), config).await()
+                llmService.generateCompletion(ChatTitle.prompt(prompts, userText, replyText), config).await()
             }
         } catch (ce: CancellationException) {
             throw ce
@@ -1550,7 +1467,7 @@ class ChatViewModel(
      * @param llmService the inference service.
      * @param turns the conversation so far; the last entry is the current user turn.
      * @param config the generation config.
-     * @param toolDefinitions the tools to offer a natively-calling backend; see [callsToolsNatively].
+     * @param toolDefinitions the tools to offer a natively-calling backend; see [BackendPrompts.callsToolsNatively].
      * @param epoch this run's epoch, for staleness checks against Stop/newer sends.
      * @return the turn: the reply with any native calls rendered into it for extraction, beside the
      *   text the model itself wrote, which is what the transcript keeps.
@@ -1654,6 +1571,9 @@ class ChatViewModel(
                         noResponseText = str(R.string.agent_no_response),
                         unparsedReplyText = { str(unparsedReplyMessage(it)) },
                     )
+                    if (AnswerReview.holdsCode(displayText)) {
+                        runCodeReply = CodeReply(agentMessageId, displayText, reply.historyText)
+                    }
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val finalMsg = ChatMessage(
@@ -1808,6 +1728,7 @@ class ChatViewModel(
         }
         activityMessageId = null
         runToolNames.clear()
+        runToolLog.clear()
     }
 
     /**
@@ -1828,6 +1749,7 @@ class ChatViewModel(
             status = status,
             // Any non-null value: a null one is what the adapter animates generating-dots on.
             durationMs = 0L,
+            toolLog = runToolLog.takeIf { it.isNotEmpty() }?.joinToString("\n\n"),
         )
         activityMessageId = message.id
         _messages.value = if (existing) {

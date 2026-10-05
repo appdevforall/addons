@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.Sender
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.SHIPPED_ROOT
+import com.itsaky.androidide.plugins.aicore.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Role
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -16,7 +19,10 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -54,6 +60,8 @@ class ChatViewModelPromptEditTest {
     /** Backs the preferences mock; concurrent because the persist scope writes from its own thread. */
     private val stored = ConcurrentHashMap<String, String>()
 
+    private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     @Before
     fun setUp() {
         // ChatViewModel's stateIn() calls run on viewModelScope, i.e. Dispatchers.Main.
@@ -73,12 +81,16 @@ class ChatViewModelPromptEditTest {
             if (value == null) stored.remove(key) else stored[key] = value
             editor
         }
+        // A run renders its prompts from this config, which the plugin loads on activation.
+        runBlocking { sharedPromptConfig.preload(configScope, DirectoryPromptConfigSource(SHIPPED_ROOT)).await() }
     }
 
     @After
     fun tearDown() {
         SharedServices.clear()
         Dispatchers.resetMain()
+        sharedPromptConfig.clear()
+        configScope.cancel()
     }
 
     @Test

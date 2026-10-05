@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-mode palette. Mirrors values/colors.xml name-for-name; selected automatically when the
+     IDE is in night mode. See values/colors.xml for the mechanism. -->
+<resources>
+    <color name="plugin_primary">#2DD4BF</color>
+    <color name="plugin_on_primary">#0A3A36</color>
+    <color name="plugin_primary_container">#134E4A</color>
+    <color name="plugin_on_primary_container">#CCFBF1</color>
+
+    <color name="plugin_secondary">#D4D4D4</color>
+    <color name="plugin_on_secondary">#0A0A0A</color>
+    <color name="plugin_secondary_container">#171717</color>
+    <color name="plugin_on_secondary_container">#FAFAFA</color>
+
+    <color name="plugin_surface">#0A0A0A</color>
+    <color name="plugin_on_surface">#FAFAFA</color>
+    <color name="plugin_surface_variant">#171717</color>
+    <color name="plugin_on_surface_variant">#A3A3A3</color>
+    <color name="plugin_surface_dim">#000000</color>
+
+    <color name="plugin_outline">#525252</color>
+    <color name="plugin_outline_variant">#262626</color>
+
+    <color name="plugin_error">#FCA5A5</color>
+    <color name="plugin_on_error">#5A1F1F</color>
+    <color name="plugin_error_container">#5A1F1F</color>
+    <color name="plugin_on_error_container">#FECACA</color>
+
+    <color name="plugin_success">#86EFAC</color>
+    <color name="plugin_success_container">#14532D</color>
+
+    <color name="plugin_text_muted">#A3A3A3</color>
+    <color name="plugin_text_subtle">#525252</color>
+
+</resources>

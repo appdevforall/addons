@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Claude — Guide</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+  th, td {
+    border: 1px solid #e0e0e0;
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    font-size: 0.95em;
+  }
+  th { background: #fafafa; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>AI Agent Claude — Anthropic's Claude for the Agent</h1>
+
+  <p><b>AI Agent Claude</b> is a headless plugin: it has no screens of its own,
+  only a settings pane inside AI Core. It adds the <code>claude</code> backend to
+  <b>AI Core</b>, which routes requests from the Agent chat, <b>Code
+  Suggestions</b> and <b>Speech to Text</b>. Install <b>AI Core</b> as well —
+  without it this plugin has nothing to register with.</p>
+
+  <h2>Setup</h2>
+  <ul>
+    <li><b>API key</b> — required. Tap <b>Get API Key</b> to open the Claude
+      Console in your browser, create a key (it starts with
+      <code>sk-ant-</code>), copy it, paste it into the field and tap
+      <b>Save Key</b>. The key is checked with Claude before it is saved.</li>
+    <li><b>Model</b> — one field that is also a list: type any model id, or tap
+      it to pick one your key can use. Typing is saved when you leave the field.
+      The default is <code>claude-opus-5-5</code>, which suits building apps;
+      <code>claude-fable-5-1</code> is more capable and costs more,
+      <code>claude-sonnet-5-5</code> is faster and cheaper, and
+      <code>claude-haiku-4-5</code> is fastest and cheapest.</li>
+    <li><b>Test Connection &amp; List Models</b> — checks the key without saving
+      it, and fills the model list from the same reply.</li>
+  </ul>
+
+  <div class="note">
+    The key is stored encrypted with the Android Keystore, and is sent as an
+    <code>x-api-key</code> header — never in a URL, where it would leak into logs
+    and proxies.
+  </div>
+
+  <h2>How the Agent uses Claude</h2>
+  <p>The Agent's tools — reading, searching and editing files, building and
+  running the app — are declared to Claude directly, so its calls arrive as
+  structured data rather than text that has to be written exactly right. A file
+  whose contents contain quotes or line breaks cannot break a call.</p>
+  <p>Most Claude models think before they answer (Haiku 4.5 does not). That
+  thinking is never shown, but it takes time, so a pause before the first word of
+  a reply is normal.</p>
+
+  <h2>Cost</h2>
+  <p>The Claude API is not free. It draws on prepaid credit in the Claude Console
+  and is <b>separate from a Claude.ai subscription</b> — paying for Claude.ai does
+  not give you API access. If you want to use the Agent without paying, use
+  <b>AI Agent Local</b> to run a small model on the device, or <b>AI Agent
+  Gemini</b>, which has a free tier.</p>
+
+  <h2>Privacy</h2>
+  <p>Prompts, and any file contents a plugin includes in them, are sent to
+  Anthropic over HTTPS. Your code leaves the device.</p>
+
+  <h2>What it does not do</h2>
+  <ul>
+    <li><b>Semantic search.</b> Anthropic has no embeddings service, so
+      <b>Vector Search</b> needs the OpenAI or Gemini backend to index a
+      project.</li>
+  </ul>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><b>"Claude refused your API key"</b> — the key is wrong or revoked;
+      re-enter it.</li>
+    <li><b>"Your Claude API credit balance is too low"</b> — add credit in the
+      Claude Console.</li>
+    <li><b>"Claude is overloaded or unavailable"</b> — Claude is busy. If no
+      reply had appeared yet, the request was already retried twice; try again in
+      a moment.</li>
+    <li><b>"Claude stopped sending its reply partway through"</b> — Claude went
+      silent for two minutes. Try again, or ask for a smaller change.</li>
+    <li><b>"This key is not in a workspace"</b> — Claude needs a workspace ID
+      with this key. A <b>Workspace ID</b> field appears under the key: workspace
+      IDs start with <code>wrkspc_</code> and are listed in the Claude Console
+      under <b>Workspaces</b>. Paste the ID and tap <b>Save Key</b> again.</li>
+    <li><b>"Claude declined to answer this request"</b> — a safety check stopped
+      the reply. Rephrase the request, or pick a different model.</li>
+    <li><b>"Claude has no model called …"</b> — tap <b>Test Connection &amp; List
+      Models</b>, then pick from the Model field.</li>
+    <li><b>The <code>Claude</code> backend never appears</b> — AI Core isn't
+      installed or activated; install it and restart the IDE.</li>
+  </ul>
+</body>
+</html>

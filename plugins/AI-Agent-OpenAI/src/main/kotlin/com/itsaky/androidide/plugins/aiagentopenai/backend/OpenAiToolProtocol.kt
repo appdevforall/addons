@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aiagentopenai.backend
 
+import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallRequest
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallingBackend.EXTRA_PARAM_REQUIRED_TOOL
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,6 +20,21 @@ internal object OpenAiToolProtocol {
      * and a pathologically deep one would otherwise recurse until the host process dies.
      */
     private const val MAX_SCHEMA_DEPTH = 12
+
+    /**
+     * The `tool_choice` that makes the model call [config]'s required tool this turn.
+     *
+     * @param config the turn's config; its `required_tool` extra names the tool.
+     * @param tools the tools the request declares.
+     * @return the choice, or null when none is required or the required one is not declared.
+     */
+    fun requiredToolChoice(config: LlmConfig, tools: List<ToolDefinition>): JSONObject? {
+        val name = config.extraParams?.get(EXTRA_PARAM_REQUIRED_TOOL) as? String ?: return null
+        if (tools.none { it.name == name }) return null
+        return JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject().put("name", name))
+    }
 
     /**
      * One `tool_calls` fragment as it arrives on the stream.

@@ -12,9 +12,11 @@ interface ToolHandler {
     val toolName: String
 
     /**
-     * Description of what this tool does.
+     * What this tool does, for a contributed tool, which brings its own. Empty for a built-in: its
+     * wording, arguments included, is `tool_descriptions.yml`'s; see `ToolDescriptions`.
      */
     val description: String
+        get() = ""
 
     /**
      * Execute the tool with the given arguments.

@@ -8,17 +8,25 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Ro
 /**
  * The agentic tool-loop: each turn renders the transcript into a prompt, generates a
  * reply, and runs any tool calls, looping until the model stops or a limit is hit.
- * Free of Android/coroutine/UI deps so it unit-tests with plain fakes.
+ * Free of Android/coroutine/UI deps so it unit-tests with plain fakes; knows no wording.
+ *
+ * @param formatToolResults words each batch's results as the next user turn.
+ * @param unfinishedTurn words the turn sent when a run that has used tools ends a reply without
+ *   [terminalTool]; null ends the run on that reply instead.
+ * @param requiredToolTurn words the turn sent when a run told to call a tool first tries to finish
+ *   without it; receives the tool's name. Null never asks.
  */
 class AgentLoop(
+    private val formatToolResults: ToolResultsFormatter,
     private val maxIterations: Int = DEFAULT_MAX_ITERATIONS,
-    private val toolOutputCharLimit: Int = DEFAULT_TOOL_OUTPUT_CHAR_LIMIT,
     private val maxConsecutiveRepeats: Int = DEFAULT_MAX_CONSECUTIVE_REPEATS,
     private val maxTurnsWithoutProgress: Int = DEFAULT_MAX_TURNS_WITHOUT_PROGRESS,
     private val extractToolCalls: (String) -> List<ToolCall> = ToolCallExtractor::extractToolCalls,
     private val diagnoseUnparsedReply: (String) -> ToolCallExtractor.UnparsedReply? =
         ToolCallExtractor::diagnoseUnparsedReply,
     private val terminalTool: String? = null,
+    private val unfinishedTurn: (suspend () -> String)? = null,
+    private val requiredToolTurn: (suspend (String) -> String)? = null,
 ) {
 
     companion object {
@@ -28,9 +36,6 @@ class AgentLoop(
          * repeated-call guard and per-write approval are the tighter limits.
          */
         const val DEFAULT_MAX_ITERATIONS = 16
-
-        /** Per-tool-result cap fed back into the prompt, so big outputs don't blow a local model's context. */
-        const val DEFAULT_TOOL_OUTPUT_CHAR_LIMIT = 4000
 
         /**
          * Consecutive identical tool-call batches tolerated before aborting as
@@ -134,6 +139,23 @@ class AgentLoop(
          * @param turn 1-based turn index.
          */
         suspend fun onAbandonedAfterFailure(turn: Int) {}
+
+        /**
+         * A run that has used tools replied without the terminal tool, so it was asked to finish
+         * or carry on rather than being ended on that reply.
+         *
+         * @param turn 1-based turn index.
+         */
+        suspend fun onUnfinishedReply(turn: Int) {}
+
+        /**
+         * The run was told to call [tool] before answering and tried to finish without it, so it
+         * was asked to call it; a backend that forces the call never reaches this.
+         *
+         * @param turn 1-based turn index.
+         * @param tool the tool the run had to call.
+         */
+        suspend fun onRequiredToolSkipped(turn: Int, tool: String) {}
     }
 
     /** Why the loop stopped. */
@@ -178,6 +200,8 @@ class AgentLoop(
      * @param pathsOf the project paths a call names; the progress guard counts an earlier look at
      *   one a later call rewrote as a new action again rather than as a repeat.
      * @param changesPaths whether a call rewrites what it names.
+     * @param requiredTool a tool the run must call before it may finish, e.g. a web search before a
+     *   code review; asked for once through [requiredToolTurn]. Null requires nothing.
      * @param events UI/state callbacks.
      * @return the run [Result].
      */
@@ -187,6 +211,7 @@ class AgentLoop(
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
         pathsOf: (ToolCall) -> Set<String> = { emptySet() },
         changesPaths: (ToolCall) -> Boolean = { false },
+        requiredTool: String? = null,
         events: Events = object : Events {},
     ): Result {
         var turn = 0
@@ -196,6 +221,11 @@ class AgentLoop(
             pathsOf,
             changesPaths,
         )
+        // Once a tool has run, only the terminal tool finishes the run; see [unfinishedTurn].
+        var toolsRan = false
+        var askedToFinish = false
+        // Cleared once the tool runs or has been asked for, so a model that refuses it still stops.
+        var requiredPending = requiredTool != null && requiredToolTurn != null
         while (turn < maxIterations) {
             turn++
 
@@ -218,6 +248,18 @@ class AgentLoop(
                     events.onUnparsedReply(turn, unparsed)
                     return Result(turn, StopReason.UNPARSABLE)
                 }
+                if (requiredPending) {
+                    requiredPending = false
+                    askForRequiredTool(turn, requiredTool!!, history, events)
+                    continue
+                }
+                // Asked once per stretch of prose, so a model that will not call it still stops.
+                if (toolsRan && !askedToFinish && unfinishedTurn != null) {
+                    askedToFinish = true
+                    events.onUnfinishedReply(turn)
+                    history.add(ChatMessage(Role.USER, unfinishedTurn.invoke()))
+                    continue
+                }
                 // Prose after a failed batch is the model giving up, not finishing: the run ends
                 // with the user's request unmet, so reporting it COMPLETED overstates the outcome.
                 if (progress.lastBatchFailed) {
@@ -231,6 +273,12 @@ class AgentLoop(
             val realCalls = terminalTool?.let { tt ->
                 calls.filterNot { isTerminalToolName(it.name, tt) }
             } ?: calls
+            // Only the terminal tool: an answer, which a run owing its required tool may not give yet.
+            if (realCalls.isEmpty() && requiredPending) {
+                requiredPending = false
+                askForRequiredTool(turn, requiredTool!!, history, events)
+                continue
+            }
             terminalTool?.let { tt ->
                 val terminal = calls.firstOrNull { isTerminalToolName(it.name, tt) }
                 if (terminal != null && realCalls.isEmpty()) {
@@ -256,13 +304,27 @@ class AgentLoop(
             }
 
             val results = executeTools(realCalls)
+            if (realCalls.any { it.name == requiredTool }) requiredPending = false
+            toolsRan = true
+            askedToFinish = false
             progress.recordResults(results)
             events.onToolResults(turn, realCalls, results)
-            history.add(ChatMessage(Role.USER, formatToolResults(realCalls, results)))
+            history.add(ChatMessage(Role.USER, formatToolResults.format(realCalls, results)))
         }
 
         events.onMaxIterationsReached(turn)
         return Result(turn, StopReason.MAX_ITERATIONS)
+    }
+
+    /** Records the reply as not finishing the run and asks for [tool] in the next user turn. */
+    private suspend fun askForRequiredTool(
+        turn: Int,
+        tool: String,
+        history: MutableList<ChatMessage>,
+        events: Events,
+    ) {
+        events.onRequiredToolSkipped(turn, tool)
+        history.add(ChatMessage(Role.USER, requiredToolTurn!!.invoke(tool)))
     }
 
     /**
@@ -283,51 +345,4 @@ class AgentLoop(
         }
         return sb.toString()
     }
-
-    /**
-     * Renders tool results for the next prompt, capping each body and wrapping it in
-     * `<tool_response>` tags that chat-tuned models are trained to read. Handed the same content as
-     * bare prose, a small model tends to re-issue the call it already ran.
-     * @param calls the tool calls that ran.
-     * @param results their results, positionally aligned with [calls].
-     * @return the formatted results block.
-     */
-    fun formatToolResults(calls: List<ToolCall>, results: List<ToolResult>): String {
-        val sb = StringBuilder()
-        results.forEachIndexed { index, result ->
-            val name = calls.getOrNull(index)?.name ?: "tool"
-            val body = if (result.success) {
-                buildString {
-                    append(result.message)
-                    result.data?.takeIf { it.isNotBlank() }?.let { append("\n").append(it) }
-                }
-            } else {
-                buildString {
-                    append("FAILED: ").append(result.message)
-                    result.error_details?.takeIf { it.isNotBlank() }?.let { append("\n").append(it) }
-                }
-            }
-            sb.append("<tool_response>\n")
-                .append("[").append(name).append("] ").append(truncate(body)).append("\n")
-                .append("</tool_response>\n\n")
-        }
-        sb.append(
-            "Base your reply strictly on the tool result(s) above — report only what they actually say; " +
-                "do not invent, assume, or contradict them. "
-        )
-        if (results.isNotEmpty() && results.all { it.success }) {
-            sb.append(
-                "The action succeeded. If this satisfies the user's request, you are DONE — reply with the " +
-                    "\"respond\" tool briefly confirming what happened. Do NOT call another tool unless the " +
-                    "request clearly needs a further step."
-            )
-        } else {
-            sb.append("If the task is complete, give the user your final answer. Otherwise, call the next tool.")
-        }
-        return sb.toString()
-    }
-
-    private fun truncate(text: String): String =
-        if (text.length <= toolOutputCharLimit) text
-        else text.take(toolOutputCharLimit) + "\n…[truncated ${text.length - toolOutputCharLimit} chars]"
 }

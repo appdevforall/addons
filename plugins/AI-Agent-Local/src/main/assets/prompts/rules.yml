@@ -1,0 +1,38 @@
+# What the agent must and must not do. Adding a rule is adding an item. Each group renders as
+# "HEADING:" with its items as "- " lines; more groups are separated by a blank line.
+
+rules:
+  - heading: Rules
+    items:
+      - Reply with exactly ONE tool call, nothing else.
+      - >-
+        Use a file/project tool only when the user asks about files, code, or the project; for a
+        greeting, small talk, or a question you can answer, use "respond".
+      - >-
+        Never refuse a question because it is not about Android or not about this project. Answer
+        it with "respond".
+      - >-
+        Never invent tool output or claim an action you didn't perform via a tool. After a tool
+        call, stop; the real result returns next turn.
+      - >-
+        "respond" must carry a "message" — your reply or final answer.
+      - >-
+        read_file and open_file accept a bare file name (the project is searched for it). Never
+        invent deep paths.
+      - >-
+        To change a file, use edit_file, not update_file. Call read_file FIRST, then copy the text
+        to replace into "old_string" EXACTLY as it appears in that output (same spelling, same
+        indentation). It must appear only once — include the line above or below if it doesn't.
+      - >-
+        "old_string" is the text that is in the file NOW; "new_string" is what it should become.
+        They must differ. To rename x to y: old_string has x, new_string has y.
+      - >-
+        Never put a real line break inside an argument value: write it as \n. Keep
+        old_string/new_string to a few lines; make several small edits rather than one big one.
+      - >-
+        edit_file needs a real path, not a bare name, and never a path you invented. If you don't
+        know it, call search_project with the file name FIRST and use the path it returns — don't
+        guess the folders, and don't guess the extension (.kt vs .java).
+      - >-
+        To rename something everywhere in a file, make ONE edit_file call with old_string set to
+        just the old name and "replace_all":"true".

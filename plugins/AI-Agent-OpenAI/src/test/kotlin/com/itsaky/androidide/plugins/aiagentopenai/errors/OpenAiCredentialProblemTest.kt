@@ -39,6 +39,7 @@ class OpenAiCredentialProblemTest {
             OpenAiFailure.Unexpected(418, null),
             OpenAiFailure.ServerNotRunning,
             OpenAiFailure.Unreachable,
+            OpenAiFailure.TimedOut(180),
             OpenAiFailure.EmptyReply(skippedChunks = 3),
             OpenAiFailure.ReasoningOnly,
             OpenAiFailure.TruncatedBeforeReply,

@@ -124,6 +124,45 @@ would leave the caller waiting on a call this backend never makes. The system
 prompt also tells the model not to use its own function-calling channel, since
 nothing reads it.
 
+## System prompt config
+
+The prompt this backend asks ai-core to send lives in `src/main/assets/prompts/`,
+one YAML file per concern, apart from the code that sends it. Changing the tone,
+adding a rule or translating the prompt is an edit to those files alone. ai-core
+appends its own IDE CONTEXT block after the rendered prompt.
+
+The files are loaded, validated and cached once, when the plugin is activated.
+`getSystemPrompt` renders `layout.yml` from that cache for each request, since the
+tool list, the protocol and the example path vary per run; it never waits. Until the
+config has loaded, or if it cannot render, it returns null and ai-core sends its own
+default prompt.
+
+| File | Keys | What it is |
+|---|---|---|
+| `agent.yml` | `schema_version`, `identity`, `include` | The entry point: the version (`1`; another is refused rather than misread), who the agent is, and the files below. |
+| `scope.yml` | `scope` | What the agent will answer: anything, with the project's tools only when the request is about the open project. |
+| `rules.yml` | `rules` | Rule groups, each a `heading` and its `items`; today one `RULES` group. **Adding a rule is adding an item**; a further group, e.g. by priority, renders as its own block. |
+| `workflow.yml` | `behavior`, `workflow` | How to go about building or changing something; the workflow's `steps` are numbered when rendered. |
+| `tools.yml` | `tools`, `tool_call_format` | What introduces the tool list, and how to call a tool: `native` under the function-calling API, `text` (with its examples) when calls travel in the reply. Exactly one is sent. |
+| `layout.yml` | `layout.system_prompt` | Where each text goes. |
+
+The files, the names they are rendered under and the checks are AI-Agent-Gemini's
+(see its README), and `scope.yml` and `workflow.yml` are identical to its copies;
+edit the two plugins together. The one intended difference is
+`tool_call_format.text.no_native_channel`, the line forbidding the provider's native
+function-calling channel under the text protocol (`TOOL_CALL_FORMAT_TEXT_NO_NATIVE_CHANNEL`).
+
+Rendering is strict: an unknown name throws, naming the text it was in, where the
+file-per-section design this replaced dropped the file silently. Activation renders
+the prompt for requests that open and close every section and logs any failure, and
+`OpenAiSystemPromptTest` fails on one in the shipped files. A new key needs
+`OpenAiPromptConfig` and its parser; a new name needs `OpenAiPromptVariables`.
+
+The engine and the YAML plumbing (`PromptTemplateEngine`, `PromptConfigLoader`,
+`PromptConfigStore`, `PromptConfigObject`, ...) are the IDE's, in `plugin-api.jar`'s
+`com.itsaky.androidide.plugins.ai.prompt`, shared with ai-core and the other backends.
+Only `OpenAiPromptConfig`, its mapping in `OpenAiPromptConfigParser`, and `sharedPromptConfig` are this plugin's own.
+
 ## Key classes
 
 Every source file sits in a package named for its layer; nothing is loose at the
@@ -139,7 +178,9 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `errors/OpenAiErrorFormatter.kt` — turns a failure into one translated sentence
 - `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 - `preferences/OpenAiPreferences.kt` — this plugin's settings store
-- `prompt/OpenAiSystemPrompt.kt` — the system prompt this cloud model is given
+- `prompt/OpenAiSystemPrompt.kt` — renders `layout.yml` from `OpenAiPromptVariables`;
+  `prompt/config/` maps `assets/prompts/` onto this plugin's config type, which the
+  IDE's `ai.prompt` package loads, validates, caches and renders
 - `settings/BaseUrlPolicy.kt` — URL normalization and the cleartext rule (pure)
 - `settings/ServerPreset.kt` — the one-tap server list
 - `settings/ConnectionVerification.kt` — what a live check established (pure)

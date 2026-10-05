@@ -58,9 +58,9 @@ All 12 entries passed that final HEAD cross-check, re-run after the most recent 
 
 ## Catalog entries (maintainer-selected)
 
-**This catalog is a maintainer override, not a gate-derived list.** The six models below were named
-explicitly by the ticket owner, replacing the eleven gate-passing entries that shipped earlier. Three
-of the six break at least one hard gate; those gates are therefore **no longer enforced** in
+**This catalog is a maintainer override, not a gate-derived list.** The first six models below were
+named explicitly by the ticket owner, replacing the eleven gate-passing entries that shipped
+earlier; the seventh was requested later in ADFA-6321. Three of the six break at least one hard gate; those gates are therefore **no longer enforced** in
 `CatalogLoader` (licence, 16k context) nor asserted in `CatalogLoaderTest`.
 
 | Entry id | Base model | GGUF uploader | Ctx | Licence | Gate waived |
@@ -71,8 +71,14 @@ of the six break at least one hard gate; those gates are therefore **no longer e
 | `llama-3-2-1b-instruct-q4_k_m` | `meta-llama/Llama-3.2-1B-Instruct` | unsloth | 131072 | llama3.2 | **2** (Llama 3.2 Community Licence; upstream repo gated) |
 | `smollm2-360m-instruct-q8_0` | `HuggingFaceTB/SmolLM2-360M-Instruct` | Hugging Face TB | 8192 | apache-2.0 | **7** (8192 context) |
 | `h2o-danube3-500m-base-q4_k_m` | `h2oai/h2o-danube3-500m-base` | mradermacher | 8192 | apache-2.0 | **1** (base model), **7** (8192 context) |
+| `qwen2-5-coder-1-5b-instruct-q4_k_m` | `Qwen/Qwen2.5-Coder-1.5B-Instruct` | Qwen (Alibaba Cloud) | 32768 | apache-2.0 | none |
 
-Gates 3 and 4 remain unproven for all six, as before. Gate 5 (chat template) does not apply to the
+`qwen2-5-coder-1-5b-instruct-q4_k_m` was added by ADFA-6321: it is the only code-trained model in
+the catalog. Its gates 1, 2, 5, 6 and 7 were re-checked against the API on 2026-10-02, and
+`minRamBytes` is 4 GiB because it is the largest file here (1.04 GiB), one step above the 3 GiB of
+the ~0.8 GB entries.
+
+Gates 3 and 4 remain unproven for all seven, as before. Gate 5 (chat template) does not apply to the
 two base models - they have none, which is part of why they are not usable as assistants. Gate 6
 holds for every entry: single file, sha256 pinned to a commit revision, HEAD-verified.
 
