@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailureLog
@@ -23,7 +24,9 @@ import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlPolicy
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlResult
 import com.itsaky.androidide.plugins.aiagentopenai.settings.ServerPresets
 import com.itsaky.androidide.plugins.services.CapabilityStatus
+import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
+import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.BufferedReader
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -83,6 +86,14 @@ class OpenAiBackend(
 
     @Volatile
     private var probeJob: Job? = null
+
+    /** Restarts [checkServer] when the user selects this backend again, if its last check failed. */
+    private val selectionWatch = BackendChangeListener { id ->
+        val reading = health.readingFor(getBaseUrl())
+        if (id == BACKEND_ID && probeJob?.isActive != true &&
+            reading.status != CapabilityStatus.AVAILABLE && reading.problem != ServerProblem.KEY_REFUSED
+        ) checkServer()
+    }
 
     private val keyCache =
         ApiKeyCache(::openAiPrefs, OpenAiPreferences.KEY_API_KEY, context.logger, scope)
@@ -320,16 +331,19 @@ class OpenAiBackend(
 
     /**
      * Asks the configured server for `/models`, off-thread, and records whether it answered.
-     * While it stays unreachable or failing it is asked again every [RECHECK_INTERVAL_MS]; a
-     * refused key is not, since only the user can fix it. Replaces a check already running.
+     * While it stays unreachable or failing and this backend stays selected, it is asked again every
+     * [RECHECK_INTERVAL_MS]; a refused key is not, since only the user can fix it. Replaces a check
+     * already running.
      */
     fun checkServer() {
         if (!scope.isActive) return
+        // Here rather than once: AI Core calls back through onRegistered after each of its restarts.
+        inferenceService()?.addBackendChangeListener(selectionWatch)
         probeJob?.cancel()
         probeJob = scope.launch {
             while (isActive) {
                 // Not set up is reported as such by isAvailable; asking OpenAI with no key is noise.
-                if (!isAvailable()) return@launch
+                if (!isAvailable() || !isSelected()) return@launch
                 val reading = probe(getBaseUrl())
                 // The probe blocks on a socket, so close() may have landed while it waited.
                 if (!isActive) return@launch
@@ -341,6 +355,16 @@ class OpenAiBackend(
             }
         }
     }
+
+    /** Whether AI Core routes to this backend; with nothing selected yet it may, so that counts. */
+    private fun isSelected(): Boolean =
+        inferenceService()?.preferredBackendId.let { it == null || it == BACKEND_ID }
+
+    private fun inferenceService(): LlmInferenceService? = runCatching {
+        SharedServices.get(LlmInferenceService::class.java) ?: context.getPluginService(
+            LlmBackendRegistration.AI_CORE_PLUGIN_ID, LlmInferenceService::class.java,
+        )
+    }.getOrNull()
 
     private fun probe(baseUrl: String): HealthReading = try {
         probeHttp.get(baseUrl + MODELS_PATH, readApiKeyOrBlank())
@@ -1043,6 +1067,7 @@ class OpenAiBackend(
 
     /** Release all resources: cancel the backend scope, any in-flight request, and the key cache. */
     fun close() {
+        inferenceService()?.removeBackendChangeListener(selectionWatch)
         currentJob?.cancel()
         probeJob?.cancel()
         probeJob = null

@@ -222,8 +222,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /**
      * Re-asks each enabled server, so its tag in the agent tracks it going down and coming back
      * without the user pressing Connect. A broken or never-reached server is asked every cycle, a
-     * working one every [HEALTHY_PROBE_EVERY]th. Runs until [keepGoing] turns false. A server whose
-     * cached tools changed, one coming back with the same names included, makes the agent re-read.
+     * working one every [HEALTHY_PROBE_EVERY]th, and one that refused its credential not until the
+     * user changes it. Runs until [keepGoing] turns false. A server whose cached tools changed, one
+     * coming back with the same names included, makes the agent re-read.
      *
      * Servers are asked in parallel, so one that hangs until its timeout delays no other's tag.
      *
@@ -236,8 +237,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             delay(PROBE_INTERVAL_MS)
             cycle++
             val due = McpServerStore.servers().filter { server ->
-                server.enabled && (cycle % HEALTHY_PROBE_EVERY == 0 ||
-                    McpServerHealth.of(server.id)?.state != McpServerHealth.State.AVAILABLE)
+                val health = McpServerHealth.of(server.id)
+                server.enabled && health?.refused != true && (cycle % HEALTHY_PROBE_EVERY == 0 ||
+                    health?.state != McpServerHealth.State.AVAILABLE)
             }
             val toolsChanged = coroutineScope {
                 due.map { server ->

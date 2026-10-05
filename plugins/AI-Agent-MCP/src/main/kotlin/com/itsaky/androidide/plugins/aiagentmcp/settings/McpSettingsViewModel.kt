@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.Dispatchers
@@ -171,6 +172,7 @@ class McpSettingsViewModel(
                 val headersStored = headers?.let { McpServerStore.setHeaders(server.id, it) } ?: true
                 // A credential change has to invalidate the session, or the old one keeps working.
                 McpConnections.invalidate(server.id)
+                McpServerHealth.credentialChanged(server.id)
                 val failure = when {
                     !tokenStored -> string(R.string.mcp_token_save_failed)
                     !headersStored -> string(R.string.mcp_headers_save_failed)
@@ -200,6 +202,7 @@ class McpSettingsViewModel(
                 val headersCleared = McpServerStore.setHeaders(id, emptyMap())
                 // The session was keyed by the credential it no longer has.
                 McpConnections.invalidate(id)
+                McpServerHealth.credentialChanged(id)
                 tokenCleared && headersCleared
             }
             onDone(cleared)

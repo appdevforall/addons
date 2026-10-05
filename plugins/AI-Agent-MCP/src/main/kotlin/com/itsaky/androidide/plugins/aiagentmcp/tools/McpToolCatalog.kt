@@ -74,13 +74,15 @@ object McpToolCatalog {
      * @param error what it failed with.
      */
     fun recordFailure(server: McpServer, error: Throwable) {
-        if (McpErrorFormatter.classify(error) == McpFailure.Cancelled) {
+        val failure = McpErrorFormatter.classify(error)
+        if (failure == McpFailure.Cancelled) {
             McpServerHealth.cancelConnecting(server.id)
             return
         }
         if (!isConfigured(server.id)) return
         val context = McpPlugin.getContext()?.androidContext
-        McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server.name, error))
+        val refused = failure == McpFailure.TokenRefused || failure == McpFailure.Forbidden
+        McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server.name, error), refused)
     }
 
     private fun isConfigured(serverId: String): Boolean =

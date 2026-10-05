@@ -22,8 +22,9 @@ object McpServerHealth {
     /**
      * @property state the server's state.
      * @property message one sentence for the user when [state] is [State.DEGRADED], else null.
+     * @property refused the server refused the credential, which only the user can fix.
      */
-    data class Health(val state: State, val message: String? = null)
+    data class Health(val state: State, val message: String? = null, val refused: Boolean = false)
 
     private val byServer = ConcurrentHashMap<String, Health>()
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
@@ -56,8 +57,15 @@ object McpServerHealth {
     /**
      * Records that the server could not be used.
      * @param message why, for the user, in the words the settings pane would use.
+     * @param refused whether it refused the credential; see [Health.refused].
      */
-    fun degraded(serverId: String, message: String) = set(serverId, Health(State.DEGRADED, message))
+    fun degraded(serverId: String, message: String, refused: Boolean = false) =
+        set(serverId, Health(State.DEGRADED, message, refused))
+
+    /** Lets the probe ask a server that refused its credential again, once the user changed it. */
+    fun credentialChanged(serverId: String) {
+        byServer.computeIfPresent(serverId) { _, health -> health.copy(refused = false) }
+    }
 
     /** Forgets a server that was removed. */
     fun forget(serverId: String) {
