@@ -1,0 +1,59 @@
+name: Build addon artifacts
+
+# Builds every addon (or one) to prove the tree compiles and packages.
+# It publishes nothing and uploads no artifacts: to get a downloadable URL,
+# run "Publish addons" with staging: true.
+#
+# Two kinds of addon, two build scripts (ADFA-6252). A plugin is a Gradle project
+# that compiles to a .cgp against the CodeOnTheGo jars; a template is a plain-text
+# tree that zips to a .cgt and needs neither. Each script builds only its own kind
+# and ignores a name of the other, so both steps get the same input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      codeonthego_ref:
+        description: CodeOnTheGo branch or tag to build the libs against
+        required: false
+        default: stage
+      addon:
+        description: One addon directory name, e.g. Random-XKCD (blank builds all)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout plugin-examples
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-disabled: true
+          add-job-summary: 'never'
+
+      - name: Refresh libs and build plugins
+        env:
+          CODEONTHEGO_REF: ${{ inputs.codeonthego_ref }}
+          ONLY_ADDON: ${{ inputs.addon }}
+        run: ./scripts/build-plugins.sh --ref "$CODEONTHEGO_REF" ${ONLY_ADDON:+"$ONLY_ADDON"}
+
+      - name: Build templates
+        env:
+          ONLY_ADDON: ${{ inputs.addon }}
+        run: ./scripts/build-templates.sh ${ONLY_ADDON:+"$ONLY_ADDON"}

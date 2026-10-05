@@ -1,0 +1,9 @@
+{
+  "templates": [
+    { "path": "FlutterBasic" },
+    { "path": "FlutterBloc" },
+    { "path": "FlutterProvider" },
+    { "path": "FlutterGetx" },
+    { "path": "FlutterRiverpod" }
+  ]
+}
