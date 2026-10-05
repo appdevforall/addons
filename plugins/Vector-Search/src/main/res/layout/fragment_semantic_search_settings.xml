@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Semantic Search settings screen. Structured like the MCP servers screen beside it in Preferences:
+  a fixed toolbar row, then the scrolling content.
+
+  Only android: attributes: app: ones on library widgets are dropped inside the host, so the
+  dropdown's end icon is set in code. Every colour is a @color/plugin_* reference with a night
+  variant, so the screen follows the IDE's day/night setting.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/plugin_surface"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/vsToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/vs_toolbar_height"
+        android:background="@color/plugin_surface_variant"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageButton
+            android:id="@+id/vsBack"
+            android:layout_width="@dimen/vs_toolbar_icon_size"
+            android:layout_height="@dimen/vs_toolbar_icon_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_vs_back"
+            android:padding="@dimen/vs_toolbar_icon_padding"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_arrow_back"
+            android:tint="@color/plugin_on_surface" />
+
+        <TextView
+            android:id="@+id/vsTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="@string/vs_title"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="@dimen/vs_title_text_size"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/space_lg">
+
+            <TextView
+                android:id="@+id/vsDescription"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/vs_description"
+                android:textAppearance="@style/Plugin.Text.Small" />
+
+            <!-- AI backend: the one selected in AI settings, and whether it can embed. -->
+
+            <TextView
+                android:id="@+id/vsBackendLabel"
+                style="@style/Plugin.SectionHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:text="@string/vs_label_backend" />
+
+            <!-- Shown instead of the backend's details when there is no backend to describe. -->
+            <TextView
+                android:id="@+id/vsBackendMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/Plugin.Text.Body"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/vsBackendDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/vsBackendName"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="@style/Plugin.Text.Body"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/vsBackendSupport"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/space_sm"
+                        android:textAppearance="@style/Plugin.Text.Small"
+                        android:textStyle="bold" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/vsChatModel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:textAppearance="@style/Plugin.Text.Small" />
+
+                <TextView
+                    android:id="@+id/vsBackendHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:textAppearance="@style/Plugin.Text.Small"
+                    android:visibility="gone" />
+
+                <!-- Embedding model: listed from, and stored by, the backend itself. -->
+
+                <TextView
+                    android:id="@+id/vsEmbeddingModelLabel"
+                    style="@style/Plugin.SectionHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xl"
+                    android:text="@string/vs_label_embedding_model" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/vsEmbeddingModelBox"
+                    style="@style/PluginTextInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/vs_hint_embedding_model">
+
+                    <AutoCompleteTextView
+                        android:id="@+id/vsEmbeddingModelInput"
+                        style="@style/PluginTextInputEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:completionThreshold="0"
+                        android:inputType="none"
+                        android:popupBackground="@color/plugin_surface" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:id="@+id/vsEmbeddingModelHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:textAppearance="@style/Plugin.Text.Small" />
+
+                <TextView
+                    android:id="@+id/vsPrivacy"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_lg"
+                    android:textAppearance="@style/Plugin.Text.Body" />
+
+            </LinearLayout>
+
+            <!-- Index: a state first, then progress or the details behind it, then the reset. -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/vsIndexLabel"
+                    style="@style/Plugin.SectionHeader"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/vs_label_index" />
+
+                <TextView
+                    android:id="@+id/vsIndexState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_sm"
+                    android:textAppearance="@style/Plugin.Text.Small"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/vsIndexMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/Plugin.Text.Small"
+                android:visibility="gone" />
+
+            <!-- Progress, while a build for the open project runs. Colours are set in code. -->
+            <LinearLayout
+                android:id="@+id/vsIndexProgressGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/vsIndexProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm" />
+
+                <TextView
+                    android:id="@+id/vsIndexProgressText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:textAppearance="@style/Plugin.Text.Small" />
+
+            </LinearLayout>
+
+            <!-- What the open project's index holds, once there is one. -->
+            <LinearLayout
+                android:id="@+id/vsIndexDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="@dimen/vs_index_label_width"
+                        android:layout_height="wrap_content"
+                        android:text="@string/vs_index_row_chunks"
+                        android:textAppearance="@style/Plugin.Text.Small" />
+
+                    <TextView
+                        android:id="@+id/vsIndexChunks"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="@style/Plugin.Text.Body" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="@dimen/vs_index_label_width"
+                        android:layout_height="wrap_content"
+                        android:text="@string/vs_index_row_files"
+                        android:textAppearance="@style/Plugin.Text.Small" />
+
+                    <TextView
+                        android:id="@+id/vsIndexFiles"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="@style/Plugin.Text.Body" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="@dimen/vs_index_label_width"
+                        android:layout_height="wrap_content"
+                        android:text="@string/vs_index_row_model"
+                        android:textAppearance="@style/Plugin.Text.Small" />
+
+                    <TextView
+                        android:id="@+id/vsIndexModel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="@style/Plugin.Text.Body" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="@dimen/vs_index_label_width"
+                        android:layout_height="wrap_content"
+                        android:text="@string/vs_index_row_last_built"
+                        android:textAppearance="@style/Plugin.Text.Small" />
+
+                    <TextView
+                        android:id="@+id/vsIndexLastBuilt"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="@style/Plugin.Text.Body" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Outlined in the error colour, set in code: it deletes every project's index. -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/vsClearIndex"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:text="@string/vs_clear_index" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

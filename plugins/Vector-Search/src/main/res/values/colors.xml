@@ -1,8 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Light-mode palette. Semantic names shared with the other CoGo AI plugins (see ai-agent-mcp) so
+  both modes have vetted contrast; the accent keeps the in-tree CodeOnTheGo BlueWave default.
+  values-night/colors.xml holds the dark variants, and the host keeps this plugin's inflation
+  Context in sync with the IDE's day/night setting, so a plain @color/plugin_* reference flips.
+-->
 <resources>
-    <!-- Match the in-tree CodeOnTheGo BlueWave default. -->
     <color name="plugin_primary">#485D92</color>
     <color name="plugin_on_primary">#FFFFFF</color>
     <color name="plugin_primary_container">#DAE2FF</color>
     <color name="plugin_on_primary_container">#001847</color>
+
+    <color name="plugin_surface">#FAFAF9</color>
+    <color name="plugin_on_surface">#0A0A0A</color>
+    <color name="plugin_surface_variant">#F5F5F4</color>
+    <color name="plugin_on_surface_variant">#525252</color>
+
+    <color name="plugin_outline">#A3A3A3</color>
+    <color name="plugin_outline_variant">#E5E5E5</color>
+
+    <color name="plugin_error">#B91C1C</color>
+    <color name="plugin_success">#15803D</color>
+    <color name="plugin_warning">#B45309</color>
+
+    <color name="plugin_text_muted">#737373</color>
 </resources>

@@ -54,7 +54,7 @@ class OpenAiSettingsViewModel(
             "gpt-4o-mini",
         )
 
-        /** The embedding half of [FALLBACK_MODELS], offered under the same conditions. */
+        /** OpenAI's current embedding models, kept to when a lookup on its own API fails. */
         private val FALLBACK_EMBEDDING_MODELS = listOf(
             "text-embedding-3-small",
             "text-embedding-3-large",
@@ -80,19 +80,6 @@ class OpenAiSettingsViewModel(
 
     private val _modelsLoading = MutableLiveData(false)
     val modelsLoading: LiveData<Boolean> get() = _modelsLoading
-
-    private val _embeddingModels =
-        MutableLiveData(OpenAiModelOptions(emptyList(), isLive = false))
-    val embeddingModels: LiveData<OpenAiModelOptions> get() = _embeddingModels
-
-    /**
-     * The embedding model the field should show, republished on the same terms as [selectedModel].
-     *
-     * Its own stream rather than a second use of [selectedModel]: the two are separate settings and
-     * a server can retire one while still offering the other.
-     */
-    private val _selectedEmbeddingModel = MutableLiveData<String>()
-    val selectedEmbeddingModel: LiveData<String> get() = _selectedEmbeddingModel
 
     // Last, after every stream it publishes to. Kotlin runs initializers in declaration order, so
     // an init block above them would call publishRememberedModels() while their backing fields are
@@ -170,7 +157,6 @@ class OpenAiSettingsViewModel(
         if (rememberedFor != getBaseUrl()) {
             // Remembered from a different server, so it says nothing about this one.
             publishModels(OpenAiModelOptions(emptyList(), isLive = false))
-            publishEmbeddingModels(OpenAiModelOptions(emptyList(), isLive = false))
             return
         }
         val remembered =
@@ -183,7 +169,7 @@ class OpenAiSettingsViewModel(
             prefs.getString(OpenAiPreferences.KEY_REMEMBERED_EMBEDDING_MODELS, null)
         )
         if (rememberedEmbedding.isNotEmpty()) {
-            publishEmbeddingModels(OpenAiModelOptions(rememberedEmbedding, isLive = false))
+            retireStaleEmbeddingModel(rememberedEmbedding, isLive = false)
         }
     }
 
@@ -210,19 +196,18 @@ class OpenAiSettingsViewModel(
     }
 
     /**
-     * Publishes [options] to the embedding picker and retires the saved embedding model when it is
-     * not among them.
+     * Retires the saved embedding model when this server's catalog does not offer it: the rule of
+     * [publishModels], since a vector space carried over from another server ranks silently wrong.
+     * The picker is on Vector Search's settings screen; this pane only keeps the value valid.
      *
-     * The same rule as [publishModels], applied to the other setting: a vector space carried over
-     * from another server does not fail, it silently ranks against an index it never shared.
+     * @param models the server's embedding models; empty retires nothing
+     * @param isLive true when [models] was fetched just now, so an absent model is really gone
      */
-    private fun publishEmbeddingModels(options: OpenAiModelOptions) {
-        _embeddingModels.postValue(options)
-
+    private fun retireStaleEmbeddingModel(models: List<String>, isLive: Boolean) {
         val replacement = ModelSelection.adopt(
             current = getEmbeddingModel(),
-            models = options.models,
-            isLive = options.isLive,
+            models = models,
+            isLive = isLive,
             savedForThisServer = embeddingModelBelongsToSavedServer(),
             preferred = OpenAiBackend.DEFAULT_EMBEDDING_MODEL,
         ) ?: return
@@ -231,7 +216,6 @@ class OpenAiSettingsViewModel(
             "$TAG: this server does not offer the saved embedding model; switching to $replacement"
         )
         saveEmbeddingModel(replacement)
-        _selectedEmbeddingModel.postValue(replacement)
     }
 
     /**
@@ -272,7 +256,7 @@ class OpenAiSettingsViewModel(
             return
         }
         publishModels(OpenAiModelOptions(FALLBACK_MODELS, isLive = false))
-        publishEmbeddingModels(OpenAiModelOptions(FALLBACK_EMBEDDING_MODELS, isLive = false))
+        retireStaleEmbeddingModel(FALLBACK_EMBEDDING_MODELS, isLive = false)
     }
 
     /**
@@ -463,7 +447,7 @@ class OpenAiSettingsViewModel(
      * Stores [model] as the embedding model, against the server it was chosen for — see
      * [OpenAiPreferences.KEY_EMBEDDING_MODEL_URL].
      */
-    fun saveEmbeddingModel(model: String) {
+    private fun saveEmbeddingModel(model: String) {
         val trimmed = model.trim()
         if (trimmed.isEmpty()) return
         prefs()?.edit()
@@ -472,7 +456,7 @@ class OpenAiSettingsViewModel(
             ?.apply()
     }
 
-    fun getEmbeddingModel(): String =
+    private fun getEmbeddingModel(): String =
         prefs()?.getString(
             OpenAiPreferences.KEY_EMBEDDING_MODEL,
             OpenAiBackend.DEFAULT_EMBEDDING_MODEL,
@@ -506,9 +490,7 @@ class OpenAiSettingsViewModel(
                             // successful test still finds the list.
                             rememberModels(result.models, result.embeddingModels)
                             publishModels(OpenAiModelOptions(result.models, isLive = true))
-                            publishEmbeddingModels(
-                                OpenAiModelOptions(result.embeddingModels, isLive = true)
-                            )
+                            retireStaleEmbeddingModel(result.embeddingModels, isLive = true)
                         }
                     }
                     // Logged by the gateway; degrade to something the user can override.

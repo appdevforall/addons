@@ -12,6 +12,12 @@ via `ProjectSearchExtension`.
 > lexical fallback, because word matches presented as semantic ones look like
 > the feature working badly rather than not running.
 
+**Preferences → Configuration → Semantic Search** shows which backend that is,
+whether it supports Vector Search (and how to fix it if not), and picks its
+embedding model through the backend's `EmbeddingModelSelectable`. It also names
+where indexing sends the code, reports the open project's index, and clears the
+index after confirmation. It needs CoGo **26.41+**.
+
 ## Architecture
 
 ```
@@ -63,13 +69,13 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. No NDK or native toolchain.
 
 ```bash
-cd Vector-Search
-../gradlew assemblePlugin          # release  -> build/plugin/vector-search.cgp
-../gradlew assemblePluginDebug     # debug variant
-../gradlew testDebugUnitTest       # ranking maths and the reindex decision
+cd plugins/Vector-Search
+../../gradlew assemblePlugin          # release  -> build/plugin/vector-search.cgp
+../../gradlew assemblePluginDebug     # debug variant
+../../gradlew testDebugUnitTest       # ranking, indexing, SQL and settings-screen logic
 ```
 
-The build resolves `plugin-api.jar` from the repo-root `../libs/`.
+The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 ## Installation
 
@@ -83,12 +89,19 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## Key classes
 
-- `VectorSearchPlugin.kt` — lifecycle, `ProjectSearchExtension`, search flow
+- `VectorSearchPlugin.kt` — lifecycle, `ProjectSearchExtension`, `SettingsExtension`, search flow
+- `IndexCoordinator.kt` — builds, reuses and clears the index, one operation at a time
+- `VectorSearchHelp.kt` — tooltip tags and entries for the in-app help
+- `BackendWatch.kt` — keeps a `BackendChangeListener` on AI Core across its restarts
+- `settings/BackendCompatibility.kt` — what the screen can say about the selected backend
+- `settings/SemanticSearchSource.kt` — what the screen reads and resets, apart from the plugin
+- `settings/SemanticSearchSettingsFragment.kt` / `…ViewModel.kt` — the Semantic Search screen
 - `EmbedderResolver.kt` — which embedder may be used, and why not when not
 - `EmbedderIdentity.kt` — the provenance stamped onto every stored vector
 - `ReindexDecision.kt` — whether the existing index can answer the query
 - `EmbeddingBatches.kt` — how many chunks go into one call
-- `EmbeddingIndexingService.kt` — file collection, schema, embedding storage (SQLite)
+- `EmbeddingIndexingService.kt` — file collection and embedding storage (SQLite)
+- `EmbeddingsSql.kt` — the schema and every SQL statement, values bound only through `?`
 - `CodeChunker.kt` — splits files into embeddable chunks
 - `VectorSearchService.kt` / `VectorMath.kt` — similarity ranking
 

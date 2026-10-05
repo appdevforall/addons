@@ -192,7 +192,7 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `backend/OpenAiToolProtocol.kt` — `tools[]`, `tool_choice` and the streamed `tool_calls` accumulator (pure)
 - `backend/RequestTuning.kt` — reasoning-model parameters, the 400-retry rule and tool-refusal detection (pure)
 - `backend/SseChunk.kt` — one line of the token stream, text or `tool_calls` deltas (pure)
-- `backend/ModelCatalogFilter.kt` — splits one catalog into the chat and embedding pickers (pure)
+- `backend/ModelCatalogFilter.kt` — splits one catalog into chat and embedding models (pure)
 - `backend/OpenAiEmbeddingProtocol.kt` — the `/v1/embeddings` body, batching and index-ordered reply (pure)
 - `errors/OpenAiErrorFormatter.kt` — turns a failure into one translated sentence
 - `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`

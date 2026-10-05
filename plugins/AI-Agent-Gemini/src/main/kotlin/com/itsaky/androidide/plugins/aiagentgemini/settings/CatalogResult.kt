@@ -9,19 +9,11 @@ package com.itsaky.androidide.plugins.aiagentgemini.settings
 sealed interface CatalogResult {
 
     /**
-     * The backend answered. Either list may be empty, which for [models] is itself suspicious for
-     * a valid key.
-     *
-     * Both halves come from one paginated walk, split by the method each model declares, so they
-     * describe the same snapshot of the same key.
+     * The backend answered. The list may be empty, which is itself suspicious for a valid key.
      *
      * @param models the chat-capable models the key can reach
-     * @param embeddingModels the embedding-capable models the key can reach
      */
-    data class Success(
-        val models: List<String>,
-        val embeddingModels: List<String>,
-    ) : CatalogResult
+    data class Success(val models: List<String>) : CatalogResult
 
     /** No "gemini" backend was resolvable — ai-core or ai-agent-gemini is missing, disabled,
      * or not yet active. */

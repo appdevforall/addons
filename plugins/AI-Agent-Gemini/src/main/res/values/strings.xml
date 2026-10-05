@@ -4,6 +4,7 @@
     <string name="gemini_error_model_unavailable">The model \"%1$s\" is no longer available to your API key. Open AI Settings, tap Refresh Models and choose another model.</string>
     <string name="gemini_error_quota">You have reached your Gemini rate limit or quota. Wait a moment and try again, or check your usage in Google AI Studio.</string>
     <string name="gemini_error_key_refused">Google refused your Gemini API key. Re-enter it in AI Settings.</string>
+    <string name="gemini_error_key_missing">No Gemini API key is saved. Enter one in AI Settings.</string>
     <string name="gemini_error_key_invalid">Your Gemini API key is not valid. Re-enter it in AI Settings.</string>
     <string name="gemini_error_request_rejected">Gemini rejected the request.</string>
     <string name="gemini_error_request_rejected_reason">Gemini rejected the request. %1$s</string>
@@ -60,11 +61,6 @@
     <string name="cd_show_models">Show the model list</string>
     <string name="hint_gemini_model_help">Refresh to list the models your key can reach.</string>
     <string name="hint_gemini_model_live">Tap to pick from the models this key can reach.</string>
-    <string name="label_gemini_embedding_model">Embedding Model</string>
-    <string name="hint_gemini_embedding_model">Gemini embedding model</string>
-    <string name="cd_show_embedding_models">Show the embedding model list</string>
-    <string name="hint_gemini_embedding_model_help">Used by semantic search, never for chat. Refresh to list the embedding models your key can reach.</string>
-    <string name="hint_gemini_embedding_model_live">Tap to pick from the embedding models this key can reach.</string>
     <string name="refresh_models">Refresh Models</string>
     <string name="loading">Loading…</string>
     <string name="model_changed">Model changed to %s</string>
