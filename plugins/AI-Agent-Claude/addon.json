@@ -1,0 +1,15 @@
+{
+  "summary": "Use Anthropic's Claude as the AI backend for the Agent. Requires the AI Core addon and a Claude API key.",
+  "description": "Connects the AI Core Agent to Anthropic's Claude API with your own API key, billed to your Claude Console account. The Agent's tools are declared to Claude directly, so it reads and edits your project through structured calls. Prompts and any file contents the Agent sends go to Anthropic.",
+  "tags": [
+    "ai",
+    "agent",
+    "claude"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
