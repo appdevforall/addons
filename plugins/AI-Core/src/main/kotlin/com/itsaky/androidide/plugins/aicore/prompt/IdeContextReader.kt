@@ -45,15 +45,12 @@ class IdeContextReader(private val getContext: () -> PluginContext?) : IdeContex
                 .getOrDefault(null to emptyList())
         }
 
-        fun relative(file: File): String = runCatching { file.relativeToOrSelf(root).path }
-            .getOrDefault(file.name)
-
         return IdeContext(
-            currentFile = current?.let(::relative),
+            currentFile = current?.let { relativePath(it, root) },
             otherFiles = open.orEmpty()
                 .filter { it != current }
-                .take(MAX_OPEN_FILES)
-                .map(::relative),
+                .mapNotNull { relativePath(it, root) }
+                .take(MAX_OPEN_FILES),
             modules = modules,
         )
     }
@@ -61,5 +58,15 @@ class IdeContextReader(private val getContext: () -> PluginContext?) : IdeContex
     companion object {
         /** Max open files named in the prompt's IDE-context block. */
         private const val MAX_OPEN_FILES = 8
+
+        /**
+         * [file]'s path relative to [root], or its name when no relative path exists.
+         *
+         * @return the path, or null when it is blank (the root itself), which names no file.
+         */
+        internal fun relativePath(file: File, root: File): String? =
+            runCatching { file.relativeToOrSelf(root).path }
+                .getOrDefault(file.name)
+                .takeUnless { it.isBlank() }
     }
 }

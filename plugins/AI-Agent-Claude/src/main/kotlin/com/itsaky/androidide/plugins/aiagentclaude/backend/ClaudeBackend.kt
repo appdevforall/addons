@@ -14,6 +14,7 @@ import com.itsaky.androidide.plugins.aiagentclaude.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentclaude.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentclaude.preferences.ClaudePreferences
 import com.itsaky.androidide.plugins.aiagentclaude.prompt.ClaudeSystemPrompt
+import com.itsaky.androidide.plugins.aiagentclaude.prompt.config.ClaudePromptConfig
 import com.itsaky.androidide.plugins.aiagentclaude.security.ApiKeyCache
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import java.io.BufferedReader
@@ -52,10 +53,15 @@ private const val TAG = "$LOG_PREFIX.AgentTrace"
  *
  * Not an [EmbeddingBackend]: Anthropic offers no embeddings endpoint, and a backend that claimed
  * one would leave semantic search failing on every index build.
+ *
+ * @param context this plugin's context
+ * @param promptConfig the loaded prompt config, or null while it loads; must return without blocking
  */
 class ClaudeBackend(
-    private val context: PluginContext
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend {
+    private val context: PluginContext,
+    private val promptConfig: () -> ClaudePromptConfig?,
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
+    ActiveModelReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -154,11 +160,30 @@ class ClaudeBackend(
     }
 
     /**
-     * Written for a large cloud model; see [ClaudeSystemPrompt] for why the wording belongs here
-     * rather than with the caller.
+     * The chat model requests go to, for the Agent's backend tag. Read from preferences like every
+     * request, so it is never stale; the plugin reports a change through `notifyBackendChanged`.
      */
-    override fun getSystemPrompt(request: SystemPromptRequest): String =
-        ClaudeSystemPrompt.build(request)
+    override fun getActiveModelName(): String = getModelName()
+
+    /**
+     * Written for a large cloud model; see [ClaudeSystemPrompt] for why the wording belongs here.
+     * Null until the config is loaded or when it cannot render, which ai-core
+     * answers with its default prompt; never blocks, since the caller's thread is ai-core's.
+     */
+    override fun getSystemPrompt(request: SystemPromptRequest): String? {
+        val config = promptConfig()
+        if (config == null) {
+            context.logger.warn("ClaudeBackend: prompt config not loaded; ai-core default used")
+            return null
+        }
+        return try {
+            ClaudeSystemPrompt.build(request, config)
+        } catch (e: Exception) {
+            // Not just the engine's IllegalArgumentException: any failure here would end ai-core's turn.
+            context.logger.error("ClaudeBackend: prompt did not render; ai-core default used", e)
+            null
+        }
+    }
 
     /** Null: this backend sends no `temperature`, which current Claude models reject outright. */
     override fun getDefaultTemperature(): Float? = null
