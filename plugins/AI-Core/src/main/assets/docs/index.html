@@ -115,6 +115,31 @@
     device.
   </div>
 
+  <h2>Web search</h2>
+  <p>The agent always knows your device's date and time, and it can look
+  things up online with two tools:</p>
+  <ul>
+    <li><b>web_search</b> searches through your backend's own provider: Google
+      Search for <b>Gemini</b>, and web search for <b>OpenAI</b> when the server
+      URL is OpenAI's own API. It uses your API key, so your provider may bill
+      searches. On-device models and other OpenAI-compatible servers (Ollama,
+      LM Studio, OpenRouter) cannot search.</li>
+    <li><b>fetch_url</b> reads a web page, a GitHub repository or a raw file
+      you link. It works with every backend and asks you before each fetch,
+      showing the address. Long pages are cut to the first few thousand
+      characters the agent can take in.</li>
+  </ul>
+  <p>Pasting code or asking whether something is deprecated or the latest
+  version makes the agent search before it answers, so a review reflects the
+  libraries as they are today rather than as the model remembers them. Each
+  of those messages costs one search.</p>
+  <p>When an answer contains code, the agent checks it once more before it is
+  done: that the code compiles, that each branch does what it should, and that
+  every version it names came from a search. While that runs the chat shows
+  <b>Checking the answer…</b>, and the answer may then change in place. This
+  costs one more request, and is skipped when the agent changed your project
+  or runs on the device.</p>
+
   <h2>Tools from other plugins</h2>
   <p>Other plugins can give the agent tools of their own. <b>AI Agent MCP</b> is
   one: it connects to Model Context Protocol servers — issue trackers,
@@ -235,6 +260,43 @@
       arrow to fold it again. The model always receives all of it.</li>
     <li>Tap the copy icon under a message, yours or the agent's, to copy its
       text. It appears under a reply once the agent has finished writing it.</li>
+  </ul>
+
+  <h2>Editing a message you sent</h2>
+  <p>Tap the pencil under any of your messages to fix a typo, add a detail you
+  left out, or rephrase a request the agent misread. The message goes back into
+  the message box with the files that were attached to it, under an
+  <b>Editing message</b> banner.</p>
+  <ul>
+    <li>On your <b>latest</b> message, <b>Send</b> replaces it: the original and
+      everything after it — the agent's replies and the tools it ran — are removed
+      from the chat and from what the model remembers, then the agent runs on the
+      edited message.</li>
+    <li>On an <b>earlier</b> message, <b>Send</b> starts a new version of the chat
+      from that point instead, and nothing is removed. The agent is given only the
+      messages above the one you edited.</li>
+    <li>The <b>&times;</b> on the banner cancels: the chat is left exactly as it
+      was, and whatever you had typed before tapping the pencil comes back.</li>
+    <li><b>Changes the agent already made to your files are not undone.</b> If
+      an earlier run edited or created files, check them, or ask the agent to
+      revert them.</li>
+    <li>Messages cannot be edited while the agent is working or waiting for your
+      approval. Stop it first.</li>
+  </ul>
+
+  <h2>Versions of a chat</h2>
+  <p>A message you edited from further up shows <b>&lsaquo; 2/2 &rsaquo;</b>
+  underneath. Tap the arrows to switch between its versions; the chat below it
+  changes to what was said in that version.</p>
+  <ul>
+    <li>Each version is its own conversation. The agent remembers only the
+      version on screen, and knows nothing of what was said in the others.</li>
+    <li>Versions can have versions: editing a message inside one adds arrows
+      there too, and switching back returns to the one you last looked at.</li>
+    <li><b>Files are not switched.</b> Your project stays as it is whichever
+      version is on screen.</li>
+    <li><b>Clear Chat</b> removes every version. Exporting a chat saves the
+      version on screen.</li>
   </ul>
 
   <h2>Keeping several chats</h2>

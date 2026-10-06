@@ -31,6 +31,8 @@ class GeminiCredentialProblemTest {
             GeminiFailure.Unexpected(418, null),
             GeminiFailure.Unreachable,
             GeminiFailure.ReplyTruncated,
+            GeminiFailure.NoReply("MALFORMED_FUNCTION_CALL"),
+            GeminiFailure.NoReply(null),
             GeminiFailure.Failed("socket closed"),
             GeminiFailure.Failed(null),
         )

@@ -57,6 +57,32 @@
           "type": "string"
         }
       }
+    },
+    "template": {
+      "$comment": "Template addons only (ADFA-6252). A template has no AndroidManifest.xml, so the three values a plugin keeps as <meta-data> live here. check.py requires this object for an addon under templates/ and model.py reads it in place of the manifest. A plugin must not carry it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "minAppVersion"
+      ],
+      "properties": {
+        "id": {
+          "$comment": "Unique, and never changed across releases.",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)*$"
+        },
+        "minAppVersion": {
+          "$comment": "A YY.ww Code on the Go release, e.g. 26.38.",
+          "type": "string",
+          "pattern": "^[0-9]{2}\\.[0-9]{2}$"
+        }
+      }
     }
   }
 }

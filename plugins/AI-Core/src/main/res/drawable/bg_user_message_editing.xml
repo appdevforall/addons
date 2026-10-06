@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- bg_user_message for the prompt being edited: ChatAdapter pulses this stroke's color. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/plugin_surface_variant" />
+    <stroke
+        android:width="@dimen/chat_user_bubble_editing_stroke_width"
+        android:color="@color/plugin_editing" />
+    <corners android:radius="@dimen/chat_user_bubble_corner_radius" />
+</shape>

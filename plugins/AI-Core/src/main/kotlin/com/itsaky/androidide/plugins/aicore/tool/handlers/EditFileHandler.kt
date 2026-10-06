@@ -38,21 +38,12 @@ class EditFileHandler(
 
     override val toolName = TOOL_NAME
     override val parametersSchema = ToolSchema.objectOf(
-        ARG_PATH to ToolSchema.string("Project-relative path of the file to edit."),
-        ARG_OLD to ToolSchema.string(
-            "The exact text to find, copied byte-for-byte from the file including indentation."
-        ),
-        ARG_NEW to ToolSchema.string("What to put in its place; empty deletes it."),
-        ARG_REPLACE_ALL to ToolSchema.boolean(
-            "Replace every occurrence. When false the text must match exactly once."
-        ),
+        ARG_PATH to ToolSchema.string(),
+        ARG_OLD to ToolSchema.string(),
+        ARG_NEW to ToolSchema.string(),
+        ARG_REPLACE_ALL to ToolSchema.boolean(),
         required = listOf(ARG_PATH, ARG_OLD, ARG_NEW),
     )
-    override val description =
-        "Edit an existing file by replacing an exact snippet: give file_path, old_string " +
-            "(text to find, copied exactly including indentation) and new_string (its " +
-            "replacement; empty deletes it). old_string must match exactly once unless " +
-            "replace_all is true. Prefer this over update_file for changing a file."
     override val requiresApproval = true
     override val mutatesProject = true
     override val pathArgs = listOf(ARG_PATH)

@@ -77,6 +77,15 @@ internal class AgentRunReporter(private val notices: Notices) : AgentLoop.Events
         AgentTrace.refusal("LOOP", "turn=$turn", "stopped with a failed tool unaddressed")
     }
 
+    override suspend fun onUnfinishedReply(turn: Int) {
+        AgentTrace.stage("LOOP", "turn=$turn asked-to-finish=no-terminal-tool")
+    }
+
+    // Reaching this means the backend did not force the call; see VerificationPolicy.
+    override suspend fun onRequiredToolSkipped(turn: Int, tool: String) {
+        AgentTrace.stage("VERIFY", "turn=$turn asked-for=$tool (answered without it)")
+    }
+
     override suspend fun onMaxIterationsReached(turns: Int) {
         AgentTrace.refusal("LOOP", "turns=$turns", "iteration cap reached")
         notices.stepBudgetExhausted(turns)

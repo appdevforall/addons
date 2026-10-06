@@ -153,6 +153,46 @@
               android:tint="@color/plugin_on_surface_variant"
               android:visibility="gone" />
 
+          <!-- Shown only while an already-sent prompt is loaded back for editing; Send confirms it,
+               the close button puts the draft that was here before back. -->
+          <LinearLayout
+              android:id="@+id/edit_banner"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:gravity="center_vertical"
+              android:orientation="horizontal"
+              android:paddingStart="@dimen/chat_input_bar_padding"
+              android:visibility="gone">
+
+              <ImageView
+                  android:layout_width="@dimen/chat_edit_banner_icon_size"
+                  android:layout_height="@dimen/chat_edit_banner_icon_size"
+                  android:importantForAccessibility="no"
+                  android:src="@drawable/ic_edit"
+                  android:tint="@color/plugin_on_surface_variant" />
+
+              <TextView
+                  android:id="@+id/edit_banner_text"
+                  android:layout_width="0dp"
+                  android:layout_height="wrap_content"
+                  android:layout_marginStart="@dimen/chat_input_bar_padding"
+                  android:layout_weight="1"
+                  android:text="@string/chat_editing_message"
+                  android:textColor="@color/plugin_on_surface_variant"
+                  android:textSize="@dimen/chat_caption_text_size" />
+
+              <ImageButton
+                  android:id="@+id/btn_cancel_edit"
+                  android:layout_width="@dimen/chat_message_action_size"
+                  android:layout_height="@dimen/chat_message_action_size"
+                  android:background="?android:attr/selectableItemBackgroundBorderless"
+                  android:contentDescription="@string/desc_cancel_edit"
+                  android:padding="@dimen/chat_message_action_padding"
+                  android:scaleType="fitCenter"
+                  android:src="@drawable/ic_close"
+                  android:tint="@color/plugin_on_surface_variant" />
+          </LinearLayout>
+
           <!-- Costs a row only while context files are attached; ChatFragment toggles it. -->
           <HorizontalScrollView
               android:id="@+id/context_chip_scroll"

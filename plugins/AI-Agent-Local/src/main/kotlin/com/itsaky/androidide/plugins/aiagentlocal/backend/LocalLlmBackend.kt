@@ -25,6 +25,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.model.PlatformModelSourceWatch
 import com.itsaky.androidide.plugins.aiagentlocal.model.SourceReachability
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
 import com.itsaky.androidide.plugins.aiagentlocal.prompt.LocalSystemPrompt
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.LocalPromptConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -50,9 +51,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Local LLM backend using llama-impl for on-device inference.
  * Wraps llama-impl APIs and implements LlmBackend interface.
+ *
+ * @param promptConfig the loaded prompt config, or null while it loads; must return without blocking
  */
 class LocalLlmBackend(
     private val context: PluginContext,
+    private val promptConfig: () -> LocalPromptConfig?,
     private val modelSourceOverride: NativeModelSource? = null,
     private val engineOverride: ModelResidencyEngine? = null,
     private val watcherOverride: ModelSourceWatcher? = null,
@@ -65,6 +69,10 @@ class LocalLlmBackend(
          * unconstrained sampling.
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
+
+        /** What the agent is told when it asks for a search; it can still read a page with fetch_url. */
+        private const val WEB_SEARCH_UNSUPPORTED =
+            "Web search is not available with the on-device model. Use fetch_url to read a page instead."
 
 
         /**
@@ -223,9 +231,22 @@ class LocalLlmBackend(
      *
      * Null when the user turned the short prompt off, which is what hands them back the caller's
      * own full tool-calling prompt — a larger model can follow it, and this backend can run one.
+     * Also null until the templates are loaded; never blocks, since the thread is ai-core's.
      */
-    override fun getSystemPrompt(request: SystemPromptRequest): String? =
-        if (LocalLlmPreferences.useSimplePrompt(context)) LocalSystemPrompt.build(request) else null
+    override fun getSystemPrompt(request: SystemPromptRequest): String? {
+        if (!LocalLlmPreferences.useSimplePrompt(context)) return null
+        val config = promptConfig()
+        if (config == null) {
+            context.logger.warn("LocalLlmBackend: prompt config not loaded; ai-core default used")
+            return null
+        }
+        return try {
+            LocalSystemPrompt.build(request, config)
+        } catch (e: IllegalArgumentException) {
+            context.logger.error("LocalLlmBackend: prompt did not render; ai-core default used", e)
+            null
+        }
+    }
 
     /**
      * Near-greedy: tool arguments must be copied out of earlier tool output verbatim, and a small
@@ -685,6 +706,10 @@ class LocalLlmBackend(
 
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         context.logger.info("LocalLlmBackend.generate() called with prompt: ${prompt.take(50)}...")
+        // Refused, not answered: a search reply made up from the model's memory reads as found fact.
+        if (config.extraParams?.get(WebSearchBackend.EXTRA_PARAM_WEB_SEARCH) == true) {
+            return CompletableFuture.completedFuture(LlmResponse.failure(WEB_SEARCH_UNSUPPORTED))
+        }
         return runGeneration(buildPrompt(config.systemPrompt, prompt), config)
     }
 

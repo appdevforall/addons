@@ -29,10 +29,14 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.ai.ui.ButtonColors
+import com.itsaky.androidide.plugins.ai.ui.FieldColors
+import com.itsaky.androidide.plugins.ai.ui.PaneStyle
+import com.itsaky.androidide.plugins.ai.ui.RevealToggle
+import com.itsaky.androidide.plugins.ai.ui.SecretRevealController
+import com.itsaky.androidide.plugins.ai.ui.applyPaneStyling
 import com.itsaky.androidide.plugins.aiagentgemini.plugin.GeminiPlugin
 import com.itsaky.androidide.plugins.aiagentgemini.R
-import com.itsaky.androidide.plugins.aiagentgemini.ui.SecretRevealController
-import com.itsaky.androidide.plugins.aiagentgemini.ui.applyPaneStyling
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -47,6 +51,30 @@ private val OUTLINED_BUTTON_IDS = setOf(
     R.id.btn_edit_api_key,
     R.id.btn_get_free_key,
     R.id.btn_refresh_models,
+)
+
+/** This plugin's resources for [applyPaneStyling]. */
+private val PANE_STYLE = PaneStyle(
+    filledButton = ButtonColors(
+        content = R.color.plugin_button_filled_content,
+        ripple = R.color.plugin_button_filled_ripple,
+        container = R.color.plugin_button_filled_container,
+    ),
+    outlinedButton = ButtonColors(
+        content = R.color.plugin_button_outlined_content,
+        ripple = R.color.plugin_button_outlined_ripple,
+        stroke = R.color.plugin_button_outlined_stroke,
+    ),
+    field = FieldColors(
+        stroke = R.color.plugin_box_stroke,
+        error = R.color.plugin_error,
+        hint = R.color.plugin_text_muted,
+        endIcon = R.color.plugin_on_surface_variant,
+    ),
+    divider = R.color.plugin_outline_variant,
+    buttonStrokeWidth = R.dimen.button_stroke_width,
+    cornerRadius = R.dimen.radius_md,
+    dividerThickness = R.dimen.divider_thickness,
 )
 
 /**
@@ -117,7 +145,7 @@ class GeminiSettingsFragment : Fragment() {
             GeminiSettingsViewModelFactory { GeminiPlugin.getContext() }
         )[GeminiSettingsViewModel::class.java]
 
-        view.applyPaneStyling(OUTLINED_BUTTON_IDS)
+        view.applyPaneStyling(PANE_STYLE, OUTLINED_BUTTON_IDS)
         setupApiKeyUi(view)
         setupModelPicker(view, chatModelPicker())
         setupModelPicker(view, embeddingModelPicker())
@@ -295,7 +323,12 @@ class GeminiSettingsFragment : Fragment() {
 
         // The window is flagged secure for exactly as long as the key is legible, which is why the
         // click is owned here rather than left to endIconMode="password_toggle".
-        val reveal = SecretRevealController(apiKeyBox, apiKeyInput) { legible ->
+        val reveal = SecretRevealController(
+            apiKeyBox,
+            apiKeyInput,
+            reveal = RevealToggle(R.drawable.ic_visibility, R.string.cd_show_credential),
+            hide = RevealToggle(R.drawable.ic_visibility_off, R.string.cd_hide_credential),
+        ) { legible ->
             setSecureWindow(legible)
         }
         reveal.attach()

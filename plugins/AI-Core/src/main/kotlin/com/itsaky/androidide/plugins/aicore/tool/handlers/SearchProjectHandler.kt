@@ -18,16 +18,11 @@ class SearchProjectHandler(
 ) : ToolHandler {
     override val toolName = "search_project"
     override val parametersSchema = ToolSchema.objectOf(
-        "query" to ToolSchema.string("Text to search for; a file name unless searching contents."),
-        "project_dir" to ToolSchema.string(
-            "Project-relative directory to search under. Defaults to the whole project."
-        ),
-        "search_in_contents" to ToolSchema.boolean(
-            "Search inside files instead of matching their names."
-        ),
+        "query" to ToolSchema.string(),
+        "project_dir" to ToolSchema.string(),
+        "search_in_contents" to ToolSchema.boolean(),
         required = listOf("query"),
     )
-    override val description = "Search for files by name or content in the project"
     override val requiresApproval = false
     override val pathArgs = listOf("project_dir")
 

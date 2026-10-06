@@ -18,12 +18,13 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputLayout
+import com.itsaky.androidide.plugins.ai.ui.RevealToggle
+import com.itsaky.androidide.plugins.ai.ui.SecretRevealController
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
-import com.itsaky.androidide.plugins.aiagentmcp.ui.SecretRevealController
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
@@ -191,7 +192,12 @@ class McpSettingsFragment : Fragment() {
         tokenField.isSaveEnabled = false
 
         // The token was maskable and nothing more before this: it could only be typed blind.
-        tokenReveal = SecretRevealController(tokenBox, tokenField) { legible ->
+        tokenReveal = SecretRevealController(
+            tokenBox,
+            tokenField,
+            reveal = RevealToggle(R.drawable.ic_visibility, R.string.cd_show_credential),
+            hide = RevealToggle(R.drawable.ic_visibility_off, R.string.cd_hide_credential),
+        ) { legible ->
             setSecureWindows(legible)
         }.also { it.attach() }
 

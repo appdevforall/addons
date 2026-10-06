@@ -18,11 +18,8 @@ class ListFilesHandler(
 ) : ToolHandler {
     override val toolName = "list_files"
     override val parametersSchema = ToolSchema.objectOf(
-        "directory" to ToolSchema.string(
-            "Project-relative directory to list. Empty or omitted lists the project root."
-        ),
+        "directory" to ToolSchema.string(),
     )
-    override val description = "List files and directories in a given path"
     override val requiresApproval = false
     override val pathArgs = listOf("directory")
     // Resolved internally (below) to rescue slash-prefixed paths; opt out of the

@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 #
 # Rebuilds plugin-api.jar and gradle-plugin.jar from the CodeOnTheGo repo
-# and refreshes this repo's libs/ folder.
+# and refreshes this repo's libs/ folder. It builds no addon: to refresh the
+# jars and then build plugins against them, run scripts/build-plugins.sh with
+# --ref or --local, which calls this script first. Templates never need it.
 #
 # Usage:
 #   ./scripts/update-libs.sh                      # clone/pull github.com/appdevforall/CodeOnTheGo into .cache/, build from stage
 #   ./scripts/update-libs.sh --ref main           # build from a different branch or tag
 #   ./scripts/update-libs.sh --local ../CodeOnTheGo  # use an existing local checkout instead of cloning
-#   ./scripts/update-libs.sh --plugin random-xkcd # refresh libs, then build only this one plugin
 #
 set -euo pipefail
 
 REPO_URL="https://github.com/appdevforall/CodeOnTheGo.git"
 DEFAULT_REF="stage"
-PLUGIN_BUILDER_ID="com.itsaky.androidide.plugins.build"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIBS_DIR="$REPO_ROOT/libs"
@@ -21,7 +21,6 @@ CACHE_DIR="$REPO_ROOT/.cache/CodeOnTheGo"
 
 LOCAL_PATH=""
 REF="$DEFAULT_REF"
-ONLY_PLUGIN=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -37,14 +36,6 @@ while [ $# -gt 0 ]; do
             REF="${2:-}"
             if [ -z "$REF" ]; then
                 echo "Error: --ref requires a branch or tag argument." >&2
-                exit 1
-            fi
-            shift 2
-            ;;
-        --plugin)
-            ONLY_PLUGIN="${2:-}"
-            if [ -z "$ONLY_PLUGIN" ]; then
-                echo "Error: --plugin requires a plugin name argument." >&2
                 exit 1
             fi
             shift 2
@@ -136,69 +127,15 @@ printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar"
 # The plugin builder records this in each .cgp's assets/cgp-build.properties as
 # libs_revision. It cannot resolve the value itself -- the CodeOnTheGo checkout is
 # outside the plugin build -- so without this a released plugin's own revision does
-# not identify the plugin-api/gradle-plugin jars it was compiled against. Left unset
-# when the sha is unknown, so the field is omitted rather than recorded as a guess.
-# Re-resolved at 12 characters rather than reusing $CODEONTHEGO_SHA, which is abbreviated
-# to git's default length: the builder records `revision` at 12, and two differently
-# shaped shas in one properties file are needlessly hard to compare at a glance.
+# not identify the plugin-api/gradle-plugin jars it was compiled against.
+# scripts/build-plugins.sh reads this file and exports PLUGIN_LIBS_REVISION; a file
+# rather than an export, because an export cannot reach the parent process. Not
+# written when the sha is unknown, so the field is omitted rather than recorded as
+# a guess. Resolved at 12 characters, the length the builder records `revision` at.
+LIBS_REVISION_FILE="$REPO_ROOT/.cache/libs-revision"
+rm -f "$LIBS_REVISION_FILE"
 LIBS_REVISION="$(git -C "$CODEONTHEGO_PATH" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
 if [ "$LIBS_REVISION" != "unknown" ]; then
-    export PLUGIN_LIBS_REVISION="$LIBS_REVISION"
+    mkdir -p "$(dirname "$LIBS_REVISION_FILE")"
+    echo "$LIBS_REVISION" > "$LIBS_REVISION_FILE"
 fi
-
-# One discovery rule for the whole repository. The tool applies the skip
-# list in tools/addons/skip.txt. Do not use mapfile here: macOS ships
-# bash 3.2, which does not have it.
-PLUGINS=()
-while IFS= read -r line; do
-    PLUGINS+=("$line")
-# --include-skipped on purpose: a libs refresh must prove every module still
-# compiles, including ones held out of the gallery. main built these too, and
-# losing that check would let a jar change break them silently.
-done < <(uv run --directory "$REPO_ROOT/tools/addons" addons --root "$REPO_ROOT" \
-         discover --include-skipped)
-
-if [ "${#PLUGINS[@]}" -eq 0 ]; then
-    echo "Error: no addons discovered. 'addons discover' returned nothing -- check that uv works and that tools/addons/skip.txt is not excluding everything." >&2
-    exit 1
-fi
-
-if [ -n "$ONLY_PLUGIN" ]; then
-    # keep the resolved repo-relative path: the build loop cds into it, and
-    # the bare name the caller gave us is no longer a directory
-    match=""
-    for p in "${PLUGINS[@]}"; do
-        if [ "$p" = "$ONLY_PLUGIN" ] || [ "${p##*/}" = "$ONLY_PLUGIN" ]; then
-            match="$p"
-            break
-        fi
-    done
-    if [ -z "$match" ]; then
-        echo "Error: requested plugin '$ONLY_PLUGIN' is not a buildable example plugin." >&2
-        echo "Available plugins: ${PLUGINS[*]}" >&2
-        exit 1
-    fi
-    PLUGINS=("$match")
-fi
-
-echo ""
-echo "Discovered example plugins: ${PLUGINS[*]}"
-echo "Building all example plugins against the refreshed libs..."
-for plugin in "${PLUGINS[@]}"; do
-    echo ""
-    echo "→ $plugin"
-    (
-        cd "$REPO_ROOT/$plugin"
-        # Newer plugins (e.g. flutter-template) drop their per-plugin wrapper and
-        # use the repo-root gradlew; fall back to it when no local gradlew exists.
-        gradlew="./gradlew"
-        [ -x "$gradlew" ] || gradlew="$REPO_ROOT/gradlew"
-        if grep -q 'downloadAssets' build.gradle.kts; then
-            "$gradlew" --console=plain downloadAssets
-        fi
-        "$gradlew" --console=plain assemblePlugin
-    )
-    "$REPO_ROOT/scripts/verify-provenance.sh" "$plugin"
-done
-echo ""
-echo "All plugins built successfully."

@@ -70,6 +70,13 @@ sealed interface OpenAiFailure {
     data object Unreachable : OpenAiFailure
 
     /**
+     * The server took the request, then sent nothing for [seconds]: a slow model, not a network fault.
+     *
+     * @param seconds how long the read waited
+     */
+    data class TimedOut(val seconds: Int) : OpenAiFailure
+
+    /**
      * The server streamed successfully but produced no reply text.
      *
      * Its own state because the request did **not** fail: reporting a network-shaped error here
@@ -128,6 +135,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             is OpenAiFailure.Unexpected,
             OpenAiFailure.ServerNotRunning,
             OpenAiFailure.Unreachable,
+            is OpenAiFailure.TimedOut,
             is OpenAiFailure.EmptyReply,
             OpenAiFailure.ReasoningOnly,
             OpenAiFailure.TruncatedBeforeReply,
@@ -205,6 +213,9 @@ object OpenAiErrorFormatter {
 
             status == 429 && parsed.mentionsBilling() -> OpenAiFailure.BillingRequired
 
+            // 402 is how compatible gateways say "no credit"; the code is how a 2xx error reply does.
+            status == 402 || parsed.apiCode == "insufficient_quota" -> OpenAiFailure.BillingRequired
+
             status == 429 || parsed.apiCode == "rate_limit_exceeded" ->
                 OpenAiFailure.QuotaExceeded
 
@@ -219,6 +230,9 @@ object OpenAiErrorFormatter {
             status != null && status in 500..599 -> OpenAiFailure.ServiceUnavailable(status)
 
             status != null -> OpenAiFailure.Unexpected(status, safeReason(parsed, error))
+
+            // Checked before IOException, which it is: the request arrived and the answer was slow.
+            error is OpenAiTimeoutException -> OpenAiFailure.TimedOut(error.timeoutMs / 1000)
 
             // No status at all: the request never got an answer.
             error is IOException ->

@@ -116,13 +116,69 @@ via CodeOnTheGo's Plugin Manager, then restart the IDE.
 
 ## Native function calling
 
-Not implemented, deliberately. This backend declares `HistoryCapableBackend` but
-not `ToolCallingBackend`, so ai-core streams it the whole conversation and the
-agent loop drives tools through a text envelope in the system prompt, which is
-provider-agnostic. Declaring `ToolCallingBackend` without native function calling
-would leave the caller waiting on a call this backend never makes. The system
-prompt also tells the model not to use its own function-calling channel, since
-nothing reads it.
+This backend declares `ToolCallingBackend`, so ai-core calls
+`generateStreamingWithTools` and the agent's tools travel through the
+Chat Completions function-calling API rather than a text envelope in the reply
+(ADFA-5410). Declared tools arrive already structured, so a file whose contents
+carry quotes or newlines cannot break the call.
+
+- **Request.** Each tool is sent in `tools[]` as `{"type":"function","function":{name, description, parameters}}`
+  (`OpenAiToolProtocol`). `tool_choice` is sent only when ai-core names a required
+  tool (`EXTRA_PARAM_REQUIRED_TOOL`); a server that refuses it is retried once
+  without it, under the same rule as the other 400 retries (`RequestTuning`).
+- **Stream.** `tool_calls` deltas are joined by index (`SseChunk`,
+  `OpenAiToolProtocol.CallAccumulator`) and reported through `onToolCall` once the
+  stream ends, so a call a retry replaced never reaches the caller. A call with no
+  name or unparseable arguments is dropped.
+- **Results.** `ChatMessage` gives an assistant turn no way to carry `tool_calls`,
+  and a `tool` role is only legal after one, so tool results go back as `user` turns.
+- **Prompt.** ai-core sees the backend calls tools natively and passes no text call
+  syntax, so `tools.yml`'s `native` format is sent. The text protocol, and its
+  `no_native_channel` line, is not used by this backend.
+- **Servers without function calling.** If a server refuses the `tools` declaration
+  (400, 404 or 422 naming a tool field as unsupported), the turn is retried with no
+  tools and a Toast says the agent cannot call tools on that server. The refusal is
+  remembered per base URL, so only the first turn pays for it. The prompt for that
+  run was built for native calling, so the model answers in prose.
+
+## System prompt config
+
+The prompt this backend asks ai-core to send lives in `src/main/assets/prompts/`,
+one YAML file per concern, apart from the code that sends it. Changing the tone,
+adding a rule or translating the prompt is an edit to those files alone. ai-core
+appends its own IDE CONTEXT block after the rendered prompt.
+
+The files are loaded, validated and cached once, when the plugin is activated.
+`getSystemPrompt` renders `layout.yml` from that cache for each request, since the
+tool list, the protocol and the example path vary per run; it never waits. Until the
+config has loaded, or if it cannot render, it returns null and ai-core sends its own
+default prompt.
+
+| File | Keys | What it is |
+|---|---|---|
+| `agent.yml` | `schema_version`, `identity`, `include` | The entry point: the version (`1`; another is refused rather than misread), who the agent is, and the files below. |
+| `scope.yml` | `scope` | What the agent will answer: anything, with the project's tools only when the request is about the open project. |
+| `rules.yml` | `rules` | Rule groups, each a `heading` and its `items`; today one `RULES` group. **Adding a rule is adding an item**; a further group, e.g. by priority, renders as its own block. |
+| `workflow.yml` | `behavior`, `workflow` | How to go about building or changing something; the workflow's `steps` are numbered when rendered. |
+| `tools.yml` | `tools`, `tool_call_format` | What introduces the tool list, and how to call a tool: `native` under the function-calling API, `text` (with its examples) when calls travel in the reply. Exactly one is sent. |
+| `layout.yml` | `layout.system_prompt` | Where each text goes. |
+
+The files, the names they are rendered under and the checks are AI-Agent-Gemini's
+(see its README), and `scope.yml` and `workflow.yml` are identical to its copies;
+edit the two plugins together. The one intended difference is
+`tool_call_format.text.no_native_channel`, the line forbidding the provider's native
+function-calling channel under the text protocol (`TOOL_CALL_FORMAT_TEXT_NO_NATIVE_CHANNEL`).
+
+Rendering is strict: an unknown name throws, naming the text it was in, where the
+file-per-section design this replaced dropped the file silently. Activation renders
+the prompt for requests that open and close every section and logs any failure, and
+`OpenAiSystemPromptTest` fails on one in the shipped files. A new key needs
+`OpenAiPromptConfig` and its parser; a new name needs `OpenAiPromptVariables`.
+
+The engine and the YAML plumbing (`PromptTemplateEngine`, `PromptConfigLoader`,
+`PromptConfigStore`, `PromptConfigObject`, ...) are the IDE's, in `plugin-api.jar`'s
+`com.itsaky.androidide.plugins.ai.prompt`, shared with ai-core and the other backends.
+Only `OpenAiPromptConfig`, its mapping in `OpenAiPromptConfigParser`, and `sharedPromptConfig` are this plugin's own.
 
 ## Key classes
 
@@ -130,16 +186,20 @@ Every source file sits in a package named for its layer; nothing is loose at the
 root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 
 - `plugin/OpenAiPlugin.kt` — plugin entry point; registers the backend with ai-core
-- `backend/OpenAiBackend.kt` — the HTTP transport, SSE streaming and model catalog
-- `backend/OpenAiRequestBuilder.kt` — `messages[]` mapping and request JSON (pure)
-- `backend/RequestTuning.kt` — reasoning-model parameters and the 400-retry rule (pure)
-- `backend/SseChunk.kt` — one line of the token stream (pure)
+- `backend/OpenAiBackend.kt` — SSE streaming, native tool calling and the model catalog
+- `backend/OpenAiHttpClient.kt` — the HTTP transport
+- `backend/OpenAiRequestBuilder.kt` — `messages[]` mapping and request JSON, including `tools` (pure)
+- `backend/OpenAiToolProtocol.kt` — `tools[]`, `tool_choice` and the streamed `tool_calls` accumulator (pure)
+- `backend/RequestTuning.kt` — reasoning-model parameters, the 400-retry rule and tool-refusal detection (pure)
+- `backend/SseChunk.kt` — one line of the token stream, text or `tool_calls` deltas (pure)
 - `backend/ModelCatalogFilter.kt` — splits one catalog into the chat and embedding pickers (pure)
 - `backend/OpenAiEmbeddingProtocol.kt` — the `/v1/embeddings` body, batching and index-ordered reply (pure)
 - `errors/OpenAiErrorFormatter.kt` — turns a failure into one translated sentence
 - `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 - `preferences/OpenAiPreferences.kt` — this plugin's settings store
-- `prompt/OpenAiSystemPrompt.kt` — the system prompt this cloud model is given
+- `prompt/OpenAiSystemPrompt.kt` — renders `layout.yml` from `OpenAiPromptVariables`;
+  `prompt/config/` maps `assets/prompts/` onto this plugin's config type, which the
+  IDE's `ai.prompt` package loads, validates, caches and renders
 - `settings/BaseUrlPolicy.kt` — URL normalization and the cleartext rule (pure)
 - `settings/ServerPreset.kt` — the one-tap server list
 - `settings/ConnectionVerification.kt` — what a live check established (pure)
@@ -147,7 +207,7 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `logging/` — `LOG_PREFIX` (`AiAgentOpenAi`), prefixing every logcat tag
 
 The pure units carry the logic that would otherwise only fail on a device; they
-are covered by 177 JVM tests.
+are covered by 245 JVM tests.
 
 ## License
 

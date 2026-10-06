@@ -17,11 +17,10 @@ class UpdateFileHandler(
 ) : ToolHandler {
     override val toolName = "update_file"
     override val parametersSchema = ToolSchema.objectOf(
-        "file_path" to ToolSchema.string("Project-relative path of the file to overwrite."),
-        "content" to ToolSchema.string("The file's new full contents."),
+        "file_path" to ToolSchema.string(),
+        "content" to ToolSchema.string(),
         required = listOf("file_path", "content"),
     )
-    override val description = "Update an existing file with new content"
     override val requiresApproval = true  // Requires approval for file modification
     override val mutatesProject = true
     override val pathArgs = listOf("file_path")

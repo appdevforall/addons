@@ -4,8 +4,10 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.CancellableBac
 import com.itsaky.androidide.plugins.services.LlmInferenceService.HistoryCapableBackend
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmBackend
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolCallingBackend
+import com.itsaky.androidide.plugins.services.LlmInferenceService.SystemPromptRequest
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,7 +17,13 @@ import org.junit.Test
  */
 class OpenAiBackendTest {
 
-    private val backend = OpenAiBackend(mockk(relaxed = true))
+    private val backend = OpenAiBackend(mockk(relaxed = true)) { null }
+
+    @Test
+    fun givenConfigNotYetLoaded_whenAskedForItsPrompt_thenItReturnsNullInsteadOfBlocking() {
+        // Null is the contract's "no prompt of my own": ai-core then sends its default prompt.
+        assertNull(backend.getSystemPrompt(SystemPromptRequest(emptyList(), null, "app/Main.kt")))
+    }
 
     @Test
     fun givenTheBackend_whenAskedForItsIdentity_thenItRegistersAsOpenAi() {

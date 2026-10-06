@@ -47,9 +47,24 @@ data class ChatMessage(
      */
     val historyText: String? = null,
     /**
+     * What each tool call of the run asked and got back, on the run's activity row only; see
+     * [com.itsaky.androidide.plugins.aicore.viewmodel.AgentActivity.logEntry]. Never sent to the model.
+     */
+    val toolLog: String? = null,
+    /**
      * Whether this row only reports that the backend is not configured yet. The chat drops those
      * once the backend answers as ready, so a key saved afterwards leaves no stranded warning
      * behind. False for every message stored before this field existed.
      */
-    val isSetupError: Boolean = false
+    val isSetupError: Boolean = false,
+    /**
+     * Absolute paths of the context files attached when this user prompt was sent, so Edit can put
+     * the same chips back. Null on every other message, and on a prompt stored before this existed.
+     */
+    val contextFiles: List<String>? = null,
+    /**
+     * The message this one follows, set only on messages kept in ChatSession.otherBranches; null
+     * there means it opens the chat. On the branch on screen, order alone says what follows what.
+     */
+    val parentId: String? = null
 )

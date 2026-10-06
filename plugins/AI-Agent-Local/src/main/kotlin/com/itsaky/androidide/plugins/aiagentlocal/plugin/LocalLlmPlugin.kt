@@ -3,8 +3,12 @@ package com.itsaky.androidide.plugins.aiagentlocal.plugin
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentlocal.backend.LocalLlmBackend
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.LocalSystemPrompt
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.LocalPromptConfig
+import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
@@ -110,8 +114,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
+            preloadPromptConfig()
 
-            backend = LocalLlmBackend(context)
+            backend = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded)
 
             // Listen first, then try: a listener added after a successful attempt would still be
             // needed for a later AI Core restart, and one added before costs nothing.
@@ -167,6 +172,29 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         null
     }
 
+    /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
+    private fun preloadPromptConfig() {
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        sharedPromptConfig.reload(source, ::reportLoadedConfig) { error ->
+            context.logger.error(
+                "LocalLlmPlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                error,
+            )
+        }
+    }
+
+    /**
+     * Logs that the config loaded, and any name typo its layout would hit at render time.
+     *
+     * @param config the config just loaded.
+     */
+    private fun reportLoadedConfig(config: LocalPromptConfig) {
+        context.logger.info("LocalLlmPlugin: loaded prompt config with ${config.rules.size} rule groups")
+        for (problem in LocalSystemPrompt.problems(config)) {
+            context.logger.warn("LocalLlmPlugin: $problem; ai-core's default prompt is sent instead")
+        }
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("LocalLlmPlugin: Deactivating plugin")
 
@@ -182,6 +210,7 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
             // A disabled plugin must not keep the loaded model resident in host RAM.
             releaseBackend()
+            sharedPromptConfig.clear()
 
             true
         } catch (e: Exception) {
@@ -208,6 +237,7 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
 
         releaseBackend()
+        sharedPromptConfig.clear()
         pluginContext = null
         context.logger.info("LocalLlmPlugin: Released local LLM backend")
     }

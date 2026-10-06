@@ -59,6 +59,15 @@
                 android:minHeight="48dp"
                 tools:ignore="TouchTargetSizeCheck" />
 
+            <!-- Web search is always on; this says so, and that searches may be billed. -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/summary_web_search"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
             <!-- Sibling of the pane container, not a child: the child FragmentManager owns that
                  container's contents, so a placeholder added to it would race its transactions. -->
             <TextView

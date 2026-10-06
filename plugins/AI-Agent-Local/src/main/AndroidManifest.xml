@@ -40,7 +40,7 @@
              and pairs with ai-core, which requires the same release. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.32" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.max_ide_version"

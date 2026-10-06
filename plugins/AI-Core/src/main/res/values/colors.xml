@@ -35,6 +35,9 @@
     <color name="plugin_success">#15803D</color>
     <color name="plugin_success_container">#DCFCE7</color>
 
+    <!-- Outlines the user message loaded into the composer for editing. -->
+    <color name="plugin_editing">#2563EB</color>
+
     <color name="plugin_text_muted">#737373</color>
     <color name="plugin_text_subtle">#A3A3A3</color>
 

@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentlocal.backend
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.IncompatibleModelException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelLoadException
@@ -116,16 +117,26 @@ class LocalLlmBackendTest {
         every { androidContext.filesDir } returns filesDir
         pluginContext = mockk(relaxed = true)
         every { pluginContext.androidContext } returns androidContext
-        backend = LocalLlmBackend(pluginContext)
+        backend = LocalLlmBackend(pluginContext, { null })
     }
 
-    private fun backendWith(source: NativeModelSource) = LocalLlmBackend(pluginContext, source)
+    private fun backendWith(source: NativeModelSource) = LocalLlmBackend(pluginContext, { null }, source)
+
+    @Test
+    fun givenTheShortPromptOnAndTemplatesNotYetLoaded_whenAskedForItsPrompt_thenItReturnsNull() {
+        // Null is the contract's "no prompt of my own": ai-core then sends its default prompt.
+        val prefs = mockk<SharedPreferences>(relaxed = true)
+        every { prefs.getBoolean(any(), any()) } returns true
+        every { pluginContext.getPluginSharedPreferences(any()) } returns prefs
+
+        assertNull(backend.getSystemPrompt(SystemPromptRequest(emptyList(), null, "app/Main.kt")))
+    }
 
     private fun backendWith(
         source: NativeModelSource,
         engine: ModelResidencyEngine,
         watcher: ModelSourceWatcher = FakeWatcher(),
-    ) = LocalLlmBackend(pluginContext, source, engine, watcher)
+    ) = LocalLlmBackend(pluginContext, { null }, source, engine, watcher)
 
     @Test
     fun testBackendId() {

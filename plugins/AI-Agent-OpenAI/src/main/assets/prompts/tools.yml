@@ -1,0 +1,40 @@
+# How the tool list is introduced, and how to call a tool. Exactly one of the two formats is sent:
+# native under the function-calling API, text when calls travel in the reply.
+
+tools:
+  heading: AVAILABLE TOOLS
+
+tool_call_format:
+  # Sent under either format, after the format's own instruction.
+  no_narration: >-
+    Do NOT describe the action in prose (e.g. "Okay, I'll open the file…") — narrating does
+    nothing.
+  # Its line breaks are sent as written.
+  native: |-
+    TOOL CALL FORMAT — the tools above are declared to you: call one through the function-calling
+    API. A call written into your reply text is NOT read by this system and will not run.
+  text:
+    instruction: >-
+      TOOL CALL FORMAT — to run a tool, emit a single line in EXACTLY this format and nothing
+      after it:
+    # The one line Gemini's text format does not have: OpenAI models reach for native calls.
+    no_native_channel: >-
+      Do NOT use your provider's native function-calling channel either; a structured tool call is
+      not read by this system.
+    only_the_line_runs: The tool only runs when you emit the tool call line itself.
+    # Its line breaks are sent as written.
+    examples_heading: |-
+      FORMAT EXAMPLES (the tool call is the entire reply; the paths are this project's — reuse a path
+      only when it is the file you actually mean)
+    # Each renders as "PURPOSE:" followed by the call on its own line.
+    examples:
+      - purpose: Report the finished task (the summary goes in "message")
+        call: '<tool_call>{"tool":"respond","args":{"message":"Renamed count to itemCount."}}</tool_call>'
+      - purpose: Open a file once you know its path
+        call: '<tool_call>{"tool":"open_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}"}}</tool_call>'
+      - purpose: Find a file by name
+        call: '<tool_call>{"tool":"search_project","args":{"query":"{{EXAMPLE_FILE_STEM}}"}}</tool_call>'
+      - purpose: List the project's top-level files (an empty directory means the project root)
+        call: '<tool_call>{"tool":"list_files","args":{"directory":""}}</tool_call>'
+      - purpose: Change part of a file (line breaks inside a value MUST be written as \n)
+        call: '<tool_call>{"tool":"edit_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}","old_string":"count = 0","new_string":"count = 1"}}</tool_call>'

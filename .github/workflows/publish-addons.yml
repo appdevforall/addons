@@ -86,42 +86,32 @@ jobs:
           PLUGIN_LIBS_REVISION: ${{ steps.libs.outputs.revision }}
         run: |
           set -euo pipefail
-          mkdir -p dist
-          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
+          # Without a name, discover lists every addon not held back by skip.txt.
+          # With one, it resolves the directory name or the slug, in any case, and
+          # fails on an unknown one, so a hostile value never reaches the shell as
+          # a path.
           if [ "$ADDON" = "all" ]; then
-            names="$all"
+            names="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
           else
-            # resolve through discover so an unknown or hostile value cannot
-            # reach the shell as a path
-            # match the directory name or the lowercase slug the rest of the
-            # system uses (dl/<slug>.cgp, the catalog's slug field)
-            names="$(printf '%s\n' "$all" | awk -v want="$ADDON" '
-              { n = $0; sub(/.*\//, "", n); l = tolower(n)
-                if (n == want || $0 == want || l == tolower(want)) print }')"
-            if [ -z "$names" ]; then
-              echo "Unknown addon: $ADDON" >&2; exit 1
-            fi
+            names="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover "$ADDON")"
           fi
           printf 'only<<EOF\n%s\nEOF\n' "$names" >> "$GITHUB_OUTPUT"
-          for dir in $names; do
-            echo "==> $dir"
-            ( cd "$dir"
-              gradlew="$GITHUB_WORKSPACE/gradlew"
-              if [ -x ./gradlew ]; then gradlew=./gradlew; fi
-              if grep -q downloadAssets build.gradle.kts; then
-                "$gradlew" --console=plain downloadAssets
-              fi
-              "$gradlew" --console=plain assemblePlugin )
-            "$GITHUB_WORKSPACE/scripts/verify-provenance.sh" "$dir"
-            slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
-            src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
-            cp "$src" "dist/${slug}.cgp"
-          done
+          # Two kinds of addon, two build scripts (ADFA-6252). Each builds only its
+          # own kind from the list and ignores the rest. No --ref: the previous
+          # step already put the plugin-api-latest jars in libs/.
+          # shellcheck disable=SC2086
+          ./scripts/build-plugins.sh --out dist $names
+          # shellcheck disable=SC2086
+          ./scripts/build-templates.sh $names
 
       - name: Build the source tarballs
         env:
           ONLY: ${{ steps.stage.outputs.only }}
         run: |
+          # Templates are passed in with everything else and skipped inside the
+          # tool, which logs the skip: a template ships no source tarball because
+          # its .cgt is plain text and already is its source (ADFA-6252). Filtering
+          # here instead would put the rule in two places.
           # shellcheck disable=SC2086
           uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" \
             tarball --out "$GITHUB_WORKSPACE/dist" --only $ONLY

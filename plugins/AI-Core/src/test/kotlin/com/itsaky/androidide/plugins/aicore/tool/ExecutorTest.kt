@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -67,7 +68,7 @@ class ExecutorTest {
     }
 
     private fun executorFor(handler: ToolHandler): Executor =
-        Executor(ToolRouter(listOf(handler)), ToolApprovalManager())
+        Executor(ToolRouter(listOf(handler)), ToolApprovalManager({ shippedConfig }))
 
     @Test
     fun givenAnInternallyResolvingHandler_whenExecutingAnEscapingPath_thenTheEscapePreGuardIsBypassed() = runBlocking {
@@ -226,7 +227,7 @@ class ExecutorTest {
                 return ToolResult.success("edited")
             }
         }
-        val approvalManager = ToolApprovalManager()
+        val approvalManager = ToolApprovalManager({ shippedConfig })
         val executor = Executor(ToolRouter(listOf(handler)), approvalManager)
 
         val results = executor.execute(
@@ -270,7 +271,7 @@ class ExecutorTest {
                 return ToolResult.success("edited")
             }
         }
-        val executor = Executor(ToolRouter(listOf(read, write)), ToolApprovalManager())
+        val executor = Executor(ToolRouter(listOf(read, write)), ToolApprovalManager({ shippedConfig }))
 
         executor.execute(
             listOf(
@@ -305,7 +306,7 @@ class ExecutorTest {
                 return ToolResult.success("contents")
             }
         }
-        val executor = Executor(ToolRouter(listOf(write, read)), ToolApprovalManager())
+        val executor = Executor(ToolRouter(listOf(write, read)), ToolApprovalManager({ shippedConfig }))
 
         executor.execute(
             listOf(
@@ -333,7 +334,7 @@ class ExecutorTest {
                 return ToolResult.success("contents")
             }
         }
-        val executor = Executor(ToolRouter(listOf(handler)), ToolApprovalManager())
+        val executor = Executor(ToolRouter(listOf(handler)), ToolApprovalManager({ shippedConfig }))
 
         executor.execute(
             listOf(
@@ -361,7 +362,7 @@ class ExecutorTest {
                 return ToolResult.success("contents")
             }
         }
-        val executor = Executor(ToolRouter(listOf(handler)), ToolApprovalManager())
+        val executor = Executor(ToolRouter(listOf(handler)), ToolApprovalManager({ shippedConfig }))
 
         executor.execute(
             listOf(
@@ -390,7 +391,7 @@ class ExecutorTest {
             override suspend fun execute(args: Map<String, Any?>) =
                 ToolResult.success("wrote:${args["file_path"]}")
         }
-        val executor = Executor(ToolRouter(listOf(read, write)), ToolApprovalManager())
+        val executor = Executor(ToolRouter(listOf(read, write)), ToolApprovalManager({ shippedConfig }))
 
         val results = executor.execute(
             listOf(
@@ -425,7 +426,7 @@ class ExecutorTest {
                 return ToolResult.success("edited")
             }
         }
-        val approvalManager = ToolApprovalManager()
+        val approvalManager = ToolApprovalManager({ shippedConfig })
         val executor = Executor(ToolRouter(listOf(handler)), approvalManager)
 
         val results = executor.execute(

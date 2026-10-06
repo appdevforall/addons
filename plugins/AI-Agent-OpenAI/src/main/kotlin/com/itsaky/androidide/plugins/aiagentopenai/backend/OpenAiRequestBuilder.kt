@@ -59,7 +59,7 @@ internal object OpenAiRequestBuilder {
      *
      * @param model the model id to request
      * @param stream true to ask for the SSE token stream
-     * @param config supplies the token cap and temperature
+     * @param config supplies the token cap, temperature and any tool the turn must call
      * @param tuning decides which optional parameters are sent at all
      * @param tools the tools to declare; omitted from the body when empty
      * @return the request JSON
@@ -81,6 +81,8 @@ internal object OpenAiRequestBuilder {
         // a file whose contents carry quotes or newlines can no longer break the call (ADFA-5410).
         if (tools.isNotEmpty()) {
             body.put("tools", OpenAiToolProtocol.toolsArray(tools))
+            val choice = OpenAiToolProtocol.requiredToolChoice(config, tools)
+            if (choice != null && tuning.sendToolChoice) body.put(RequestTuning.TOOL_CHOICE, choice)
         }
 
         if (config.maxTokens > 0) {

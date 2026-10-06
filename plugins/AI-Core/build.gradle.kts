@@ -81,7 +81,12 @@ dependencies {
     // JSON serialization for session persistence
     implementation("com.google.code.gson:gson:2.10.1")
 
+
     testImplementation(files("../../libs/plugin-api.jar"))
+    // plugin-api's prompt loader parses YAML with the host's copy; JVM tests need their own, same version
+    testImplementation("org.snakeyaml:snakeyaml-engine:2.10")
+    // plugin-api's PromptConfigStore logs through the host's slf4j; JVM tests need their own, same version
+    testRuntimeOnly("org.slf4j:slf4j-api:2.0.12")
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
     testImplementation("org.json:json:20240303")
@@ -95,3 +100,8 @@ tasks.matching {
     it.name.contains("checkDebugAarMetadata") ||
     it.name.contains("checkReleaseAarMetadata")
 }.configureEach { enabled = false }
+
+// The prompt tests read src/main/assets/prompts from disk; declared, so a YAML-only edit reruns them.
+tasks.withType<Test>().configureEach {
+    inputs.dir("src/main/assets/prompts").withPropertyName("shippedPrompts")
+}
