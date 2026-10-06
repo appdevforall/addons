@@ -67,6 +67,15 @@ class OpenAiToolProtocolTest {
         val parameters = declarations.getJSONObject(0).getJSONObject("function")
             .getJSONObject("parameters")
         assertEquals("object", parameters.getString("type"))
+        assertEquals(0, parameters.getJSONObject("properties").length())
+    }
+
+    @Test
+    fun givenAnObjectSchemaWithoutProperties_whenDeclared_thenItGetsAnEmptyOne() {
+        // LM Studio refuses the whole request when any tool's parameters lacks `properties`.
+        val parameters = OpenAiToolProtocol.parametersJson(mapOf("type" to "object"))
+
+        assertEquals(0, parameters.getJSONObject("properties").length())
     }
 
     @Test

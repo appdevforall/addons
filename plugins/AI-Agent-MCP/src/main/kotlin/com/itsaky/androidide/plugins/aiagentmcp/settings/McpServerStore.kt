@@ -270,12 +270,14 @@ object McpServerStore {
     fun setKnownTools(id: String, toolNames: List<String>) {
         synchronized(lock) {
             val server = servers().firstOrNull { it.id == id } ?: return
-            upsertLocked(
-                server.copy(
-                    knownTools = toolNames,
-                    enabledTools = server.enabledTools.filterTo(mutableSetOf()) { it in toolNames },
-                )
+            val updated = server.copy(
+                knownTools = toolNames,
+                enabledTools = server.enabledTools.filterTo(mutableSetOf()) { it in toolNames },
             )
+            // The health probe re-lists every server each cycle; an unchanged list must not make
+            // the agent rebuild its whole tool set every minute.
+            if (updated == server) return
+            upsertLocked(updated)
         }
         fireChanged()
     }

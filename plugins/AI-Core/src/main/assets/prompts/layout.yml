@@ -2,7 +2,7 @@
 # A line holding only a section tag (#, ^ or /) vanishes, so tags can sit on their own lines.
 
 layout:
-  system_prompt: |
+  system_prompt: |-
     {{IDENTITY}}
 
     {{#RULES}}

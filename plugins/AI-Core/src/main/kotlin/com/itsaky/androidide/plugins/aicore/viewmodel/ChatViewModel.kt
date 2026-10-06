@@ -212,30 +212,6 @@ class ChatViewModel(
     private val currentBackendId: String
         get() = _backendStatus.value.id
 
-    /**
-     * Label for the backend the user *selected* in settings, shown under the chat input. Tracks the
-     * selection, not the availability-resolved backend: picking Gemini must read "Gemini API" before
-     * its key check runs, or it would always show "Local LLM".
-     */
-    private val _activeBackendLabel = MutableStateFlow(selectedBackendLabel())
-    val activeBackendLabel: StateFlow<String> = _activeBackendLabel.asStateFlow()
-
-    private fun selectedBackendLabel(): String =
-        // Resolved exactly as the settings screen and the availability check resolve it, so the
-        // three cannot name different backends on the same launch.
-        when (val selected = BackendRegistry.selected()) {
-            is SelectedBackend.Installed -> selected.option.displayName
-            // A stored selection resolving to nothing means its plugin is gone. Saying "no backend"
-            // there would read as "install one" when one is installed — just not the chosen one.
-            SelectedBackend.Missing -> str(R.string.backend_selected_missing_short)
-            SelectedBackend.None -> str(R.string.backend_none_installed_short)
-        }
-
-    /** Re-read the selected backend and update [activeBackendLabel]; call when returning to chat. */
-    fun refreshBackendLabel() {
-        _activeBackendLabel.value = selectedBackendLabel()
-    }
-
     // Tool execution infrastructure
     private val approvalManager = ToolApprovalManager(sharedPromptConfig) { handler ->
         ToolDescriptions.describe(sharedPromptConfig.config(), RESPOND_TOOL, handler)

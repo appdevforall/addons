@@ -4,7 +4,10 @@ import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
+import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
+import com.itsaky.androidide.plugins.aiagentmcp.errors.McpFailure
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
+import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
@@ -43,13 +46,50 @@ object McpToolCatalog {
      * Handshakes with one server, reads its tool list and caches it.
      *
      * Blocking, so call it off the main thread. The stored known-tool names are updated too, which
-     * is what drops toggles for tools the server no longer offers.
+     * is what drops toggles for tools the server no longer offers, and so is [McpServerHealth],
+     * which is how the agent's tag for this server learns it went down or came back.
      *
      * @param server the server to ask.
      * @return its name and the tools it listed, empty for a server that offers no catalogue.
      * @throws java.io.IOException when the server cannot be reached or refuses the handshake.
      */
     fun connect(server: McpServer): Listing {
+        McpServerHealth.connectingIfUnknown(server.id)
+        val listing = try {
+            list(server)
+        } catch (e: Throwable) {
+            recordFailure(server, e)
+            throw e
+        }
+        // Deleted while the handshake was in flight: recording it would resurrect its entry.
+        if (isConfigured(server.id)) McpServerHealth.available(server.id)
+        return listing
+    }
+
+    /**
+     * Marks [server] degraded for [error], unless the error is a call being cancelled — the server
+     * did nothing wrong, and a stopped run must not paint it broken, nor leave it connecting.
+     *
+     * @param server the server that failed.
+     * @param error what it failed with.
+     */
+    fun recordFailure(server: McpServer, error: Throwable) {
+        val failure = McpErrorFormatter.classify(error)
+        if (failure == McpFailure.Cancelled) {
+            McpServerHealth.cancelConnecting(server.id)
+            return
+        }
+        if (!isConfigured(server.id)) return
+        val context = McpPlugin.getContext()?.androidContext
+        val refused = failure == McpFailure.TokenRefused || failure == McpFailure.Forbidden
+        McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server.name, error), refused)
+    }
+
+    private fun isConfigured(serverId: String): Boolean =
+        McpServerStore.servers().any { it.id == serverId }
+
+    /** The handshake-and-list itself; see [connect]. */
+    private fun list(server: McpServer): Listing {
         // Kept, not just its tools: the name the handshake returned lands on the session.
         val session = McpConnections.session(server)
         // Explicit, so a catalogue refused below is told apart from a refused connection.
@@ -97,13 +137,15 @@ object McpToolCatalog {
         return refreshed
     }
 
-    /** Forgets a server's tools, for one that was removed or edited. */
+    /** Forgets a server's tools and health, for one that was removed. */
     fun forget(serverId: String) {
         toolsByServer.remove(serverId)
+        McpServerHealth.forget(serverId)
     }
 
     /** Forgets everything, for the plugin shutting down. */
     fun clear() {
         toolsByServer.clear()
+        McpServerHealth.clear()
     }
 }

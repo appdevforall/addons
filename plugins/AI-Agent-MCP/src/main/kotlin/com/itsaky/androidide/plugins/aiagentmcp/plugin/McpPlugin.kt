@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpSettingsFragment
+import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolSource
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
@@ -20,7 +21,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -69,6 +74,18 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     companion object {
         /** Must match `plugin.id` in AndroidManifest.xml; also this source's provider id. */
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentmcp"
+
+        /**
+         * How often the health probe wakes. A server known to be broken is retried every time, so
+         * its tag clears within this long of it coming back.
+         */
+        internal const val PROBE_INTERVAL_MS = 20_000L
+
+        /**
+         * Probe cycles between re-checks of a server that is working: often enough that one going
+         * down is flagged within a minute, rarely enough not to spend a phone's radio on it.
+         */
+        internal const val HEALTHY_PROBE_EVERY = 3
 
         /** Provider of [ToolSourceRegistry]; this plugin contributes nothing without it. */
         private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
@@ -128,6 +145,19 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         resolveToolSourceRegistry()?.notifyToolsChanged(PLUGIN_ID)
     }
 
+    /**
+     * Tells the agent a server went down or came back. Status only: the tool list is unchanged,
+     * so the agent redraws its tags without rebuilding its tool set.
+     */
+    private val healthChanged: () -> Unit = {
+        try {
+            if (registered) resolveToolSourceRegistry()?.notifyToolSourceStatusChanged(PLUGIN_ID)
+        } catch (e: Throwable) {
+            // An AI Core built before contract 2 has no such method; its tags cannot show health.
+            context.logger.debug("McpPlugin: could not report a health change: ${e.message}")
+        }
+    }
+
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
         pluginContext = context
@@ -143,6 +173,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         activationJob = active.coroutineContext[Job]
         toolSource = McpToolSource()
         McpServerStore.addChangeListener(settingsChanged)
+        McpServerHealth.addChangeListener(healthChanged)
         context.addPluginLifecycleListener(aiCoreLifecycle)
 
         if (!registerToolSource()) {
@@ -154,6 +185,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         active.launch {
             val refreshed = McpToolCatalog.refreshAll { isActive }
             if (refreshed > 0 && isActive) settingsChanged()
+            probeHealth { isActive }
         }
         true
     } catch (e: Exception) {
@@ -164,6 +196,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     override fun deactivate(): Boolean = try {
         context.removePluginLifecycleListener(aiCoreLifecycle)
         McpServerStore.removeChangeListener(settingsChanged)
+        McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         // Before the connections are closed: an in-flight refresh would otherwise repopulate the
         // catalogue and the session map straight after they were cleared.
@@ -178,11 +211,50 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     override fun dispose() {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
+        McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         stopScope()
         releaseConnections()
         pluginContext = null
         context.logger.info("McpPlugin: disposed")
+    }
+
+    /**
+     * Re-asks each enabled server, so its tag in the agent tracks it going down and coming back
+     * without the user pressing Connect. A broken or never-reached server is asked every cycle, a
+     * working one every [HEALTHY_PROBE_EVERY]th, and one that refused its credential not until the
+     * user changes it. Runs until [keepGoing] turns false. A server whose cached tools changed, one
+     * coming back with the same names included, makes the agent re-read.
+     *
+     * Servers are asked in parallel, so one that hangs until its timeout delays no other's tag.
+     *
+     * @param keepGoing false once this activation is over; checked before each probe, since a probe
+     *   blocks on a socket with no suspension point, like [McpToolCatalog.refreshAll].
+     */
+    private suspend fun probeHealth(keepGoing: () -> Boolean) {
+        var cycle = 0
+        while (keepGoing()) {
+            delay(PROBE_INTERVAL_MS)
+            cycle++
+            val due = McpServerStore.servers().filter { server ->
+                val health = McpServerHealth.of(server.id)
+                server.enabled && health?.refused != true && (cycle % HEALTHY_PROBE_EVERY == 0 ||
+                    health?.state != McpServerHealth.State.AVAILABLE)
+            }
+            val toolsChanged = coroutineScope {
+                due.map { server ->
+                    async {
+                        if (!keepGoing()) return@async false
+                        val before = McpToolCatalog.tools(server.id)
+                        // Recorded by connect itself; a failure here is what the tag already shows.
+                        runCatching { McpToolCatalog.connect(server) }
+                        McpToolCatalog.tools(server.id) != before
+                    }
+                }.awaitAll().any { it }
+            }
+            // The stored names may be unchanged, so the store's own notification cannot be relied on.
+            if (toolsChanged && keepGoing()) settingsChanged()
+        }
     }
 
     /** A fresh scope for this activation; the previous one is cancelled, never reused. */

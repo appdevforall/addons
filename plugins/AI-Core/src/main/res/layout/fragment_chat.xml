@@ -260,14 +260,25 @@
                   android:tint="@color/chat_send_tint" />
           </LinearLayout>
 
-          <TextView
-              android:id="@+id/backend_status_text"
-              android:layout_width="wrap_content"
+          <!-- What the agent is connected to: backend, web access, tool sources. Replaces the
+               one-line backend caption that stood here, so it costs about the same height, and
+               scrolls sideways rather than wrapping so the field above never loses a line to it.
+               CapabilityTagRowController fills it. -->
+          <HorizontalScrollView
+              android:id="@+id/capability_tag_scroll"
+              android:layout_width="match_parent"
               android:layout_height="wrap_content"
-              android:layout_gravity="center_horizontal"
               android:layout_marginTop="@dimen/chat_caption_spacing"
-              android:textColor="@color/plugin_text_muted"
-              android:textSize="@dimen/chat_caption_text_size" />
+              android:contentDescription="@string/desc_capability_row"
+              android:scrollbars="none">
+
+              <LinearLayout
+                  android:id="@+id/capability_tag_group"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal" />
+          </HorizontalScrollView>
       </LinearLayout>
 
   </LinearLayout>
