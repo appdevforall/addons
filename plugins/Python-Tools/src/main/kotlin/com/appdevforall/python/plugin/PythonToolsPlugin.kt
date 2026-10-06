@@ -12,9 +12,14 @@ import com.itsaky.androidide.plugins.extensions.BuildActionExtension
 import com.itsaky.androidide.plugins.extensions.CommandResult
 import com.itsaky.androidide.plugins.extensions.CommandSpec
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
+import com.itsaky.androidide.plugins.extensions.LanguageDefinition
+import com.itsaky.androidide.plugins.extensions.LanguageExtension
+import com.itsaky.androidide.plugins.extensions.LanguageServerDefinition
 import com.itsaky.androidide.plugins.extensions.PluginBuildAction
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.ToolbarActionIds
+import com.itsaky.androidide.plugins.extensions.TreeSitterGrammar
+import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeCommandService
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeProjectService
@@ -28,8 +33,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.ZipInputStream
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Python Tools plugin.
@@ -44,7 +52,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * plugin must not steal the toolbar from Java/Kotlin/Android projects, and it must be usable on a
  * fresh device without Python pre-installed.
  */
-class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension {
+class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension, LanguageExtension, UIExtension {
 
     private var pluginContext: PluginContext? = null
     private var templateService: IdeTemplateService? = null
@@ -58,6 +66,7 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
     private var installJob: Job? = null
     private var toolbarContainer: WeakReference<ViewGroup>? = null
     private val tooltipBindingScheduled = AtomicBoolean(false)
+    private val requirementsSyncedRoot = AtomicReference<String?>(null)
 
     override fun initialize(context: PluginContext): Boolean {
         pluginContext = context
@@ -74,7 +83,7 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
     override fun activate(): Boolean {
         installPyHooks()
         registerTemplates()
-        installJob = scope.launch { ensurePython() }
+        installJob = scope.launch { if (ensurePython()) ensureBundledPackages() }
         Log.i(TAG, "Python Tools activated")
         return true
     }
@@ -88,6 +97,18 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
         Log.i(TAG, "Python Tools deactivated")
         return true
     }
+
+    override fun getLanguages(): List<LanguageDefinition> = listOf(
+        LanguageDefinition(
+            languageId = LANGUAGE_ID,
+            fileExtensions = setOf("py"),
+            grammar = TreeSitterGrammar(name = LANGUAGE_ID, queriesAssetPath = "treesitter/python"),
+            server = LanguageServerDefinition(
+                command = listOf(LANGUAGE_SERVER_COMMAND),
+                environment = mapOf("PYTHONUNBUFFERED" to "1"),
+            ),
+        ),
+    )
 
     override fun dispose() {
         scope.cancel()
@@ -104,9 +125,13 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
 
     override fun toolbarActionsToHide(): Set<String> {
         if (!isPythonProjectOpen()) return emptySet()
+        syncRequirementsOnce()
         scheduleTooltipBinding()
         return ToolbarActionIds.BUILD_HIDEABLE
     }
+
+    override fun getHiddenToolbarActionIds(): Set<String> =
+        if (isPythonProjectOpen()) setOf(QUICK_BUILD_ACTION_ID) else emptySet()
 
     override fun getBuildActions(): List<PluginBuildAction> {
         if (!isPythonProjectOpen()) return emptyList()
@@ -154,7 +179,7 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
                 description = "Install dependencies from requirements.txt",
                 icon = R.drawable.ic_sync_deps,
                 category = BuildActionCategory.BUILD,
-                command = shell("pip install -r requirements.txt"),
+                command = shell(requirementsInstallScript()),
                 timeoutMs = 300_000,
             ),
         )
@@ -217,18 +242,48 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
         }
         notify("Missing dependencies — installing from requirements.txt…")
         scope.launch {
-            val result = try {
-                cmd.executeCommand(shell("pip install -r requirements.txt"), timeoutMs = 300_000L).await()
-            } catch (t: Throwable) {
-                notify("Could not start dependency install.")
-                return@launch
-            }
+            val result = pipInstallRequirements(cmd) ?: return@launch
             when (result) {
                 is CommandResult.Success -> notify("Dependencies installed. Tap Run again.")
                 is CommandResult.Failure -> notify("Dependency install failed (exit ${result.exitCode}).")
                 is CommandResult.Cancelled -> Unit
             }
         }
+    }
+
+    private fun syncRequirementsOnce() {
+        val cmd = commandService ?: return
+        val root = projectService?.getCurrentProject()?.rootDir ?: return
+        val path = root.absolutePath
+        if (requirementsSyncedRoot.getAndSet(path) == path) return
+        scope.launch {
+            installJob?.join()
+            if (!File(root, "requirements.txt").exists()) return@launch
+            val result = pipInstallRequirements(cmd) ?: return@launch
+            when (result) {
+                is CommandResult.Success ->
+                    if (result.stdout.contains("Successfully installed")) notify("Project dependencies installed.")
+                is CommandResult.Failure -> {
+                    Log.e(TAG, "pip install -r requirements.txt failed: ${result.stderr.take(2000)}")
+                    notify(
+                        "Could not install project dependencies (exit ${result.exitCode}). It needs a network " +
+                            "connection; tap ${actionLabel(ACTION_SYNC_DEPS)} to try again.",
+                    )
+                }
+                is CommandResult.Cancelled -> Log.i(TAG, "pip install -r requirements.txt cancelled")
+            }
+        }
+    }
+
+    private suspend fun pipInstallRequirements(cmd: IdeCommandService): CommandResult? = try {
+        cmd.executeCommand(
+            shell(requirementsInstallScript()),
+            timeoutMs = 300_000L,
+        ).await()
+    } catch (t: Throwable) {
+        Log.e(TAG, "Could not start pip", t)
+        notify("Could not start dependency install.")
+        null
     }
 
     private fun isPythonProjectOpen(): Boolean =
@@ -355,38 +410,114 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
 
     // region Python interpreter bootstrap
 
-    private suspend fun ensurePython() {
+    private suspend fun ensurePython(): Boolean {
         val cmd = commandService ?: run {
             Log.e(TAG, "IdeCommandService unavailable; cannot manage Python")
-            return
+            return false
         }
 
         if (pythonAvailable(cmd)) {
             Log.i(TAG, "Python is already installed")
-            return
+            return true
         }
 
         notify("Python not found. Installing via Termux…")
-        val result = try {
-            cmd.executeCommand(shell("pkg install python -y"), timeoutMs = 15 * 60_000L).await()
-        } catch (t: Throwable) {
-            Log.e(TAG, "Could not start the package manager", t)
-            notify("Could not start the package manager (pkg). Install Python manually.")
+        return runInstall(cmd, "Python", "pkg install python -y", INSTALL_TIMEOUT_MS) && pythonAvailable(cmd)
+    }
+
+    private suspend fun ensureBundledPackages() {
+        val cmd = commandService ?: return
+        if (!extractWheelhouse()) {
+            notify("Could not unpack the bundled Python packages.")
+            return
+        }
+        if (probe(cmd, "command -v $LANGUAGE_SERVER_COMMAND >/dev/null && python -c 'import flask, gunicorn'")) {
+            Log.i(TAG, "Bundled Python packages are already installed")
             return
         }
 
-        when (result) {
-            is CommandResult.Success ->
-                if (pythonAvailable(cmd)) notify("Python installed successfully.")
-                else notify("Install finished but Python is still not on PATH.")
+        notify("Installing the Python language server, Flask, and gunicorn. This runs once.")
+        val wheelhouse = quote(wheelhouseDir().absolutePath)
+        runInstall(
+            cmd,
+            "the Python language server, Flask, and gunicorn",
+            "python -m pip install --disable-pip-version-check --no-index --find-links $wheelhouse " +
+                "\"$LANGUAGE_SERVER_PACKAGE\" $BUNDLED_PACKAGES",
+            INSTALL_TIMEOUT_MS,
+        )
+    }
+
+    private suspend fun runInstall(
+        cmd: IdeCommandService,
+        label: String,
+        script: String,
+        timeoutMs: Long,
+    ): Boolean {
+        val result = try {
+            cmd.executeCommand(shell(script), timeoutMs = timeoutMs).await()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Could not start the $label install", t)
+            notify("Could not start the $label install.")
+            return false
+        }
+        return when (result) {
+            is CommandResult.Success -> {
+                notify("Installed $label.")
+                true
+            }
             is CommandResult.Failure -> {
                 val detail = result.error ?: result.stderr.takeIf { it.isNotBlank() } ?: "exit ${result.exitCode}"
-                Log.e(TAG, "pkg install python failed: $detail")
-                notify("Failed to install Python: $detail")
+                Log.e(TAG, "$label install failed: $detail")
+                notify("Failed to install $label: ${detail.lineSequence().last { it.isNotBlank() }}")
+                false
             }
-            is CommandResult.Cancelled -> Log.i(TAG, "Python installation cancelled")
+            is CommandResult.Cancelled -> {
+                Log.i(TAG, "$label install cancelled")
+                false
+            }
         }
     }
+
+    private suspend fun probe(cmd: IdeCommandService, script: String): Boolean = try {
+        val result = cmd.executeCommand(shell(script), timeoutMs = PROBE_TIMEOUT_MS).await()
+        result is CommandResult.Success && result.exitCode == 0
+    } catch (t: Throwable) {
+        false
+    }
+
+    private fun extractWheelhouse(): Boolean {
+        val assets = pluginContext?.androidContext?.assets ?: return false
+        val target = wheelhouseDir()
+        return runCatching {
+            target.mkdirs()
+            ZipInputStream(assets.open(WHEELHOUSE_ASSET)).use { zip ->
+                generateSequence { zip.nextEntry }.forEach { entry ->
+                    val out = File(target, entry.name)
+                    if (!out.canonicalPath.startsWith(target.canonicalPath + File.separator)) {
+                        throw SecurityException("Wheelhouse entry escapes its directory: ${entry.name}")
+                    }
+                    if (!out.exists()) {
+                        val partial = File(target, "${entry.name}.partial")
+                        partial.outputStream().use { zip.copyTo(it) }
+                        if (!partial.renameTo(out)) throw IOException("Could not move ${partial.name} into place")
+                    }
+                }
+            }
+            true
+        }.getOrElse {
+            Log.e(TAG, "Failed to extract the bundled wheelhouse", it)
+            false
+        }
+    }
+
+    private fun pluginDir(): File = pluginContext!!.resources.getPluginDirectory()
+
+    private fun wheelhouseDir(): File = File(pluginDir(), "wheelhouse")
+
+    private fun quote(path: String): String = "\"" + path + "\""
+
+    private fun requirementsInstallScript(): String =
+        "python -m pip install --disable-pip-version-check --find-links ${quote(wheelhouseDir().absolutePath)} -r requirements.txt"
 
     private suspend fun pythonAvailable(cmd: IdeCommandService): Boolean = try {
         val result = cmd.executeCommand(shell("python --version"), timeoutMs = 20_000L).await()
@@ -407,6 +538,14 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension 
 
     companion object {
         private const val TAG = "PythonToolsPlugin"
+        private const val LANGUAGE_ID = "python"
+        private const val LANGUAGE_SERVER_COMMAND = "pylsp"
+        private const val LANGUAGE_SERVER_PACKAGE = "python-lsp-server[pyflakes,yapf]"
+        private const val PROBE_TIMEOUT_MS = 20_000L
+        private const val INSTALL_TIMEOUT_MS = 20 * 60_000L
+        private const val WHEELHOUSE_ASSET = "python/wheelhouse.zip"
+        private const val BUNDLED_PACKAGES = "flask gunicorn"
+        private const val QUICK_BUILD_ACTION_ID = "ide.editor.build.quickBuild"
 
         internal const val PLUGIN_ID = "com.appdevforall.python.plugin"
         internal const val ACTION_RUN_APP = "python.run.app"

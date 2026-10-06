@@ -231,6 +231,12 @@
   </p>
   <pre><code>override fun toolbarActionsToHide(): Set&lt;String&gt; =
     if (isPythonProjectOpen()) ToolbarActionIds.BUILD_HIDEABLE else emptySet()</code></pre>
+  <p>
+    Quick Run is not in that set. The plugin hides it through
+    <code>UIExtension</code>, which accepts any toolbar action id:
+  </p>
+  <pre><code>override fun getHiddenToolbarActionIds(): Set&lt;String&gt; =
+    if (isPythonProjectOpen()) setOf("ide.editor.build.quickBuild") else emptySet()</code></pre>
 
   <h3>Process lifecycle</h3>
   <p>
