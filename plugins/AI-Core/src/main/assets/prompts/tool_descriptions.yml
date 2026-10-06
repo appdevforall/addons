@@ -73,7 +73,7 @@ built_in_tools:
       Run any Gradle task in the project — tests, lint, clean, assemble — and get back whether it
       passed and the build output, test failures and compiler errors included. A result from an
       earlier message is out of date: whenever the user asks to run a task, call this tool again
-      instead of repeating that result
+      instead of repeating that result. Unsure of a task's name? Call list_gradle_tasks first
     arguments:
       tasks: >-
         The Gradle tasks to run, separated by spaces, e.g. "test" or ":app:testDebugUnitTest".
@@ -82,6 +82,16 @@ built_in_tools:
         or "--info". A task option such as --tests applies to the last task. Gradle skips a task
         whose inputs have not changed; add "--rerun" to run the last task anyway. Omit when there
         are none.
+  list_gradle_tasks:
+    # Without "custom tasks" models answer from Gradle and Android defaults and miss the project's own.
+    description: >-
+      List the Gradle tasks this project has, the project's own custom tasks included, with each
+      task's path, group and what it does. Call it before run_gradle_task when you are unsure a
+      task exists or which task does what the user asked
+    arguments:
+      filter: >-
+        Text to search task paths, groups and descriptions for, e.g. ":app", "test" or "lint".
+        Omit to list the tasks that have a group or a description.
   generate_from_template:
     description: Generate files from Pebble templates with variable substitution
     arguments:

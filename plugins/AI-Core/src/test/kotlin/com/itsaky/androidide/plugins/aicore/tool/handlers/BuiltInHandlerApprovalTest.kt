@@ -40,6 +40,7 @@ class BuiltInHandlerApprovalTest {
             "search_project",
             "open_file",
             "read_build_output",
+            "list_gradle_tasks",
             // Its query goes to the provider already holding the conversation; no new party sees it.
             "web_search",
             "read_app_logs",
