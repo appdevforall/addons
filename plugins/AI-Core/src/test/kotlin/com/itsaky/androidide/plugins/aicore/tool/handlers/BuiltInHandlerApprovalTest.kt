@@ -23,6 +23,7 @@ class BuiltInHandlerApprovalTest {
             "add_dependency",
             "run_app",
             "gradle_sync",
+            "run_gradle_task",
             "generate_from_template",
         )
 

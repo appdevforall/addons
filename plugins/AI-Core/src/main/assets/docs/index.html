@@ -103,6 +103,11 @@
       so <b>Ctrl+Z undoes it</b> and your unsaved work is preserved.</li>
     <li>Trigger a Gradle sync (asks for approval — a sync starts a real build)
       and read build output.</li>
+    <li>Run any Gradle task, such as <code>test</code>, <code>lint</code> or
+      <code>clean</code>, with Gradle arguments such as
+      <code>--tests com.example.FooTest</code>. It asks first, runs on the IDE's
+      own Gradle daemon, and reports whether the task passed along with the test
+      failures or compiler errors. Pressing Stop cancels the task.</li>
     <li>Read <b>App Logs</b> and <b>IDE Logs</b>, so it can find the exception
       behind a crash without you copying log lines into the chat. It never
       asks first: reading a log changes nothing.</li>

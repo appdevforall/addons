@@ -66,6 +66,22 @@ built_in_tools:
       prompt, so success means the install started, not that the app is on screen
   gradle_sync:
     description: Sync the Gradle project (reload dependencies and rebuild cache)
+  run_gradle_task:
+    # Without "any task" small models still answer that they cannot run tests, and without the
+    # second sentence Gemini answers a repeated "run the tests" from the earlier result.
+    description: >-
+      Run any Gradle task in the project — tests, lint, clean, assemble — and get back whether it
+      passed and the build output, test failures and compiler errors included. A result from an
+      earlier message is out of date: whenever the user asks to run a task, call this tool again
+      instead of repeating that result
+    arguments:
+      tasks: >-
+        The Gradle tasks to run, separated by spaces, e.g. "test" or ":app:testDebugUnitTest".
+      arguments: >-
+        Gradle command-line arguments, separated by spaces, e.g. "--tests com.example.FooTest"
+        or "--info". A task option such as --tests applies to the last task. Gradle skips a task
+        whose inputs have not changed; add "--rerun" to run the last task anyway. Omit when there
+        are none.
   generate_from_template:
     description: Generate files from Pebble templates with variable substitution
     arguments:

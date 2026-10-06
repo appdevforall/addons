@@ -61,8 +61,9 @@
   <h2>Core functionality</h2>
   <ul>
     <li><b>Agent chat</b> — a conversational editor tab that can read and edit
-      project files, add dependencies, run a Gradle sync and launch the app, with
-      every file-changing action gated behind an approval dialog.</li>
+      project files, add dependencies, run a Gradle sync or any Gradle task
+      (tests, lint, clean) and launch the app, with every file-changing action
+      gated behind an approval dialog.</li>
     <li><b>Agent settings</b> — one screen to pick the backend and configure it;
       each backend contributes its own portion of that screen.</li>
     <li><b>Web search</b> — the agent always has <code>web_search</code> (the
@@ -138,8 +139,8 @@
   </table>
   <p>AI Core declares <b>filesystem.read</b>, <b>filesystem.write</b>,
   <b>system.commands</b> and <b>project.structure</b> — the agent reads and edits
-  files in the open project, triggers Gradle sync and run through the IDE's own
-  build service, and inspects the project's module structure. It declares
+  files in the open project, triggers Gradle sync, Gradle tasks and run through
+  the IDE's own build service, and inspects the project's module structure. It declares
   <b>no network access and loads no native code</b>: those belong to the backend
   plugin that serves a given request, so a device using only the local backend
   never grants a network-capable AI plugin. The same holds for tools another
@@ -157,7 +158,7 @@
       enter a Gemini API key. The same screen is reachable from the Agent tab.</li>
     <li>Open a project and switch to the <b>Agent</b> tab to start chatting. Any
       action that changes a file asks for your approval first, as does starting a
-      Gradle sync or generating from a template. Only reads run unprompted.</li>
+      Gradle sync or task, or generating from a template. Only reads run unprompted.</li>
     <li><i>Optional:</i> install a tool provider such as <b>AI Agent MCP</b> to
       give the agent tools beyond its own. Its tools appear in the agent's tool
       list once configured, and each asks for approval naming the plugin it came
