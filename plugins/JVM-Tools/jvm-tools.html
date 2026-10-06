@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JVM Tools</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #b45309;
+    --accent-light: #fdf3e7;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+
+<header>
+  <h1>JVM Tools</h1>
+  <p class="subtitle">Compile and run Java and Kotlin programs on the device, with a main-class picker and program arguments</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.jvm.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#limits">Limits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    JVM Tools runs Java and Kotlin programs the way a desktop IDE does: choose the class whose
+    <code>main</code> should start, give it program arguments, and tap Run. The project is compiled
+    on the device with the JDK and Kotlin compiler that Code on the Go already ships, and the output
+    streams into Build Output. Nothing is downloaded.
+  </p>
+  <p>
+    It applies to JVM projects only: a folder of <code>.java</code> and <code>.kt</code> files with no
+    Gradle build. Android projects keep their Gradle toolbar untouched.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+  <table>
+    <tr><th>Feature</th><th>What it does</th></tr>
+    <tr><td><b>Run</b></td><td>Compiles every Java and Kotlin file in the project and runs the chosen main class with its arguments. Becomes <b>Cancel Run</b> while the program runs.</td></tr>
+    <tr><td><b>Run configuration</b></td><td>Lists every class with a <code>main</code> method and takes the program arguments. Saved per project.</td></tr>
+    <tr><td><b>Java/Kotlin Program</b></td><td>A New Project template with <code>Main</code> and <code>Greeter</code> classes in Java or Kotlin.</td></tr>
+  </table>
+</section>
+
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>Domain gating</h3>
+  <p>
+    <code>JvmDomain</code> treats the open project as JVM when its root has no Gradle build file and a
+    <code>.java</code> or <code>.kt</code> file sits within four folders of it. Every contribution
+    below is gated on that check, so the plugin is invisible in Android projects.
+  </p>
+
+  <h3>Finding main classes</h3>
+  <p>
+    <code>MainClassFinder</code> reads the sources with comments removed and reports Java classes with a
+    <code>static void main(String[])</code>, Kotlin files with a top-level <code>fun main</code> (as the
+    <code>FileNameKt</code> facade, or the <code>@file:JvmName</code>), and Kotlin objects or companion
+    objects with a <code>@JvmStatic</code> main. Names are qualified with the file's package.
+  </p>
+
+  <h3>Compiling and running</h3>
+  <p>Run is a <code>PluginBuildAction</code> whose shell command:</p>
+  <ol>
+    <li>lists the project's sources, skipping <code>build/</code> and dot folders;</li>
+    <li>compiles all sources with <code>K2JVMCompiler</code> from <code>kotlin-compiler-embeddable</code> in the IDE's local Maven repository, when any <code>.kt</code> file exists (Java files are passed too, so Kotlin can see Java classes);</li>
+    <li>compiles the <code>.java</code> files with the JDK's <code>javac</code> against the Kotlin output;</li>
+    <li>replaces itself with <code>java -cp classes[:kotlin-stdlib] MainClass args...</code>, so cancelling the action stops the program.</li>
+  </ol>
+  <p>
+    Classes are written to a per-project folder under <code>$PREFIX/tmp/jvm-tools</code>, never into
+    the project. The toolchain paths come from <code>IdeEnvironmentService.getTmpDirectory()</code>,
+    whose parent is <code>$PREFIX</code>.
+  </p>
+
+  <h3>Hiding the Gradle actions</h3>
+  <p>
+    <code>toolbarActionsToHide()</code> returns <code>ToolbarActionIds.BUILD_HIDEABLE</code>, and
+    <code>getHiddenToolbarActionIds()</code> adds Quick Build, which is not in that set.
+  </p>
+</section>
+
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <table>
+    <tr><th>API</th><th>Used for</th></tr>
+    <tr><td><code>BuildActionExtension</code></td><td>The Run action and the pre-run save of unsaved Java and Kotlin buffers</td></tr>
+    <tr><td><code>UIExtension</code></td><td>The Run configuration toolbar button and hiding Quick Build</td></tr>
+    <tr><td><code>DocumentationExtension</code></td><td>Long-press tooltips and the in-app help page</td></tr>
+    <tr><td><code>IdeTemplateService</code></td><td>The Java/Kotlin Program template</td></tr>
+    <tr><td><code>IdeEditorService</code></td><td><code>getModifiedFiles</code>, <code>getFileContent</code> and <code>saveFile</code> before a run</td></tr>
+    <tr><td><code>PluginWindows</code></td><td>Showing the Run configuration dialog, a Material dialog built on the IDE activity</td></tr>
+  </table>
+  <p>
+    Permissions: <code>filesystem.read</code>, <code>filesystem.write</code>,
+    <code>system.commands</code>, <code>project.structure</code>. Supports Code on the Go 26.37 through
+    26.99; 26.37 is the first release with <code>PluginWindows</code>, which shows the Run configuration
+    dialog.
+  </p>
+</section>
+
+<section id="usage">
+  <h2>5. Usage</h2>
+  <ol>
+    <li>Install the plugin from the Plugin Manager and restart Code on the Go.</li>
+    <li>Create a project with <b>Java/Kotlin Program</b> on the New Project screen, or open a folder of <code>.java</code> and <code>.kt</code> files.</li>
+    <li>Tap <b>Run</b>. The project compiles and the output appears in Build Output.</li>
+    <li>To run another class or pass arguments, tap <b>Run configuration</b>, choose the main class, enter the arguments, and tap Save. Run uses that choice from then on.</li>
+  </ol>
+  <p>Build the plugin itself with <code>../../gradlew assemblePlugin</code> from <code>plugins/JVM-Tools</code>.</p>
+</section>
+
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li>Runs Java and Kotlin programs with no Gradle project, no network and no extra downloads.</li>
+    <li>Works like a desktop IDE: pick the main class and arguments once, then run with one tap.</li>
+    <li>Leaves Android projects untouched; the toolbar changes only in a JVM project.</li>
+  </ul>
+</section>
+
+<section id="limits">
+  <h2>7. Limits</h2>
+  <ul>
+    <li>No keyboard input: plugin commands have no stdin, so <code>Scanner</code> and <code>readLine()</code> see the end of input.</li>
+    <li>No third-party libraries: only the Java class library and the Kotlin standard library are on the classpath.</li>
+    <li>A <code>main</code> in a nested Java class is not listed.</li>
+  </ul>
+</section>
+
+<footer>
+  JVM Tools Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.jvm.plugin
+</footer>
+
+</body>
+</html>

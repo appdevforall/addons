@@ -1,0 +1,3 @@
+object Greeter {
+    fun greet(name: String) = "Hello, $name! This program runs on your device."
+}
