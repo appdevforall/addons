@@ -116,13 +116,30 @@ via CodeOnTheGo's Plugin Manager, then restart the IDE.
 
 ## Native function calling
 
-Not implemented, deliberately. This backend declares `HistoryCapableBackend` but
-not `ToolCallingBackend`, so ai-core streams it the whole conversation and the
-agent loop drives tools through a text envelope in the system prompt, which is
-provider-agnostic. Declaring `ToolCallingBackend` without native function calling
-would leave the caller waiting on a call this backend never makes. The system
-prompt also tells the model not to use its own function-calling channel, since
-nothing reads it.
+This backend declares `ToolCallingBackend`, so ai-core calls
+`generateStreamingWithTools` and the agent's tools travel through the
+Chat Completions function-calling API rather than a text envelope in the reply
+(ADFA-5410). Declared tools arrive already structured, so a file whose contents
+carry quotes or newlines cannot break the call.
+
+- **Request.** Each tool is sent in `tools[]` as `{"type":"function","function":{name, description, parameters}}`
+  (`OpenAiToolProtocol`). `tool_choice` is sent only when ai-core names a required
+  tool (`EXTRA_PARAM_REQUIRED_TOOL`); a server that refuses it is retried once
+  without it, under the same rule as the other 400 retries (`RequestTuning`).
+- **Stream.** `tool_calls` deltas are joined by index (`SseChunk`,
+  `OpenAiToolProtocol.CallAccumulator`) and reported through `onToolCall` once the
+  stream ends, so a call a retry replaced never reaches the caller. A call with no
+  name or unparseable arguments is dropped.
+- **Results.** `ChatMessage` gives an assistant turn no way to carry `tool_calls`,
+  and a `tool` role is only legal after one, so tool results go back as `user` turns.
+- **Prompt.** ai-core sees the backend calls tools natively and passes no text call
+  syntax, so `tools.yml`'s `native` format is sent. The text protocol, and its
+  `no_native_channel` line, is not used by this backend.
+- **Servers without function calling.** If a server refuses the `tools` declaration
+  (400, 404 or 422 naming a tool field as unsupported), the turn is retried with no
+  tools and a Toast says the agent cannot call tools on that server. The refusal is
+  remembered per base URL, so only the first turn pays for it. The prompt for that
+  run was built for native calling, so the model answers in prose.
 
 ## System prompt config
 
@@ -169,10 +186,12 @@ Every source file sits in a package named for its layer; nothing is loose at the
 root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 
 - `plugin/OpenAiPlugin.kt` — plugin entry point; registers the backend with ai-core
-- `backend/OpenAiBackend.kt` — the HTTP transport, SSE streaming and model catalog
-- `backend/OpenAiRequestBuilder.kt` — `messages[]` mapping and request JSON (pure)
-- `backend/RequestTuning.kt` — reasoning-model parameters and the 400-retry rule (pure)
-- `backend/SseChunk.kt` — one line of the token stream (pure)
+- `backend/OpenAiBackend.kt` — SSE streaming, native tool calling and the model catalog
+- `backend/OpenAiHttpClient.kt` — the HTTP transport
+- `backend/OpenAiRequestBuilder.kt` — `messages[]` mapping and request JSON, including `tools` (pure)
+- `backend/OpenAiToolProtocol.kt` — `tools[]`, `tool_choice` and the streamed `tool_calls` accumulator (pure)
+- `backend/RequestTuning.kt` — reasoning-model parameters, the 400-retry rule and tool-refusal detection (pure)
+- `backend/SseChunk.kt` — one line of the token stream, text or `tool_calls` deltas (pure)
 - `backend/ModelCatalogFilter.kt` — splits one catalog into the chat and embedding pickers (pure)
 - `backend/OpenAiEmbeddingProtocol.kt` — the `/v1/embeddings` body, batching and index-ordered reply (pure)
 - `errors/OpenAiErrorFormatter.kt` — turns a failure into one translated sentence
@@ -188,7 +207,7 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `logging/` — `LOG_PREFIX` (`AiAgentOpenAi`), prefixing every logcat tag
 
 The pure units carry the logic that would otherwise only fail on a device; they
-are covered by 177 JVM tests.
+are covered by 245 JVM tests.
 
 ## License
 
