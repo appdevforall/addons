@@ -163,7 +163,8 @@ class GeminiBackend(
             ?: DEFAULT_EMBEDDING_MODEL
 
     /**
-     * The models the saved key can embed with: those that advertise `embedContent`.
+     * The models the saved key can embed with: those that advertise `embedContent`. A saved model
+     * the list omits is replaced by its first entry.
      *
      * Fails rather than answering empty without a key, so the screen offering the choice can say
      * why there is no list instead of drawing an empty one.
@@ -181,7 +182,11 @@ class GeminiBackend(
         ) {
             val apiKey = readGeminiApiKey()
             if (apiKey.isNullOrBlank()) throw ReportedFailure(missingKeyMessage())
-            describeCatalog(apiKey).embedding
+            val models = describeCatalog(apiKey).embedding
+            // Off a retired saved model, as OpenAI does: the live catalog omitting it means a 404.
+            models.firstOrNull()?.takeIf { getEmbeddingModelId() !in models }
+                ?.let(::setEmbeddingModelId)
+            models
         }
     }
 

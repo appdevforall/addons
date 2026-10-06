@@ -128,8 +128,11 @@ class IndexCoordinator(
         // Cancel a build and wait for it to unwind, so builds never interleave writes.
         if (running !== clearing) running?.cancel()
         target = wanted
+        val pendingClear = clearing
         val job = scope.launch {
             try {
+                // The clear first: a superseded build may have left without waiting for it.
+                pendingClear?.join()
                 running?.join()
                 build(rootsKey, roots, backend, identity)
             } catch (e: CancellationException) {

@@ -152,7 +152,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:completionThreshold="0"
-                        android:inputType="none"
+                        android:imeOptions="actionDone"
+                        android:inputType="text"
                         android:popupBackground="@color/plugin_surface" />
                 </com.google.android.material.textfield.TextInputLayout>
 

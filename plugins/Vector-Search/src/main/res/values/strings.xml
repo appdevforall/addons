@@ -31,7 +31,7 @@
     <string name="vs_models_loading">Loading the embedding models…</string>
     <string name="vs_models_failed">Couldn\'t load the embedding models: %1$s</string>
     <string name="vs_models_failed_unknown">Couldn\'t load the embedding models. Check the backend\'s API key and your network connection.</string>
-    <string name="vs_models_empty">This backend offers no embedding models.</string>
+    <string name="vs_models_empty">This backend lists no embedding models. Type the model\'s name instead.</string>
     <string name="vs_models_help">Changing the model rebuilds the index on the next search.</string>
     <string name="vs_model_changed">The next search rebuilds the index with %1$s.</string>
 

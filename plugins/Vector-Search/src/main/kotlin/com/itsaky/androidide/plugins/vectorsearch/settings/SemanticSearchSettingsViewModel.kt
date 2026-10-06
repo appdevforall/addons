@@ -146,7 +146,7 @@ class SemanticSearchSettingsViewModel(
      * Makes [modelId] the backend's embedding model. The backend stores it and notifies AI Core,
      * whose notice comes back as a backend change.
      *
-     * @param modelId a model the dropdown offered
+     * @param modelId a model the dropdown offered or the user typed
      */
     fun selectModel(modelId: String) {
         val selectable = selectableOf(_state.value.compatibility) ?: return
@@ -205,8 +205,9 @@ class SemanticSearchSettingsViewModel(
             try {
                 val owner = source()
                 val status = owner?.indexStatus() ?: IndexStatus.NoProject
-                // A running build always has something to stop, so it skips the database read.
-                status to (status is IndexStatus.Building || owner?.indexHoldsAnything() == true)
+                // Running and failed builds are always clearable: clearing is how a failure retries.
+                val clearable = status is IndexStatus.Building || status is IndexStatus.BuildFailed
+                status to (clearable || owner?.indexHoldsAnything() == true)
             } catch (e: Exception) {
                 log("could not read the index status", e)
                 IndexStatus.NoProject to false

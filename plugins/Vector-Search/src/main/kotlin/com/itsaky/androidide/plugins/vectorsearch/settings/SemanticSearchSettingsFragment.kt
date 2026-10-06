@@ -8,6 +8,7 @@ import android.text.format.DateUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Filter
@@ -165,8 +166,8 @@ class SemanticSearchSettingsFragment : Fragment() {
     // --- Embedding model picker ----------------------------------------------------------------
 
     /**
-     * Pick-only, like the backends' own model dropdowns: the list is what the backend can embed
-     * with, so free text could only name a model it would refuse.
+     * Picked or typed: the list is filtered by name on OpenAI-compatible servers, so it can miss a
+     * model the backend accepts.
      */
     private fun setupModelPicker(bound: Views) {
         val box = bound.modelBox
@@ -184,15 +185,22 @@ class SemanticSearchSettingsFragment : Fragment() {
             showTooltip(icon, VectorSearchHelp.TAG_EMBEDDING_MODEL)
         }
 
-        input.keyListener = null
         // Rendered from the state on every view creation; a restored setText() would filter.
         input.isSaveEnabled = false
-        // No adapter is how "disabled" is drawn here, so a tap opens nothing then.
+        // No adapter means nothing to list, so a tap opens nothing then.
         input.setOnClickListener { if (input.adapter != null) input.showDropDown() }
         box.setEndIconOnClickListener { if (input.adapter != null) input.showDropDown() }
         input.setOnItemClickListener { parent, _, position, _ ->
             (parent.getItemAtPosition(position) as? String)?.let(viewModel::selectModel)
         }
+        val commitTyped = {
+            input.text.toString().trim().takeIf { it.isNotEmpty() }?.let(viewModel::selectModel)
+        }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) commitTyped()
+            false
+        }
+        input.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTyped() }
     }
 
     /** In code: the bar's app: colour attributes are dropped inside the host. */
@@ -275,11 +283,11 @@ class SemanticSearchSettingsFragment : Fragment() {
         val input = bound.modelInput
         val current = (support as? EmbeddingSupport.Selectable)?.modelId.orEmpty()
         // The suppressing overload: a filtering write would narrow the list to this one entry.
-        if (input.text.toString() != current) input.setText(current, false)
+        if (!input.hasFocus() && input.text.toString() != current) input.setText(current, false)
 
         val options = state.selectedModels
         val models = (options as? ModelOptions.Loaded)?.models.orEmpty()
-        setPickerEnabled(bound, support is EmbeddingSupport.Selectable && models.isNotEmpty())
+        setPickerEnabled(bound, support is EmbeddingSupport.Selectable)
         if (models != adapterModels) {
             adapterModels = models
             input.setAdapter(if (models.isEmpty()) null else DropdownAdapter(input.context, models))
@@ -313,6 +321,7 @@ class SemanticSearchSettingsFragment : Fragment() {
      */
     private fun setPickerEnabled(bound: Views, enabled: Boolean) {
         bound.modelBox.alpha = if (enabled) 1f else DISABLED_ALPHA
+        bound.modelInput.isFocusableInTouchMode = enabled
         ViewCompat.setStateDescription(
             bound.modelInput,
             if (enabled) null else getString(R.string.vs_state_unavailable),
