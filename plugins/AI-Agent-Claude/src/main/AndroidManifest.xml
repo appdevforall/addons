@@ -39,12 +39,12 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.39: AI Core's own minimum, and this plugin does nothing without AI Core. The
-             plugin-api surface it uses itself is older: KeystoreSecretStore, which
-             SecureApiKeyStore builds on, shipped in 26.36. -->
+        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
+             this backend reports getActiveModelName() and notifyBackendChanged() (ADFA-6278).
+             The prompt loader and pane helpers it uses are no newer. Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.39" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.max_ide_version"

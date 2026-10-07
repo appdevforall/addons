@@ -66,16 +66,39 @@
       calls, per-model parameters, retries and error classification.</li>
     <li>The API key is encrypted with the IDE's <code>KeystoreSecretStore</code>
       under this plugin's own alias.</li>
+    <li>The system prompt lives in <code>assets/prompts/</code>, one YAML file per
+      concern, so its wording changes without touching code. It is loaded and
+      checked once on activation; if it cannot load or render, AI Core's default
+      prompt is sent instead.</li>
+    <li>Registration with AI Core goes through the IDE's
+      <code>LlmBackendRegistration</code>, which re-registers when AI Core restarts
+      and tells the chat when the key or model changes, so its backend tag names
+      the model in use.</li>
   </ul>
 
   <h2>Usage</h2>
   <ol>
     <li>Install <b>AI Core</b> and this plugin, then restart the IDE.</li>
-    <li>Open <b>AI Core → Agent settings</b> and select <b>Claude</b>.</li>
+    <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> and select
+      <b>Claude</b>. This plugin's own pane appears below it.</li>
     <li>Tap <b>Get API Key</b>, create a key in the Claude Console, paste it and
       tap <b>Save Key</b>.</li>
     <li>Optionally pick a model, then start a chat.</li>
   </ol>
+
+  <h2>Key benefits</h2>
+  <ul>
+    <li><b>Frontier models on any device</b> — Claude runs in Anthropic's cloud,
+      so a phone that could not run a large model locally can still use one.</li>
+    <li><b>Reliable tool use</b> — the Agent's tools are declared to Claude
+      natively, so edits arrive as structured calls rather than text that has to
+      be parsed.</li>
+    <li><b>Small footprint</b> — no bundled model or native library.</li>
+    <li><b>Credential hygiene</b> — the key is checked before it is saved,
+      encrypted at rest, and dropped from memory when the plugin unloads.</li>
+    <li><b>Coexists with the other backends</b> — install it beside AI Agent Local,
+      Gemini or OpenAI and switch between them in <b>Preferences &rarr; Configuration &rarr; Agent</b>.</li>
+  </ul>
 
   <h2>Cost</h2>
   <p>The Claude API is billed to prepaid credit, separate from a Claude.ai

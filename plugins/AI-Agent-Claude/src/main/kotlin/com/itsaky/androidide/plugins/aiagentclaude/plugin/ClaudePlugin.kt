@@ -2,13 +2,16 @@ package com.itsaky.androidide.plugins.aiagentclaude.plugin
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
+import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentclaude.backend.ClaudeBackend
+import com.itsaky.androidide.plugins.aiagentclaude.preferences.ClaudePreferences
+import com.itsaky.androidide.plugins.aiagentclaude.prompt.ClaudeSystemPrompt
+import com.itsaky.androidide.plugins.aiagentclaude.prompt.config.ClaudePromptConfig
+import com.itsaky.androidide.plugins.aiagentclaude.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
-import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.services.SharedServices
 
 /**
  * Registers the Claude backend with AI Core's inference router.
@@ -20,18 +23,22 @@ import com.itsaky.androidide.plugins.services.SharedServices
 class ClaudePlugin : IPlugin, DocumentationExtension {
 
     private lateinit var context: PluginContext
-    private var backend: ClaudeBackend? = null
 
-    /** True once [backend] is registered with the router, so re-registration is idempotent. */
-    @Volatile private var registered = false
+    /** The live backend, from [activate] until [deactivate] releases it. */
+    @Volatile private var backend: ClaudeBackend? = null
+
+    /** Keeps [backend] registered with AI Core across its restarts, and reports setting changes. */
+    private lateinit var registration: LlmBackendRegistration
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiagentclaude"
 
-        /** Provider of [LlmInferenceService]; this plugin is useless without it. */
-        private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
-
-        private const val TOOLTIP_TAG_PLUGIN = "plugin_ai_backend_claude"
+        /**
+         * The whole-plugin entry, and the only one carrying the Tier-3 guide button. Anchored to
+         * the key status line on this backend's settings pane — the one element this plugin always
+         * draws, and an entry no element long-presses is an entry nobody can read.
+         */
+        const val TOOLTIP_TAG_PLUGIN = "plugin_ai_agent_claude"
 
         /**
          * Category the host registers this plugin's tooltips under. Must be `"plugin_"` + the full
@@ -45,6 +52,9 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_MODEL = "ai_claude_model"
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_claude_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_claude_get_key"
+
+        /** The settings that change what [ClaudeBackend.isAvailable] or its model name answers. */
+        private val WATCHED_KEYS = setOf(ClaudePreferences.KEY_API_KEY, ClaudePreferences.KEY_MODEL)
 
         @Volatile
         private var pluginContext: PluginContext? = null
@@ -62,31 +72,16 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         fun getBackend(): ClaudeBackend? = activeBackend
     }
 
-    /**
-     * Re-registers when AI Core activates. Plugins load in parallel with no ordering, so
-     * [activate] may run before AI Core has published its service; this closes that race instead
-     * of polling for it.
-     */
-    private val aiCoreLifecycle = object : PluginLifecycleListener {
-        override fun onPluginActivated(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registerBackend()
-        }
-
-        override fun onPluginDeactivated(pluginId: String) {
-            // The router went away and took the registration with it; allow a fresh one.
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-
-        override fun onPluginUninstalled(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registered = false
-        }
-    }
-
     override fun initialize(context: PluginContext): Boolean {
         return try {
             this.context = context
             // Published for the settings pane, which the hosting screen constructs directly.
             pluginContext = context
+            registration = LlmBackendRegistration(
+                context = context,
+                preferences = { ClaudePreferences.of(context) },
+                watchedKeys = WATCHED_KEYS,
+            )
             context.logger.info("ClaudePlugin: Plugin initialized successfully")
             true
         } catch (e: Exception) {
@@ -101,22 +96,15 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         return try {
             // A half-failed activation can leave a backend behind; keep at most one live.
             releaseBackend()
+            preloadPromptConfig()
 
-            val claude = ClaudeBackend(context)
+            val claude = ClaudeBackend(context, sharedPromptConfig::configIfLoaded)
             backend = claude
             activeBackend = claude
 
             // Decrypt the key off-thread now, so a main-thread isAvailable() can't say "no key".
             claude.warmKeyCache()
-
-            // Listen first, then try: a listener added after a successful attempt would still be
-            // needed for a later AI Core restart, and one added before costs nothing.
-            context.addPluginLifecycleListener(aiCoreLifecycle)
-            if (!registerBackend()) {
-                context.logger.info(
-                    "ClaudePlugin: AI Core is not active yet; will register when it activates"
-                )
-            }
+            registration.start(claude)
 
             true
         } catch (e: Exception) {
@@ -125,59 +113,36 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         }
     }
 
-    /**
-     * Registers the backend with AI Core's router, if the router is reachable.
-     *
-     * @return true when the backend is registered (now or already), false when AI Core is absent
-     */
-    private fun registerBackend(): Boolean {
-        if (registered) return true
-        val claude = backend ?: return false
-
-        val service = resolveInferenceService()
-        if (service == null) {
-            context.logger.debug("ClaudePlugin: LlmInferenceService not available yet")
-            return false
-        }
-
-        return try {
-            service.registerBackend(claude)
-            registered = true
-            context.logger.info("ClaudePlugin: Registered '${claude.getId()}' backend with AI Core")
-            true
-        } catch (e: Exception) {
-            context.logger.error("ClaudePlugin: Could not register the Claude backend", e)
-            false
+    /** Reads and validates the prompt config now, so building a prompt does no disk I/O. */
+    private fun preloadPromptConfig() {
+        val source = AssetPromptConfigSource(context.androidContext.assets)
+        sharedPromptConfig.reload(source, ::reportLoadedConfig) { error ->
+            context.logger.error(
+                "ClaudePlugin: prompt config failed to load; ai-core's default prompt is sent instead",
+                error,
+            )
         }
     }
 
     /**
-     * Resolves AI Core's router, preferring the process-global registry and falling back to the
-     * provider-scoped lookup so a registry cleared by another plugin is not fatal.
+     * Logs that the config loaded, and any name typo its layout would hit at render time.
+     *
+     * @param config the config just loaded.
      */
-    private fun resolveInferenceService(): LlmInferenceService? = try {
-        SharedServices.get(LlmInferenceService::class.java)
-            ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
-    } catch (e: Exception) {
-        context.logger.warn("ClaudePlugin: Could not resolve LlmInferenceService: ${e.message}")
-        null
+    private fun reportLoadedConfig(config: ClaudePromptConfig) {
+        context.logger.info("ClaudePlugin: loaded prompt config with ${config.rules.size} rule groups")
+        for (problem in ClaudeSystemPrompt.problems(config)) {
+            context.logger.warn("ClaudePlugin: $problem; ai-core's default prompt is sent instead")
+        }
     }
 
     override fun deactivate(): Boolean {
         context.logger.info("ClaudePlugin: Deactivating plugin")
 
         return try {
-            context.removePluginLifecycleListener(aiCoreLifecycle)
-
-            val claude = backend
-            if (claude != null && registered) {
-                resolveInferenceService()?.unregisterBackend(claude.getId())
-                registered = false
-                context.logger.info("ClaudePlugin: Unregistered '${claude.getId()}' backend")
-            }
-
             // A disabled plugin must not keep the decrypted key on the host heap.
             releaseBackend()
+            sharedPromptConfig.clear()
 
             true
         } catch (e: Exception) {
@@ -191,19 +156,17 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
      * backend. Idempotent, so a [deactivate] followed by [dispose] closes nothing twice.
      */
     private fun releaseBackend() {
+        if (::registration.isInitialized) registration.stop()
         backend?.close()
         backend = null
         activeBackend = null
-        registered = false
     }
 
     override fun dispose() {
         context.logger.info("ClaudePlugin: Disposing plugin")
 
-        // deactivate() removes this too; a dispose without one would leave the host holding this.
-        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
-
         releaseBackend()
+        sharedPromptConfig.clear()
         pluginContext = null
         context.logger.info("ClaudePlugin: Released Claude backend")
     }
@@ -221,9 +184,15 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
                 <p>The agent's tools are declared to Claude directly, so it reads
                 and edits your project through structured calls rather than
                 text it has to get exactly right.</p>
-                <p>Install <b>AI Core</b> as well, then add your key in
-                <b>AI Core &rarr; Agent settings</b>. Prompts and any file
-                contents a plugin sends are transmitted to Anthropic.</p>
+                <p>Install <b>AI Core</b> as well, then open <b>Preferences →
+                Configuration → Agent</b>, select the <b>claude</b> backend and
+                enter your API key in the pane this plugin adds there. Prompts
+                and any file contents a plugin sends are transmitted to
+                Anthropic.</p>
+                <p>The system prompt is set in YAML files under the plugin's
+                <code>assets/prompts/</code>, so its wording changes without code.
+                If they cannot load or render, AI Core's default prompt is sent
+                instead.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
