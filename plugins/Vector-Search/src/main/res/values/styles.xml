@@ -1,9 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!--
+      DayNight theme applied to the plugin's inflation Context via android:theme on <application>.
+      The host keeps that Context's Configuration in sync with the IDE's day/night setting, so the
+      Semantic Search screen follows the IDE. Colors map to @color/plugin_* with night variants.
+    -->
     <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/plugin_primary</item>
         <item name="colorOnPrimary">@color/plugin_on_primary</item>
         <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+
+        <item name="android:colorBackground">@color/plugin_surface</item>
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+
+        <item name="colorOutline">@color/plugin_outline</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+        <item name="colorError">@color/plugin_error</item>
     </style>
+
+    <!-- Typography -->
+
+    <style name="Plugin.Text.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/plugin_on_surface</item>
+        <item name="android:textSize">@dimen/text_body</item>
+    </style>
+
+    <style name="Plugin.Text.Small" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/plugin_text_muted</item>
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:lineSpacingMultiplier">1.25</item>
+    </style>
+
+    <!-- Eyebrow label above a section, as used by the IDE's own grouped settings. -->
+    <style name="Plugin.SectionHeader" parent="">
+        <item name="android:textAppearance">@style/TextAppearance.Material3.LabelMedium</item>
+        <item name="android:textColor">@color/plugin_text_muted</item>
+        <item name="android:paddingBottom">@dimen/space_xs</item>
+    </style>
+
+    <!--
+      The embedding model box, styled by an explicit style= on the widget rather than the theme's
+      textInputStyle: the host may layer PluginTheme onto its own theme without forcing it, and a
+      theme attribute would then resolve to the host's value.
+    -->
+    <style name="PluginTextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/plugin_outline</item>
+        <item name="hintTextColor">@color/plugin_text_muted</item>
+        <item name="android:textColorHint">@color/plugin_text_muted</item>
+        <item name="endIconTint">@color/plugin_on_surface_variant</item>
+    </style>
+
+    <style name="PluginTextInputEditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:textAppearance">@style/Plugin.Text.Body</item>
+        <item name="android:textColor">@color/plugin_on_surface</item>
+    </style>
+
 </resources>

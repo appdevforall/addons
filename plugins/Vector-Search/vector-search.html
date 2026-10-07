@@ -64,14 +64,22 @@
       changing either builds the index again.</li>
     <li><b>Cosine-similarity ranking</b> with a relevance cutoff so only strong
       matches are returned.</li>
+    <li><b>Semantic Search settings screen</b> &mdash; in Preferences &rarr;
+      Configuration: shows the selected backend and whether it supports Vector
+      Search (with how to fix it if not), picks the embedding model, says where
+      the code is sent, reports what is indexed, and clears the index after
+      confirmation.</li>
   </ul>
 
   <h2>Technical architecture</h2>
   <table>
     <tr><th>Component</th><th>Role</th></tr>
     <tr><td><code>VectorSearchPlugin</code></td><td>Entry point. Implements
-      <code>ProjectSearchExtension</code>; runs indexing on a background scope and
-      answers search requests.</td></tr>
+      <code>ProjectSearchExtension</code> and answers search requests, asking
+      <code>IndexCoordinator</code> for an index build when one is needed.</td></tr>
+    <tr><td><code>IndexCoordinator</code></td><td>Builds, reuses and clears the
+      index on a background scope, one operation at a time, so a clear never
+      leaves a partial index behind.</td></tr>
     <tr><td><code>EmbedderResolver</code></td><td>Resolves the selected backend to
       an <code>EmbeddingBackend</code>, or says which of the reasons it could
       not.</td></tr>
@@ -86,6 +94,11 @@
       can answer the query, or has to be built again.</td></tr>
     <tr><td><code>VectorMath</code> / <code>VectorSearchService</code></td><td>Cosine
       similarity and top-K ranking of stored embeddings against the query.</td></tr>
+    <tr><td><code>SemanticSearchSettingsFragment</code></td><td>The settings screen,
+      contributed through <code>SettingsExtension</code>. Lists and sets the model
+      through the backend's <code>EmbeddingModelSelectable</code>.</td></tr>
+    <tr><td><code>BackendWatch</code></td><td>Listens for backend changes on AI
+      Core's inference service, so the screen updates without reopening.</td></tr>
   </table>
   <p>Embeddings are requested through <b>AI Core</b>'s inference service over the
   shared service registry; the plugin contains no model, no HTTP client and no
@@ -98,6 +111,9 @@
       a key.</li>
     <li>Install <b>Vector Search</b> via the Plugin Manager and restart the
       IDE.</li>
+    <li>Optionally open <b>Preferences &rarr; Configuration &rarr; Semantic
+      Search</b> to check the backend is supported and choose its embedding
+      model.</li>
     <li>Use the IDE's <b>project search</b>. Semantic matches appear under a
       <b>"Semantic Results"</b> section. The first search on a project triggers a
       background index build.</li>

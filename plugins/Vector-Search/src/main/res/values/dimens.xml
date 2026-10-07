@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Matches the MCP servers screen beside it in Preferences, so the two read as one family. -->
+<resources>
+    <dimen name="vs_toolbar_height">48dp</dimen>
+    <dimen name="vs_toolbar_icon_size">40dp</dimen>
+    <dimen name="vs_toolbar_icon_padding">8dp</dimen>
+    <dimen name="vs_title_text_size">18sp</dimen>
+
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">24dp</dimen>
+
+    <dimen name="radius_md">8dp</dimen>
+    <dimen name="text_small">13sp</dimen>
+    <dimen name="text_body">15sp</dimen>
+    <dimen name="touch_target_min">48dp</dimen>
+    <dimen name="vs_index_label_width">96dp</dimen>
+    <dimen name="vs_outline_stroke">1dp</dimen>
+</resources>

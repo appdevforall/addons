@@ -1,13 +1,11 @@
 package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 /**
- * One server's catalog, split into the models each picker may offer.
- *
- * Carried as one value because both halves come from one `GET /v1/models`: fetching them
- * separately would let the two pickers describe different snapshots of the same server.
+ * One server's catalog: chat models for this plugin's settings pane, embedding models for Vector
+ * Search's. One value because both come from one `GET /v1/models`, so they describe one snapshot.
  *
  * @param chat models the chat picker may offer
- * @param embedding models the embedding picker may offer
+ * @param embedding models Vector Search's embedding picker may offer
  */
 internal data class ModelCatalog(
     val chat: List<String>,

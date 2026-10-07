@@ -96,7 +96,7 @@ class BackendGeminiCatalogGateway(
         return try {
             val catalog = future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 ?: ModelCatalog.EMPTY
-            CatalogResult.Success(catalog.chat, catalog.embedding)
+            CatalogResult.Success(catalog.chat)
         } catch (e: ExecutionException) {
             // The API failure the backend reported; its message carries the HTTP status.
             CatalogResult.Failed(e.cause ?: e)

@@ -44,15 +44,18 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_PRESET = "ai_openai_preset"
         const val TOOLTIP_TAG_SETTINGS_KEY = "ai_openai_key"
         const val TOOLTIP_TAG_SETTINGS_MODEL = "ai_openai_model"
-        const val TOOLTIP_TAG_SETTINGS_EMBEDDING_MODEL = "ai_openai_embedding_model"
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_openai_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_openai_get_key"
 
-        /** The settings that change what [OpenAiBackend.isAvailable] or its model name answers. */
+        /**
+         * The settings that change what [OpenAiBackend.isAvailable], its model name or its
+         * embedding model answers; the last is set from Vector Search, which re-reads on notice.
+         */
         private val WATCHED_KEYS = setOf(
             OpenAiPreferences.KEY_BASE_URL,
             OpenAiPreferences.KEY_API_KEY,
             OpenAiPreferences.KEY_MODEL,
+            OpenAiPreferences.KEY_EMBEDDING_MODEL,
         )
 
         /** The settings that change whether the server answers [OpenAiBackend.checkServer]. */
@@ -263,23 +266,6 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
                 <p>Unlike Google's catalog, this list carries no "can chat" flag,
                 so obvious non-chat models (embeddings, audio, images) are filtered
                 out and anything unrecognised is kept.</p>
-            """.trimIndent(),
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_EMBEDDING_MODEL,
-            summary = "Which model turns your code into vectors for semantic search. Never used for chat.",
-            detail = """
-                <p>Semantic search compares meaning rather than words, which it
-                does by embedding every chunk of the project with this model. It
-                is a separate setting because embedding models and chat models are
-                different models: this list offers exactly what the <b>Model</b>
-                list above filters out.</p>
-                <p>Changing it changes the vector space, so the project is indexed
-                again from scratch. Vectors from two different models are not
-                comparable, and mixing them would quietly return worse results
-                rather than fail.</p>
-                <p>Free text always works, which matters for a local server —
-                <code>nomic-embed-text</code> on Ollama, for example.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(

@@ -61,7 +61,7 @@ class GeminiBackend(
     private val context: PluginContext,
     private val promptConfig: () -> GeminiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend, WebSearchBackend, ActiveModelReportingBackend {
+    EmbeddingModelSelectable, WebSearchBackend, ActiveModelReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -163,6 +163,48 @@ class GeminiBackend(
             ?: DEFAULT_EMBEDDING_MODEL
 
     /**
+     * The models the saved key can embed with: those that advertise `embedContent`. A saved model
+     * the list omits is replaced by its first entry.
+     *
+     * Fails rather than answering empty without a key, so the screen offering the choice can say
+     * why there is no list instead of drawing an empty one.
+     *
+     * @return the embedding models in catalog order, or a future completed exceptionally with the
+     *   sentence a refused chat turn shows, or, with no usable key, why none could be read
+     */
+    override fun listEmbeddingModels(): CompletableFuture<List<String>> {
+        val keyStamp = storedKeyStamp()
+        return launchFuture(
+            describeFailure = { e ->
+                context.logger.warn("GeminiBackend: listing embedding models failed: ${e.message}")
+                IOException(formatErrorMessage(e, keyStamp), e)
+            },
+        ) {
+            val apiKey = readGeminiApiKey()
+            if (apiKey.isNullOrBlank()) throw ReportedFailure(missingKeyMessage())
+            val models = describeCatalog(apiKey).embedding
+            // Off a retired saved model, as OpenAI does: the live catalog omitting it means a 404.
+            models.firstOrNull()?.takeIf { getEmbeddingModelId() !in models }
+                ?.let(::setEmbeddingModelId)
+            models
+        }
+    }
+
+    /**
+     * Stores [modelId] where [getEmbeddingModelId] reads it.
+     *
+     * The plugin watches this key, so writing it is what tells AI Core's listeners; setting the
+     * current model again writes nothing and so tells nobody.
+     */
+    override fun setEmbeddingModelId(modelId: String) {
+        val model = modelId.trim()
+        require(model.isNotEmpty()) { "The embedding model id must not be empty" }
+        if (model == getEmbeddingModelId()) return
+        agentPrefs()?.edit()?.putString(GeminiPreferences.KEY_EMBEDDING_MODEL, model)?.apply()
+        context.logger.info("GeminiBackend: embedding model set to $model")
+    }
+
+    /**
      * Vector length the API last produced for the configured embedding model.
      *
      * @return the width reported by the last successful call, or 0 before there has been one. The
@@ -183,42 +225,20 @@ class GeminiBackend(
      *   store a partial space
      */
     override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> {
-        val future = CompletableFuture<List<FloatArray>>()
-        if (texts.isEmpty()) {
-            future.complete(emptyList())
-            return future
-        }
-        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
-        if (!scope.isActive) {
-            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
-            return future
-        }
-
-        val job = scope.launch {
-            val keyStamp = storedKeyStamp()
-            try {
-                val apiKey = readGeminiApiKey()
-                if (apiKey.isNullOrBlank()) {
-                    // The same refusal a chat turn reports, through the same formatter.
-                    future.completeExceptionally(
-                        IOException(userMessage(GeminiFailure.KeyInvalid))
-                    )
-                    return@launch
-                }
-                future.complete(embedBatches(texts, apiKey))
-            } catch (e: CancellationException) {
-                future.cancel(true)
-                throw e
-            } catch (e: Exception) {
+        if (texts.isEmpty()) return CompletableFuture.completedFuture(emptyList())
+        val keyStamp = storedKeyStamp()
+        return launchFuture(
+            describeFailure = { e ->
                 context.logger.error("GeminiBackend: embedding ${texts.size} texts failed", e)
                 // The formatted sentence, not the raw body: this message reaches the user through
                 // whichever consumer asked, exactly as a refused chat turn's does.
-                future.completeExceptionally(IOException(formatErrorMessage(e, keyStamp), e))
-            }
+                IOException(formatErrorMessage(e, keyStamp), e)
+            },
+        ) {
+            val apiKey = readGeminiApiKey()
+            if (apiKey.isNullOrBlank()) throw ReportedFailure(missingKeyMessage())
+            embedBatches(texts, apiKey)
         }
-        future.cancelJobOnCancel(job)
-
-        return future
     }
 
     /**
@@ -670,36 +690,22 @@ class GeminiBackend(
      * network/API failure, so the caller can fall back to a current-models-only list and
      * never advertise a dead model.
      */
-    internal fun listCatalog(): CompletableFuture<ModelCatalog> {
-        val future = CompletableFuture<ModelCatalog>()
-        // close() cancels the scope, making launch a silent no-op; fail loudly instead, or the
-        // gateway's blocking get() would sit at "Loading" for its full 60-second timeout.
-        if (!scope.isActive) {
-            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
-            return future
-        }
-
-        val job = scope.launch {
-            try {
-                val key = readGeminiApiKey()
-                if (key.isNullOrBlank()) {
-                    context.logger.warn("GeminiBackend: no API key configured; cannot list live models")
-                    future.complete(ModelCatalog.EMPTY)
-                    return@launch
-                }
-                future.complete(describeCatalog(key))
-            } catch (e: CancellationException) {
-                future.cancel(true)
-                throw e
-            } catch (e: Exception) {
+    internal fun listCatalog(): CompletableFuture<ModelCatalog> =
+        // A closed scope fails at once, not after the gateway's blocking 60-second get().
+        launchFuture(
+            describeFailure = { e ->
                 context.logger.error("GeminiBackend: Error in listCatalog", e)
-                future.completeExceptionally(e)
+                e
+            },
+        ) {
+            val key = readGeminiApiKey()
+            if (key.isNullOrBlank()) {
+                context.logger.warn("GeminiBackend: no API key configured; cannot list live models")
+                ModelCatalog.EMPTY
+            } else {
+                describeCatalog(key)
             }
         }
-        future.cancelJobOnCancel(job)
-
-        return future
-    }
 
     /**
      * List the models a caller-supplied [apiKey] can use, instead of the one saved on disk.
@@ -713,32 +719,19 @@ class GeminiBackend(
      *   status code out of that message to tell a refused key from an unreachable network
      */
     internal fun listCatalog(apiKey: String): CompletableFuture<ModelCatalog> {
-        val future = CompletableFuture<ModelCatalog>()
         val key = apiKey.trim()
         if (key.isEmpty()) {
-            future.completeExceptionally(IllegalArgumentException("Gemini API key is blank"))
-            return future
-        }
-        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
-        if (!scope.isActive) {
-            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
-            return future
-        }
-
-        val job = scope.launch {
-            try {
-                future.complete(describeCatalog(key))
-            } catch (e: CancellationException) {
-                future.cancel(true)
-                throw e
-            } catch (e: Exception) {
-                context.logger.warn("GeminiBackend: candidate key check failed: ${e.message}")
-                future.completeExceptionally(e)
+            // Not CompletableFuture.failedFuture: that is API 31, and the host still runs on 28.
+            return CompletableFuture<ModelCatalog>().apply {
+                completeExceptionally(IllegalArgumentException("Gemini API key is blank"))
             }
         }
-        future.cancelJobOnCancel(job)
-
-        return future
+        return launchFuture(
+            describeFailure = { e ->
+                context.logger.warn("GeminiBackend: candidate key check failed: ${e.message}")
+                e
+            },
+        ) { describeCatalog(key) }
     }
 
     /**
@@ -1099,6 +1092,65 @@ class GeminiBackend(
     }
 
     /**
+     * Runs [block] on this backend's scope and completes the returned future with its value.
+     *
+     * Cancelling the future cancels [block], and a closed backend fails the future at once: after
+     * close() cancels the scope, launch is a silent no-op that would leave it pending forever.
+     *
+     * @param describeFailure turns what [block] threw into what the future fails with; a
+     *   [ReportedFailure] skips it, being already in the user's words
+     */
+    private fun <T> launchFuture(
+        describeFailure: (Exception) -> Throwable,
+        block: suspend () -> T,
+    ): CompletableFuture<T> {
+        val future = CompletableFuture<T>()
+        if (!scope.isActive) {
+            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
+            return future
+        }
+
+        val job = scope.launch {
+            try {
+                future.complete(block())
+            } catch (e: CancellationException) {
+                future.cancel(true)
+                throw e
+            } catch (e: ReportedFailure) {
+                future.completeExceptionally(e)
+            } catch (e: Exception) {
+                future.completeExceptionally(describeFailure(e))
+            }
+        }
+        future.cancelJobOnCancel(job)
+        return future
+    }
+
+    /**
+     * Why no key could be used, in words that do not blame a key that was never sent: none saved,
+     * one this device can no longer decrypt, or a Keystore that did not answer this time.
+     */
+    private fun missingKeyMessage(): String {
+        val stored = runCatching {
+            secureApiKeyStore.readAndMigrate(agentPrefs(), GeminiPreferences.KEY_API_KEY)
+        }.getOrNull()
+        val res = when (stored) {
+            KeystoreSecretStore.Stored.Absent -> R.string.gemini_error_key_missing
+            is KeystoreSecretStore.Stored.Value ->
+                // Readable now but not a moment ago, or saved blank; only blank lasts.
+                if (stored.plain.isBlank()) R.string.gemini_error_key_missing
+                else R.string.msg_api_key_unavailable
+            KeystoreSecretStore.Stored.Unreadable -> R.string.msg_api_key_unreadable
+            KeystoreSecretStore.Stored.Unavailable, null -> R.string.msg_api_key_unavailable
+        }
+        return try {
+            context.androidContext.getString(res)
+        } catch (e: Exception) {
+            "No usable Gemini API key"
+        }
+    }
+
+    /**
      * Turn a failure into one user-facing sentence.
      *
      * [GeminiErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
@@ -1180,6 +1232,12 @@ class GeminiBackend(
         "[Reply cut off at the output limit.]"
     }
 }
+
+/**
+ * A failure already worded for the user, which [GeminiBackend]'s future helper passes on as it is
+ * instead of classifying it again as a transport error.
+ */
+private class ReportedFailure(message: String) : IOException(message)
 
 /**
  * Cancel [job] when this future is cancelled by its caller.
