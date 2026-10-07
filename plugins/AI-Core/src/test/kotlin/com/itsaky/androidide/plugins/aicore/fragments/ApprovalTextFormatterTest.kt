@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -140,5 +141,31 @@ class ApprovalTextFormatterTest {
         val text = ApprovalTextFormatter.formatArgs(mapOf("directory" to null))
 
         assertTrue(text.contains("directory"))
+    }
+
+    @Test
+    fun givenALongMultiLineScript_whenFormatted_thenEveryLineIsShownAsWritten() {
+        val script = (1..50).joinToString("\n") { "echo \"line $it\"" }
+
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to script),
+            directoryLabel = { "in $it" },
+        )
+
+        assertEquals(script, text)
+    }
+
+    @Test
+    fun givenAWorkingDirectory_whenFormatted_thenItIsLabelledAboveTheCommandAsWritten() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(
+                RunShellCommandHandler.ARG_COMMAND to "ls",
+                RunShellCommandHandler.ARG_WORKING_DIRECTORY to " -L dir ",
+            ),
+            directoryLabel = { "Runs in: $it" },
+        )
+
+        assertEquals("Runs in: -L dir\n\nls", text)
+        assertFalse(text.contains("cd "))
     }
 }

@@ -33,7 +33,7 @@
     <string name="openai_error_empty_reply">The server answered but sent no reply text. Check the model is fully loaded in your server, then try again — see the IDE log for what the server sent.</string>
     <string name="openai_error_reasoning_only">The model spent its whole reply on internal reasoning and never answered. Raise the response length limit in your server, or choose a model without a thinking mode.</string>
     <string name="openai_error_truncated">The reply was cut off before any text arrived — the response length limit is too low for this model. Raise it in your server settings.</string>
-    <string name="openai_error_tools_unsupported">%1$s does not support tool calling, so the AI can answer but cannot change your project. Point the server setting at one that does.</string>
+    <string name="openai_error_tools_unsupported">%1$s on %2$s does not support tool calling, so the AI can answer but cannot use its tools. Pick another model.</string>
     <string name="openai_error_failed">The request to the AI server failed.</string>
     <string name="openai_error_failed_reason">The request to the AI server failed. %1$s</string>
 

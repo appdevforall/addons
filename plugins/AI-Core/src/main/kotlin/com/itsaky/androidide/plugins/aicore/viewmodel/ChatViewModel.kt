@@ -317,6 +317,10 @@ class ChatViewModel(
     @Volatile
     private var lastToolFailedThisRun = false
 
+    /** Whether the next turn answers a request to finish after a prose answer; read once. */
+    @Volatile
+    private var askedToFinishAfterProse = false
+
     /**
      * The transcript row this run rewrites in place as each tool starts, closed as a one-line
      * summary when the run ends; null before the run's first tool. Main thread only.
@@ -960,6 +964,7 @@ class ChatViewModel(
         AgentTrace.beginRun(currentBackendId, userMessage, runFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
+        askedToFinishAfterProse = false
         activityMessageId = null
         runToolNames.clear()
         runToolLog.clear()
@@ -1067,7 +1072,7 @@ class ChatViewModel(
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
                         requiredTool = requiredTool,
-                        events = AgentRunReporter(runNotices),
+                        events = AgentRunReporter(runNotices) { askedToFinishAfterProse = true },
                     )
                     if (loopResult.completed && generationEpoch.get() == epoch) {
                         runCodeReply?.let { draft -> reviewAnswer(llmService, userMessage, draft, history, epoch) }
@@ -1531,8 +1536,10 @@ class ChatViewModel(
                     }
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
+                    val recapsShownAnswer = askedToFinishAfterProse.also { askedToFinishAfterProse = false }
 
-                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL)) {
+                    // A recap of the prose answer already on screen would show the answer twice.
+                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL, recapsShownAnswer, lastToolFailed)) {
                         viewModelScope.launch(Dispatchers.Main) {
                             removeMessageFromSession(agentMessageId)
                         }

@@ -92,6 +92,35 @@ built_in_tools:
       filter: >-
         Text to search task paths, groups and descriptions for, e.g. ":app", "test" or "lint".
         Omit to list the tasks that have a group or a description.
+  run_shell_command:
+    # Without the second sentence models hand the user a script to run themselves (ADFA-6339);
+    # without the third, Gemini ran "ls -la" when asked for "ls".
+    description: >-
+      Run a shell command or script with bash in the IDE's Terminal and get back its exit code and
+      output. Use it instead of asking the user to run a command. When the user gives the command,
+      run it exactly as written, adding no flags or options they did not ask for. A command still
+      running after 30 seconds, such as a server, is left running and its output so far comes
+      back. For a Gradle task use run_gradle_task, not ./gradlew
+    arguments:
+      command: >-
+        The command or script to run with bash, e.g. "ls -la app/src" or several lines of script.
+      working_directory: >-
+        Project-relative directory to run in; it must be inside the project. Omit to run at the
+        project root.
+  read_terminal_session:
+    description: >-
+      Check on a command run_shell_command left running, such as a server: whether it still runs,
+      its exit code once it stopped, and its latest output
+    arguments:
+      session: The Terminal session name the run_shell_command result reported.
+  stop_terminal_session:
+    # Its second sentence: Gemini stopped a ping it had just started, to finish the request.
+    description: >-
+      Stop a command run_shell_command left running, such as a server or ping, with Ctrl-C. Use it
+      only when the user asks to stop, kill or cancel that command, never to finish a request that
+      started it
+    arguments:
+      session: The Terminal session name the run_shell_command result reported.
   generate_from_template:
     description: Generate files from Pebble templates with variable substitution
     arguments:

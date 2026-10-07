@@ -941,7 +941,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         // childFragmentManager makes this fragment the parent, which is how Host is resolved.
         if (currentApprovalDialog() != null) return
         AgentTrace.detail("UI", "approval dialog shown tool=${request.toolName}")
-        ApprovalDialogFragment.newInstance(request).show(childFragmentManager, APPROVAL_DIALOG_TAG)
+        ApprovalDialogFragment.newInstance(request, resources).show(childFragmentManager, APPROVAL_DIALOG_TAG)
     }
 
     override fun onApprovalDecision(

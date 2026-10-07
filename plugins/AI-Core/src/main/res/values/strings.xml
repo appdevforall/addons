@@ -133,6 +133,8 @@
     <string name="approval_title">Approve %s?</string>
     <string name="approval_message">The AI wants to execute:</string>
     <string name="approval_args">Arguments:</string>
+    <string name="approval_command">Command:</string>
+    <string name="approval_working_directory">Runs in: %1$s</string>
     <string name="approval_approve_once">Approve Once</string>
     <string name="approval_approve_session">Approve for Session</string>
     <string name="approval_deny">Deny</string>
