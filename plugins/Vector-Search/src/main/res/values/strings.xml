@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Project search results section -->
+    <string name="search_results_title">Semantic Results</string>
+    <string name="search_results_title_rebuilt">Semantic Results (index rebuilt with %1$s)</string>
+
+    <!-- Preferences row -->
+    <string name="pref_semantic_search_title">Semantic Search</string>
+    <string name="pref_semantic_search_summary">Embedding model, backend support and index</string>
+
+    <!-- Screen chrome -->
+    <string name="vs_title">Semantic Search</string>
+    <string name="cd_vs_back">Back</string>
+    <string name="vs_description">Vector Search ranks project files by meaning, using the AI backend selected in AI settings to embed your code.</string>
+
+    <!-- AI backend section -->
+    <string name="vs_label_backend">AI backend</string>
+    <string name="vs_chat_model">Chat model: %1$s</string>
+    <string name="vs_supported">Supported</string>
+    <string name="vs_not_supported">Not supported</string>
+    <string name="vs_no_service">AI Core isn\'t installed or enabled. Install AI Core and an AI backend plugin such as Gemini or OpenAI to use Vector Search.</string>
+    <string name="vs_no_selection">No AI backend is selected. Choose one that supports Vector Search, such as Gemini or OpenAI, in AI settings.</string>
+    <string name="vs_not_installed">The selected backend, %1$s, isn\'t installed or enabled. Enable its plugin, or select another backend in AI settings.</string>
+    <string name="vs_hint_not_supported">%1$s doesn\'t support Vector Search, or its plugin is too old to offer its embedding models here. Update the %1$s plugin, or select a backend that supports it, such as Gemini or OpenAI, in AI settings.</string>
+
+    <!-- Embedding model section -->
+    <string name="vs_label_embedding_model">Embedding model</string>
+    <string name="vs_hint_embedding_model">Choose a model</string>
+    <string name="cd_vs_show_embedding_models">Show the embedding model list</string>
+    <string name="vs_state_unavailable">Unavailable</string>
+    <string name="vs_models_loading">Loading the embedding models…</string>
+    <string name="vs_models_failed">Couldn\'t load the embedding models: %1$s</string>
+    <string name="vs_models_failed_unknown">Couldn\'t load the embedding models. Check the backend\'s API key and your network connection.</string>
+    <string name="vs_models_empty">This backend lists no embedding models. Type the model\'s name instead.</string>
+    <string name="vs_models_help">Changing the model rebuilds the index on the next search.</string>
+    <string name="vs_model_changed">The next search rebuilds the index with %1$s.</string>
+
+    <!-- Privacy -->
+    <string name="vs_privacy">Indexing sends this project\'s source code to %1$s.</string>
+
+    <!-- Index section -->
+    <string name="vs_label_index">Index</string>
+    <string name="vs_index_no_project">No project open</string>
+    <string name="vs_index_not_indexed">Not indexed yet</string>
+    <string name="vs_index_state_indexing">Indexing…</string>
+    <string name="vs_index_state_failed">Last build failed</string>
+    <string name="vs_index_state_up_to_date">Up to date</string>
+    <string name="vs_index_state_out_of_date">Out of date</string>
+    <string name="vs_index_state_indexed">Indexed</string>
+    <string name="vs_index_msg_not_indexed">The first search in this project builds its index.</string>
+    <string name="vs_index_msg_failed">The last build stopped on an error, so nothing was stored. Check the backend\'s API key and quota, then clear the index so the next search tries again.</string>
+    <string name="vs_index_msg_out_of_date">Built with %1$s. The next search rebuilds it with %2$s.</string>
+    <string name="vs_index_msg_indexed">Searches use this index only while a backend that supports Vector Search is selected.</string>
+    <string name="vs_index_preparing">Collecting files…</string>
+    <plurals name="vs_index_progress">
+        <item quantity="one">%1$s of %2$s chunk embedded</item>
+        <item quantity="other">%1$s of %2$s chunks embedded</item>
+    </plurals>
+    <string name="vs_index_row_chunks">Chunks</string>
+    <string name="vs_index_row_files">Files</string>
+    <string name="vs_index_row_model">Model</string>
+    <string name="vs_index_row_last_built">Last built</string>
+    <string name="vs_index_last_built_unknown">Not recorded</string>
+    <string name="vs_index_model_value">%1$s · %2$s · %3$d dimensions</string>
+    <string name="vs_clear_index">Clear index</string>
+    <string name="vs_clearing_index">Clearing…</string>
+
+    <!-- Clear index confirmation -->
+    <string name="vs_clear_title">Clear the index?</string>
+    <string name="vs_clear_message">This clears the index for every project, not just the open one. The next search rebuilds it, which sends the project\'s source code to the selected backend again.</string>
+    <string name="vs_clear_cancel">Cancel</string>
+    <string name="vs_clear_confirm">Clear index</string>
+</resources>

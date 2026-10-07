@@ -46,19 +46,12 @@ class GeminiSettingsViewModel(
         private val KEY_API_KEY_TIMESTAMP = GeminiPreferences.KEY_API_KEY_TIMESTAMP
         private val KEY_API_KEY_VERIFIED = GeminiPreferences.KEY_API_KEY_VERIFIED
         private val KEY_MODEL = GeminiPreferences.KEY_MODEL
-        private val KEY_EMBEDDING_MODEL = GeminiPreferences.KEY_EMBEDDING_MODEL
 
         /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
         private val FALLBACK_MODELS = listOf(
             "gemini-2.5-flash",
             "gemini-2.5-pro",
             "gemini-2.0-flash",
-        )
-
-        /** The embedding half of [FALLBACK_MODELS], offered under the same conditions. */
-        private val FALLBACK_EMBEDDING_MODELS = listOf(
-            "gemini-embedding-001",
-            "text-embedding-004",
         )
     }
 
@@ -74,10 +67,6 @@ class GeminiSettingsViewModel(
 
     private val _geminiModelsLoading = MutableLiveData(false)
     val geminiModelsLoading: LiveData<Boolean> get() = _geminiModelsLoading
-
-    private val _geminiEmbeddingModels =
-        MutableLiveData(GeminiModelOptions(emptyList(), isLive = false))
-    val geminiEmbeddingModels: LiveData<GeminiModelOptions> get() = _geminiEmbeddingModels
 
     /**
      * This plugin's own settings store — the same one [GeminiBackend] reads at request time, so a
@@ -230,20 +219,6 @@ class GeminiSettingsViewModel(
         prefs()?.getString(KEY_MODEL, GeminiBackend.DEFAULT_MODEL) ?: GeminiBackend.DEFAULT_MODEL
 
     /**
-     * Stores [model] as the embedding model.
-     *
-     * Its own setting, not a second use of [saveGeminiModel]: the two catalogs are disjoint, and a
-     * chat model asked to embed answers 404.
-     */
-    fun saveGeminiEmbeddingModel(model: String) {
-        prefs()?.edit()?.putString(KEY_EMBEDDING_MODEL, model)?.apply()
-    }
-
-    fun getGeminiEmbeddingModel(): String =
-        prefs()?.getString(KEY_EMBEDDING_MODEL, GeminiBackend.DEFAULT_EMBEDDING_MODEL)
-            ?: GeminiBackend.DEFAULT_EMBEDDING_MODEL
-
-    /**
      * Ask the backend for the models the current API key can actually use, and publish them to
      * [geminiModels]. Falls back to [FALLBACK_MODELS] (current models only — never a retired one)
      * when there is no key, no backend, or the live lookup fails, so the picker is never populated
@@ -265,19 +240,13 @@ class GeminiSettingsViewModel(
 
                 when (val result = catalogGateway.listModelsForSavedKey()) {
                     is CatalogResult.Success -> {
-                        if (result.models.isEmpty() && result.embeddingModels.isEmpty()) {
+                        if (result.models.isEmpty()) {
                             logger?.warn("$TAG: live model list empty; showing fallback models")
                             publishFallbackModels()
                         } else {
-                            logger?.debug(
-                                "$TAG: fetched ${result.models.size} chat and " +
-                                    "${result.embeddingModels.size} embedding Gemini models"
-                            )
-                            publishLive(_geminiModels, result.models, FALLBACK_MODELS)
-                            publishLive(
-                                _geminiEmbeddingModels,
-                                result.embeddingModels,
-                                FALLBACK_EMBEDDING_MODELS,
+                            logger?.debug("$TAG: fetched ${result.models.size} Gemini models")
+                            _geminiModels.postValue(
+                                GeminiModelOptions(result.models, isLive = true)
                             )
                         }
                     }
@@ -295,34 +264,8 @@ class GeminiSettingsViewModel(
         }
     }
 
-    /** Offers both pickers the current-models-only list, which never carries a retired model. */
+    /** Offers the current-models-only list, which never carries a retired model. */
     private fun publishFallbackModels() {
         _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
-        _geminiEmbeddingModels.postValue(
-            GeminiModelOptions(FALLBACK_EMBEDDING_MODELS, isLive = false)
-        )
-    }
-
-    /**
-     * Publishes one half of a fetched catalog, falling back when this key can reach nothing of
-     * that kind.
-     *
-     * A key with no embedding models is possible while its chat list is healthy, and publishing an
-     * empty list would leave that picker blank with no way to pick anything at all.
-     *
-     * @param target the picker to publish to
-     * @param fetched what the key can reach, possibly empty
-     * @param fallback the current-models-only list to offer instead of nothing
-     */
-    private fun publishLive(
-        target: MutableLiveData<GeminiModelOptions>,
-        fetched: List<String>,
-        fallback: List<String>,
-    ) {
-        if (fetched.isEmpty()) {
-            target.postValue(GeminiModelOptions(fallback, isLive = false))
-        } else {
-            target.postValue(GeminiModelOptions(fetched, isLive = true))
-        }
     }
 }

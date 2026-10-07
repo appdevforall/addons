@@ -3,42 +3,35 @@ package com.itsaky.androidide.plugins.vectorsearch
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
+import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
-import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginSettingsEntry
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.ProjectSearchExtension
 import com.itsaky.androidide.plugins.extensions.ProjectSearchRequest
 import com.itsaky.androidide.plugins.extensions.ProjectSearchResult
 import com.itsaky.androidide.plugins.extensions.ProjectSearchSection
+import com.itsaky.androidide.plugins.extensions.SettingsExtension
 import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.services.LlmInferenceService.EmbeddingBackend
 import com.itsaky.androidide.plugins.services.SharedServices
+import com.itsaky.androidide.plugins.vectorsearch.settings.SemanticSearchSettingsFragment
+import com.itsaky.androidide.plugins.vectorsearch.settings.SemanticSearchSource
+import java.io.File
+import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.File
-import java.io.IOException
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutionException
-import kotlin.coroutines.coroutineContext
 
 /**
  * Names this class in every line it logs.
  *
  * The host already prefixes each line with `[pluginId]`, which says which `.cgp` wrote it but not
- * which of its classes; this plugin logs from two.
+ * which of its classes.
  */
 private const val TAG = "VectorSearchPlugin"
-private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
-private const val SEMANTIC_RESULTS_TITLE = "Semantic Results"
 
 /**
  * How long one search may spend waiting, across every wait it makes.
@@ -63,32 +56,34 @@ private const val SEARCH_BUDGET_MS = 8_000L
  * lexical fallback — one used to fill the index with hashed token bags that were
  * indistinguishable from real vectors once stored, which made the feature look like it worked.
  */
-class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtension {
+class VectorSearchPlugin :
+    IPlugin, ProjectSearchExtension, DocumentationExtension, SettingsExtension {
 
     private lateinit var context: PluginContext
     private lateinit var indexingService: EmbeddingIndexingService
-    @Volatile private var indexingJob: Job? = null
-    // What the last completed build produced; null until one has completed in this session.
-    @Volatile private var indexedState: IndexState? = null
-    // What the in-flight [indexingJob] is building; guards against awaiting a build whose result
-    // this search could not use — another project's roots, or another embedder's vector space.
-    @Volatile private var indexingTarget: IndexTarget? = null
+    private lateinit var indexing: IndexCoordinator
 
-    // Background scope for indexing so a large project never stalls a search request.
-    private val indexingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Watches the selected backend for the settings screen; live from activate to deactivate.
+    private var backendWatch: BackendWatch? = null
+
+    // What the settings screen reads, rebuilt with [indexing] on each activate.
+    @Volatile private var semanticSearch: SemanticSearchSource? = null
 
     /**
      * This plugin's IDE-surfaced log, so indexing diagnostics reach the IDE's own log view rather
-     * than only logcat.
-     *
-     * Null before [initialize], which is the state [dispose] can be called in when the plugin
-     * failed to load — the one path that must not throw on its way out.
+     * than only logcat. Null before [initialize], the state [dispose] runs in after a failed load.
      */
     private val log: PluginLogger?
         get() = if (::context.isInitialized) context.logger else null
 
+    fun logger(): PluginLogger? = log
+
+    /** The settings screen's view of this activation's index, or null before [activate]. */
+    fun semanticSearchSource(): SemanticSearchSource? = semanticSearch
+
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
+        instance = this
         log?.info("$TAG: initialized")
         return true
     }
@@ -96,8 +91,33 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
     override fun activate(): Boolean {
         log?.info("$TAG: activating...")
 
-        // Initialize indexing service
+        if (::indexing.isInitialized) indexing.close()
+        if (::indexingService.isInitialized) indexingService.close()
         indexingService = EmbeddingIndexingService(context.androidContext, context.logger)
+        val indexChanges = MutableStateFlow(0L)
+        indexing = IndexCoordinator(
+            store = indexingService,
+            buildLog = PreferencesIndexBuildLog {
+                context.getPluginSharedPreferences(PreferencesIndexBuildLog.FILE)
+            },
+            logger = { log },
+            onIndexChanged = { indexChanges.update { it + 1 } },
+        )
+
+        backendWatch?.stop()
+        val backendChanges = MutableStateFlow(0L)
+        backendWatch = BackendWatch(context, ::inferenceService) {
+            backendChanges.update { it + 1 }
+        }.also { it.start() }
+
+        semanticSearch = SemanticSearchSourceImpl(
+            context = context,
+            store = indexingService,
+            indexing = indexing,
+            inference = ::inferenceService,
+            backendChanges = backendChanges.asStateFlow(),
+            indexChanges = indexChanges.asStateFlow(),
+        )
 
         log?.info("$TAG: activated. The first search builds the index.")
         return true
@@ -105,11 +125,17 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
 
     override fun deactivate(): Boolean {
         log?.info("$TAG: deactivating")
+        backendWatch?.stop()
+        backendWatch = null
         return true
     }
 
     override fun dispose() {
-        indexingScope.cancel()
+        backendWatch?.stop()
+        backendWatch = null
+        if (instance === this) instance = null
+        semanticSearch = null
+        if (::indexing.isInitialized) indexing.close()
         // Release the SQLite connection so it doesn't leak when the plugin unloads.
         if (::indexingService.isInitialized) {
             indexingService.close()
@@ -130,17 +156,17 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
     override fun searchProject(request: ProjectSearchRequest): CompletableFuture<List<ProjectSearchSection>> {
         log?.info("$TAG: project search requested for '${request.query}'")
         return CompletableFuture.supplyAsync {
-            val results = runBlocking {
-                search(query = request.query, roots = request.roots, topK = 10)
+            val outcome = runBlocking {
+                searchReporting(query = request.query, roots = request.roots, topK = 10)
             }
-            if (results.isEmpty()) {
+            if (outcome.results.isEmpty()) {
                 log?.info("$TAG: no semantic results available for '${request.query}'")
                 emptyList()
             } else {
                 listOf(
                     ProjectSearchSection(
-                        title = SEMANTIC_RESULTS_TITLE,
-                        results = results.map { it.toProjectSearchResult(request.query) },
+                        title = resultsTitle(outcome.rebuiltWith),
+                        results = outcome.results.map { it.toProjectSearchResult(request.query) },
                     )
                 )
             }
@@ -163,30 +189,51 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         query: String,
         roots: List<File> = emptyList(),
         topK: Int = 10,
-    ): List<CodeEmbedding> {
-        return try {
+    ): List<CodeEmbedding> = searchReporting(query, roots, topK).results
+
+    /**
+     * One search's answer, and whether answering it replaced the index's embedding model.
+     *
+     * @param results the ranked chunks, empty when there is no answer
+     * @param rebuiltWith the model this search rebuilt the index with, or null when it reused one
+     */
+    private data class SearchOutcome(
+        val results: List<CodeEmbedding>,
+        val rebuiltWith: String? = null,
+    )
+
+    /** [search], also reporting a rebuild so the results can say why the first query was slow. */
+    private suspend fun searchReporting(
+        query: String,
+        roots: List<File>,
+        topK: Int,
+    ): SearchOutcome {
+        var rebuiltWith: String? = null
+        val ranked = try {
             val deadline = System.nanoTime() + SEARCH_BUDGET_MS * 1_000_000
             val embedder = EmbedderResolver.resolve(inferenceService())
             if (embedder !is EmbedderResolution.Ready) {
                 logUnresolved(embedder)
-                return emptyList()
+                return SearchOutcome(emptyList())
             }
 
             // The query is embedded first because its vector is what reports the width: only a
             // vector the backend actually produced can say what space the index must be built in.
             val queryEmbedding = withTimeoutOrNull(remainingMs(deadline)) {
-                embed(embedder.backend, listOf(query)).firstOrNull()
+                embedder.backend.awaitVectors(listOf(query)).firstOrNull()
             }
             if (queryEmbedding == null) {
                 log?.warn("$TAG: no query vector within ${SEARCH_BUDGET_MS}ms; no semantic results")
-                return emptyList()
+                return SearchOutcome(emptyList())
             }
             val identity = EmbedderIdentity(embedder.key, queryEmbedding.size)
 
-            val rootsKey = if (roots.isEmpty()) null else rootsKeyOf(roots)
+            val rootsKey = if (roots.isEmpty()) null else RootsKey.of(roots)
             if (rootsKey != null) {
                 // Wait for an in-flight build so the first query returns real results, not empty.
-                val job = startIndexingIfNeeded(rootsKey, roots, embedder.backend, identity)
+                val build = indexing.buildIfNeeded(rootsKey, roots, embedder.backend, identity)
+                if (build?.replacedModel != null) rebuiltWith = identity.modelId
+                val job = build?.job
                 if (job != null && withTimeoutOrNull(remainingMs(deadline)) { job.join() } == null) {
                     log?.warn("$TAG: indexing outlasted the search budget; using partial index")
                 }
@@ -194,21 +241,47 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
 
             val comparable = indexingService.getAllEmbeddings(identity, rootsKey)
             if (comparable.isEmpty()) {
-                log?.warn("$TAG: no embeddings from $identity yet; no semantic results for now")
-                return emptyList()
+                val rebuilding = rebuiltWith?.let { " (index rebuilding with $it)" }.orEmpty()
+                log?.warn("$TAG: no embeddings from $identity yet; no semantic results$rebuilding")
+                return SearchOutcome(emptyList(), rebuiltWith)
             }
 
-            val results =
+            val scored =
                 VectorSearchService.searchWithScores(queryEmbedding, comparable, topK = topK)
-            log?.debug("$TAG: search for '$query' returned ${results.size} results")
+            log?.debug("$TAG: search for '$query' returned ${scored.size} results")
 
-            results.map { it.first }
+            scored.map { it.first }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log?.error("$TAG: error during search", e)
             emptyList()
         }
+        return SearchOutcome(ranked, rebuiltWith)
+    }
+
+    /**
+     * The results section's title, naming the new model when this search rebuilt the index for it.
+     *
+     * @param rebuiltWith the model the index was rebuilt with, or null when it was reused
+     */
+    private fun resultsTitle(rebuiltWith: String?): String =
+        if (rebuiltWith == null) {
+            string(R.string.search_results_title, FALLBACK_RESULTS_TITLE)
+        } else {
+            string(R.string.search_results_title_rebuilt, FALLBACK_RESULTS_TITLE, rebuiltWith)
+        }
+
+    /**
+     * Resolves [resId] against this plugin's own resources.
+     *
+     * @param fallback returned when the context is missing or the lookup fails; the host builds
+     *   search results and Preferences on its own schedule and must never see an exception here
+     */
+    private fun string(resId: Int, fallback: String, vararg args: Any): String = try {
+        context.androidContext.getString(resId, *args)
+    } catch (e: Exception) {
+        fallback
     }
 
     /** What is left of the search budget, floored at zero so an expired budget waits no longer. */
@@ -216,25 +289,18 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         ((deadline - System.nanoTime()) / 1_000_000).coerceAtLeast(0)
 
     /**
-     * Clears the index of every project (e.g., for reindexing after project changes).
+     * AI Core's inference service, or null before [initialize], since Preferences may build the
+     * settings screen first. Not `context.services` as a third fallback: that registry holds only
+     * the host's own `Ide*Service`s, so a cross-plugin lookup there never answers.
      */
-    fun clearIndex() {
-        indexingService.clearIndex()
-        indexedState = null
-        log?.info("$TAG: index cleared")
+    private fun inferenceService(): LlmInferenceService? {
+        if (!::context.isInitialized) return null
+        return SharedServices.get(LlmInferenceService::class.java)
+            ?: context.getPluginService(
+                LlmBackendRegistration.AI_CORE_PLUGIN_ID,
+                LlmInferenceService::class.java,
+            )
     }
-
-    /**
-     * AI Core's inference service, however this host publishes it.
-     *
-     * `context.services` is deliberately not a third fallback: it is this plugin's own registry
-     * and holds only the host's own `Ide*Service`s, so a cross-plugin lookup there never answers.
-     *
-     * @return the service, or null when AI Core is absent or has not published it yet
-     */
-    private fun inferenceService(): LlmInferenceService? =
-        SharedServices.get(LlmInferenceService::class.java)
-            ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
 
     /**
      * Says why there is no embedder, in the words that name the fix.
@@ -272,227 +338,6 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         }
     }
 
-    /**
-     * Starts (or reuses) a background index build for [roots], returning its [Job] so the caller
-     * can await it, or null when the index already answers for these roots and this embedder.
-     *
-     * @param rootsKey the roots being indexed, as one value
-     * @param roots project root directories to index
-     * @param backend the embedder to build with
-     * @param identity what that embedder produces, as the query has just demonstrated
-     * @return the running index-build job, or null if the existing index is reusable
-     */
-    @Synchronized
-    private fun startIndexingIfNeeded(
-        rootsKey: String,
-        roots: List<File>,
-        backend: EmbeddingBackend,
-        identity: EmbedderIdentity,
-    ): Job? {
-        val target = IndexTarget(rootsKey, identity)
-        val running = indexingJob
-        if (running != null && running.isActive && indexingTarget == target) {
-            return running
-        }
-        if (running?.isActive != true) {
-            // The marker is per-session but the rows are not: ask before re-embedding, or a
-            // restart and a project switch each pay for the whole project again.
-            if (!ReindexDecision.isReusable(indexedState, rootsKey, identity)) {
-                val stored = indexingService.countEmbeddings(rootsKey, identity)
-                if (stored > 0) indexedState = IndexState(rootsKey, identity, stored)
-            }
-            if (ReindexDecision.isReusable(indexedState, rootsKey, identity)) return null
-        }
-
-        // Cancel a build for another target and wait for it to unwind, so builds never
-        // interleave writes.
-        val previous = running
-        previous?.cancel()
-        indexingTarget = target
-        val job = indexingScope.launch {
-            try {
-                previous?.join()
-                buildIndex(rootsKey, roots, backend, identity)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log?.error("$TAG: background indexing failed", e)
-            }
-        }
-        indexingJob = job
-        return job
-    }
-
-    /**
-     * What one index build is for, as the one value two builds are compared on.
-     *
-     * @param rootsKey the roots being indexed
-     * @param identity the embedder the vectors will come from
-     */
-    private data class IndexTarget(val rootsKey: String, val identity: EmbedderIdentity)
-
-    /** The roots, as one value two builds can be compared on. */
-    private fun rootsKeyOf(roots: List<File>): String =
-        roots.map { it.absolutePath }.sorted().joinToString("|")
-
-    /**
-     * Builds the whole index for [roots], batch by batch.
-     *
-     * A failed batch aborts the build and leaves the index empty rather than substituting anything.
-     * A substitute would be stored under the real embedder's identity, so the origin filter could
-     * not tell it apart and every later search would rank it beside genuine vectors.
-     */
-    private suspend fun buildIndex(
-        rootsKey: String,
-        roots: List<File>,
-        backend: EmbeddingBackend,
-        identity: EmbedderIdentity,
-    ) {
-        // Reset the marker up front so a mid-build failure doesn't leave a stale "indexed" flag.
-        indexedState = null
-        indexingService.clearIndex(rootsKey)
-
-        val pending = collectChunks(roots)
-        var stored = 0
-        try {
-            for (batch in EmbeddingBatches.split(pending) { it.chunkText.length }) {
-                coroutineContext.ensureActive()
-                val vectors = embed(backend, batch.map { it.chunkText })
-                indexingService.storeEmbeddings(rootsKey, toEmbeddings(batch, vectors, identity))
-                stored += batch.size
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Emptied, not left partial: a half-built index answers with whatever it happened to
-            // reach first, which reads as bad ranking rather than as a failed build.
-            indexingService.clearIndex(rootsKey)
-            // Recorded as an attempt: a backend that refuses every call — a revoked key, an
-            // exhausted quota — must not be re-tried, and re-billed, by every later search.
-            indexedState = IndexState(rootsKey, identity, chunkCount = 0)
-            log?.error("$TAG: indexing aborted after $stored of ${pending.size} chunks", e)
-            return
-        }
-
-        indexedState = IndexState(rootsKey, identity, stored)
-        log?.info("$TAG: indexed $stored chunks with $identity")
-    }
-
-    /**
-     * One chunk waiting to be embedded.
-     *
-     * Collected before any embedding so the loop that calls the network is about batches rather
-     * than about walking a file tree.
-     */
-    private data class PendingChunk(
-        val key: String,
-        val filePath: String,
-        val chunkText: String,
-        val language: String,
-        val chunkIndex: Int,
-        val startLine: Int,
-        val endLine: Int,
-    )
-
-    /** Walks [roots] and chunks every code file it finds. */
-    private suspend fun collectChunks(roots: List<File>): List<PendingChunk> {
-        val pending = mutableListOf<PendingChunk>()
-        var fileCount = 0
-
-        roots.forEach { root ->
-            indexingService.collectFiles(root).forEach { file ->
-                // Bail promptly if this build was superseded by one for different roots.
-                coroutineContext.ensureActive()
-                fileCount++
-                val language = indexingService.languageFor(file)
-                val chunks = try {
-                    CodeChunker.chunkFile(file)
-                } catch (e: Exception) {
-                    log?.warn("$TAG: failed to chunk ${file.absolutePath}", e)
-                    emptyList()
-                }
-
-                chunks.forEachIndexed { index, chunk ->
-                    pending.add(
-                        PendingChunk(
-                            key = "${file.absolutePath}:$index",
-                            filePath = file.absolutePath,
-                            chunkText = chunk.content,
-                            language = language,
-                            chunkIndex = index,
-                            startLine = chunk.startLine + 1,
-                            endLine = chunk.endLine + 1,
-                        )
-                    )
-                }
-            }
-        }
-
-        log?.info("$TAG: collected ${pending.size} chunks from $fileCount files")
-        return pending
-    }
-
-    /**
-     * Pairs a batch with the vectors it produced.
-     *
-     * @throws IOException when the backend answered with a different width than the index is being
-     *   built in — storing those rows would put two spaces under one identity
-     */
-    private fun toEmbeddings(
-        batch: List<PendingChunk>,
-        vectors: List<FloatArray>,
-        identity: EmbedderIdentity,
-    ): List<CodeEmbedding> = batch.mapIndexed { position, chunk ->
-        val vector = vectors[position]
-        if (vector.size != identity.dimensions) {
-            throw IOException(
-                "The embedder answered with ${vector.size} dimensions, not ${identity.dimensions}"
-            )
-        }
-        CodeEmbedding(
-            key = chunk.key,
-            filePath = chunk.filePath,
-            chunkText = chunk.chunkText,
-            language = chunk.language,
-            chunkIndex = chunk.chunkIndex,
-            startLine = chunk.startLine,
-            endLine = chunk.endLine,
-            embedding = vector,
-            identity = identity,
-        )
-    }
-
-    /**
-     * Embeds [texts] with [backend], unwrapping the future's failure so the caller sees the
-     * backend's own message rather than an [ExecutionException] wrapper.
-     *
-     * The wait is interruptible and cancels the future with it: without that, abandoning an index
-     * build would leave its HTTP requests running to completion for vectors nobody will store.
-     *
-     * @return one vector per text, in order
-     * @throws IOException when the backend failed or answered with the wrong number of vectors
-     */
-    private suspend fun embed(
-        backend: EmbeddingBackend,
-        texts: List<String>,
-    ): List<FloatArray> {
-        val future = backend.embed(texts)
-        val vectors = try {
-            runInterruptible { future.get() }
-        } catch (e: CancellationException) {
-            future.cancel(true)
-            throw e
-        } catch (e: ExecutionException) {
-            throw IOException(e.cause?.message ?: "The embedder failed", e.cause ?: e)
-        }
-        if (vectors == null || vectors.size != texts.size) {
-            throw IOException(
-                "The embedder answered with ${vectors?.size ?: 0} vectors for ${texts.size} texts"
-            )
-        }
-        return vectors
-    }
-
     private fun CodeEmbedding.toProjectSearchResult(query: String): ProjectSearchResult {
         val line = startLine.coerceAtLeast(1) - 1
         return ProjectSearchResult(
@@ -506,36 +351,44 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         )
     }
 
-    override fun getTooltipCategory(): String = "plugin_com.itsaky.androidide.plugins.vectorsearch"
+    // --- SettingsExtension: the Semantic Search row in Preferences -> Configuration ---
 
-    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Vector Search adds semantic, meaning-based matches to project search.",
-            detail = """
-                <p><b>Vector Search</b> chunks project files, embeds them with
-                the AI backend you selected in AI settings, and ranks matches by
-                semantic similarity instead of only exact text.</p>
-                <p>It needs a backend that produces embeddings, which today means
-                a cloud one. With no such backend selected it simply contributes
-                no results, rather than quietly matching on words and presenting
-                that as semantic search.</p>
-                <p>Changing the backend or its embedding model builds the index
-                again: vectors from two different models cannot be compared.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(
-                    description = "Vector Search guide",
-                    uri = "index.html",
-                    order = 0
-                )
-            )
+    override fun getSettingsEntries(): List<PluginSettingsEntry> = listOf(
+        PluginSettingsEntry(
+            id = "semantic_search",
+            title = string(R.string.pref_semantic_search_title, "Semantic Search"),
+            summary = string(
+                R.string.pref_semantic_search_summary,
+                "Embedding model, backend support and index",
+            ),
+            fragmentClassName = SemanticSearchSettingsFragment::class.java.name,
         )
     )
 
+    // --- DocumentationExtension: three-tier in-IDE help ---
+
+    override fun getTooltipCategory(): String = TOOLTIP_CATEGORY
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = VectorSearchHelp.entries()
+
     override fun getTier3DocsAssetPath(): String = "docs"
 
-    private companion object {
-        const val TOOLTIP_TAG_PLUGIN = "plugin_vector_search"
+    companion object {
+        const val PLUGIN_ID = "com.itsaky.androidide.plugins.vectorsearch"
+
+        /**
+         * Category the host registers this plugin's tooltips under. Must be `"plugin_"` + the full
+         * plugin id, or a long-press renders the literal string `n/a`.
+         */
+        const val TOOLTIP_CATEGORY = "plugin_$PLUGIN_ID"
+
+        /** The results title when this plugin's own resources cannot be read. */
+        private const val FALLBACK_RESULTS_TITLE = "Semantic Results"
+
+        @Volatile
+        private var instance: VectorSearchPlugin? = null
+
+        /** The live plugin, for the settings screen the host constructs by class name. */
+        fun getInstance(): VectorSearchPlugin? = instance
     }
 }

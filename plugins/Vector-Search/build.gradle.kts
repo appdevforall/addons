@@ -56,13 +56,16 @@ dependencies {
     // SQLite for embeddings storage (Android built-in, but explicit for clarity)
     implementation("androidx.sqlite:sqlite:2.4.0")
 
-    // Material Design
+    // 'implementation' (not 'compileOnly') for the androidx/Material libraries: AAPT2 needs them
+    // at compile time to process the Semantic Search screen's layouts.
     implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("com.google.android.material:material:1.10.0")
 
     testImplementation(files("../../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }
 
 tasks.matching {

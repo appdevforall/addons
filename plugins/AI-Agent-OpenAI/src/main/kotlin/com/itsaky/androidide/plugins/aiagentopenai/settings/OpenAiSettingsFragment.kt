@@ -21,11 +21,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.DimenRes
 import androidx.annotation.DrawableRes
-import androidx.annotation.IdRes
-import androidx.annotation.StringRes
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -152,8 +149,7 @@ class OpenAiSettingsFragment : Fragment() {
         view.applyPaneStyling(PANE_STYLE, OUTLINED_BUTTON_IDS)
         setupApiKeyUi(view)
         setupServerUi(view)
-        setupModelPicker(view, chatModelPicker())
-        setupModelPicker(view, embeddingModelPicker())
+        setupModelPicker(view)
         setupConnectionTest(view)
         onServerChanged?.invoke(viewModel.getBaseUrl())
     }
@@ -769,67 +765,7 @@ class OpenAiSettingsFragment : Fragment() {
         }
     }
 
-    // --- Model pickers -------------------------------------------------------------------------
-
-    /**
-     * Everything one editable model dropdown needs, so the chat and embedding pickers are one
-     * implementation rather than two that drift.
-     *
-     * @param tooltipTag long-press help shared by the picker's label, field and hint
-     * @param helpHint hint shown while no catalog is offered, i.e. free text only
-     * @param liveHint hint shown once there is a list to tap
-     * @param switchedMessage toast shown when this server retires the saved model
-     * @param read the currently saved model
-     * @param write persists a model the user typed or picked
-     * @param options the catalog to offer
-     * @param selected the model the field must show, republished when the saved one is retired
-     */
-    private class ModelPicker(
-        @IdRes val boxId: Int,
-        @IdRes val inputId: Int,
-        @IdRes val labelId: Int,
-        @IdRes val hintId: Int,
-        val tooltipTag: String,
-        @StringRes val helpHint: Int,
-        @StringRes val liveHint: Int,
-        @StringRes val switchedMessage: Int,
-        val read: () -> String,
-        val write: (String) -> Unit,
-        val options: LiveData<OpenAiModelOptions>,
-        val selected: LiveData<String>,
-    )
-
-    /** The chat model: what a turn is generated with. */
-    private fun chatModelPicker() = ModelPicker(
-        boxId = R.id.openai_model_box,
-        inputId = R.id.openai_model_input,
-        labelId = R.id.openai_model_label,
-        hintId = R.id.openai_model_hint_text,
-        tooltipTag = OpenAiPlugin.TOOLTIP_TAG_SETTINGS_MODEL,
-        helpHint = R.string.hint_openai_model_help,
-        liveHint = R.string.hint_openai_model_live,
-        switchedMessage = R.string.msg_model_switched,
-        read = viewModel::getModel,
-        write = viewModel::saveModel,
-        options = viewModel.models,
-        selected = viewModel.selectedModel,
-    )
-
-    /** The embedding model: what semantic search indexes and queries with. */
-    private fun embeddingModelPicker() = ModelPicker(
-        boxId = R.id.openai_embedding_model_box,
-        inputId = R.id.openai_embedding_model_input,
-        labelId = R.id.openai_embedding_model_label,
-        hintId = R.id.openai_embedding_model_hint_text,
-        tooltipTag = OpenAiPlugin.TOOLTIP_TAG_SETTINGS_EMBEDDING_MODEL,
-        helpHint = R.string.hint_openai_embedding_model_help,
-        liveHint = R.string.hint_openai_embedding_model_live,
-        switchedMessage = R.string.msg_embedding_model_switched,
-        read = viewModel::getEmbeddingModel,
-        write = viewModel::saveEmbeddingModel,
-        options = viewModel.embeddingModels,
-        selected = viewModel.selectedEmbeddingModel,
-    )
+    // --- Model picker --------------------------------------------------------------------------
 
     /**
      * One editable dropdown, not a field beside a spinner.
@@ -839,29 +775,29 @@ class OpenAiSettingsFragment : Fragment() {
      * the same control rather than a second one. The value is saved on pick, on IME Done and on
      * focus loss, so there is no Save button either.
      */
-    private fun setupModelPicker(view: View, picker: ModelPicker) {
-        val modelBox = view.findViewById<TextInputLayout>(picker.boxId)
-        val modelInput = view.findViewById<AutoCompleteTextView>(picker.inputId)
-        val modelLabel = view.findViewById<TextView>(picker.labelId)
-        val modelHint = view.findViewById<TextView>(picker.hintId)
+    private fun setupModelPicker(view: View) {
+        val modelBox = view.findViewById<TextInputLayout>(R.id.openai_model_box)
+        val modelInput = view.findViewById<AutoCompleteTextView>(R.id.openai_model_input)
+        val modelLabel = view.findViewById<TextView>(R.id.openai_model_label)
+        val modelHint = view.findViewById<TextView>(R.id.openai_model_hint_text)
 
         setupDropdownEndIcon(modelBox)
 
         listOf<View>(modelLabel, modelInput, modelHint)
-            .forEach { wireTooltip(it, picker.tooltipTag) }
+            .forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_MODEL) }
 
         modelInput.isSaveEnabled = false
         // Typing searches, so the first keystroke has to replace the model id already in the field
         // rather than append to it — "gpt-4o-mini" + "claude" matches nothing, by construction.
         modelInput.setSelectAllOnFocus(true)
         // The suppressing overload throughout: a filtering write would narrow the list.
-        modelInput.setText(picker.read(), false)
+        modelInput.setText(viewModel.getModel(), false)
 
         /** Persist what is typed, ignoring a blank field rather than storing an unusable model. */
         fun commitTypedModel() {
             val typed = modelInput.text.toString().trim()
-            if (typed.isEmpty() || typed == picker.read()) return
-            picker.write(typed)
+            if (typed.isEmpty() || typed == viewModel.getModel()) return
+            viewModel.saveModel(typed)
         }
 
         modelInput.setOnEditorActionListener { _, _, _ ->
@@ -874,25 +810,25 @@ class OpenAiSettingsFragment : Fragment() {
         // Tapping the field opens the list; completionThreshold=0 alone waits for a keystroke.
         modelInput.setOnClickListener { modelInput.showDropDown() }
         modelBox.setEndIconOnClickListener { modelInput.showDropDown() }
-        wireEndIconTooltip(modelBox, picker.tooltipTag)
+        wireEndIconTooltip(modelBox, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_MODEL)
         modelInput.setOnItemClickListener { _, _, _, _ -> commitTypedModel() }
 
         // A server that does not offer the saved model retires it; the field must show what will
         // actually be requested, and silently keeping the old id is what 404s on the first message.
-        picker.selected.observe(viewLifecycleOwner) { model ->
+        viewModel.selectedModel.observe(viewLifecycleOwner) { model ->
             val shown = modelInput.text.toString()
             if (shown == model || modelInput.hasFocus()) return@observe
             modelInput.setText(model, false)
             if (shown.isNotBlank()) {
                 Toast.makeText(
                     requireContext(),
-                    getString(picker.switchedMessage, model),
+                    getString(R.string.msg_model_switched, model),
                     Toast.LENGTH_LONG
                 ).show()
             }
         }
 
-        picker.options.observe(viewLifecycleOwner) { options ->
+        viewModel.models.observe(viewLifecycleOwner) { options ->
             // Cleared, not left stale: an empty list means the server changed and the old catalog
             // no longer describes it, so offering it would suggest models that will 404.
             modelInput.setAdapter(
@@ -908,8 +844,10 @@ class OpenAiSettingsFragment : Fragment() {
             )
             // Keyed on whether there is a list, not on whether it is live: a remembered list is
             // still a list to tap, and telling the user to test the connection would be wrong.
-            modelHint.text =
-                getString(if (options.models.isEmpty()) picker.helpHint else picker.liveHint)
+            modelHint.text = getString(
+                if (options.models.isEmpty()) R.string.hint_openai_model_help
+                else R.string.hint_openai_model_live
+            )
         }
     }
 

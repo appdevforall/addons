@@ -73,7 +73,8 @@ class OpenAiBackend(
     private val promptConfig: () -> OpenAiPromptConfig?,
     onStatusChanged: () -> Unit = {},
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingBackend, WebSearchBackend, StatusReportingBackend, ActiveModelReportingBackend {
+    EmbeddingModelSelectable, WebSearchBackend, StatusReportingBackend,
+    ActiveModelReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -193,6 +194,43 @@ class OpenAiBackend(
             ?: DEFAULT_EMBEDDING_MODEL
 
     /**
+     * The models the configured server offers for embedding, as the settings catalog splits them.
+     *
+     * The key is read inside the launched work rather than on the caller's thread: decrypting it
+     * is a Keystore round trip, and the screen offering the choice calls this from the UI thread.
+     *
+     * @return the embedding models, or a future completed exceptionally with the same formatted
+     *   sentence a refused chat turn shows — a missing key on OpenAI's own API answers 401
+     */
+    override fun listEmbeddingModels(): CompletableFuture<List<String>> {
+        val keyStamp = storedKeyStamp()
+        return launchFuture(
+            describeFailure = { e ->
+                context.logger.warn("OpenAiBackend: listing embedding models failed: ${e.message}")
+                IOException(formatErrorMessage(e, keyStamp), e)
+            },
+        ) { fetchAvailableModels(readApiKeyOrBlank(), getBaseUrl()).embedding }
+    }
+
+    /**
+     * Stores [modelId] stamped with its server ([OpenAiPreferences.KEY_EMBEDDING_MODEL_URL]). The
+     * plugin watches the key, so the write is what tells AI Core's listeners; the current model set
+     * again writes only when it was stamped for another server.
+     */
+    override fun setEmbeddingModelId(modelId: String) {
+        val model = modelId.trim()
+        require(model.isNotEmpty()) { "The embedding model id must not be empty" }
+        val baseUrl = getBaseUrl()
+        val stampedFor = openAiPrefs()?.getString(OpenAiPreferences.KEY_EMBEDDING_MODEL_URL, null)
+        if (model == getEmbeddingModelId() && stampedFor == baseUrl) return
+        openAiPrefs()?.edit()
+            ?.putString(OpenAiPreferences.KEY_EMBEDDING_MODEL, model)
+            ?.putString(OpenAiPreferences.KEY_EMBEDDING_MODEL_URL, baseUrl)
+            ?.apply()
+        context.logger.info("OpenAiBackend: embedding model set to $model")
+    }
+
+    /**
      * Vector length this server last produced for the configured embedding model.
      *
      * @return the observed width, or 0 before the first successful response — the honest answer,
@@ -213,34 +251,16 @@ class OpenAiBackend(
      *   than store a partial space
      */
     override fun embed(texts: List<String>): CompletableFuture<List<FloatArray>> {
-        val future = CompletableFuture<List<FloatArray>>()
-        if (texts.isEmpty()) {
-            future.complete(emptyList())
-            return future
-        }
-        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
-        if (!scope.isActive) {
-            future.completeExceptionally(IllegalStateException("OpenAI backend is closed"))
-            return future
-        }
-
-        val job = scope.launch {
-            val keyStamp = storedKeyStamp()
-            try {
-                future.complete(embedBatches(texts))
-            } catch (e: CancellationException) {
-                future.cancel(true)
-                throw e
-            } catch (e: Exception) {
+        if (texts.isEmpty()) return CompletableFuture.completedFuture(emptyList())
+        val keyStamp = storedKeyStamp()
+        return launchFuture(
+            describeFailure = { e ->
                 context.logger.error("OpenAiBackend: embedding ${texts.size} texts failed", e)
                 // The formatted sentence, not the raw body: this message reaches the user through
                 // whichever consumer asked, exactly as a refused chat turn's does.
-                future.completeExceptionally(IOException(formatErrorMessage(e, keyStamp), e))
-            }
-        }
-        future.cancelJobOnCancel(job)
-
-        return future
+                IOException(formatErrorMessage(e, keyStamp), e)
+            },
+        ) { embedBatches(texts) }
     }
 
     /**
@@ -991,9 +1011,34 @@ class OpenAiBackend(
      * @param apiKey the candidate key, or blank for a server that needs none; never logged
      * @param baseUrl the candidate server, normalized by the caller
      */
-    internal fun listCatalog(apiKey: String, baseUrl: String): CompletableFuture<ModelCatalog> {
-        val future = CompletableFuture<ModelCatalog>()
-        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
+    internal fun listCatalog(apiKey: String, baseUrl: String): CompletableFuture<ModelCatalog> =
+        launchFuture(
+            describeFailure = { e ->
+                context.logger.warn("OpenAiBackend: model listing failed: ${e.message}")
+                e
+            },
+        ) {
+            val catalog = fetchAvailableModels(apiKey.trim(), baseUrl)
+            context.logger.info(
+                "OpenAiBackend: $baseUrl offers ${catalog.chat.size} chat and " +
+                    "${catalog.embedding.size} embedding models"
+            )
+            catalog
+        }
+
+    /**
+     * Runs [block] on this backend's scope and completes the returned future with its value.
+     *
+     * Cancelling the future cancels [block], and a closed backend fails the future at once: after
+     * close() cancels the scope, launch is a silent no-op that would leave it pending forever.
+     *
+     * @param describeFailure turns what [block] threw into what the future fails with
+     */
+    private fun <T> launchFuture(
+        describeFailure: (Exception) -> Throwable,
+        block: suspend () -> T,
+    ): CompletableFuture<T> {
+        val future = CompletableFuture<T>()
         if (!scope.isActive) {
             future.completeExceptionally(IllegalStateException("OpenAI backend is closed"))
             return future
@@ -1001,22 +1046,15 @@ class OpenAiBackend(
 
         val job = scope.launch {
             try {
-                val catalog = fetchAvailableModels(apiKey.trim(), baseUrl)
-                context.logger.info(
-                    "OpenAiBackend: $baseUrl offers ${catalog.chat.size} chat and " +
-                        "${catalog.embedding.size} embedding models"
-                )
-                future.complete(catalog)
+                future.complete(block())
             } catch (e: CancellationException) {
                 future.cancel(true)
                 throw e
             } catch (e: Exception) {
-                context.logger.warn("OpenAiBackend: model listing failed: ${e.message}")
-                future.completeExceptionally(e)
+                future.completeExceptionally(describeFailure(e))
             }
         }
         future.cancelJobOnCancel(job)
-
         return future
     }
 

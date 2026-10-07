@@ -37,9 +37,12 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
+        <!-- 26.41: the first release whose plugin-api carries BackendChangeListener,
+             ActiveModelReportingBackend and EmbeddingModelSelectable, which the Semantic Search
+             settings screen reads (ADFA-6303). Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.39" />
+            android:value="26.41" />
 
         <meta-data
             android:name="plugin.max_ide_version"

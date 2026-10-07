@@ -1,11 +1,8 @@
 package com.itsaky.androidide.plugins.aiagentgemini.backend
 
 /**
- * One key's catalog, split into the models each picker may offer.
- *
- * Carried as one value because both halves come from one paginated `ListModels` walk, filtered on
- * the capability each model declares: fetching them separately would pay for the walk twice and
- * let the two pickers describe different snapshots.
+ * One key's catalog, split by declared capability: chat models for this plugin's settings pane,
+ * embedding models for Vector Search's. One value because both come from one `ListModels` walk.
  *
  * @param chat models that advertise `generateContent`
  * @param embedding models that advertise `embedContent`

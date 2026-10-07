@@ -77,10 +77,9 @@ internal object OpenAiPreferences {
     const val KEY_REMEMBERED_MODELS_URL = "openai_remembered_models_url"
 
     /**
-     * The embedding half of the last model list a server returned, remembered under its own key so
-     * reopening the settings pane offers both pickers without another request. Encoded by
-     * `RememberedModels`, and guarded by the same [KEY_REMEMBERED_MODELS_URL]: both halves come
-     * from one listing, so one origin describes them both.
+     * The embedding half of the last model list a server returned, which keeps the saved embedding
+     * model valid for that server without another request. Encoded by `RememberedModels`; guarded
+     * by [KEY_REMEMBERED_MODELS_URL], since both halves come from one listing.
      */
     const val KEY_REMEMBERED_EMBEDDING_MODELS = "openai_remembered_embedding_models"
 

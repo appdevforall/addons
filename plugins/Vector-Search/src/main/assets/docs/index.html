@@ -47,8 +47,9 @@
     <li>Your query is embedded the same way and compared by cosine similarity;
       the closest chunks are returned.</li>
     <li>Embeddings come from the AI backend you selected in <b>AI settings</b>,
-      using that backend's own embedding-model setting. The backend must be one
-      that produces embeddings, which today means a cloud one.</li>
+      using the embedding model chosen on the <b>Semantic Search</b> screen. The
+      backend must be one that produces embeddings, which today means a cloud
+      one.</li>
   </ul>
 
   <h2>What you need</h2>
@@ -65,6 +66,45 @@
   <p>Open the project search screen and run a query as usual. When Vector Search
   is active, results include a <b>Semantic Results</b> section alongside the
   normal text matches. Indexing happens on demand for the searched roots.</p>
+
+  <h2>The Semantic Search screen</h2>
+  <p>Open <b>Preferences &rarr; Configuration &rarr; Semantic Search</b>. The
+  screen updates on its own when you switch backend or model in AI settings.</p>
+  <ul>
+    <li><b>AI backend</b> &mdash; the backend selected in AI settings, its chat
+      model, and whether it works with Vector Search. <b>Supported</b> means it
+      can embed your code and offer its embedding models here. <b>Not
+      supported</b> means it cannot, or its plugin is too old to: update its
+      plugin (newer Gemini and OpenAI plugins support Vector Search), or select
+      one that does in AI settings. The on-device Local backend never does. If
+      no backend is selected, or AI Core is not installed, the screen says so
+      instead.</li>
+    <li><b>Embedding model</b> &mdash; the models the backend can embed with
+      right now, for example the Gemini models that support
+      <code>embedContent</code>. Picking one stores it in the backend plugin's own
+      settings, and the next search rebuilds the index with it. If the list
+      cannot load (no API key, no network), the field still shows the model in
+      use and the reason appears beneath it. This setting used to live in the
+      Gemini and OpenAI settings panes; a model chosen there before is the one
+      selected here.</li>
+    <li><b>Privacy line</b> &mdash; names the backend your source code is sent
+      to when the project is indexed.</li>
+    <li><b>Index</b> &mdash; leads with the state of the open project's index:
+      <b>Up to date</b> (built with the selected backend and model),
+      <b>Out of date</b> (built with another model; the next search rebuilds it),
+      <b>Indexing</b> (a build is running, with a progress bar),
+      <b>Last build failed</b> (nothing was stored; fix the backend's key or
+      quota, then clear the index to try again), <b>Not indexed yet</b> (no
+      search has run since the index was built or cleared) or <b>No project
+      open</b>. Below it: the number of chunks and files indexed, the model and
+      vector size, and when the index was last built.</li>
+    <li><b>Clear index</b> &mdash; asks for confirmation, then deletes the index
+      of <b>every</b> project, not only the open one. The next search rebuilds
+      it, which sends the project's source to the selected backend again.
+      Clearing while an index is being built waits for that build to stop first,
+      so no partial index is left behind.</li>
+  </ul>
+  <p>Long-press any control on the screen for a short explanation.</p>
 
   <h2>Changing provider or model</h2>
   <p>Every stored vector records which backend, model and vector width produced
@@ -85,14 +125,18 @@
 
   <h2>Troubleshooting</h2>
   <ul>
-    <li><b>No semantic results at all</b> &mdash; check AI settings: AI Core must
-      be installed, a backend selected, and that backend must be one that
-      embeds. The on-device backend does not.</li>
+    <li><b>No semantic results at all</b> &mdash; open the <b>Semantic Search</b>
+      screen: it says whether AI Core is installed, which backend is selected,
+      and whether that backend supports Vector Search, with what to do if it
+      does not.</li>
     <li><b>No results on the first search</b> &mdash; the roots may still be
       indexing; run the search again once it completes.</li>
     <li><b>Results stopped appearing after a settings change</b> &mdash; changing
       the embedding model empties the index and builds it again; the first
-      search afterwards pays for that.</li>
+      search afterwards pays for that, and its results title says the index was
+      rebuilt.</li>
+    <li><b>Results look stale or wrong</b> &mdash; use <b>Clear index</b> on the
+      Semantic Search screen; the next search builds a fresh one.</li>
   </ul>
 </body>
 </html>

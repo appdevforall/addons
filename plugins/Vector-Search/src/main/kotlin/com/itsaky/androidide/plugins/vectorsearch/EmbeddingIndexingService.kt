@@ -1,6 +1,5 @@
 package com.itsaky.androidide.plugins.vectorsearch
 
-import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.content.Context
@@ -15,61 +14,32 @@ import java.nio.ByteBuffer
 private const val TAG = "EmbeddingIndexing"
 
 /**
- * Schema version.
+ * How many chunks one embedder holds within a project, as the settings screen reports it.
  *
- * Bumped to 3 by ADFA-6054, which added the provenance and roots columns. Bump it again for any
- * change to the columns below — [EmbeddingsDbHelper.onUpgrade] rebuilds from scratch, so forgetting
- * leaves every existing install querying a table that no longer matches the code reading it.
+ * @param backendId the backend that produced them
+ * @param modelId the embedding model that produced them
+ * @param dimensions the width of its vectors
+ * @param chunkCount how many rows it holds
  */
-private const val DB_VERSION = 3
-
-/** Table holding one row per indexed chunk. */
-private const val TABLE = "embeddings"
-
-/** Columns read back by [EmbeddingIndexingService.getAllEmbeddings], in cursor order. */
-private val COLUMNS = arrayOf(
-    "key", "file_path", "chunk_text", "language", "chunk_index", "start_line", "end_line",
-    "embedding", "embedder_backend", "embedder_model", "embedder_dimensions",
+data class IndexedEmbedder(
+    val backendId: String,
+    val modelId: String,
+    val dimensions: Int,
+    val chunkCount: Int,
 )
 
-/** Selects one embedder's rows within one project's index. */
-private const val IDENTITY_WHERE =
-    "embedder_backend = ? AND embedder_model = ? AND embedder_dimensions = ?"
-
 /**
- * SQLite helper for embeddings storage.
- */
-/**
+ * SQLite helper for embeddings storage; the schema itself is in [EmbeddingsSql].
+ *
  * @param logger the owning plugin's log, or null before the plugin has a context
  */
 class EmbeddingsDbHelper(context: Context, private val logger: PluginLogger?) :
-    SQLiteOpenHelper(context, "embeddings.db", null, DB_VERSION) {
+    SQLiteOpenHelper(context, EmbeddingsSql.DB_NAME, null, EmbeddingsSql.DB_VERSION) {
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("""
-            CREATE TABLE IF NOT EXISTS $TABLE (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
-                file_path TEXT,
-                chunk_text TEXT,
-                language TEXT,
-                chunk_index INTEGER,
-                start_line INTEGER,
-                end_line INTEGER,
-                embedding BLOB,
-                embedder_backend TEXT NOT NULL,
-                embedder_model TEXT NOT NULL,
-                embedder_dimensions INTEGER NOT NULL,
-                roots_key TEXT NOT NULL
-            )
-        """.trimIndent())
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_file_path ON $TABLE(file_path)")
-        // Every query filters on the roots and the whole identity, so it is one index rather
-        // than four.
-        db.execSQL(
-            "CREATE INDEX IF NOT EXISTS idx_scope ON " +
-                "$TABLE(roots_key, embedder_backend, embedder_model, embedder_dimensions)"
-        )
+        db.execSQL(EmbeddingsSql.CREATE_TABLE)
+        db.execSQL(EmbeddingsSql.CREATE_INDEX_FILE_PATH)
+        db.execSQL(EmbeddingsSql.CREATE_INDEX_SCOPE)
     }
 
     /**
@@ -97,7 +67,7 @@ class EmbeddingsDbHelper(context: Context, private val logger: PluginLogger?) :
     }
 
     private fun recreate(db: SQLiteDatabase) {
-        db.execSQL("DROP TABLE IF EXISTS $TABLE")
+        db.execSQL(EmbeddingsSql.DROP_TABLE)
         onCreate(db)
     }
 }
@@ -174,11 +144,17 @@ class EmbeddingIndexingService(
         val db = dbHelper.readableDatabase
         val embeddings = mutableListOf<CodeEmbedding>()
 
+        val (where, args) =
+            if (rootsKey == null) {
+                EmbeddingsSql.WHERE_IDENTITY to EmbeddingsSql.identityArgs(identity)
+            } else {
+                EmbeddingsSql.WHERE_ROOTS_AND_IDENTITY to EmbeddingsSql.scopedArgs(rootsKey, identity)
+            }
         db.query(
-            TABLE,
-            COLUMNS,
-            whereFor(rootsKey),
-            argsFor(identity, rootsKey),
+            EmbeddingsSql.TABLE,
+            EmbeddingsSql.READ_COLUMNS,
+            where,
+            args,
             null, null, null
         ).use { cursor ->
             while (cursor.moveToNext()) {
@@ -200,9 +176,61 @@ class EmbeddingIndexingService(
      */
     fun countEmbeddings(rootsKey: String, identity: EmbedderIdentity): Int =
         dbHelper.readableDatabase.rawQuery(
-            "SELECT COUNT(*) FROM $TABLE WHERE ${whereFor(rootsKey)}",
-            argsFor(identity, rootsKey),
+            EmbeddingsSql.COUNT_SCOPED,
+            EmbeddingsSql.scopedArgs(rootsKey, identity),
         ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
+    /**
+     * What the index holds for files under [projectRoot], one entry per embedder, largest first.
+     * Counted by path rather than by roots, since a search scoped to one module still indexes the
+     * open project.
+     *
+     * @return the embedders with rows here, empty when nothing under [projectRoot] is indexed
+     */
+    fun summarize(projectRoot: File): List<IndexedEmbedder> {
+        return dbHelper.readableDatabase.rawQuery(
+            EmbeddingsSql.SUMMARIZE_PATH_RANGE,
+            EmbeddingsSql.pathRangeArgs(projectRoot),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        IndexedEmbedder(
+                            backendId = cursor.getString(0),
+                            modelId = cursor.getString(1),
+                            dimensions = cursor.getInt(2),
+                            chunkCount = cursor.getInt(3),
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    /** How many distinct files under [projectRoot] have rows, whichever embedder wrote them. */
+    fun countFiles(projectRoot: File): Int =
+        dbHelper.readableDatabase.rawQuery(
+            EmbeddingsSql.COUNT_FILES_PATH_RANGE,
+            EmbeddingsSql.pathRangeArgs(projectRoot),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
+    /** Whether any project has rows, so a clear would delete something. */
+    fun hasAnyRows(): Boolean =
+        dbHelper.readableDatabase.rawQuery(EmbeddingsSql.HAS_ANY_ROW, null)
+            .use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+
+    /**
+     * The embedding models whose rows [rootsKey] holds, so a rebuild can say which one it replaces.
+     *
+     * @return the distinct model ids, empty when [rootsKey] was never indexed
+     */
+    fun storedModels(rootsKey: String): List<String> =
+        dbHelper.readableDatabase.rawQuery(
+            EmbeddingsSql.STORED_MODELS,
+            arrayOf(rootsKey),
+        ).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+        }
 
     /**
      * Releases the SQLite connection. Call from the plugin's dispose() so the open
@@ -225,23 +253,12 @@ class EmbeddingIndexingService(
     fun clearIndex(rootsKey: String? = null) {
         val db = dbHelper.writableDatabase
         val deleted =
-            if (rootsKey == null) db.delete(TABLE, null, null)
-            else db.delete(TABLE, "roots_key = ?", arrayOf(rootsKey))
+            if (rootsKey == null) db.delete(EmbeddingsSql.TABLE, null, null)
+            else db.delete(EmbeddingsSql.TABLE, EmbeddingsSql.WHERE_ROOTS, arrayOf(rootsKey))
         logger?.info("$TAG: cleared $deleted rows from the index")
     }
 
-    /** The identity filter, narrowed to one project when [rootsKey] names one. */
-    private fun whereFor(rootsKey: String?): String =
-        if (rootsKey == null) IDENTITY_WHERE else "roots_key = ? AND $IDENTITY_WHERE"
-
-    /** The arguments [whereFor] expects, in its order. */
-    private fun argsFor(identity: EmbedderIdentity, rootsKey: String?): Array<String> {
-        val identityArgs =
-            arrayOf(identity.backendId, identity.modelId, identity.dimensions.toString())
-        return if (rootsKey == null) identityArgs else arrayOf(rootsKey) + identityArgs
-    }
-
-    /** Reads one row in [COLUMNS] order. */
+    /** Reads one row in [EmbeddingsSql.READ_COLUMNS] order. */
     private fun readEmbedding(cursor: android.database.Cursor): CodeEmbedding {
         val buffer = cursor.getBlob(7)
         val embedding = FloatArray(buffer.size / Float.SIZE_BYTES)
@@ -267,27 +284,12 @@ class EmbeddingIndexingService(
     }
 
     private fun storeEmbedding(db: SQLiteDatabase, rootsKey: String, embedding: CodeEmbedding) {
-        val buffer = ByteBuffer.allocate(embedding.embedding.size * Float.SIZE_BYTES)
-        for (f in embedding.embedding) {
-            buffer.putFloat(f)
-        }
-
-        val values = ContentValues().apply {
-            put("key", embedding.key)
-            put("file_path", embedding.filePath)
-            put("chunk_text", embedding.chunkText)
-            put("language", embedding.language)
-            put("chunk_index", embedding.chunkIndex)
-            put("start_line", embedding.startLine)
-            put("end_line", embedding.endLine)
-            put("embedding", buffer.array())
-            put("embedder_backend", embedding.identity.backendId)
-            put("embedder_model", embedding.identity.modelId)
-            put("embedder_dimensions", embedding.identity.dimensions)
-            put("roots_key", rootsKey)
-        }
-
-        db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        db.insertWithOnConflict(
+            EmbeddingsSql.TABLE,
+            null,
+            EmbeddingsSql.rowValues(rootsKey, embedding),
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
     }
 
     private fun collectCodeFiles(root: File, maxCount: Int): List<File> {
