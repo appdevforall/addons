@@ -426,8 +426,10 @@ class ChatViewModel(
      * the time [onCleared] asks for the last write, and this scope must outlive it. A failure
      * reaching here is logged rather than thrown, so a full disk cannot take the IDE down.
      */
+    private val persistSupervisor = SupervisorJob()
+
     private val persistScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e ->
+        persistSupervisor + Dispatchers.IO + CoroutineExceptionHandler { _, e ->
             logError("Chat history write failed", e)
         }
     )
@@ -2292,6 +2294,8 @@ class ChatViewModel(
         // schedules cannot run, since viewModelScope is already cancelled by the time we get here.
         stopProcessing(reason = "viewModel cleared")
         persistState()
+        // Ends persistScope once the queued writes finish; complete() lets them run, cancel() would drop them.
+        persistSupervisor.complete()
         stopStateTimer()
     }
 }
