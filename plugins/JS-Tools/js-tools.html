@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS Tools</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>JS Tools</h1>
+  <p class="subtitle">JavaScript and TypeScript on Node.js for Code on the Go, with everything bundled so it works offline</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.js.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#editing">Editing</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#templates">Templates</a></li>
+    <li><a href="#runtime">What is bundled</a></li>
+    <li><a href="#limits">Limits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Overview</h2>
+  <p>JS Tools turns Code on the Go into a JavaScript and TypeScript editor with a real Node.js
+  behind it. It bundles Node.js 24 LTS, npm, TypeScript 6, and typescript-language-server, so a
+  project can be created, edited, run, tested, and type-checked with no network connection.</p>
+  <p>Open a folder with a <code>package.json</code>, <code>tsconfig.json</code>, or JavaScript and
+  TypeScript files, or create one from a template. The Android build actions step aside and the JS
+  Tools commands take their place on the editor toolbar.</p>
+  <div class="callout">
+    TypeScript runs without a build step: Node.js removes the type annotations as it loads each
+    <code>.ts</code> file, and the TypeScript compiler checks the types separately.
+  </div>
+</section>
+
+<section id="editing">
+  <h2>2. Editing</h2>
+  <ul>
+    <li><strong>Syntax highlighting</strong> for <code>.js</code>, <code>.mjs</code>,
+        <code>.cjs</code>, <code>.jsx</code>, <code>.ts</code>, <code>.mts</code>,
+        <code>.cts</code>, and <code>.tsx</code>, from tree-sitter grammars.</li>
+    <li><strong>Completion, hover, signature help, go to definition, and find references</strong>
+        from TypeScript's language service, for JavaScript and TypeScript alike.</li>
+    <li><strong>Errors as you type</strong>, the same ones <b>Type check</b> reports.</li>
+  </ul>
+</section>
+
+<section id="commands">
+  <h2>3. Commands</h2>
+  <table>
+    <tr><th>Command</th><th>What it does</th><th>Offline</th></tr>
+    <tr><td>Run app</td><td>Runs the entry point (the <code>start</code> script, the <code>main</code> field, or <code>src/index</code>) with Node.js</td><td>Yes</td></tr>
+    <tr><td>Run current file</td><td>Runs the JavaScript or TypeScript file open in the editor</td><td>Yes</td></tr>
+    <tr><td>Run tests</td><td>Runs <code>npm test</code>, or Node.js's built-in <code>node --test</code></td><td>Yes</td></tr>
+    <tr><td>Type check</td><td>Runs <code>tsc --noEmit</code> with the project's <code>tsconfig.json</code> or <code>jsconfig.json</code></td><td>Yes</td></tr>
+    <tr><td>Install packages</td><td>Runs <code>npm install</code></td><td>No: packages come from the npm registry</td></tr>
+  </table>
+  <p>Output streams into the Build Output panel, and each command's button becomes a Cancel button
+  while it runs.</p>
+</section>
+
+<section id="templates">
+  <h2>4. Templates</h2>
+  <table>
+    <tr><th>Template</th><th>What you get</th></tr>
+    <tr><td>JavaScript App</td><td>An ES module program with a module, tests, and type checking through <code>jsconfig.json</code></td></tr>
+    <tr><td>TypeScript App</td><td>The same program in TypeScript with strict type checking</td></tr>
+    <tr><td>Node.js Web Server</td><td>A TypeScript server on <code>node:http</code> with JSON routes, tests, and graceful shutdown</td></tr>
+  </table>
+  <p>Every template uses only Node.js's built-in modules and ships with the Node.js type
+  declarations, so completion and tests work from the first minute without downloading
+  anything.</p>
+</section>
+
+<section id="runtime">
+  <h2>5. What is bundled</h2>
+  <ul>
+    <li>Node.js 24 LTS and npm 11, Termux builds with the libraries they load.</li>
+    <li>TypeScript 6 and typescript-language-server, which power the editor and <b>Type check</b>.</li>
+    <li>The Node.js type declarations, <code>@types/node</code>, for the templates.</li>
+  </ul>
+  <p>Node.js is bundled for both 64-bit and 32-bit ARM devices. On the first launch the plugin
+  unpacks the build for the device once into its private directory, about 160 MB, and never
+  downloads anything itself.</p>
+</section>
+
+<section id="limits">
+  <h2>6. Limits</h2>
+  <ul>
+    <li>Programs run from the toolbar cannot read keyboard input. Pass values as arguments, or run
+        the program from the terminal.</li>
+    <li>JSX and TSX files are highlighted and checked but not run, since running them needs a
+        bundler.</li>
+    <li>Installing packages from npm needs a network connection.</li>
+  </ul>
+</section>
+
+<footer>
+  JS Tools Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.js.plugin
+</footer>
+
+</body>
+</html>

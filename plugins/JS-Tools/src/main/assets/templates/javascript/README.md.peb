@@ -1,0 +1,39 @@
+# ${{APP_NAME}}
+
+A JavaScript program for Node.js, created with Code on the Go.
+
+## Run
+
+Tap **Run app** in the editor toolbar, or from the terminal:
+
+```bash
+npm start
+```
+
+## Test
+
+Tap **Run tests**, or:
+
+```bash
+npm test
+```
+
+## Check types
+
+Tap **Type check**. `jsconfig.json` turns on type checking for the JavaScript in `src/`, so
+mistakes such as a misspelled property show up before the program runs.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  package.json        # name, scripts, and the Node.js type declarations
+  jsconfig.json       # type checking for JavaScript
+  src/index.js        # entry point
+  src/greet.js        # a module
+  src/greet.test.js   # tests, run with Node.js's built-in test runner
+```
+
+The program uses only Node.js's built-in modules, so it runs and is tested with no network
+connection. To add a package from npm, run `npm install <package>` in the terminal or tap
+**Install packages**; that step needs a network connection.

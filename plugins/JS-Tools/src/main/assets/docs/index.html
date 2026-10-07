@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS Tools - Commands</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>JS Tools</h1>
+<p class="lede">Write, run, and test JavaScript and TypeScript on the device, with no network connection.</p>
+
+<p>JS Tools adds three project templates, editing support for JavaScript and TypeScript files, and
+up to five toolbar commands. The commands appear only while a JavaScript or TypeScript project is
+open; in a Java, Kotlin, or Android project the toolbar is left alone. Because Gradle plays no part
+in these projects, the Gradle actions (Quick Run, Sync, Debug, Run Tasks, Launch App) are hidden
+while you work in one.</p>
+
+<div class="callout">
+<p>A project counts as JavaScript or TypeScript when its root holds a <code>package.json</code>,
+<code>tsconfig.json</code>, or <code>jsconfig.json</code>, or a <code>.js</code>, <code>.ts</code>,
+<code>.jsx</code>, or <code>.tsx</code> file in the root or in <code>src/</code>, and no Gradle
+build script.</p>
+</div>
+
+<h2>Getting Node.js and TypeScript</h2>
+<p>Node.js 24 LTS, npm 11, TypeScript 6, and typescript-language-server ship inside the plugin, with
+a Node.js build for both 64-bit and 32-bit ARM devices. The first time the plugin activates it
+unpacks the build for this device into its own private directory - no download, no network, and
+nothing is installed into the shared terminal environment. It takes about 160 MB on the device and
+happens once; a message tells you when Node.js is ready.</p>
+<div class="callout">
+<p>Node.js is <b>not</b> installed with <code>pkg</code>. Code on the Go's package repository
+carries a curated subset that does not include Node.js, so the plugin carries Termux's build of
+Node.js together with the libraries it loads (ICU, OpenSSL, SQLite, c-ares, zlib, and libc++),
+and starts it with those libraries rather than the terminal's own.</p>
+</div>
+
+<h2>Editing</h2>
+<p>Files ending in <code>.js</code>, <code>.mjs</code>, <code>.cjs</code>, <code>.jsx</code>,
+<code>.ts</code>, <code>.mts</code>, <code>.cts</code>, and <code>.tsx</code> get syntax
+highlighting from tree-sitter grammars, and completion, hover, signature help, go to definition,
+find references, and error squiggles from TypeScript's language service, which
+typescript-language-server serves to the editor.</p>
+<p>The language server starts when you open the first file of a kind and stays running while the
+project is open. JavaScript, JSX, TypeScript, and TSX files each get their own server, so a project
+that mixes all four runs four. If you open a file before the first install has finished, close and
+reopen it once Node.js is ready.</p>
+<p>The bundled templates include the Node.js type declarations in <code>node_modules</code>, so
+completion knows <code>node:fs</code>, <code>node:http</code>, and <code>process</code> from the
+first keystroke. In a project of your own, tap <b>Install packages</b> once you add
+<code>@types/node</code> to <code>package.json</code>.</p>
+
+<h2>The commands</h2>
+<table>
+  <tr><th>Command</th><th>What it runs</th><th>Stopped after</th></tr>
+  <tr><td><a href="#run-app">Run app</a></td><td><code>node</code> on the entry point, or <code>npm start</code></td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-current-file">Run current file</a></td><td><code>node</code> on the open file</td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-tests">Run tests</a></td><td><code>npm test</code>, or <code>node --test</code></td><td>15 minutes</td></tr>
+  <tr><td><a href="#type-check">Type check</a></td><td><code>tsc --noEmit</code></td><td>10 minutes</td></tr>
+  <tr><td><a href="#install-packages">Install packages</a></td><td><code>npm install</code></td><td>15 minutes</td></tr>
+</table>
+<p>Every command streams its output into the <b>Build Output</b> panel at the bottom of the editor,
+and the panel opens itself when a command starts. While a command is running its toolbar button
+turns into a Cancel button: tap it to stop the process.</p>
+
+<h3 id="run-app">Run app</h3>
+<p>Runs the project's entry point with Node.js. The entry point is, in order: the file named by a
+<code>start</code> script of the form <code>node &lt;file&gt;</code>; the <code>main</code> field of
+<code>package.json</code>; or a file named <code>index</code> or <code>main</code> with a
+<code>.js</code> or <code>.ts</code> extension in the project root or <code>src/</code>.</p>
+<p>When the plugin finds the file itself it runs Node.js on it directly, so the process the IDE
+tracks is your program and Cancel really stops it. Any other <code>start</code> script runs
+through <code>npm start</code>; there, Cancel stops npm, and a server npm started can keep
+running. Write the start script as <code>node &lt;file&gt;</code> to avoid that.</p>
+
+<h3 id="run-current-file">Run current file</h3>
+<p>Appears while a <code>.js</code>, <code>.mjs</code>, <code>.cjs</code>, <code>.ts</code>,
+<code>.mts</code>, or <code>.cts</code> file is open, and runs exactly that file with Node.js -
+useful for a scratch script that is not the project's entry point. JSX and TSX files need a build
+step before Node.js can run them, so the command does not appear for them.</p>
+
+<h3 id="run-tests">Run tests</h3>
+<p>Runs <code>npm test</code> when <code>package.json</code> defines a test script, and otherwise
+Node.js's built-in test runner, <code>node --test</code>, which finds files such as
+<code>*.test.js</code> and <code>*.test.ts</code> anywhere in the project. The built-in runner needs
+no packages, so tests work offline.</p>
+
+<h3 id="type-check">Type check</h3>
+<p>Appears when the project has a <code>tsconfig.json</code> or <code>jsconfig.json</code>, and runs
+<code>tsc --noEmit</code> with it: every type error in the project is listed, and nothing is written
+to disk. It is the same compiler as the language server, so the two report the same errors.</p>
+
+<h3 id="install-packages">Install packages</h3>
+<p>Appears when the project has a <code>package.json</code>, and runs <code>npm install</code> in the
+project root.</p>
+<div class="callout">
+<p><b>This is the one command that needs a network connection.</b> Packages are downloaded from the
+npm registry. A project that uses only Node.js's built-in modules never needs it - which is why the
+bundled templates have no dependencies to download, and run fine with no connection at all.</p>
+</div>
+
+<h2>TypeScript without a build step</h2>
+<p>Node.js 24 runs <code>.ts</code> files directly: it removes the type annotations as it loads each
+file. That covers everything that is only types - annotations, interfaces, type aliases, generics,
+<code>as</code> casts - but not <code>enum</code>, <code>namespace</code>, or parameter properties,
+which need compiling. The TypeScript templates set <code>erasableSyntaxOnly</code> in
+<code>tsconfig.json</code> so the editor flags those as errors before you run.</p>
+<p>Imports name the <code>.ts</code> file they load, as in
+<code>import { greet } from './greet.ts'</code>; <code>allowImportingTsExtensions</code> in
+<code>tsconfig.json</code> lets the type checker accept that.</p>
+
+<h2>The templates</h2>
+<p><b>JavaScript App</b> is a small ES module program: a <code>greet</code> module, an entry point
+that calls it, tests for the built-in runner, and a <code>jsconfig.json</code> that type-checks the
+JavaScript.</p>
+<p><b>TypeScript App</b> is the same program in TypeScript with strict type checking.</p>
+<p><b>Node.js Web Server</b> is a TypeScript server on <code>node:http</code> with a text route, a
+JSON <code>/api/hello</code> route, a 404 for anything else, and graceful shutdown on
+<code>SIGINT</code> and <code>SIGTERM</code>. Run it and open <code>http://localhost:3000</code> in a
+browser on the same device. Its tests start the server on a free port and call it with
+<code>fetch</code>.</p>
+<p>All three ask for a package name when you create them, and use only Node.js's built-in
+modules.</p>
+
+<h2>Build environment</h2>
+<p>Commands run with these settings:</p>
+<ul>
+  <li><code>node</code>, <code>npm</code>, <code>npx</code>, and <code>tsc</code> are on the
+  <code>PATH</code>. <code>node</code> is a small launcher that points <code>LD_LIBRARY_PATH</code>
+  at the libraries bundled with it.</li>
+  <li>npm keeps its cache and global packages in the plugin's private directory, runs package scripts
+  with the terminal's <code>sh</code>, and skips the update, funding, and audit checks.</li>
+  <li><code>TMPDIR</code> points at the IDE's temporary directory, and <code>SSL_CERT_FILE</code> at
+  the terminal's certificate bundle, which npm needs to reach the registry over HTTPS.</li>
+</ul>
+
+<h2>Limits</h2>
+<ul>
+  <li>Programs cannot read keyboard input: nothing typed reaches <code>process.stdin</code> of a
+  command. Pass values as arguments or environment variables instead, or run the program from the
+  terminal.</li>
+  <li>JSX and TSX files are highlighted and checked, but not run: running them needs a bundler.</li>
+</ul>
+
+</body>
+</html>

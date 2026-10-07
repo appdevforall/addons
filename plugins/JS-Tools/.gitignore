@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+
+# Kotlin
+.kotlin/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Local config
+local.properties
+
+# macOS
+.DS_Store
+.cxx/

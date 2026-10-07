@@ -1,0 +1,42 @@
+# ${{APP_NAME}}
+
+A TypeScript program for Node.js, created with Code on the Go.
+
+## Run
+
+Tap **Run app** in the editor toolbar, or from the terminal:
+
+```bash
+npm start
+```
+
+There is no build step: Node.js removes the type annotations as it loads each `.ts` file. Imports
+name the `.ts` file they load, as in `import { greet } from './greet.ts'`.
+
+## Test
+
+Tap **Run tests**, or:
+
+```bash
+npm test
+```
+
+## Check types
+
+Tap **Type check** to run the TypeScript compiler over `src/` with the strict settings in
+`tsconfig.json`.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  package.json        # name, scripts, and the Node.js type declarations
+  tsconfig.json       # strict type checking, no output files
+  src/index.ts        # entry point
+  src/greet.ts        # a module
+  src/greet.test.ts   # tests, run with Node.js's built-in test runner
+```
+
+`tsconfig.json` sets `erasableSyntaxOnly`, which rules out `enum` and `namespace`: Node.js can
+strip types from a file but cannot compile those two. Use a union of string literals instead of an
+`enum`.

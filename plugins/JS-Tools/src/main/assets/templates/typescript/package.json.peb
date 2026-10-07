@@ -1,0 +1,14 @@
+{
+  "name": "${{NPM_NAME}}",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/node": "^@TYPES_NODE_VERSION@"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "summary": "Write, run, and test JavaScript and TypeScript on the device, offline, with a bundled Node.js.",
+  "description": "Bundles Node.js, npm, TypeScript, and typescript-language-server, so JavaScript and TypeScript projects get syntax highlighting, completion, diagnostics, and run, test, type check, and package install actions with no network connection. Adds JavaScript, TypeScript, and Node.js web server templates.",
+  "tags": [
+    "javascript",
+    "typescript",
+    "nodejs",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

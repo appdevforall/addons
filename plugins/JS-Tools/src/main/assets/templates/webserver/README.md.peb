@@ -1,0 +1,38 @@
+# ${{APP_NAME}}
+
+An HTTP server in TypeScript on Node.js's built-in `node:http`, created with Code on the Go.
+
+## Run
+
+Tap **Run app**, then open <http://localhost:${{PORT}}> in a browser on this device. Tap
+**Cancel Run app** to stop the server. From the terminal:
+
+```bash
+npm start
+```
+
+Set the `PORT` environment variable to listen on another port.
+
+## Routes
+
+| Method | Path                     | Response                        |
+| ------ | ------------------------ | ------------------------------- |
+| GET    | `/`                      | a plain-text greeting           |
+| GET    | `/api/hello?name=Ada`    | `{ "message": "Hello, Ada!" }`  |
+|        | anything else            | `404` with a JSON error         |
+
+## Test
+
+Tap **Run tests**, or `npm test`. The tests start the server on a free port and call it with
+`fetch`, so they need no network connection.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  package.json        # name, scripts, and the Node.js type declarations
+  tsconfig.json       # strict type checking, no output files
+  src/server.ts       # starts the server and shuts it down cleanly on SIGINT and SIGTERM
+  src/app.ts          # the request handler and its routes
+  src/app.test.ts     # tests
+```

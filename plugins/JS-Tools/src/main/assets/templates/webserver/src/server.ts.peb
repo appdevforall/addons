@@ -1,0 +1,16 @@
+import { createServer } from 'node:http';
+import { handle } from './app.ts';
+
+const port = Number(process.env.PORT ?? ${{PORT}});
+const server = createServer(handle);
+
+server.listen(port, () => {
+  console.log(`Listening on http://localhost:${port}`);
+});
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    console.log(`Received ${signal}, shutting down`);
+    server.close(() => process.exit(0));
+  });
+}
