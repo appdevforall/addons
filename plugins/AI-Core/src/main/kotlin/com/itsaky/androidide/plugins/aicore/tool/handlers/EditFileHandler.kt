@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
@@ -45,6 +46,7 @@ class EditFileHandler(
         required = listOf(ARG_PATH, ARG_OLD, ARG_NEW),
     )
     override val requiresApproval = true
+    override val approvalPreview = ApprovalPreview.EDIT
     override val mutatesProject = true
     override val pathArgs = listOf(ARG_PATH)
     override val argAliases = mapOf(

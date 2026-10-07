@@ -103,7 +103,9 @@ class ToolApprovalManager(
                 displayName = handler.displayName,
                 sourceLabel = handler.sourceLabel,
                 args = args,
-                description = describe(handler)
+                description = describe(handler),
+                preview = handler.approvalPreview,
+                allowsSessionApproval = !isNeverSessionApproved(toolName, handler),
             )
 
             val deferred = CompletableDeferred<ApprovalDecision>()
@@ -234,7 +236,9 @@ data class ApprovalRequest(
     val args: Map<String, Any?>,
     val description: String,
     val displayName: String = toolName,
-    val sourceLabel: String? = null
+    val sourceLabel: String? = null,
+    val preview: ApprovalPreview = ApprovalPreview.ARGS,
+    val allowsSessionApproval: Boolean = true,
 )
 
 /**

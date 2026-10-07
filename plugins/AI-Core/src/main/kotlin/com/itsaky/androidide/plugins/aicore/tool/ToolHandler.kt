@@ -70,6 +70,10 @@ interface ToolHandler {
     val allowsSessionApproval: Boolean
         get() = true
 
+    /** How the approval dialog shows this tool's arguments. */
+    val approvalPreview: ApprovalPreview
+        get() = ApprovalPreview.ARGS
+
     /**
      * Arg keys whose values are filesystem paths. The Executor verifies each of
      * these resolves within the project root before the tool runs, so no handler

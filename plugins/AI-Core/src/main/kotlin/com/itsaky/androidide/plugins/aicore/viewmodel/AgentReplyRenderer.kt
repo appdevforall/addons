@@ -20,16 +20,25 @@ object AgentReplyRenderer {
      * a failure still gets its own message. Before that line existed every such turn appended a
      * badge bubble and every result another, which is what buried the answer.
      *
-     * A turn carrying the terminal call always keeps its bubble: that is the only place the answer
-     * is rendered.
+     * A turn carrying the terminal call keeps its bubble, as the only place the answer is rendered,
+     * unless it only recaps a prose answer already on screen; a failure's warning still shows.
      *
      * @param toolCalls the calls parsed out of this turn.
      * @param terminalTool the name of the answer-carrying pseudo-tool (`respond`).
+     * @param recapsShownAnswer whether the run was asked to finish after a prose answer.
+     * @param lastToolFailed whether this run's most recent tool call failed.
      * @return true when the turn should not reach the transcript.
      */
-    fun isSilentTurn(toolCalls: List<ToolCall>, terminalTool: String): Boolean {
+    fun isSilentTurn(
+        toolCalls: List<ToolCall>,
+        terminalTool: String,
+        recapsShownAnswer: Boolean = false,
+        lastToolFailed: Boolean = false,
+    ): Boolean {
         if (toolCalls.isEmpty()) return false
-        return toolCalls.none { isTerminalToolName(it.name, terminalTool) }
+        val answers = toolCalls.filter { isTerminalToolName(it.name, terminalTool) }
+        if (answers.isEmpty()) return true
+        return recapsShownAnswer && !lastToolFailed && answers.size == toolCalls.size
     }
 
     /**

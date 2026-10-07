@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ShellInvocation
 import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import org.json.JSONObject
 
@@ -45,6 +46,20 @@ object ApprovalTextFormatter {
                 append("⚠ Applies to every occurrence in the file.")
             }
         }
+    }
+
+    /**
+     * Renders a shell command exactly as it will run, uncut and unescaped, since a hidden line would
+     * still run. A directory outside the project root goes above it as a label, not as a command.
+     * @param args the `run_shell_command` call arguments.
+     * @param directoryLabel words the line naming the working directory.
+     * @return the command text.
+     */
+    fun formatShellCommand(args: Map<String, Any?>, directoryLabel: (String) -> String): String {
+        val invocation = ShellInvocation.from(args) ?: return ""
+        return invocation.workingDirectory
+            ?.let { directory -> "${directoryLabel(directory)}\n\n${invocation.command}" }
+            ?: invocation.command
     }
 
     /**

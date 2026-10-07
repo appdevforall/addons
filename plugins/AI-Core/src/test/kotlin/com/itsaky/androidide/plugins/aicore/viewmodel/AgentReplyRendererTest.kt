@@ -156,6 +156,29 @@ class AgentReplyRendererTest {
     }
 
     @Test
+    fun givenARecapOfAProseAnswer_whenChecked_thenItIsSilencedSoTheAnswerShowsOnce() {
+        val recap = respond("message" to "The ls command ran successfully.")
+
+        assertTrue(AgentReplyRenderer.isSilentTurn(recap, TERMINAL, recapsShownAnswer = true))
+    }
+
+    @Test
+    fun givenARecapAfterAFailedTool_whenChecked_thenItKeepsItsBubbleForTheWarning() {
+        val recap = respond("message" to "Done.")
+
+        assertFalse(
+            AgentReplyRenderer.isSilentTurn(recap, TERMINAL, recapsShownAnswer = true, lastToolFailed = true)
+        )
+    }
+
+    @Test
+    fun givenAnAnswerBesideARealCallAfterAProseAnswer_whenChecked_thenItIsNotSilenced() {
+        val calls = respond("message" to "Running it now.") + ToolCall("run_shell_command", mapOf("command" to "ls"))
+
+        assertFalse(AgentReplyRenderer.isSilentTurn(calls, TERMINAL, recapsShownAnswer = true))
+    }
+
+    @Test
     fun givenNoToolCallsAtAll_whenChecked_thenTheProseTurnIsNotSilent() {
         // A plain answer parses to no calls; silencing it would drop the reply entirely.
         assertFalse(AgentReplyRenderer.isSilentTurn(emptyList(), TERMINAL))

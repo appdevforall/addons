@@ -15,7 +15,7 @@ import org.junit.Test
 class BuiltInHandlerApprovalTest {
 
     private companion object {
-        /** Built-ins that change the project, install an app, or start a build. */
+        /** Built-ins that change the project, install an app, start a build, or run or stop a command. */
         val MUTATING_TOOLS = setOf(
             "create_file",
             "update_file",
@@ -24,6 +24,8 @@ class BuiltInHandlerApprovalTest {
             "run_app",
             "gradle_sync",
             "run_gradle_task",
+            "run_shell_command",
+            "stop_terminal_session",
             "generate_from_template",
         )
 
@@ -45,6 +47,8 @@ class BuiltInHandlerApprovalTest {
             "web_search",
             "read_app_logs",
             "read_ide_logs",
+            // Output of a command the user already approved; the host reads only the agent's sessions.
+            "read_terminal_session",
         )
 
         /** Built-ins that reach a host the model chose, so the user sees where before it happens. */
