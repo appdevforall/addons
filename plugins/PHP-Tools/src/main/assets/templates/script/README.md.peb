@@ -1,0 +1,34 @@
+# ${{APP_NAME}}
+
+A command-line PHP program, created with Code on the Go.
+
+## Run
+
+Tap **Run app** in the editor toolbar, or from the terminal:
+
+```bash
+php main.php
+```
+
+## Test
+
+Tap **Run tests**. Each `tests/*Test.php` file runs with assertions turned on, so a failed
+`assert()` fails the run. No packages are needed.
+
+## Check syntax
+
+Tap **Check syntax** to run `php -l` over every PHP file.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  composer.json           # name and the start script
+  main.php                # entry point
+  src/Greeter.php         # a class
+  tests/GreeterTest.php   # tests
+```
+
+The program uses only PHP's built-in functions, so it runs and is tested with no network
+connection. To add a package from Packagist, run `composer require <package>` in the terminal or
+tap **Install dependencies**; that step needs a network connection.

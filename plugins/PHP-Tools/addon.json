@@ -1,0 +1,16 @@
+{
+  "summary": "Write, run, and test PHP on the device, offline, with a bundled PHP and its built-in web server.",
+  "description": "Bundles PHP 8.5, Composer, and the phpactor language server, so PHP projects get syntax highlighting, completion, navigation, and run, test, syntax check, and dependency install actions with no network connection. Runs websites on PHP's built-in web server. Adds PHP script and web app templates.",
+  "tags": [
+    "php",
+    "composer",
+    "web",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

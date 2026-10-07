@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHP Tools</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PHP Tools</h1>
+  <p class="subtitle">PHP for Code on the Go, with PHP, Composer, and a language server bundled so it works offline</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.php.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#editing">Editing</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#templates">Templates</a></li>
+    <li><a href="#runtime">What is bundled</a></li>
+    <li><a href="#limits">Limits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Overview</h2>
+  <p>PHP Tools turns Code on the Go into a PHP editor with a real PHP behind it. It bundles PHP 8.5,
+  Composer, and the phpactor language server, so a project can be created, edited, run, and tested
+  with no network connection, websites included.</p>
+  <p>Open a folder with a <code>composer.json</code> or PHP files, or create one from a template. The
+  Android build actions step aside and the PHP Tools commands take their place on the editor
+  toolbar.</p>
+  <div class="callout">
+    A website runs on PHP's built-in web server: tap Run app and open it in a browser on the same
+    device.
+  </div>
+</section>
+
+<section id="editing">
+  <h2>2. Editing</h2>
+  <ul>
+    <li><strong>Syntax highlighting</strong> for <code>.php</code> and <code>.phtml</code>, from a
+        tree-sitter grammar.</li>
+    <li><strong>Completion, hover, signature help, go to definition, find references, and code
+        actions</strong> from the phpactor language server.</li>
+  </ul>
+</section>
+
+<section id="commands">
+  <h2>3. Commands</h2>
+  <table>
+    <tr><th>Command</th><th>What it does</th><th>Offline</th></tr>
+    <tr><td>Run app</td><td>Runs the <code>start</code> script, PHP's web server for <code>public/</code>, or <code>index.php</code></td><td>Yes</td></tr>
+    <tr><td>Run current file</td><td>Runs the PHP file open in the editor</td><td>Yes</td></tr>
+    <tr><td>Run tests</td><td>Runs PHPUnit, the <code>test</code> script, or every <code>tests/*Test.php</code> with assertions on</td><td>Yes</td></tr>
+    <tr><td>Check syntax</td><td>Runs <code>php -l</code> on every PHP file</td><td>Yes</td></tr>
+    <tr><td>Install dependencies</td><td>Runs <code>composer install</code></td><td>No: packages come from Packagist</td></tr>
+  </table>
+  <p>Output streams into the Build Output panel, and each command's button becomes a Cancel button
+  while it runs.</p>
+</section>
+
+<section id="templates">
+  <h2>4. Templates</h2>
+  <table>
+    <tr><th>Template</th><th>What you get</th></tr>
+    <tr><td>PHP Script</td><td>A command-line program with a class and tests</td></tr>
+    <tr><td>PHP Web App</td><td>A website and JSON API on the built-in web server, with routes, a stylesheet, and tests</td></tr>
+  </table>
+  <p>Both templates use only PHP's built-in functions, so they run and are tested without installing
+  anything.</p>
+</section>
+
+<section id="runtime">
+  <h2>5. What is bundled</h2>
+  <ul>
+    <li>PHP 8.5, a Termux build with its common extensions built in and the libraries it loads.</li>
+    <li>Composer, for projects that use packages from Packagist.</li>
+    <li>phpactor, the language server behind completion and navigation.</li>
+  </ul>
+  <p>PHP is bundled for both 64-bit and 32-bit ARM devices. On the first launch the plugin unpacks
+  the build for the device once into its private directory, and never downloads anything
+  itself.</p>
+</section>
+
+<section id="limits">
+  <h2>6. Limits</h2>
+  <ul>
+    <li>Programs run from the toolbar cannot read keyboard input. Pass values as arguments, or run
+        the program from the terminal.</li>
+    <li>The built-in web server is for development on the device, not for serving other
+        devices.</li>
+    <li>Installing packages from Packagist needs a network connection.</li>
+  </ul>
+</section>
+
+<footer>
+  PHP Tools Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.php.plugin
+</footer>
+
+</body>
+</html>

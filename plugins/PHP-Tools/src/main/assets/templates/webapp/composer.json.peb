@@ -1,0 +1,12 @@
+{
+    "name": "${{COMPOSER_NAME}}",
+    "description": "A PHP website created with Code on the Go",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.3"
+    },
+    "scripts": {
+        "start": "php -S localhost:${{PORT}} -t public"
+    }
+}

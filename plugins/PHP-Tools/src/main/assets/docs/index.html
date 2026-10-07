@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHP Tools - Commands</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>PHP Tools</h1>
+<p class="lede">Write, run, and test PHP on the device, websites included, with no network connection.</p>
+
+<p>PHP Tools adds two project templates, editing support for PHP files, and up to five toolbar
+commands. The commands appear only while a PHP project is open; in a Java, Kotlin, or Android
+project the toolbar is left alone. Because Gradle plays no part in these projects, the Gradle actions
+(Quick Run, Sync, Debug, Run Tasks, Launch App) are hidden while you work in one.</p>
+
+<div class="callout">
+<p>A project counts as PHP when its root holds a <code>composer.json</code>, or a <code>.php</code>
+file sits in the root, <code>src/</code>, or <code>public/</code>, and there is no Gradle build
+script.</p>
+</div>
+
+<h2>Getting PHP</h2>
+<p>PHP 8.5, Composer, and the phpactor language server ship inside the plugin, with a PHP build for
+both 64-bit and 32-bit ARM devices. The first time the plugin activates it unpacks the build for this
+device into its own private directory - no download, no network, and nothing is installed into the
+shared terminal environment. It happens once; a message tells you when PHP is ready.</p>
+<p>PHP comes with its common extensions built in: <code>mbstring</code>, <code>intl</code>,
+<code>json</code>, <code>pdo_sqlite</code> and <code>sqlite3</code>, <code>pdo_mysql</code>,
+<code>curl</code>, <code>openssl</code>, <code>dom</code>, <code>xml</code>, <code>zip</code>,
+<code>gmp</code>, <code>bcmath</code>, and more.</p>
+<div class="callout">
+<p>PHP is <b>not</b> installed with <code>pkg</code>. The plugin carries Termux's build of PHP
+together with the libraries it loads, and its own <code>php.ini</code>, which points PHP's temporary
+files, its cache lock, and its certificate bundle at directories an app can use.</p>
+</div>
+
+<h2>Editing</h2>
+<p><code>.php</code> and <code>.phtml</code> files get syntax highlighting from a tree-sitter
+grammar, and completion, hover, signature help, go to definition, find references, and code actions
+from the phpactor language server. The server starts when you open the first PHP file and stays
+running while the project is open. If you open a file before the first install has finished, close
+and reopen it once PHP is ready.</p>
+
+<h2>The commands</h2>
+<table>
+  <tr><th>Command</th><th>What it runs</th><th>Stopped after</th></tr>
+  <tr><td><a href="#run-app">Run app</a></td><td>the <code>start</code> script, PHP's web server, or the entry file</td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-current-file">Run current file</a></td><td><code>php</code> on the open file</td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-tests">Run tests</a></td><td>PHPUnit, the <code>test</code> script, or <code>tests/*Test.php</code></td><td>15 minutes</td></tr>
+  <tr><td><a href="#check-syntax">Check syntax</a></td><td><code>php -l</code> on every PHP file</td><td>10 minutes</td></tr>
+  <tr><td><a href="#install-dependencies">Install dependencies</a></td><td><code>composer install</code></td><td>15 minutes</td></tr>
+</table>
+<p>Every command streams its output into the <b>Build Output</b> panel at the bottom of the editor,
+and the panel opens itself when a command starts. While a command is running its toolbar button
+turns into a Cancel button: tap it to stop the process.</p>
+
+<h3 id="run-app">Run app</h3>
+<p>Runs, in order of preference:</p>
+<ul>
+  <li>the <code>start</code> script from <code>composer.json</code>. A script of the form
+  <code>php ...</code>, such as <code>php -S localhost:8080 -t public</code>, runs PHP directly, so
+  the process the IDE tracks is your program and Cancel really stops it. Any other script runs
+  through <code>composer run-script start</code>;</li>
+  <li>PHP's built-in web server on <code>localhost:8080</code> with <code>public/</code> as the
+  document root, when there is a <code>public/index.php</code>;</li>
+  <li>the first of <code>index.php</code>, <code>main.php</code>, <code>app.php</code>,
+  <code>src/main.php</code>, and <code>src/index.php</code>, as a command-line program.</li>
+</ul>
+<p>Open a website in a browser on the same device while it runs. Requests for files that exist under
+<code>public/</code> are served as they are; every other request goes to
+<code>public/index.php</code>.</p>
+
+<h3 id="run-current-file">Run current file</h3>
+<p>Appears while a <code>.php</code> file is open, and runs exactly that file with PHP - useful for a
+scratch script that is not the project's entry point.</p>
+
+<h3 id="run-tests">Run tests</h3>
+<p>Runs PHPUnit when Composer has installed it in <code>vendor/bin</code>, or the <code>test</code>
+script from <code>composer.json</code>. Otherwise it runs every <code>tests/*Test.php</code> file with
+assertions turned on (<code>zend.assertions=1</code>, <code>assert.exception=1</code>): a failed
+<code>assert()</code> throws, the file exits with an error, and the run fails. That needs no
+packages, so tests work offline.</p>
+
+<h3 id="check-syntax">Check syntax</h3>
+<p>Runs <code>php -l</code> on every <code>.php</code> file outside <code>vendor/</code> and lists each
+file with its result. The command fails if any file has a syntax error.</p>
+
+<h3 id="install-dependencies">Install dependencies</h3>
+<p>Appears when the project has a <code>composer.json</code>, and runs <code>composer install</code>
+in the project root.</p>
+<div class="callout">
+<p><b>This is the one command that needs a network connection</b> for any package from Packagist. A
+project that uses only PHP's built-in functions never needs it - which is why the bundled templates
+have no dependencies, and run fine with no connection at all.</p>
+</div>
+
+<h2>The templates</h2>
+<p><b>PHP Script</b> is a command-line program: a <code>Greeter</code> class, a <code>main.php</code>
+that uses it, and tests for the built-in test runner.</p>
+<p><b>PHP Web App</b> is a website on PHP's built-in web server: an HTML page, a JSON
+<code>/api/hello</code> route, a 404 for anything else, a stylesheet served as a static file, and
+tests that call the request handler directly. It asks for the port to listen on.</p>
+<p>Both ask for a Composer package name when you create them.</p>
+
+<h2>Build environment</h2>
+<ul>
+  <li><code>php</code>, <code>composer</code>, and <code>phpactor</code> are on the <code>PATH</code>.
+  <code>php</code> is a small launcher that points <code>LD_LIBRARY_PATH</code> at the libraries
+  bundled with it and <code>PHPRC</code> at the plugin's <code>php.ini</code>.</li>
+  <li><code>php.ini</code> sets the temporary directories and OPcache's lock file to the IDE's
+  temporary directory, points <code>openssl.cafile</code> and <code>curl.cainfo</code> at the
+  terminal's certificate bundle, and raises <code>memory_limit</code> to 512 MB.</li>
+  <li>Composer keeps its home and cache in the plugin's private directory, and its scripts are never
+  stopped by Composer's own timeout.</li>
+</ul>
+
+<h2>Limits</h2>
+<ul>
+  <li>Programs cannot read keyboard input: nothing typed reaches <code>STDIN</code> of a command. Pass
+  values as arguments instead, or run the program from the terminal.</li>
+  <li>The built-in web server runs one request at a time. It is for development, not for serving
+  other devices.</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,37 @@
+# ${{APP_NAME}}
+
+A website and JSON API on PHP's built-in web server, created with Code on the Go.
+
+## Run
+
+Tap **Run app**, then open <http://localhost:${{PORT}}> in a browser on this device. Tap
+**Cancel Run app** to stop the server. From the terminal:
+
+```bash
+php -S localhost:${{PORT}} -t public
+```
+
+## Routes
+
+| Method | Path                  | Response                        |
+| ------ | --------------------- | ------------------------------- |
+| GET    | `/`                   | an HTML page                    |
+| GET    | `/api/hello?name=Ada` | `{"message":"Hello, Ada!"}`     |
+|        | `/style.css`          | the stylesheet, served as a file |
+|        | anything else         | `404` with a JSON error         |
+
+## Test
+
+Tap **Run tests**. `tests/AppTest.php` calls the request handler directly, so the tests need no
+server and no network connection.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  composer.json         # name and the start script
+  public/index.php      # front controller: every request that is not a file lands here
+  public/style.css      # a static file, served as is
+  src/App.php           # routes
+  tests/AppTest.php     # tests
+```
