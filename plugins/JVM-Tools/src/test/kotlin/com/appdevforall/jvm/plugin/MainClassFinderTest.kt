@@ -32,6 +32,46 @@ class MainClassFinderTest {
     }
 
     @Test
+    fun `java main after a nested type belongs to the class that encloses it`() {
+        val source = """
+            public class Main {
+                record Point(int x, int y) {}
+                static final String BRACE = "}";
+                static final char OPEN = '{';
+                public static void main(String[] args) {}
+            }
+        """.trimIndent()
+
+        assertEquals(listOf("Main"), MainClassFinder.mainClassNames("Main.java", source))
+    }
+
+    @Test
+    fun `java main in a nested type runs under its binary name`() {
+        val source = """
+            package com.example;
+
+            public class Outer {
+                static class Inner {
+                    public static void main(String[] args) {}
+                }
+                interface Tool {
+                    static void main(String[] args) {}
+                }
+                void run() {
+                    class Local {
+                        public static void main(String[] args) {}
+                    }
+                }
+            }
+        """.trimIndent()
+
+        assertEquals(
+            listOf("com.example.Outer\$Inner", "com.example.Outer\$Tool"),
+            MainClassFinder.mainClassNames("Outer.java", source),
+        )
+    }
+
+    @Test
     fun `java without a runnable main is not listed`() {
         val source = """
             class A {
@@ -68,6 +108,27 @@ class MainClassFinderTest {
         """.trimIndent()
 
         assertEquals(listOf("Tool", "App"), MainClassFinder.mainClassNames("Both.kt", source))
+    }
+
+    @Test
+    fun `kotlin jvmstatic main in a nested object or companion runs under its binary name`() {
+        val source = """
+            package tools
+
+            class Outer {
+                val type = Outer::class
+                object Tool {
+                    @JvmStatic fun main(args: Array<String>) {}
+                }
+                class App(val name: String) {
+                    companion object Factory {
+                        @JvmStatic fun main(args: Array<String>) {}
+                    }
+                }
+            }
+        """.trimIndent()
+
+        assertEquals(listOf("tools.Outer\$Tool", "tools.Outer\$App"), MainClassFinder.mainClassNames("Outer.kt", source))
     }
 
     @Test

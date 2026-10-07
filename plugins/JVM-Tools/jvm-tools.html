@@ -147,7 +147,8 @@
     <code>MainClassFinder</code> reads the sources with comments removed and reports Java classes with a
     <code>static void main(String[])</code>, Kotlin files with a top-level <code>fun main</code> (as the
     <code>FileNameKt</code> facade, or the <code>@file:JvmName</code>), and Kotlin objects or companion
-    objects with a <code>@JvmStatic</code> main. Names are qualified with the file's package.
+    objects with a <code>@JvmStatic</code> main. A main belongs to the type whose braces enclose it, so a
+    nested type is run by its binary name (<code>Outer$Inner</code>). Names are qualified with the file's package.
   </p>
 
   <h3>Compiling and running</h3>
@@ -215,7 +216,7 @@
   <ul>
     <li>No keyboard input: plugin commands have no stdin, so <code>Scanner</code> and <code>readLine()</code> see the end of input.</li>
     <li>No third-party libraries: only the Java class library and the Kotlin standard library are on the classpath.</li>
-    <li>A <code>main</code> in a nested Java class is not listed.</li>
+    <li>A <code>main</code> in a local or anonymous class is not listed.</li>
   </ul>
 </section>
 
