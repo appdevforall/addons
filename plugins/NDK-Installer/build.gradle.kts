@@ -125,8 +125,8 @@ val downloadAssets by tasks.registering {
     doLast {
         assetsDir.mkdirs()
 
-        val archiveUrl = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz"
-        val md5Url = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz.md5"
+        val archiveUrl = "https://dev-assets.appdevforall.org/release/v8/ndk-cmake.tar.xz"
+        val md5Url = "https://dev-assets.appdevforall.org/release/v8/ndk-cmake.tar.xz.md5"
         val maxAttempts = 3
 
         var lastError: String? = null
