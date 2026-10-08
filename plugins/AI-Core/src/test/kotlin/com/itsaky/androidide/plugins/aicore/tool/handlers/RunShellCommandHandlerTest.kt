@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.Validation
+import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.services.IdeTerminalService
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
 import io.mockk.coEvery
@@ -101,14 +102,15 @@ class RunShellCommandHandlerTest {
     }
 
     @Test
-    fun givenANonZeroExitCode_whenRunning_thenItFailsWithTheCodeAndOutput() = runTest {
-        answerWith(TerminalCommandResult.Completed(127, "bash: foo: command not found"))
+    fun givenANonZeroExitCode_whenRunning_thenItSucceedsWithTheCodeAndOutput() = runTest {
+        answerWith(TerminalCommandResult.Completed(1, "$ grep -rn TODO app/src"))
 
-        val result = handler.execute(mapOf("command" to "foo"))
+        val result = handler.execute(mapOf("command" to "grep -rn TODO app/src"))
 
-        assertFalse(result.success)
-        assertTrue(result.message.contains("127"))
-        assertTrue(result.error_details!!.contains("command not found"))
+        // grep finding nothing exits 1: that is the answer, not a failed tool call.
+        assertTrue(result.success)
+        assertTrue(result.message.contains("exited with code 1"))
+        assertEquals("$ grep -rn TODO app/src", result.data)
     }
 
     @Test
@@ -155,6 +157,12 @@ class RunShellCommandHandlerTest {
     fun givenTheShellTool_whenDispatched_thenTheWorkingDirectoryIsContainedToTheProject() {
         assertEquals(listOf(RunShellCommandHandler.ARG_WORKING_DIRECTORY), handler.pathArgs)
         assertFalse(handler.resolvesPathsInternally)
+    }
+
+    @Test
+    fun givenTheShellTool_whenDispatched_thenItMutatesTheProjectWithoutNamingAPath() {
+        assertTrue(handler.mutatesProject)
+        assertTrue(handler.pathsIn(mapOf("command" to "sed -i s/a/b/ A.kt", "working_directory" to "app")).isEmpty())
     }
 
     @Test

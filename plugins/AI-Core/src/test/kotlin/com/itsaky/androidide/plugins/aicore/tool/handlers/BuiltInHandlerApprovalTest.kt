@@ -30,7 +30,7 @@ class BuiltInHandlerApprovalTest {
         )
 
         /** The subset that rewrites a project file, which is what the progress guard counts. */
-        val WRITING_TOOLS = setOf("create_file", "update_file", "edit_file", "add_dependency")
+        val WRITING_TOOLS = setOf("create_file", "update_file", "edit_file", "add_dependency", "run_shell_command")
 
         /**
          * Built-ins that only read. `open_file` belongs here despite opening an editor tab: it

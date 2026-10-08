@@ -28,8 +28,14 @@ class RunShellCommandHandler(
     // Approval is keyed by tool name, so a session grant would cover every later command.
     override val allowsSessionApproval = false
 
+    // sed -i, rm or a script can rewrite any project file, so a run with one is no longer read-only.
+    override val mutatesProject = true
+
     // Checked against the project root before the user is asked, so a doomed call costs no dialog.
     override val pathArgs = listOf(ARG_WORKING_DIRECTORY)
+
+    // Where the command runs is not what it writes, so the progress guard treats every file as touched.
+    override val trackedPathArgs = emptyList<String>()
 
     override val parametersSchema = ToolSchema.objectOf(
         ARG_COMMAND to ToolSchema.string(),
@@ -88,20 +94,16 @@ class RunShellCommandHandler(
         )
 
         /**
-         * The tool result for [outcome]: exit code 0 succeeds, another code fails, and a command
-         * still running (a server, a watch task) succeeds with what it printed so far.
+         * The tool result for [outcome]: a command that exited succeeds whatever its code, as grep
+         * finding nothing exits 1; one still running (a server) succeeds with its output so far.
          */
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
         internal fun resultFor(outcome: TerminalCommandResult): ToolResult = when (outcome) {
-            is TerminalCommandResult.Completed -> {
-                val output = TerminalOutput.tailOf(outcome.output)
-                if (outcome.exitCode == 0) {
-                    ToolResult.success(message = "Command exited with code 0", data = output)
-                } else {
-                    ToolResult.failure("Command exited with code ${outcome.exitCode}", output)
-                }
-            }
+            is TerminalCommandResult.Completed -> ToolResult.success(
+                message = "Command exited with code ${outcome.exitCode}",
+                data = TerminalOutput.tailOf(outcome.output)
+            )
             is TerminalCommandResult.Running -> ToolResult.success(
                 message = "Command is still running in Terminal session \"${outcome.sessionName}\"",
                 data = "$STILL_RUNNING_NOTE\n\n${TerminalOutput.tailOf(outcome.output)}"

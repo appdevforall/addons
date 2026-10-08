@@ -9,6 +9,7 @@ import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalSessionHan
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -186,7 +187,7 @@ class ToolResultsPromptTest {
     }
 
     @Test
-    fun givenAFailedCommandWithFullOutput_whenRendering_thenTheErrorAtTheEndIsNotCut() {
+    fun givenANonZeroExitWithFullOutput_whenRendering_thenTheErrorAtTheEndIsNotCut() {
         val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "error: no such file"
         val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Completed(1, output))
 
@@ -199,7 +200,7 @@ class ToolResultsPromptTest {
     @Test
     fun givenASessionReadWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
         val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "GET / 200"
-        val result = ReadTerminalSessionHandler.resultFor("AI Core 1", TerminalCommandResult.Running("AI Core 1", output))
+        val result = ReadTerminalSessionHandler(mockk(relaxed = true)).resultFor("AI Core 1", TerminalCommandResult.Running("AI Core 1", output))
 
         val turn = render(listOf(ToolCall(ReadTerminalSessionHandler.TOOL_NAME, emptyMap())), listOf(result))
 

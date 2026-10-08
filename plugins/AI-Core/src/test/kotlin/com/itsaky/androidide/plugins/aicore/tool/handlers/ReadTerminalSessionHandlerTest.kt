@@ -75,15 +75,15 @@ class ReadTerminalSessionHandlerTest {
     }
 
     @Test
-    fun givenACommandThatExitedWithAnError_whenReading_thenItFailsWithTheCodeAndOutput() = runTest {
+    fun givenACommandThatExitedWithAnError_whenReading_thenItSucceedsWithTheCodeAndOutput() = runTest {
         coEvery { terminal.readSession(any()) } returns
             TerminalCommandResult.Completed(1, "$ npm start\nEADDRINUSE")
 
         val result = handler.execute(mapOf("session" to "AI Core 1"))
 
-        assertFalse(result.success)
+        assertTrue(result.success)
         assertTrue(result.message.contains("exited with code 1"))
-        assertTrue(result.error_details!!.contains("EADDRINUSE"))
+        assertTrue(result.data!!.contains("EADDRINUSE"))
     }
 
     @Test

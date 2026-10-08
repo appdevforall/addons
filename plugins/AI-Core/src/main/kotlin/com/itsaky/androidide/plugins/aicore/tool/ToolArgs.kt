@@ -40,14 +40,14 @@ fun normalizeToolArgs(handler: ToolHandler, args: Map<String, Any?>): Map<String
 }
 
 /**
- * The project paths a call names, as the tool will see them: normalized keys first, then
+ * The project paths a call reads or writes, as the tool will see them: normalized keys first, then
  * [ToolHandler.pathDefaults] for a path the call left the handler to fill in.
  * @param args the call's raw arguments.
  * @return the paths named, trimmed, without the blanks.
  */
 fun ToolHandler.pathsIn(args: Map<String, Any?>): Set<String> {
     val normalized = normalizeToolArgs(this, args)
-    return pathArgs.mapNotNullTo(mutableSetOf()) { key ->
+    return trackedPathArgs.mapNotNullTo(mutableSetOf()) { key ->
         (normalized[key]?.toString() ?: pathDefaults[key])?.trim()?.takeIf { it.isNotEmpty() }
     }
 }

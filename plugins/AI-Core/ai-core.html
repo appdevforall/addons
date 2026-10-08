@@ -141,10 +141,10 @@
   <b>system.commands</b> and <b>project.structure</b> — the agent reads and edits
   files in the open project, triggers Gradle sync, Gradle tasks and run through
   the IDE's own build service, runs shell commands in the IDE's Terminal, and
-  inspects the project's module structure. It declares
-  <b>no network access and loads no native code</b>: those belong to the backend
-  plugin that serves a given request, so a device using only the local backend
-  never grants a network-capable AI plugin. The same holds for tools another
+  inspects the project's module structure. It also declares
+  <b>network.access</b>, for <code>fetch_url</code>, which reads a page or file only
+  after you approve it. It <b>loads no native code</b>: that belongs to the backend
+  plugin that serves a given request. The same holds for tools another
   plugin contributes — they run inside the contributing plugin, under the
   permissions <i>it</i> declared, which is why the approval dialog names the
   plugin a tool came from.</p>
@@ -176,11 +176,10 @@
     <li><b>One router, many plugins</b> — a single inference service shared
       across all AI features, so backend and model choice are configured once.</li>
     <li><b>Install only what you need</b> — a device that only ever uses the
-      cloud backend need not carry an 8&nbsp;MB native library, and one that never
-      goes online need not carry a network-capable plugin at all.</li>
-    <li><b>Least privilege</b> — network access, filesystem access and native
-      code are declared by the specific backend that needs them, so what a user
-      grants matches what they installed.</li>
+      cloud backend need not carry an 8&nbsp;MB native library.</li>
+    <li><b>Least privilege</b> — native code and a provider's API access are
+      declared by the specific backend that needs them, so what a user grants
+      matches what they installed.</li>
     <li><b>Extensible in two directions</b> — a new model provider is a new
       backend plugin, and a new agent capability is a new tool source. Neither
       requires a change to AI Core or to any consumer plugin.</li>
