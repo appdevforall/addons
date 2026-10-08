@@ -22,6 +22,7 @@
     <string name="openai_error_key_refused">The server refused your API key. Re-enter it in Agent settings.</string>
     <string name="openai_error_key_missing">This server needs an API key. Add one in Agent settings.</string>
     <string name="openai_error_key_forbidden">Your API key is not allowed to use this model. Choose another model, or check the key\'s permissions.</string>
+    <string name="openai_error_context_too_long">This conversation is longer than the model can read. Tap Retry to summarize the earlier messages and send it again.</string>
     <string name="openai_error_request_rejected">The server rejected the request.</string>
     <string name="openai_error_request_rejected_reason">The server rejected the request. %1$s</string>
     <string name="openai_error_service_unavailable">The server is temporarily unavailable (HTTP %1$d). Try again in a moment.</string>

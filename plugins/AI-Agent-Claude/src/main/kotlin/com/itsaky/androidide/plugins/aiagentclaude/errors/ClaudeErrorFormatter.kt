@@ -57,6 +57,9 @@ sealed interface ClaudeFailure {
     /** The conversation is larger than the API accepts (HTTP 413). */
     data object RequestTooLarge : ClaudeFailure
 
+    /** The conversation has more input tokens than the model's context window (HTTP 400). */
+    data object ContextTooLong : ClaudeFailure
+
     /** HTTP 400 about the request rather than the credential. */
     data class RequestRejected(val reason: String?) : ClaudeFailure
 
@@ -132,6 +135,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             ClaudeFailure.QuotaExceeded,
             ClaudeFailure.BillingRequired,
             ClaudeFailure.RequestTooLarge,
+            ClaudeFailure.ContextTooLong,
             is ClaudeFailure.RequestRejected,
             is ClaudeFailure.ServiceUnavailable,
             is ClaudeFailure.Unexpected,
@@ -225,6 +229,8 @@ object ClaudeErrorFormatter {
 
             status == 400 && parsed.needsWorkspace() -> ClaudeFailure.KeyNeedsWorkspace
 
+            status == 400 && parsed.isPromptTooLong() -> ClaudeFailure.ContextTooLong
+
             status == 400 -> ClaudeFailure.RequestRejected(safeReason(parsed, error))
 
             // 529 is the API's "overloaded", which is the common one.
@@ -248,6 +254,14 @@ object ClaudeErrorFormatter {
      */
     private fun ClaudeApiError.mentionsCredit(): Boolean =
         apiMessage?.lowercase()?.contains("credit balance") == true
+
+    /**
+     * True when the input alone exceeds the model's context window. Retrying cannot fix it, so it
+     * gets its own failure instead of echoing "prompt is too long: N tokens > M maximum".
+     */
+    private fun ClaudeApiError.isPromptTooLong(): Boolean =
+        (apiType == null || apiType == "invalid_request_error") &&
+            apiMessage?.lowercase()?.startsWith("prompt is too long") == true
 
     /**
      * True when the API is refusing a key that belongs to no workspace. It names the header it

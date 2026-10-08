@@ -10,6 +10,7 @@
     <string name="llm_load_error_not_gguf">This file isn\'t a valid .gguf model (it may be corrupt or only partially downloaded). Re-download the model and select it again.</string>
     <string name="llm_load_error_low_memory">Loading this model needs at least %1$s of free memory, but only %2$s is available on this device. Close other apps and try again, or pick a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
     <string name="llm_load_error_runtime">The model couldn\'t be initialized, most likely because too little memory is free right now. Close other apps and try again, or pick a smaller or more heavily quantized model.</string>
+    <string name="local_error_context_too_long">This conversation is longer than the model can read. Tap Retry to summarize the earlier messages and send it again.</string>
     <string name="llm_load_error_busy">Another model is still loading or in use. Wait a moment and try again.</string>
     <string name="llm_load_error_unsupported">The model couldn\'t be loaded. It may use a format or quantization this build doesn\'t support, or the file may be corrupt. Try a different .gguf — a Q4_K_M quantization of a smaller model is most likely to work.</string>
     <!-- Settings pane this backend contributes (see LocalLlmSettingsFragment) -->

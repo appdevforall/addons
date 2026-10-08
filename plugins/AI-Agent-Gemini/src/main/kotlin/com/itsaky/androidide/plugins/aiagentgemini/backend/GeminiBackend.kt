@@ -1191,6 +1191,9 @@ class GeminiBackend(
             GeminiFailure.KeyInvalid ->
                 resources.getString(CredentialFailure.KeyInvalid.messageRes)
 
+            GeminiFailure.ContextTooLong ->
+                resources.getString(R.string.gemini_error_context_too_long)
+
             is GeminiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_request_rejected_reason, it)
             } ?: resources.getString(R.string.gemini_error_request_rejected)

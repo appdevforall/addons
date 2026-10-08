@@ -80,6 +80,28 @@ class OpenAiErrorFormatterTest {
     }
 
     @Test
+    fun givenOpenAiOverflowBody_whenClassify_thenContextTooLong() {
+        val body = """OpenAI HTTP 400: {"error":{"message":"This model's maximum context length is""" +
+            """ 128000 tokens. However, your messages resulted in 135000 tokens.",""" +
+            """"type":"invalid_request_error","code":"context_length_exceeded"}}"""
+        assertEquals(OpenAiFailure.ContextTooLong, classify(body))
+    }
+
+    @Test
+    fun givenLlamaServerOverflowBody_whenClassify_thenContextTooLong() {
+        val body = """OpenAI HTTP 400: {"error":{"code":400,"message":"the request exceeds the""" +
+            """ available context size, try increasing it","type":"exceed_context_size_error"}}"""
+        assertEquals(OpenAiFailure.ContextTooLong, classify(body))
+    }
+
+    @Test
+    fun givenAGatewayOverflowMessageOnA413_whenClassify_thenContextTooLong() {
+        // No code or type: only the passed-through wording says what went wrong.
+        val body = """OpenAI HTTP 413: {"error":{"message":"Input exceeds the model's context window"}}"""
+        assertEquals(OpenAiFailure.ContextTooLong, classify(body))
+    }
+
+    @Test
     fun givenA500_whenClassified_thenTheServiceIsUnavailable() {
         assertEquals(
             OpenAiFailure.ServiceUnavailable(503),

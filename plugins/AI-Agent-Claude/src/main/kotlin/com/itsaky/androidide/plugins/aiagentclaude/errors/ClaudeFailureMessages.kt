@@ -46,6 +46,9 @@ internal class ClaudeFailureMessages(private val context: PluginContext) {
             ClaudeFailure.RequestTooLarge ->
                 resources.getString(R.string.claude_error_too_large)
 
+            ClaudeFailure.ContextTooLong ->
+                resources.getString(R.string.claude_error_context_too_long)
+
             is ClaudeFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.claude_error_request_rejected_reason, it)
             } ?: resources.getString(R.string.claude_error_request_rejected)

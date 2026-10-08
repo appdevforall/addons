@@ -48,6 +48,9 @@ sealed interface OpenAiFailure {
     /** The key is valid but not allowed to use this model or endpoint (HTTP 403). */
     data object KeyForbidden : OpenAiFailure
 
+    /** The conversation has more tokens than the model's context window; retrying cannot fix it. */
+    data object ContextTooLong : OpenAiFailure
+
     /** HTTP 400 about the request rather than the credential. */
     data class RequestRejected(val reason: String?) : OpenAiFailure
 
@@ -130,6 +133,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             is OpenAiFailure.ModelUnavailable,
             OpenAiFailure.QuotaExceeded,
             OpenAiFailure.BillingRequired,
+            OpenAiFailure.ContextTooLong,
             is OpenAiFailure.RequestRejected,
             is OpenAiFailure.ServiceUnavailable,
             is OpenAiFailure.Unexpected,
@@ -225,6 +229,9 @@ object OpenAiErrorFormatter {
 
             status == 403 -> OpenAiFailure.KeyForbidden
 
+            // Any status: some gateways answer an overflow with 413 or 422 rather than 400.
+            parsed.mentionsContextOverflow() -> OpenAiFailure.ContextTooLong
+
             status == 400 -> OpenAiFailure.RequestRejected(safeReason(parsed, error))
 
             status != null && status in 500..599 -> OpenAiFailure.ServiceUnavailable(status)
@@ -241,6 +248,27 @@ object OpenAiErrorFormatter {
             else -> OpenAiFailure.Failed(safeReason(parsed, error))
         }
     }
+
+    /**
+     * True when the server says the prompt does not fit the model's context window. OpenAI sends
+     * the code, llama-server the type; anything else passes the provider's own wording through.
+     */
+    private fun OpenAiApiError.mentionsContextOverflow(): Boolean {
+        if (apiCode == "context_length_exceeded" || apiType == "exceed_context_size_error") return true
+        val text = "${apiCode.orEmpty()} ${apiType.orEmpty()} ${apiMessage.orEmpty()}".lowercase()
+        return CONTEXT_OVERFLOW_PHRASES.any { text.contains(it) }
+    }
+
+    /** Wording that only a context overflow uses, across OpenAI-compatible servers. */
+    private val CONTEXT_OVERFLOW_PHRASES = listOf(
+        "context_length_exceeded",
+        "maximum context length",
+        "context length",
+        "context window",
+        "exceeds the available context",
+        "too many tokens",
+        "prompt is too long",
+    )
 
     /** True when a 429 is about money rather than request rate. */
     private fun OpenAiApiError.mentionsBilling(): Boolean {

@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigS
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -88,6 +89,64 @@ class ContextFilesPromptTest {
         val block = render(listOf(File(folder.root, "gone.kt"), present))
 
         assertTrue(block.contains("kept"))
+    }
+
+    @Test
+    fun givenAFileOverTheSizeLimit_whenRendering_thenItKeepsItsStartAndEndAroundACutNotice() {
+        val half = ContextFilesPrompt.MAX_FILE_CHARS / 2
+        val text = "S" + "a".repeat(half) + "m".repeat(1_000) + "b".repeat(half) + "E"
+        val file = folder.newFile("Big.kt").apply { writeText(text) }
+
+        val block = render(listOf(file))
+
+        val head = text.take(half)
+        val tail = text.takeLast(half)
+        val notice = "…[truncated 1002 chars; call read_file on this file for the part left out]"
+        assertTrue(block.contains("=== Big.kt ===\n$head\n$notice\n$tail\n"))
+        assertFalse(block.contains("mmm"))
+    }
+
+    @Test
+    fun givenAFileAtTheSizeLimit_whenRendering_thenItIsSentWhole() {
+        val text = "a".repeat(ContextFilesPrompt.MAX_FILE_CHARS)
+
+        assertEquals(text, ContextFilesPrompt.capped(shippedConfig, text))
+    }
+
+    @Test
+    fun givenASmallerLimit_whenRendering_thenTheFileIsCutToIt() {
+        val file = folder.newFile("Mid.kt").apply { writeText("S" + "m".repeat(20_000) + "E") }
+
+        val block = runBlocking { prompt.render(listOf(file), maxFileChars = 9_000) }
+
+        assertTrue(block.contains("…[truncated 11002 chars;"))
+        assertTrue(block.contains("\nS" + "m".repeat(4_499) + "\n"))
+    }
+
+    @Test
+    fun givenFilesOverTheTotalLimit_whenAllotted_thenShortOnesGoWholeAndTheRestSplitWhatIsLeft() {
+        val limits = ContextFilesPrompt.allotted(listOf(9_000, 1_000, 9_000), maxFileChars = 50_000, maxTotalChars = 10_000)
+
+        assertEquals(listOf(4_500, 1_000, 4_500), limits)
+    }
+
+    @Test
+    fun givenFilesUnderBothLimits_whenAllotted_thenEachIsSentWhole() {
+        assertEquals(listOf(10, 20), ContextFilesPrompt.allotted(listOf(10, 20), maxFileChars = 50, maxTotalChars = 100))
+    }
+
+    @Test
+    fun givenOneLargeFileAndATotalAboveIt_whenAllotted_thenThePerFileLimitStillHolds() {
+        assertEquals(listOf(50), ContextFilesPrompt.allotted(listOf(500), maxFileChars = 50, maxTotalChars = 1_000))
+    }
+
+    @Test
+    fun givenSeveralFiles_whenRenderingUnderATotalLimit_thenEachIsCutToItsShare() {
+        val files = listOf("A.kt", "B.kt").map { name -> folder.newFile(name).apply { writeText("z".repeat(8_000)) } }
+
+        val block = runBlocking { prompt.render(files, maxFileChars = 50_000, maxTotalChars = 8_000) }
+
+        assertEquals(2, Regex("""…\[truncated 4000 chars;""").findAll(block).count())
     }
 
     private fun render(files: List<File>): String = runBlocking { prompt.render(files) }

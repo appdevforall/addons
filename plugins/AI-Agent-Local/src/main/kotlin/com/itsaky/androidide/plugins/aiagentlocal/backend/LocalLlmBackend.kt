@@ -115,6 +115,7 @@ class LocalLlmBackend(
 
     /** Renders load diagnoses as user-facing text; keeps R.string lookups out of this engine. */
     private val loadMessages by lazy { ModelLoadMessages(context.androidContext) }
+    private val errorMessages by lazy { GenerationErrorMessages(context.androidContext) }
 
     @Volatile private var modelLoaded = false
 
@@ -804,7 +805,7 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                future.complete(LlmResponse.failure("Error: ${e.message}"))
+                future.complete(LlmResponse.failure(errorMessages.describe(e)))
             }
         }
         currentGenerateJob = job
@@ -906,7 +907,7 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                callback.onError("Error: ${e.message}")
+                callback.onError(errorMessages.describe(e))
             }
         }
     }

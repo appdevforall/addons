@@ -303,7 +303,8 @@ class ChatAdapter(
                 holder.btnRetry.visibility = View.VISIBLE
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
-                if (message.sender == Sender.SYSTEM) {
+                // Only a setup notice is fixed in settings; a run error is retried (ADFA-6345).
+                if (message.isSetupError) {
                     holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_OPEN_SETTINGS, message)

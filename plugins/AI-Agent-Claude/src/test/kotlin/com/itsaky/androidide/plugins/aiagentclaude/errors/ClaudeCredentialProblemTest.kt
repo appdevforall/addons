@@ -36,6 +36,7 @@ class ClaudeCredentialProblemTest {
         val others = listOf(
             ClaudeFailure.ModelUnavailable("claude-opus-5-5"),
             ClaudeFailure.RequestTooLarge,
+            ClaudeFailure.ContextTooLong,
             ClaudeFailure.Refused,
             ClaudeFailure.RequestRejected("too long"),
             ClaudeFailure.RequestRejected(null),

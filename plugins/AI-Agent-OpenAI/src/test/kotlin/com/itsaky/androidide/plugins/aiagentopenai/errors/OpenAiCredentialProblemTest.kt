@@ -33,6 +33,7 @@ class OpenAiCredentialProblemTest {
     fun givenAFailureAboutAnythingElse_whenClassified_thenItIsNotACredentialProblem() {
         val others = listOf(
             OpenAiFailure.ModelUnavailable("gpt-5"),
+            OpenAiFailure.ContextTooLong,
             OpenAiFailure.RequestRejected("too long"),
             OpenAiFailure.RequestRejected(null),
             OpenAiFailure.ServiceUnavailable(503),
