@@ -168,4 +168,42 @@ class ApprovalTextFormatterTest {
         assertEquals("Runs in: -L dir\n\nls", text)
         assertFalse(text.contains("cd "))
     }
+
+    @Test
+    fun givenACarriageReturnHidingAPrefix_whenFormatted_thenItIsSpelledOutAndWarnedAbout() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to "rm -rf app\rls"),
+            directoryLabel = { "in $it" },
+        )
+
+        assertTrue(text.startsWith("rm -rf app<U+000D>ls"))
+        assertTrue(text.contains("invisible or control characters"))
+    }
+
+    @Test
+    fun givenBidiOverridesZeroWidthAndEscapes_whenFormatted_thenEachIsSpelledOut() {
+        val command = "echo \u202Egnp.exe\u202C \u200B\u2066x\u2069 \u001B[2K"
+
+        val text = ApprovalTextFormatter.revealHidden(command)
+
+        assertEquals("echo <U+202E>gnp.exe<U+202C> <U+200B><U+2066>x<U+2069> <U+001B>[2K", text)
+    }
+
+    @Test
+    fun givenAHiddenCharacterInTheWorkingDirectory_whenFormatted_thenItIsSpelledOutToo() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(
+                RunShellCommandHandler.ARG_COMMAND to "ls",
+                RunShellCommandHandler.ARG_WORKING_DIRECTORY to "app\u202Etset",
+            ),
+            directoryLabel = { "Runs in: $it" },
+        )
+
+        assertTrue(text.startsWith("Runs in: app<U+202E>tset\n\nls"))
+    }
+
+    @Test
+    fun givenNewlinesAndTabs_whenRevealed_thenTheyStayAsWritten() {
+        assertEquals("a\n\tb", ApprovalTextFormatter.revealHidden("a\n\tb"))
+    }
 }

@@ -17,15 +17,15 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for [ReadTerminalSessionHandler] — the tool that checks on a command
+ * Unit tests for [ReadTerminalCommandHandler] — the tool that checks on a command
  * run_shell_command left running, such as a dev server (ADFA-6339).
  */
-class ReadTerminalSessionHandlerTest {
+class ReadTerminalCommandHandlerTest {
 
     private lateinit var context: PluginContext
     private lateinit var services: ServiceRegistry
     private lateinit var terminal: IdeTerminalService
-    private lateinit var handler: ReadTerminalSessionHandler
+    private lateinit var handler: ReadTerminalCommandHandler
 
     @Before
     fun setup() {
@@ -35,51 +35,51 @@ class ReadTerminalSessionHandlerTest {
         every { context.services } returns services
         every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeTerminalService::class.java) } returns terminal
-        handler = ReadTerminalSessionHandler(context)
+        handler = ReadTerminalCommandHandler(context)
     }
 
     @Test
     fun givenNoTerminalService_whenReading_thenItFails() = runTest {
         every { services.get(IdeTerminalService::class.java) } returns null
 
-        val result = handler.execute(mapOf("session" to "AI Core 1"))
+        val result = handler.execute(mapOf("command_id" to "cmd-1"))
 
         assertFalse(result.success)
         assertTrue(result.message.contains("not available"))
     }
 
     @Test
-    fun givenNoSession_whenValidating_thenItIsRejected() = runTest {
-        assertTrue(handler.validate(mapOf("session" to " ")) is Validation.Rejected)
+    fun givenNoCommandId_whenValidating_thenItIsRejected() = runTest {
+        assertTrue(handler.validate(mapOf("command_id" to " ")) is Validation.Rejected)
     }
 
     @Test
-    fun givenASessionName_whenReading_thenTheHostGetsItTrimmed() = runTest {
-        coEvery { terminal.readSession(any()) } returns null
+    fun givenACommandId_whenReading_thenTheHostGetsItTrimmed() = runTest {
+        coEvery { terminal.readCommand(any()) } returns null
 
-        handler.execute(mapOf("session" to " AI Core 1 "))
+        handler.execute(mapOf("command_id" to " cmd-1 "))
 
-        coVerify { terminal.readSession("AI Core 1") }
+        coVerify { terminal.readCommand("cmd-1") }
     }
 
     @Test
-    fun givenARunningCommand_whenReading_thenItSaysSoWithTheOutput() = runTest {
-        coEvery { terminal.readSession(any()) } returns
-            TerminalCommandResult.Running("AI Core 1", "$ npm start\nlistening on 3000")
+    fun givenARunningCommand_whenReading_thenItSaysSoWithTheSessionAndOutput() = runTest {
+        coEvery { terminal.readCommand(any()) } returns
+            TerminalCommandResult.Running("cmd-1", "AI Core 2", "$ npm start\nlistening on 3000")
 
-        val result = handler.execute(mapOf("session" to "AI Core 1"))
+        val result = handler.execute(mapOf("command_id" to "cmd-1"))
 
         assertTrue(result.success)
-        assertTrue(result.message.contains("still running"))
+        assertTrue(result.message.contains("still running in Terminal session \"AI Core 2\""))
         assertEquals("$ npm start\nlistening on 3000", result.data)
     }
 
     @Test
     fun givenACommandThatExitedWithAnError_whenReading_thenItSucceedsWithTheCodeAndOutput() = runTest {
-        coEvery { terminal.readSession(any()) } returns
+        coEvery { terminal.readCommand(any()) } returns
             TerminalCommandResult.Completed(1, "$ npm start\nEADDRINUSE")
 
-        val result = handler.execute(mapOf("session" to "AI Core 1"))
+        val result = handler.execute(mapOf("command_id" to "cmd-1"))
 
         assertTrue(result.success)
         assertTrue(result.message.contains("exited with code 1"))
@@ -88,9 +88,9 @@ class ReadTerminalSessionHandlerTest {
 
     @Test
     fun givenACommandThatExitedCleanly_whenReading_thenItSucceedsWithTheOutput() = runTest {
-        coEvery { terminal.readSession(any()) } returns TerminalCommandResult.Completed(0, "done")
+        coEvery { terminal.readCommand(any()) } returns TerminalCommandResult.Completed(0, "done")
 
-        val result = handler.execute(mapOf("session" to "AI Core 1"))
+        val result = handler.execute(mapOf("command_id" to "cmd-1"))
 
         assertTrue(result.success)
         assertTrue(result.message.contains("exited with code 0"))
@@ -98,12 +98,23 @@ class ReadTerminalSessionHandlerTest {
     }
 
     @Test
-    fun givenAnUnknownSession_whenReading_thenItFailsNamingIt() = runTest {
-        coEvery { terminal.readSession(any()) } returns null
+    fun givenAnExitCodeTheTerminalCouldNotTell_whenReading_thenItDoesNotClaimMinusOne() = runTest {
+        coEvery { terminal.readCommand(any()) } returns TerminalCommandResult.Completed(-1, "done")
 
-        val result = handler.execute(mapOf("session" to "other 1"))
+        val result = handler.execute(mapOf("command_id" to "server"))
+
+        assertTrue(result.success)
+        assertTrue(result.message.contains("could not tell its exit code"))
+        assertFalse(result.message.contains("-1"))
+    }
+
+    @Test
+    fun givenAnUnknownCommandId_whenReading_thenItFailsNamingIt() = runTest {
+        coEvery { terminal.readCommand(any()) } returns null
+
+        val result = handler.execute(mapOf("command_id" to "cmd-9"))
 
         assertFalse(result.success)
-        assertTrue(result.message.contains("No Terminal session named \"other 1\""))
+        assertTrue(result.message.contains("No command with id \"cmd-9\""))
     }
 }

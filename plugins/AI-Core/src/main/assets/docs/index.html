@@ -113,11 +113,11 @@
       that exists. A task you just added appears after the next Gradle sync.</li>
     <li>Run a shell command or script with bash. It asks first, every time, runs it in the
       <b>Terminal</b> so you can see what ran, and reads back the exit code and
-      output. Commands reuse one Terminal session, but each runs in a fresh shell, so a
+      output. Commands reuse an idle Terminal session, but each runs in a fresh shell, so a
       <code>cd</code> or <code>export</code> does not carry over to the next command. A command still running after
-      30 seconds, such as a server, is left running, and the next command opens a
-      second session beside it; the agent can check on it later without asking, and
-      asks before stopping it, touching only its own sessions. A command starts in the project folder;
+      30 seconds, such as a server, is left running, and the next command opens
+      another session beside it; the agent can check on it later without asking, and
+      asks before stopping it, touching only its own commands. A command starts in the project folder;
       pressing Stop interrupts it.</li>
     <li>Read <b>App Logs</b> and <b>IDE Logs</b>, so it can find the exception
       behind a crash without you copying log lines into the chat. It never

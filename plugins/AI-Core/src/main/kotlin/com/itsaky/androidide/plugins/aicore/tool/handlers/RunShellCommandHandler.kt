@@ -7,7 +7,8 @@ import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
-import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalToolCall.Companion.TRACE_STAGE
+import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.SHELL_STAGE
+import com.itsaky.androidide.plugins.services.IdeTerminalService
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
 import kotlin.time.measureTimedValue
 
@@ -52,7 +53,9 @@ class RunShellCommandHandler(
         "working_dir" to ARG_WORKING_DIRECTORY,
     )
 
-    private val terminalCall = TerminalToolCall(pluginContext, toolName)
+    private val terminalCall = HostServiceCall(
+        pluginContext, toolName, IdeTerminalService::class.java, SHELL_STAGE, "Terminal",
+    )
 
     override suspend fun validate(args: Map<String, Any?>): Validation =
         ShellInvocation.from(args)?.let { Validation.Accepted(args) } ?: Validation.Rejected(NO_COMMAND)
@@ -61,13 +64,13 @@ class RunShellCommandHandler(
         val invocation = ShellInvocation.from(args) ?: return NO_COMMAND
 
         return terminalCall.run { terminal ->
-            AgentTrace.stage(TRACE_STAGE, "$toolName cwd=${invocation.workingDirectory ?: "<project root>"}")
+            AgentTrace.stage(SHELL_STAGE, "$toolName cwd=${invocation.workingDirectory ?: "<project root>"}")
             // No timeout here: the host returns Running once its wait ends. Stop sends Ctrl-C.
             val (outcome, waited) = measureTimedValue {
                 terminal.runInTerminal(invocation.command, invocation.workingDirectory)
             }
             AgentTrace.stage(
-                TRACE_STAGE,
+                SHELL_STAGE,
                 "$toolName outcome=${outcome::class.simpleName} waitedMs=${waited.inWholeMilliseconds}"
             )
             resultFor(outcome)
@@ -84,8 +87,8 @@ class RunShellCommandHandler(
             "The command has not exited and keeps running, e.g. a server, a watch task or a ping; " +
                 "the output below is what it printed so far. That is expected and the command " +
                 "succeeded: report this output. Do not run it again, and leave it running unless " +
-                "the user asks you to stop it. Its session name is what " +
-                "${ReadTerminalSessionHandler.TOOL_NAME} and ${StopTerminalSessionHandler.TOOL_NAME} " +
+                "the user asks you to stop it. Its command id is what " +
+                "${ReadTerminalCommandHandler.TOOL_NAME} and ${StopTerminalCommandHandler.TOOL_NAME} " +
                 "take. Another command runs in a separate Terminal session meanwhile."
 
         private val NO_COMMAND = ToolResult.failure(
@@ -101,11 +104,12 @@ class RunShellCommandHandler(
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
         internal fun resultFor(outcome: TerminalCommandResult): ToolResult = when (outcome) {
             is TerminalCommandResult.Completed -> ToolResult.success(
-                message = "Command exited with code ${outcome.exitCode}",
+                message = "Command ${TerminalOutput.exitOf(outcome.exitCode)}",
                 data = TerminalOutput.tailOf(outcome.output)
             )
             is TerminalCommandResult.Running -> ToolResult.success(
-                message = "Command is still running in Terminal session \"${outcome.sessionName}\"",
+                message = "Command is still running in Terminal session \"${outcome.sessionName}\" " +
+                    "with command id \"${outcome.commandId}\"",
                 data = "$STILL_RUNNING_NOTE\n\n${TerminalOutput.tailOf(outcome.output)}"
             )
             is TerminalCommandResult.NotStarted -> ToolResult.failure(

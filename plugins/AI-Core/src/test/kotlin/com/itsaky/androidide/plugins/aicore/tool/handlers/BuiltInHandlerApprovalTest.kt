@@ -25,7 +25,7 @@ class BuiltInHandlerApprovalTest {
             "gradle_sync",
             "run_gradle_task",
             "run_shell_command",
-            "stop_terminal_session",
+            "stop_terminal_command",
             "generate_from_template",
         )
 
@@ -48,7 +48,7 @@ class BuiltInHandlerApprovalTest {
             "read_app_logs",
             "read_ide_logs",
             // Output of a command the user already approved; the host reads only the agent's sessions.
-            "read_terminal_session",
+            "read_terminal_command",
         )
 
         /** Built-ins that reach a host the model chose, so the user sees where before it happens. */

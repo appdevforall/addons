@@ -44,6 +44,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Tool-protocol tracing, under the tag suffix `ai-core` uses for the other half of the same run:
@@ -117,11 +118,10 @@ class OpenAiBackend(
     private var currentJob: Job? = null
 
     /**
-     * The server and model that answered a tool declaration with a refusal, so the next turn does
+     * Every server and model that answered a tool declaration with a refusal, so a later turn does
      * not pay the same round trip. Keyed by both: one model refusing tools says nothing of the next.
      */
-    @Volatile
-    private var toolsRejectedBy: ServerModel? = null
+    private val toolsRejectedBy: MutableSet<ServerModel> = ConcurrentHashMap.newKeySet()
 
     /**
      * Vector length this server actually returned, as (embedding model -> dimensions).
@@ -850,7 +850,7 @@ class OpenAiBackend(
         attempt: suspend (List<ToolDefinition>) -> Unit
     ) {
         val target = ServerModel(getBaseUrl(), getModelName())
-        if (tools.isEmpty() || toolsRejectedBy == target) {
+        if (tools.isEmpty() || target in toolsRejectedBy) {
             attempt(emptyList())
             return
         }
@@ -860,20 +860,22 @@ class OpenAiBackend(
             throw e
         } catch (e: OpenAiHttpException) {
             if (!UnsupportedTools.rejectedIn(e.statusCode, e.body)) throw e
-            toolsRejectedBy = target
+            toolsRejectedBy.add(target)
             // The body names what was refused; without it a refused model and a refused schema look alike.
             Log.w(
                 TAG,
                 "REQUEST | ${target.model} refused a tool declaration; retrying with none | " +
                     e.body.orEmpty().take(REFUSAL_BODY_PREVIEW_CHARS)
             )
+            // The toast sends the user here, so this line carries what the server named too.
             context.logger.warn(
-                "OpenAiBackend: ${target.model} on ${target.baseUrl} does not accept tool " +
-                    "declarations; the agent cannot call tools with it"
+                "OpenAiBackend: ${target.model} on ${target.baseUrl} refused the tool " +
+                    "declarations; the agent cannot call tools with it | " +
+                    e.body.orEmpty().take(REFUSAL_BODY_PREVIEW_CHARS)
             )
             // Said out loud, not only logged: from here the agent answers but never touches the
             // project, which reads as the tools being broken. Once per server and model, since
-            // the flag above short-circuits every later turn.
+            // the set above short-circuits every later turn.
             notifyToolsUnsupported(target)
             attempt(emptyList())
         }

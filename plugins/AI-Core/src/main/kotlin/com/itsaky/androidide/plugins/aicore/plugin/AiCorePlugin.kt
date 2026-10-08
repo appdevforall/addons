@@ -76,6 +76,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_APPROVAL_DECLINE = "agent_approval_decline"
         const val TOOLTIP_TAG_APPROVAL_CORRECTION_INPUT = "agent_approval_correction_input"
         const val TOOLTIP_TAG_APPROVAL_RUN_NOW = "agent_approval_run_now"
+        /** Run Now under a shell command, which is shown uncut and is never granted for the session. */
+        const val TOOLTIP_TAG_APPROVAL_RUN_COMMAND = "agent_approval_run_command"
         const val TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW = "agent_approval_always_allow"
 
         // Tags for the controls rendered inside chat messages (see ChatAdapter).
@@ -613,7 +615,24 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 shortened for readability, so a long path or snippet may be cut —
                 the full value is what actually runs.</p>
                 <p>You'll be asked again the next time this tool is used, unless
-                you choose <b>Always Allow</b>.</p>
+                you choose <b>Always Allow</b> where the dialog offers it.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_RUN_COMMAND,
+            summary = "Run this shell command once, exactly as shown above.",
+            detail = """
+                <p>Runs the command in a Terminal session, in the project folder
+                unless a working directory is named above it. The command is shown
+                in full, never shortened: what you read is what runs. Invisible or
+                control characters are shown as <code>&lt;U+XXXX&gt;</code> codes so
+                they cannot hide part of it.</p>
+                <p>A shell command can change or delete any file in your project,
+                so read it before you tap. You'll be asked again for every command;
+                there is no <b>Always Allow</b> for the shell.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)

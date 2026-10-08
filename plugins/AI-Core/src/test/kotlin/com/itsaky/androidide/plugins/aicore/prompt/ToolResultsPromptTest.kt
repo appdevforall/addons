@@ -5,7 +5,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedWith
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
-import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalSessionHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
@@ -179,7 +179,7 @@ class ToolResultsPromptTest {
     @Test
     fun givenAStillRunningCommandWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
         val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "listening on 3000"
-        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Running("AI Core 1", output))
+        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
 
         val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
@@ -198,11 +198,11 @@ class ToolResultsPromptTest {
     }
 
     @Test
-    fun givenASessionReadWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
+    fun givenACommandReadWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
         val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "GET / 200"
-        val result = ReadTerminalSessionHandler(mockk(relaxed = true)).resultFor("AI Core 1", TerminalCommandResult.Running("AI Core 1", output))
+        val result = ReadTerminalCommandHandler(mockk(relaxed = true)).resultFor("cmd-1", TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
 
-        val turn = render(listOf(ToolCall(ReadTerminalSessionHandler.TOOL_NAME, emptyMap())), listOf(result))
+        val turn = render(listOf(ToolCall(ReadTerminalCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
         assertTrue(turn.contains("GET / 200\n</tool_response>"))
     }

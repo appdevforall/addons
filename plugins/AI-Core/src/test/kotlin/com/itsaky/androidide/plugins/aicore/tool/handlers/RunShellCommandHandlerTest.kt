@@ -115,12 +115,13 @@ class RunShellCommandHandlerTest {
 
     @Test
     fun givenACommandStillRunning_whenRunning_thenItSucceedsAndSaysToLeaveItRunning() = runTest {
-        answerWith(TerminalCommandResult.Running("AI Core 1", "$ npm start\nlistening on 3000"))
+        answerWith(TerminalCommandResult.Running("cmd-1", "AI Core 1", "$ npm start\nlistening on 3000"))
 
         val result = handler.execute(mapOf("command" to "npm start"))
 
         assertTrue(result.success)
         assertTrue(result.message.contains("still running in Terminal session \"AI Core 1\""))
+        assertTrue(result.message.contains("command id \"cmd-1\""))
         assertTrue(result.data!!.contains("Do not run it again"))
         assertTrue(result.data!!.contains("leave it running unless the user asks you to stop it"))
         assertTrue(result.data!!.endsWith("listening on 3000"))

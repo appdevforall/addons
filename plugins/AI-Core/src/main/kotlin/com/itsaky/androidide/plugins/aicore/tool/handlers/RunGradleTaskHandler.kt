@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
+import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import com.itsaky.androidide.plugins.services.GradleTaskResult
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import kotlinx.coroutines.CancellationException
@@ -25,9 +26,13 @@ import kotlin.coroutines.resumeWithException
  * the slice worth reading comes back with the result, so a test run reports its failures at once.
  */
 class RunGradleTaskHandler(
-    private val pluginContext: PluginContext,
+    pluginContext: PluginContext,
 ) : ToolHandler {
     override val toolName = "run_gradle_task"
+
+    private val buildCall = HostServiceCall(
+        pluginContext, toolName, IdeBuildService::class.java, BUILD_STAGE, "Build",
+    )
 
     // Starts a real build, like run_app and gradle_sync, and the arguments are the model's choice.
     override val requiresApproval = true
@@ -58,17 +63,8 @@ class RunGradleTaskHandler(
         if (invocation.tasks.isEmpty()) return NO_TASKS
         val label = invocation.tasks.joinToString(" ")
 
-        return try {
-            val buildService = pluginContext.services.get(IdeBuildService::class.java)
-            if (buildService == null) {
-                AgentTrace.refusal("BUILD", "$toolName rejected", "IdeBuildService not available")
-                return ToolResult.failure(
-                    "Build service not available",
-                    "The IDE build service is not available."
-                )
-            }
-
-            AgentTrace.stage("BUILD", "$toolName tasks=$label args=${invocation.arguments}")
+        return buildCall.run { buildService ->
+            AgentTrace.stage(BUILD_STAGE, "$toolName tasks=$label args=${invocation.arguments}")
             val startMs = System.currentTimeMillis()
             val future = buildService.executeTasks(invocation.tasks, invocation.arguments)
             val outcome = try {
@@ -85,7 +81,7 @@ class RunGradleTaskHandler(
             } catch (ce: CancellationException) {
                 // Stop pressed while the build runs: the agent started it, so the agent ends it.
                 if (!future.isDone) {
-                    AgentTrace.stage("BUILD", "$toolName stopped; cancelling the build")
+                    AgentTrace.stage(BUILD_STAGE, "$toolName stopped; cancelling the build")
                     buildService.cancelBuild()
                 }
                 throw ce
@@ -94,29 +90,19 @@ class RunGradleTaskHandler(
 
             if (outcome == null) {
                 AgentTrace.refusal(
-                    "BUILD",
+                    BUILD_STAGE,
                     "$toolName timed out waitedMs=$waitedMs",
                     "no result within ${BUILD_TIMEOUT_MS / 1000}s; the build may still be running"
                 )
-                return ToolResult.failure(
+                return@run ToolResult.failure(
                     "Gradle task still running",
                     "$label did not finish within 10 minutes and may still be running. " +
                         "Call read_build_output to see how far it got."
                 )
             }
 
-            AgentTrace.stage("BUILD", "$toolName outcome=$outcome waitedMs=$waitedMs")
+            AgentTrace.stage(BUILD_STAGE, "$toolName outcome=$outcome waitedMs=$waitedMs")
             resultFor(label, outcome, buildService.getBuildOutput())
-        } catch (ce: CancellationException) {
-            // An Exception on the JVM, so the catch below would report Stop as a task failure.
-            throw ce
-        } catch (e: Exception) {
-            AgentTrace.refusal("BUILD", "$toolName failed", e.toString())
-            pluginContext.logger.error("$toolName failed", e)
-            ToolResult.failure(
-                "Error: ${e.javaClass.simpleName}",
-                "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"
-            )
         }
     }
 
@@ -125,7 +111,7 @@ class RunGradleTaskHandler(
         while (true) {
             delay(BUILD_PROGRESS_LOG_INTERVAL_MS)
             val seconds = (System.currentTimeMillis() - startMs) / 1000
-            AgentTrace.detail("BUILD", "$toolName still waiting elapsed=${seconds}s")
+            AgentTrace.detail(BUILD_STAGE, "$toolName still waiting elapsed=${seconds}s")
         }
     }
 
