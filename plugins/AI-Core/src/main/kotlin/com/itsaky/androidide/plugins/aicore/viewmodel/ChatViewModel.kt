@@ -317,6 +317,14 @@ class ChatViewModel(
     @Volatile
     private var lastToolFailedThisRun = false
 
+    /** Whether the next turn answers a request to finish after a prose answer; read once. */
+    @Volatile
+    private var askedToFinishAfterProse = false
+
+    /** Whether the latest prose turn left answer text on screen, not only thinking or a fallback. */
+    @Volatile
+    private var proseTurnShowedAnswer = false
+
     /**
      * The transcript row this run rewrites in place as each tool starts, closed as a one-line
      * summary when the run ends; null before the run's first tool. Main thread only.
@@ -960,6 +968,8 @@ class ChatViewModel(
         AgentTrace.beginRun(currentBackendId, userMessage, runFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
+        askedToFinishAfterProse = false
+        proseTurnShowedAnswer = false
         activityMessageId = null
         runToolNames.clear()
         runToolLog.clear()
@@ -1067,7 +1077,8 @@ class ChatViewModel(
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
                         requiredTool = requiredTool,
-                        events = AgentRunReporter(runNotices),
+                        // Only a prose turn that showed an answer has one a recap could repeat.
+                        events = AgentRunReporter(runNotices) { askedToFinishAfterProse = proseTurnShowedAnswer },
                     )
                     if (loopResult.completed && generationEpoch.get() == epoch) {
                         runCodeReply?.let { draft -> reviewAnswer(llmService, userMessage, draft, history, epoch) }
@@ -1531,8 +1542,10 @@ class ChatViewModel(
                     }
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
+                    val recapsShownAnswer = askedToFinishAfterProse.also { askedToFinishAfterProse = false }
 
-                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL)) {
+                    // A recap of the prose answer already on screen would show the answer twice.
+                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL, recapsShownAnswer, lastToolFailed)) {
                         viewModelScope.launch(Dispatchers.Main) {
                             removeMessageFromSession(agentMessageId)
                         }
@@ -1549,6 +1562,8 @@ class ChatViewModel(
                         noResponseText = str(R.string.agent_no_response),
                         unparsedReplyText = { str(unparsedReplyMessage(it)) },
                     )
+                    proseTurnShowedAnswer = toolCalls.isEmpty() &&
+                        AgentReplyRenderer.showsAnswer(displayText, str(R.string.agent_no_response))
                     if (AnswerReview.holdsCode(displayText)) {
                         runCodeReply = CodeReply(agentMessageId, displayText, reply.historyText)
                     }

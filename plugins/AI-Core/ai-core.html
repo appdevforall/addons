@@ -62,8 +62,8 @@
   <ul>
     <li><b>Agent chat</b> — a conversational editor tab that can read and edit
       project files, add dependencies, run a Gradle sync, list and run any Gradle
-      task (tests, lint, clean, your own) and launch the app, with every file-changing action
-      gated behind an approval dialog.</li>
+      task (tests, lint, clean, your own), run a shell command in the Terminal and
+      launch the app, with every file-changing action gated behind an approval dialog.</li>
     <li><b>Agent settings</b> — one screen to pick the backend and configure it;
       each backend contributes its own portion of that screen.</li>
     <li><b>Web search</b> — the agent always has <code>web_search</code> (the
@@ -140,10 +140,11 @@
   <p>AI Core declares <b>filesystem.read</b>, <b>filesystem.write</b>,
   <b>system.commands</b> and <b>project.structure</b> — the agent reads and edits
   files in the open project, triggers Gradle sync, Gradle tasks and run through
-  the IDE's own build service, and inspects the project's module structure. It declares
-  <b>no network access and loads no native code</b>: those belong to the backend
-  plugin that serves a given request, so a device using only the local backend
-  never grants a network-capable AI plugin. The same holds for tools another
+  the IDE's own build service, runs shell commands in the IDE's Terminal, and
+  inspects the project's module structure. It also declares
+  <b>network.access</b>, for <code>fetch_url</code>, which reads a page or file only
+  after you approve it. It <b>loads no native code</b>: that belongs to the backend
+  plugin that serves a given request. The same holds for tools another
   plugin contributes — they run inside the contributing plugin, under the
   permissions <i>it</i> declared, which is why the approval dialog names the
   plugin a tool came from.</p>
@@ -158,7 +159,7 @@
       enter a Gemini API key. The same screen is reachable from the Agent tab.</li>
     <li>Open a project and switch to the <b>Agent</b> tab to start chatting. Any
       action that changes a file asks for your approval first, as does starting a
-      Gradle sync or task, or generating from a template. Only reads run unprompted.</li>
+      Gradle sync or task, running a shell command, or generating from a template. Only reads run unprompted.</li>
     <li><i>Optional:</i> install a tool provider such as <b>AI Agent MCP</b> to
       give the agent tools beyond its own. Its tools appear in the agent's tool
       list once configured, and each asks for approval naming the plugin it came
@@ -175,11 +176,10 @@
     <li><b>One router, many plugins</b> — a single inference service shared
       across all AI features, so backend and model choice are configured once.</li>
     <li><b>Install only what you need</b> — a device that only ever uses the
-      cloud backend need not carry an 8&nbsp;MB native library, and one that never
-      goes online need not carry a network-capable plugin at all.</li>
-    <li><b>Least privilege</b> — network access, filesystem access and native
-      code are declared by the specific backend that needs them, so what a user
-      grants matches what they installed.</li>
+      cloud backend need not carry an 8&nbsp;MB native library.</li>
+    <li><b>Least privilege</b> — native code and a provider's API access are
+      declared by the specific backend that needs them, so what a user grants
+      matches what they installed.</li>
     <li><b>Extensible in two directions</b> — a new model provider is a new
       backend plugin, and a new agent capability is a new tool source. Neither
       requires a change to AI Core or to any consumer plugin.</li>

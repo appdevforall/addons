@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import android.app.Dialog
+import android.content.res.Resources
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -11,16 +12,16 @@ import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.R
+import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalResult
-import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 
 /**
- * Dialog for approving tool execution; for an edit, a real review step — a before/after block with
- * **Accept / Correct / Decline** and no blanket "Always Allow". Decisions go to [Host], resolved
- * from [getParentFragment] each time, since a captured callback dies on recreation.
+ * Dialog for approving tool execution; for an edit, a before/after block with **Accept / Correct /
+ * Decline**. "Always Allow" shows only when the request allows a session grant. Decisions go
+ * to [Host], resolved from [getParentFragment] each time, since a captured callback dies on recreation.
  */
 class ApprovalDialogFragment : DialogFragment() {
 
@@ -57,15 +58,17 @@ class ApprovalDialogFragment : DialogFragment() {
         private const val ARG_SOURCE = "source"
         private const val ARG_DESCRIPTION = "description"
         private const val ARG_ARGS = "args"
-        private const val ARG_IS_EDIT = "is_edit"
+        private const val ARG_PREVIEW = "preview"
+        private const val ARG_ALLOWS_ALWAYS_ALLOW = "allows_always_allow"
 
         /**
          * Builds the dialog. Everything it needs is in [getArguments], so the framework can
          * recreate it after a configuration change without losing the decision channel.
          * @param request the pending approval to render.
+         * @param resources words the labels inside the formatted arguments.
          */
-        fun newInstance(request: ApprovalRequest): ApprovalDialogFragment {
-            val isEdit = request.toolName == EditFileHandler.TOOL_NAME
+        fun newInstance(request: ApprovalRequest, resources: Resources): ApprovalDialogFragment {
+            val preview = request.preview
             return ApprovalDialogFragment().apply {
                 arguments = Bundle().apply {
                     // The registered name, not the provider's: it is the tool that will actually
@@ -77,12 +80,9 @@ class ApprovalDialogFragment : DialogFragment() {
                     )
                     putString(ARG_SOURCE, request.sourceLabel)
                     putString(ARG_DESCRIPTION, request.description)
-                    putBoolean(ARG_IS_EDIT, isEdit)
-                    putString(
-                        ARG_ARGS,
-                        if (isEdit) ApprovalTextFormatter.formatEdit(request.args)
-                        else ApprovalTextFormatter.formatArgs(request.args)
-                    )
+                    putString(ARG_PREVIEW, preview.name)
+                    putString(ARG_ARGS, ApprovalPresentation.format(preview, request.args, resources))
+                    putBoolean(ARG_ALLOWS_ALWAYS_ALLOW, request.allowsSessionApproval)
                 }
             }
         }
@@ -94,7 +94,9 @@ class ApprovalDialogFragment : DialogFragment() {
         val source = arguments?.getString(ARG_SOURCE)
         val description = arguments?.getString(ARG_DESCRIPTION) ?: ""
         val argsText = arguments?.getString(ARG_ARGS) ?: "{}"
-        val isEdit = arguments?.getBoolean(ARG_IS_EDIT) == true
+        val preview = ApprovalPresentation.named(arguments?.getString(ARG_PREVIEW))
+        val isEdit = preview == ApprovalPreview.EDIT
+        val allowsAlwaysAllow = arguments?.getBoolean(ARG_ALLOWS_ALWAYS_ALLOW) ?: false
 
         val message = buildString {
             append(getString(R.string.approval_header))
@@ -114,7 +116,7 @@ class ApprovalDialogFragment : DialogFragment() {
             }
             append(description)
             append("\n\n")
-            append(getString(if (isEdit) R.string.approval_proposed_change else R.string.approval_args))
+            append(getString(ApprovalPresentation.argsLabel(preview)))
             append("\n")
             append(argsText)
         }
@@ -142,9 +144,11 @@ class ApprovalDialogFragment : DialogFragment() {
                 decide(ApprovalResult.APPROVED_ONCE)
                 dismiss()
             }
-            builder.setNeutralButton(getString(R.string.approval_always_allow)) { _, _ ->
-                decide(ApprovalResult.APPROVED_FOR_SESSION)
-                dismiss()
+            if (allowsAlwaysAllow) {
+                builder.setNeutralButton(getString(R.string.approval_always_allow)) { _, _ ->
+                    decide(ApprovalResult.APPROVED_FOR_SESSION)
+                    dismiss()
+                }
             }
         }
 
@@ -160,8 +164,11 @@ class ApprovalDialogFragment : DialogFragment() {
             // Long-press help on the consent gate: which button actually writes to the project.
             wireTooltip(
                 dialog.getButton(Dialog.BUTTON_POSITIVE),
-                if (isEdit) AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
-                else AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW,
+                when (preview) {
+                    ApprovalPreview.EDIT -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
+                    ApprovalPreview.SHELL_COMMAND -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_COMMAND
+                    ApprovalPreview.ARGS -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW
+                },
             )
             wireTooltip(
                 dialog.getButton(Dialog.BUTTON_NEUTRAL),

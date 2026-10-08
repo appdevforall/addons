@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ShellInvocation
 import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import org.json.JSONObject
 
@@ -16,6 +17,17 @@ object ApprovalTextFormatter {
 
     /** Per-side cap in the edit preview; long enough for a real hunk, short enough to read. */
     private const val MAX_SNIPPET_CHARS = 600
+
+    /** Unicode categories that draw nothing: bidi overrides and zero-width marks, line and paragraph breaks. */
+    private val HIDDEN_TYPES = setOf(
+        Character.FORMAT,
+        Character.LINE_SEPARATOR,
+        Character.PARAGRAPH_SEPARATOR,
+    )
+
+    private const val HIDDEN_CHARACTERS_WARNING =
+        "⚠ This command contains invisible or control characters, shown as <U+XXXX>. " +
+            "They will be sent to the shell as they are. Decline unless you know why they are there."
 
     /**
      * Renders the proposed edit as a diff-style before/after block.
@@ -45,6 +57,41 @@ object ApprovalTextFormatter {
                 append("⚠ Applies to every occurrence in the file.")
             }
         }
+    }
+
+    /**
+     * Renders a shell command uncut, since a hidden line would still run, with every invisible or
+     * control character spelled as `<U+XXXX>` so the text read is the text run. A working directory,
+     * when given, goes above the command as a label.
+     * @param args the `run_shell_command` call arguments.
+     * @param directoryLabel words the line naming the working directory.
+     * @return the command text.
+     */
+    fun formatShellCommand(args: Map<String, Any?>, directoryLabel: (String) -> String): String {
+        val invocation = ShellInvocation.from(args) ?: return ""
+        val command = revealHidden(invocation.command)
+        val directory = invocation.workingDirectory?.let(::revealHidden)
+        val shown = directory?.let { "${directoryLabel(it)}\n\n$command" } ?: command
+        if (command == invocation.command && directory == invocation.workingDirectory) return shown
+        return "$shown\n\n$HIDDEN_CHARACTERS_WARNING"
+    }
+
+    /**
+     * Spells out each code point that draws nothing or moves the cursor: `\r`, ESC and other
+     * controls, bidi overrides, zero-width marks. Newlines and tabs stay, as they show as themselves.
+     * @param text the model-written text.
+     * @return [text], with each such code point replaced by `<U+XXXX>`.
+     */
+    internal fun revealHidden(text: String): String = buildString {
+        text.codePoints().forEach { codePoint ->
+            if (isHidden(codePoint)) append("<U+%04X>".format(codePoint)) else appendCodePoint(codePoint)
+        }
+    }
+
+    private fun isHidden(codePoint: Int): Boolean = when {
+        codePoint == '\n'.code || codePoint == '\t'.code -> false
+        Character.isISOControl(codePoint) -> true
+        else -> Character.getType(codePoint).toByte() in HIDDEN_TYPES
     }
 
     /**

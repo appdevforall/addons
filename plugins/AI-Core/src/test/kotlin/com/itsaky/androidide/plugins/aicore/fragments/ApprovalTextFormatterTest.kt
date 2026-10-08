@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -140,5 +141,69 @@ class ApprovalTextFormatterTest {
         val text = ApprovalTextFormatter.formatArgs(mapOf("directory" to null))
 
         assertTrue(text.contains("directory"))
+    }
+
+    @Test
+    fun givenALongMultiLineScript_whenFormatted_thenEveryLineIsShownAsWritten() {
+        val script = (1..50).joinToString("\n") { "echo \"line $it\"" }
+
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to script),
+            directoryLabel = { "in $it" },
+        )
+
+        assertEquals(script, text)
+    }
+
+    @Test
+    fun givenAWorkingDirectory_whenFormatted_thenItIsLabelledAboveTheCommandAsWritten() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(
+                RunShellCommandHandler.ARG_COMMAND to "ls",
+                RunShellCommandHandler.ARG_WORKING_DIRECTORY to " -L dir ",
+            ),
+            directoryLabel = { "Runs in: $it" },
+        )
+
+        assertEquals("Runs in: -L dir\n\nls", text)
+        assertFalse(text.contains("cd "))
+    }
+
+    @Test
+    fun givenACarriageReturnHidingAPrefix_whenFormatted_thenItIsSpelledOutAndWarnedAbout() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to "rm -rf app\rls"),
+            directoryLabel = { "in $it" },
+        )
+
+        assertTrue(text.startsWith("rm -rf app<U+000D>ls"))
+        assertTrue(text.contains("invisible or control characters"))
+    }
+
+    @Test
+    fun givenBidiOverridesZeroWidthAndEscapes_whenFormatted_thenEachIsSpelledOut() {
+        val command = "echo \u202Egnp.exe\u202C \u200B\u2066x\u2069 \u001B[2K"
+
+        val text = ApprovalTextFormatter.revealHidden(command)
+
+        assertEquals("echo <U+202E>gnp.exe<U+202C> <U+200B><U+2066>x<U+2069> <U+001B>[2K", text)
+    }
+
+    @Test
+    fun givenAHiddenCharacterInTheWorkingDirectory_whenFormatted_thenItIsSpelledOutToo() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(
+                RunShellCommandHandler.ARG_COMMAND to "ls",
+                RunShellCommandHandler.ARG_WORKING_DIRECTORY to "app\u202Etset",
+            ),
+            directoryLabel = { "Runs in: $it" },
+        )
+
+        assertTrue(text.startsWith("Runs in: app<U+202E>tset\n\nls"))
+    }
+
+    @Test
+    fun givenNewlinesAndTabs_whenRevealed_thenTheyStayAsWritten() {
+        assertEquals("a\n\tb", ApprovalTextFormatter.revealHidden("a\n\tb"))
     }
 }

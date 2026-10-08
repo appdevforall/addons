@@ -7,7 +7,7 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
  * [AgentLoop] builds one per run and asks it about every batch before running it, so the loop
  * orchestrates turns and this decides what counts as progress.
  *
- * @param maxConsecutiveRepeats identical unsuccessful batches, or successful log re-reads, tolerated
+ * @param maxConsecutiveRepeats identical unsuccessful batches, or live re-reads answering alike, tolerated
  *   back to back.
  * @param maxTurnsWithoutProgress turns tolerated introducing no batch the run has not already run.
  * @param pathsOf the project paths one call names, whether it reads them or rewrites them.
@@ -47,10 +47,15 @@ internal class ToolCallProgressGuard(
     // file back and forth still runs out of novelty.
     private val changingSignatures = mutableSetOf<String>()
     private var currentBatchPaths = emptySet<String>()
-    private var currentBatchWrites = emptySet<String>()
+    // Null when a changing call names no path, so nothing narrows which reads it invalidates.
+    private var currentBatchWrites: Set<String>? = emptySet()
     private var currentBatchChanges = false
     private var currentBatchIsNew = false
     private var currentBatchRereadsLive = false
+    private var currentSignature = ""
+
+    // What each live re-read last answered, so a poll whose answer moved counts as progress.
+    private val liveAnswers = mutableMapOf<String, List<ToolResult>>()
 
     // Null until a batch has run: "no tools yet" and "the tools failed" end a run differently.
     private var previousBatchSucceeded: Boolean? = null
@@ -68,8 +73,10 @@ internal class ToolCallProgressGuard(
      */
     fun inspect(calls: List<ToolCall>): Verdict {
         val signature = signatureOf(calls)
+        currentSignature = signature
         currentBatchPaths = pathsNamedBy(calls)
-        currentBatchWrites = pathsNamedBy(calls.filter(changesPaths))
+        val writes = calls.filter(changesPaths).map { pathsNamedBy(listOf(it)) }
+        currentBatchWrites = writes.takeIf { it.none(Set<String>::isEmpty) }?.flatten()?.toSet()
         currentBatchChanges = calls.any(changesPaths)
         currentBatchRereadsLive = calls.all { it.name in LIVE_READS }
         val verdict = verdictFor(signature)
@@ -86,14 +93,22 @@ internal class ToolCallProgressGuard(
      */
     fun recordResults(results: List<ToolResult>) {
         previousBatchSucceeded = results.isNotEmpty() && results.all { it.success }
+        // Polling a build that is still printing is watching it move, not going round in circles;
+        // an answer that stopped changing still counts toward both limits.
+        if (previousBatchSucceeded == true && currentBatchRereadsLive &&
+            liveAnswers.put(currentSignature, results) != results
+        ) {
+            consecutiveRepeats = 0
+            turnsWithoutNewSignature = 0
+        }
         // A change the run had not made before makes an earlier look at the paths it rewrote a new
         // action again, so a run that edits and then verifies is not judged as going in circles.
-        // A change whose handler names no path invalidates every read: there is no way to tell
-        // which ones it stood for.
+        // A change whose handler names no path, such as a shell command, invalidates every read: there
+        // is no way to tell which ones it stood for, even beside an edit that names one.
         if (previousBatchSucceeded != true || !currentBatchIsNew || !currentBatchChanges) return
         val invalidated = seenSignatures.filter { (seen, paths) ->
             seen !in changingSignatures &&
-                (currentBatchWrites.isEmpty() || paths.any { it in currentBatchWrites })
+                (currentBatchWrites?.let { writes -> paths.any { it in writes } } ?: true)
         }
         seenSignatures.keys.removeAll(invalidated.keys)
     }
@@ -138,6 +153,6 @@ internal class ToolCallProgressGuard(
 
     private companion object {
         /** Reads whose answer changes between calls, so re-issuing one does not mean the work is done. */
-        val LIVE_READS = setOf("read_app_logs", "read_ide_logs")
+        val LIVE_READS = setOf("read_app_logs", "read_ide_logs", "read_terminal_command")
     }
 }

@@ -70,6 +70,10 @@ interface ToolHandler {
     val allowsSessionApproval: Boolean
         get() = true
 
+    /** How the approval dialog shows this tool's arguments. */
+    val approvalPreview: ApprovalPreview
+        get() = ApprovalPreview.ARGS
+
     /**
      * Arg keys whose values are filesystem paths. The Executor verifies each of
      * these resolves within the project root before the tool runs, so no handler
@@ -80,6 +84,13 @@ interface ToolHandler {
 
     val resolvesPathsInternally: Boolean
         get() = false
+
+    /**
+     * The [pathArgs] keys naming what a call reads or writes, for the progress guard. All of them by
+     * default; a shell command's working directory is where it runs, not what it touches.
+     */
+    val trackedPathArgs: List<String>
+        get() = pathArgs
 
     /**
      * Values a [pathArgs] key falls back to when the call omits it, keyed the same way. Declared

@@ -44,6 +44,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Tool-protocol tracing, under the tag suffix `ai-core` uses for the other half of the same run:
@@ -53,6 +54,12 @@ import org.json.JSONObject
  * only a `[pluginId]` prefix — unfilterable, and so absent from a captured log of an agent run.
  */
 private const val TAG = "$LOG_PREFIX.AgentTrace"
+
+/** How much of a refusal's body the trace keeps: enough for the field and the reason it names. */
+private const val REFUSAL_BODY_PREVIEW_CHARS = 500
+
+/** One model on one server, the unit a tool refusal is remembered for. */
+private data class ServerModel(val baseUrl: String, val model: String)
 
 /**
  * OpenAI-compatible backend: one transport for every server that speaks `chat/completions`.
@@ -111,11 +118,10 @@ class OpenAiBackend(
     private var currentJob: Job? = null
 
     /**
-     * Base URL that answered a tool declaration with a refusal, so the next turn does not pay the
-     * same round trip. Keyed by the URL itself, so pointing the setting elsewhere re-probes.
+     * Every server and model that answered a tool declaration with a refusal, so a later turn does
+     * not pay the same round trip. Keyed by both: one model refusing tools says nothing of the next.
      */
-    @Volatile
-    private var toolsRejectedBy: String? = null
+    private val toolsRejectedBy: MutableSet<ServerModel> = ConcurrentHashMap.newKeySet()
 
     /**
      * Vector length this server actually returned, as (embedding model -> dimensions).
@@ -829,7 +835,8 @@ class OpenAiBackend(
      * Run [attempt] with [tools] declared and, if this server refuses a tool declaration, run it
      * once more with none.
      *
-     * The refusal is remembered per server so only the first turn pays for it. What it costs is
+     * The refusal is remembered per server and model so only the first turn pays for it, and
+     * picking another model tries tools again. What it costs is
      * real: the system prompt for this run was built for native calling, so it teaches no envelope
      * and the model has no other way to reach a tool — the turn answers in prose. Servers that
      * take `tools` are the overwhelming majority, and this keeps the rest chatting rather than
@@ -842,8 +849,8 @@ class OpenAiBackend(
         tools: List<ToolDefinition>,
         attempt: suspend (List<ToolDefinition>) -> Unit
     ) {
-        val baseUrl = getBaseUrl()
-        if (tools.isEmpty() || toolsRejectedBy == baseUrl) {
+        val target = ServerModel(getBaseUrl(), getModelName())
+        if (tools.isEmpty() || target in toolsRejectedBy) {
             attempt(emptyList())
             return
         }
@@ -853,16 +860,23 @@ class OpenAiBackend(
             throw e
         } catch (e: OpenAiHttpException) {
             if (!UnsupportedTools.rejectedIn(e.statusCode, e.body)) throw e
-            toolsRejectedBy = baseUrl
-            Log.w(TAG, "REQUEST | server refused a tool declaration; retrying with none")
+            toolsRejectedBy.add(target)
+            // The body names what was refused; without it a refused model and a refused schema look alike.
+            Log.w(
+                TAG,
+                "REQUEST | ${target.model} refused a tool declaration; retrying with none | " +
+                    e.body.orEmpty().take(REFUSAL_BODY_PREVIEW_CHARS)
+            )
+            // The toast sends the user here, so this line carries what the server named too.
             context.logger.warn(
-                "OpenAiBackend: $baseUrl does not accept tool declarations; " +
-                    "the agent cannot call tools on this server"
+                "OpenAiBackend: ${target.model} on ${target.baseUrl} refused the tool " +
+                    "declarations; the agent cannot call tools with it | " +
+                    e.body.orEmpty().take(REFUSAL_BODY_PREVIEW_CHARS)
             )
             // Said out loud, not only logged: from here the agent answers but never touches the
-            // project, which reads as the tools being broken. Once per server, since the flag
-            // above short-circuits every later turn.
-            notifyToolsUnsupported(baseUrl)
+            // project, which reads as the tools being broken. Once per server and model, since
+            // the set above short-circuits every later turn.
+            notifyToolsUnsupported(target)
             attempt(emptyList())
         }
     }
@@ -871,11 +885,11 @@ class OpenAiBackend(
      * Tells the user this server cannot call tools, as a Toast: the run continues, so there is no
      * error message to carry it, and the chat's own turn is an ordinary prose answer.
      *
-     * @param baseUrl the server that refused, named in the message.
+     * @param target the server and model that refused, both named in the message.
      */
-    private fun notifyToolsUnsupported(baseUrl: String) {
+    private fun notifyToolsUnsupported(target: ServerModel) {
         val appContext = context.androidContext.applicationContext
-        val message = appContext.getString(R.string.openai_error_tools_unsupported, baseUrl)
+        val message = appContext.getString(R.string.openai_error_tools_unsupported, target.model, target.baseUrl)
         Handler(Looper.getMainLooper()).post {
             Toast.makeText(appContext, message, Toast.LENGTH_LONG).show()
         }

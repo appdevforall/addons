@@ -5,6 +5,11 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedWith
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
+import com.itsaky.androidide.plugins.services.TerminalCommandResult
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -169,5 +174,36 @@ class ToolResultsPromptTest {
         val turn = render(openFile, listOf(ToolResult.success("x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT + 10))))
 
         assertTrue(turn.contains("[truncated"))
+    }
+
+    @Test
+    fun givenAStillRunningCommandWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
+        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "listening on 3000"
+        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
+
+        val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
+
+        assertTrue(turn.contains("listening on 3000\n</tool_response>"))
+    }
+
+    @Test
+    fun givenANonZeroExitWithFullOutput_whenRendering_thenTheErrorAtTheEndIsNotCut() {
+        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "error: no such file"
+        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Completed(1, output))
+
+        val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
+
+        assertTrue(turn.contains("error: no such file"))
+        assertFalse(turn.contains("…[truncated"))
+    }
+
+    @Test
+    fun givenACommandReadWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
+        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "GET / 200"
+        val result = ReadTerminalCommandHandler(mockk(relaxed = true)).resultFor("cmd-1", TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
+
+        val turn = render(listOf(ToolCall(ReadTerminalCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
+
+        assertTrue(turn.contains("GET / 200\n</tool_response>"))
     }
 }

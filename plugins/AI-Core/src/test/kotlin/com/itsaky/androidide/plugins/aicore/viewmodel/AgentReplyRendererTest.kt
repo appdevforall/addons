@@ -156,6 +156,52 @@ class AgentReplyRendererTest {
     }
 
     @Test
+    fun givenARecapOfAProseAnswer_whenChecked_thenItIsSilencedSoTheAnswerShowsOnce() {
+        val recap = respond("message" to "The ls command ran successfully.")
+
+        assertTrue(AgentReplyRenderer.isSilentTurn(recap, TERMINAL, recapsShownAnswer = true))
+    }
+
+    @Test
+    fun givenAMultiLineAnswerAfterTheFinishRequest_whenChecked_thenItIsShownAsTheRealAnswer() {
+        val answer = respond("message" to "The build passed.\n\n3 tests ran, none failed.")
+
+        assertFalse(AgentReplyRenderer.isSilentTurn(answer, TERMINAL, recapsShownAnswer = true))
+    }
+
+    @Test
+    fun givenProseOnlyThinking_whenCheckedForAnAnswer_thenNoneWasShown() {
+        assertFalse(AgentReplyRenderer.showsAnswer("<think>check the output</think>\n", NO_RESPONSE))
+        assertFalse(AgentReplyRenderer.showsAnswer("<think>still going", NO_RESPONSE))
+    }
+
+    @Test
+    fun givenTheNoResponseFallback_whenCheckedForAnAnswer_thenNoneWasShown() {
+        assertFalse(AgentReplyRenderer.showsAnswer(NO_RESPONSE, NO_RESPONSE))
+    }
+
+    @Test
+    fun givenProseBesideThinking_whenCheckedForAnAnswer_thenItWasShown() {
+        assertTrue(AgentReplyRenderer.showsAnswer("<think>hm</think>The tests pass.", NO_RESPONSE))
+    }
+
+    @Test
+    fun givenARecapAfterAFailedTool_whenChecked_thenItKeepsItsBubbleForTheWarning() {
+        val recap = respond("message" to "Done.")
+
+        assertFalse(
+            AgentReplyRenderer.isSilentTurn(recap, TERMINAL, recapsShownAnswer = true, lastToolFailed = true)
+        )
+    }
+
+    @Test
+    fun givenAnAnswerBesideARealCallAfterAProseAnswer_whenChecked_thenItIsNotSilenced() {
+        val calls = respond("message" to "Running it now.") + ToolCall("run_shell_command", mapOf("command" to "ls"))
+
+        assertFalse(AgentReplyRenderer.isSilentTurn(calls, TERMINAL, recapsShownAnswer = true))
+    }
+
+    @Test
     fun givenNoToolCallsAtAll_whenChecked_thenTheProseTurnIsNotSilent() {
         // A plain answer parses to no calls; silencing it would drop the reply entirely.
         assertFalse(AgentReplyRenderer.isSilentTurn(emptyList(), TERMINAL))
