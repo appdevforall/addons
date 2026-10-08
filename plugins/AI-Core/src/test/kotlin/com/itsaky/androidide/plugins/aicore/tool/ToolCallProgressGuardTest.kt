@@ -68,6 +68,30 @@ class ToolCallProgressGuardTest {
     }
 
     @Test
+    fun givenATerminalPollWhoseOutputKeepsChanging_whenReissued_thenItNeverStops() {
+        val guard = guard()
+        val poll = listOf(ToolCall("read_terminal_command", mapOf("command_id" to "cmd-1")))
+
+        repeat(6) { i ->
+            assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(poll))
+            guard.recordResults(listOf(ToolResult.success("running", "line $i")))
+        }
+    }
+
+    @Test
+    fun givenATerminalPollWhoseOutputStopsChanging_whenReissued_thenItStopsAtTheRepeatLimit() {
+        val guard = guard(repeats = 2)
+        val poll = listOf(ToolCall("read_terminal_command", mapOf("command_id" to "cmd-1")))
+        val same = listOf(ToolResult.success("running", "waiting"))
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(poll))
+        guard.recordResults(same)
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(poll))
+        guard.recordResults(same)
+        assertEquals(ToolCallProgressGuard.Verdict.REPEATED, guard.inspect(poll))
+    }
+
+    @Test
     fun givenALogReadBatchedWithABuildReissued_whenInspected_thenItAssumesComplete() {
         val guard = guard()
         val batch = call("run_app") + call("read_app_logs")
@@ -233,9 +257,9 @@ class ToolCallProgressGuardTest {
     }
 
     @Test
-    fun givenATerminalSessionReadReissued_whenInspected_thenItPollsAgain() {
+    fun givenATerminalCommandReadReissued_whenInspected_thenItPollsAgain() {
         val guard = realGuard()
-        val read = listOf(ToolCall("read_terminal_session", mapOf("session" to "AI Core 1")))
+        val read = listOf(ToolCall("read_terminal_command", mapOf("command_id" to "cmd-1")))
         guard.inspect(read)
         guard.recordResults(ok)
 

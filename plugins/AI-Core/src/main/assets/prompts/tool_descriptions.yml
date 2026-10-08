@@ -111,20 +111,20 @@ built_in_tools:
       working_directory: >-
         Project-relative directory to run in; it must be inside the project. Omit to run at the
         project root.
-  read_terminal_session:
+  read_terminal_command:
     description: >-
       Check on a command run_shell_command left running, such as a server: whether it still runs,
       its exit code once it stopped, and its latest output
     arguments:
-      session: The Terminal session name the run_shell_command result reported.
-  stop_terminal_session:
+      command_id: The command id the run_shell_command result reported.
+  stop_terminal_command:
     # Its second sentence: Gemini stopped a ping it had just started, to finish the request.
     description: >-
       Stop a command run_shell_command left running, such as a server or ping, with Ctrl-C. Use it
       only when the user asks to stop, kill or cancel that command, never to finish a request that
       started it
     arguments:
-      session: The Terminal session name the run_shell_command result reported.
+      command_id: The command id the run_shell_command result reported.
   generate_from_template:
     description: Generate files from Pebble templates with variable substitution
     arguments:

@@ -163,6 +163,29 @@ class AgentReplyRendererTest {
     }
 
     @Test
+    fun givenAMultiLineAnswerAfterTheFinishRequest_whenChecked_thenItIsShownAsTheRealAnswer() {
+        val answer = respond("message" to "The build passed.\n\n3 tests ran, none failed.")
+
+        assertFalse(AgentReplyRenderer.isSilentTurn(answer, TERMINAL, recapsShownAnswer = true))
+    }
+
+    @Test
+    fun givenProseOnlyThinking_whenCheckedForAnAnswer_thenNoneWasShown() {
+        assertFalse(AgentReplyRenderer.showsAnswer("<think>check the output</think>\n", NO_RESPONSE))
+        assertFalse(AgentReplyRenderer.showsAnswer("<think>still going", NO_RESPONSE))
+    }
+
+    @Test
+    fun givenTheNoResponseFallback_whenCheckedForAnAnswer_thenNoneWasShown() {
+        assertFalse(AgentReplyRenderer.showsAnswer(NO_RESPONSE, NO_RESPONSE))
+    }
+
+    @Test
+    fun givenProseBesideThinking_whenCheckedForAnAnswer_thenItWasShown() {
+        assertTrue(AgentReplyRenderer.showsAnswer("<think>hm</think>The tests pass.", NO_RESPONSE))
+    }
+
+    @Test
     fun givenARecapAfterAFailedTool_whenChecked_thenItKeepsItsBubbleForTheWarning() {
         val recap = respond("message" to "Done.")
 

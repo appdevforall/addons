@@ -6,9 +6,9 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolResultsFormatter
-import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalSessionHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalSessionHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
 
@@ -57,8 +57,8 @@ class ToolResultsPrompt(
             WebAccess.WEB_SEARCH_TOOL to WEB_SEARCH_CHAR_LIMIT,
             WebAccess.FETCH_URL_TOOL to WEB_SEARCH_CHAR_LIMIT,
             RunShellCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
-            ReadTerminalSessionHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
-            StopTerminalSessionHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
+            ReadTerminalCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
+            StopTerminalCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
         )
 
         /**

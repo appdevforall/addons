@@ -12,6 +12,7 @@ import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.R
+import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalResult
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
@@ -57,7 +58,7 @@ class ApprovalDialogFragment : DialogFragment() {
         private const val ARG_SOURCE = "source"
         private const val ARG_DESCRIPTION = "description"
         private const val ARG_ARGS = "args"
-        private const val ARG_KIND = "kind"
+        private const val ARG_PREVIEW = "preview"
         private const val ARG_ALLOWS_ALWAYS_ALLOW = "allows_always_allow"
 
         /**
@@ -67,7 +68,7 @@ class ApprovalDialogFragment : DialogFragment() {
          * @param resources words the labels inside the formatted arguments.
          */
         fun newInstance(request: ApprovalRequest, resources: Resources): ApprovalDialogFragment {
-            val kind = ApprovalKind.of(request.preview)
+            val preview = request.preview
             return ApprovalDialogFragment().apply {
                 arguments = Bundle().apply {
                     // The registered name, not the provider's: it is the tool that will actually
@@ -79,8 +80,8 @@ class ApprovalDialogFragment : DialogFragment() {
                     )
                     putString(ARG_SOURCE, request.sourceLabel)
                     putString(ARG_DESCRIPTION, request.description)
-                    putString(ARG_KIND, kind.name)
-                    putString(ARG_ARGS, kind.format(request.args, resources))
+                    putString(ARG_PREVIEW, preview.name)
+                    putString(ARG_ARGS, ApprovalPresentation.format(preview, request.args, resources))
                     putBoolean(ARG_ALLOWS_ALWAYS_ALLOW, request.allowsSessionApproval)
                 }
             }
@@ -93,8 +94,8 @@ class ApprovalDialogFragment : DialogFragment() {
         val source = arguments?.getString(ARG_SOURCE)
         val description = arguments?.getString(ARG_DESCRIPTION) ?: ""
         val argsText = arguments?.getString(ARG_ARGS) ?: "{}"
-        val kind = ApprovalKind.named(arguments?.getString(ARG_KIND))
-        val isEdit = kind == ApprovalKind.EDIT
+        val preview = ApprovalPresentation.named(arguments?.getString(ARG_PREVIEW))
+        val isEdit = preview == ApprovalPreview.EDIT
         val allowsAlwaysAllow = arguments?.getBoolean(ARG_ALLOWS_ALWAYS_ALLOW) ?: false
 
         val message = buildString {
@@ -115,7 +116,7 @@ class ApprovalDialogFragment : DialogFragment() {
             }
             append(description)
             append("\n\n")
-            append(getString(kind.argsLabel))
+            append(getString(ApprovalPresentation.argsLabel(preview)))
             append("\n")
             append(argsText)
         }
@@ -163,8 +164,11 @@ class ApprovalDialogFragment : DialogFragment() {
             // Long-press help on the consent gate: which button actually writes to the project.
             wireTooltip(
                 dialog.getButton(Dialog.BUTTON_POSITIVE),
-                if (isEdit) AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
-                else AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW,
+                when (preview) {
+                    ApprovalPreview.EDIT -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
+                    ApprovalPreview.SHELL_COMMAND -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_COMMAND
+                    ApprovalPreview.ARGS -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW
+                },
             )
             wireTooltip(
                 dialog.getButton(Dialog.BUTTON_NEUTRAL),

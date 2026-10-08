@@ -5,19 +5,24 @@ import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
+import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import com.itsaky.androidide.plugins.services.GradleTaskInfo
 import com.itsaky.androidide.plugins.services.IdeBuildService
-import kotlinx.coroutines.CancellationException
 
 /**
  * Handler for listing the project's Gradle tasks with their group and description, from the IDE's
  * last sync, so the agent picks a task that exists before it calls run_gradle_task.
  */
 class ListGradleTasksHandler(
-    private val pluginContext: PluginContext,
+    pluginContext: PluginContext,
 ) : ToolHandler {
     override val toolName = "list_gradle_tasks"
     override val requiresApproval = false
+
+    private val buildCall = HostServiceCall(
+        pluginContext, toolName, IdeBuildService::class.java, BUILD_STAGE, "Build",
+        failureMessage = { "Error listing Gradle tasks" },
+    )
 
     override val parametersSchema = ToolSchema.objectOf(
         "filter" to ToolSchema.string(),
@@ -32,28 +37,10 @@ class ListGradleTasksHandler(
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val filter = (args["filter"] as? String)?.trim().orEmpty()
-        return try {
-            val buildService = pluginContext.services.get(IdeBuildService::class.java)
-            if (buildService == null) {
-                AgentTrace.refusal("BUILD", "$toolName rejected", "IdeBuildService not available")
-                return ToolResult.failure(
-                    "Build service not available",
-                    "The IDE build service is not available."
-                )
-            }
+        return buildCall.run { buildService ->
             val tasks = buildService.getTasks()
-            AgentTrace.detail("BUILD", "$toolName filter='$filter' hostTasks=${tasks.size}")
+            AgentTrace.detail(BUILD_STAGE, "$toolName filter='$filter' hostTasks=${tasks.size}")
             resultFor(tasks, filter)
-        } catch (ce: CancellationException) {
-            // An Exception on the JVM, so the catch below would report Stop as a listing failure.
-            throw ce
-        } catch (e: Exception) {
-            AgentTrace.refusal("BUILD", "$toolName failed", e.toString())
-            pluginContext.logger.error("$toolName failed", e)
-            ToolResult.failure(
-                "Error listing Gradle tasks",
-                "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"
-            )
         }
     }
 

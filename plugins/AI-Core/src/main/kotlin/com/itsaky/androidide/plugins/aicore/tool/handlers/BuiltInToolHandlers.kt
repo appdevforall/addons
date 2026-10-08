@@ -41,8 +41,8 @@ object BuiltInToolHandlers {
         (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context)) else emptyList()) +
         (if (hostHasTerminalService(context)) listOf(
             RunShellCommandHandler(context),
-            ReadTerminalSessionHandler(context),
-            StopTerminalSessionHandler(context),
+            ReadTerminalCommandHandler(context),
+            StopTerminalCommandHandler(context),
         ) else emptyList()) +
         listOf(
         // Template tool

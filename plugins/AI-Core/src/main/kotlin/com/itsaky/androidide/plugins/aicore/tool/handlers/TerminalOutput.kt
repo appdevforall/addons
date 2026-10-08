@@ -16,4 +16,11 @@ internal object TerminalOutput {
         output.length <= MAX_CHARS -> output
         else -> "$TRUNCATION_MARKER\n${output.takeLast(MAX_CHARS)}"
     }
+
+    /** How a command with [exitCode] ended, as a predicate; the host reports -1 when it could not tell. */
+    fun exitOf(exitCode: Int): String =
+        if (exitCode == UNKNOWN_EXIT_CODE) "exited, but the Terminal could not tell its exit code"
+        else "exited with code $exitCode"
+
+    private const val UNKNOWN_EXIT_CODE = -1
 }
