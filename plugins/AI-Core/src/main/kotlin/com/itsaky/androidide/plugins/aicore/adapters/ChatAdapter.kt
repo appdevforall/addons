@@ -105,6 +105,16 @@ class ChatAdapter(
 
         /** A version arrow with nowhere to go, or held back while the agent works. */
         private const val DISABLED_ALPHA = 0.38f
+
+        /**
+         * The button an error row from [sender] offers, or null for none. A tool failure gets none:
+         * the run carries on past it, and Retry would rewind the whole run.
+         */
+        internal fun errorActionFor(sender: Sender): String? = when (sender) {
+            Sender.SYSTEM -> ACTION_OPEN_SETTINGS
+            Sender.TOOL -> null
+            else -> ACTION_RETRY
+        }
     }
 
     sealed class MessageViewHolder(view: View) : RecyclerView.ViewHolder(view)
@@ -300,23 +310,32 @@ class ChatAdapter(
             MessageStatus.ERROR -> {
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
-                holder.btnRetry.visibility = View.VISIBLE
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
-                if (message.sender == Sender.SYSTEM) {
-                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
-                    holder.btnRetry.setOnClickListener {
-                        onMessageAction(ACTION_OPEN_SETTINGS, message)
+                val action = errorActionFor(message.sender)
+                holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
+                when (action) {
+                    ACTION_OPEN_SETTINGS -> {
+                        holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
+                        holder.btnRetry.setOnClickListener {
+                            onMessageAction(ACTION_OPEN_SETTINGS, message)
+                        }
+                        // Re-wired per bind: the same recycled button plays both roles, so the
+                        // tag has to follow the role it currently has.
+                        wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
                     }
-                    // Re-wired per bind: the same recycled button plays both roles, so the
-                    // tag has to follow the role it currently has.
-                    wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
-                } else {
-                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
-                    holder.btnRetry.setOnClickListener {
-                        onMessageAction(ACTION_RETRY, message)
+                    ACTION_RETRY -> {
+                        holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
+                        holder.btnRetry.setOnClickListener {
+                            onMessageAction(ACTION_RETRY, message)
+                        }
+                        wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
                     }
-                    wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
+                    // Drop the last bind's listeners so a hidden button holds no stale message.
+                    else -> {
+                        holder.btnRetry.setOnClickListener(null)
+                        holder.btnRetry.setOnLongClickListener(null)
+                    }
                 }
                 updateMessageMetadata(holder, message)
             }
