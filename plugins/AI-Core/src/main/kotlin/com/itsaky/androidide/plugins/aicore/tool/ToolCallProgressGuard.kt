@@ -47,7 +47,8 @@ internal class ToolCallProgressGuard(
     // file back and forth still runs out of novelty.
     private val changingSignatures = mutableSetOf<String>()
     private var currentBatchPaths = emptySet<String>()
-    private var currentBatchWrites = emptySet<String>()
+    // Null when a changing call names no path, so nothing narrows which reads it invalidates.
+    private var currentBatchWrites: Set<String>? = emptySet()
     private var currentBatchChanges = false
     private var currentBatchIsNew = false
     private var currentBatchRereadsLive = false
@@ -69,7 +70,8 @@ internal class ToolCallProgressGuard(
     fun inspect(calls: List<ToolCall>): Verdict {
         val signature = signatureOf(calls)
         currentBatchPaths = pathsNamedBy(calls)
-        currentBatchWrites = pathsNamedBy(calls.filter(changesPaths))
+        val writes = calls.filter(changesPaths).map { pathsNamedBy(listOf(it)) }
+        currentBatchWrites = writes.takeIf { it.none(Set<String>::isEmpty) }?.flatten()?.toSet()
         currentBatchChanges = calls.any(changesPaths)
         currentBatchRereadsLive = calls.all { it.name in LIVE_READS }
         val verdict = verdictFor(signature)
@@ -88,12 +90,12 @@ internal class ToolCallProgressGuard(
         previousBatchSucceeded = results.isNotEmpty() && results.all { it.success }
         // A change the run had not made before makes an earlier look at the paths it rewrote a new
         // action again, so a run that edits and then verifies is not judged as going in circles.
-        // A change whose handler names no path invalidates every read: there is no way to tell
-        // which ones it stood for.
+        // A change whose handler names no path, such as a shell command, invalidates every read: there
+        // is no way to tell which ones it stood for, even beside an edit that names one.
         if (previousBatchSucceeded != true || !currentBatchIsNew || !currentBatchChanges) return
         val invalidated = seenSignatures.filter { (seen, paths) ->
             seen !in changingSignatures &&
-                (currentBatchWrites.isEmpty() || paths.any { it in currentBatchWrites })
+                (currentBatchWrites?.let { writes -> paths.any { it in writes } } ?: true)
         }
         seenSignatures.keys.removeAll(invalidated.keys)
     }
@@ -138,6 +140,6 @@ internal class ToolCallProgressGuard(
 
     private companion object {
         /** Reads whose answer changes between calls, so re-issuing one does not mean the work is done. */
-        val LIVE_READS = setOf("read_app_logs", "read_ide_logs")
+        val LIVE_READS = setOf("read_app_logs", "read_ide_logs", "read_terminal_session")
     }
 }

@@ -86,6 +86,13 @@ interface ToolHandler {
         get() = false
 
     /**
+     * The [pathArgs] keys naming what a call reads or writes, for the progress guard. All of them by
+     * default; a shell command's working directory is where it runs, not what it touches.
+     */
+    val trackedPathArgs: List<String>
+        get() = pathArgs
+
+    /**
      * Values a [pathArgs] key falls back to when the call omits it, keyed the same way. Declared
      * here so the progress guard sees the file a defaulted write actually touches.
      */

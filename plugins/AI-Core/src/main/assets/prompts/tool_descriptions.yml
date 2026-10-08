@@ -94,13 +94,17 @@ built_in_tools:
         Omit to list the tasks that have a group or a description.
   run_shell_command:
     # Without the second sentence models hand the user a script to run themselves (ADFA-6339);
-    # without the third, Gemini ran "ls -la" when asked for "ls".
+    # without the third, Gemini ran "ls -la" when asked for "ls". The host runs each call in a
+    # fresh bash, so a lone "cd" or "export" is lost before the next call.
     description: >-
       Run a shell command or script with bash in the IDE's Terminal and get back its exit code and
       output. Use it instead of asking the user to run a command. When the user gives the command,
-      run it exactly as written, adding no flags or options they did not ask for. A command still
-      running after 30 seconds, such as a server, is left running and its output so far comes
-      back. For a Gradle task use run_gradle_task, not ./gradlew
+      run it exactly as written, adding no flags or options they did not ask for. Each call starts
+      a new shell, so cd and export do not carry over to the next call: use working_directory, or
+      chain in one call, e.g. "cd app && ls src". A non-zero exit code can be the answer, e.g.
+      grep exits 1 when nothing matches. A command still running after 30 seconds, such as a
+      server, is left running and its output so far comes back. For a Gradle task use
+      run_gradle_task, not ./gradlew
     arguments:
       command: >-
         The command or script to run with bash, e.g. "ls -la app/src" or several lines of script.

@@ -231,4 +231,39 @@ class ToolCallProgressGuardTest {
 
         assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(read))
     }
+
+    @Test
+    fun givenATerminalSessionReadReissued_whenInspected_thenItPollsAgain() {
+        val guard = realGuard()
+        val read = listOf(ToolCall("read_terminal_session", mapOf("session" to "AI Core 1")))
+        guard.inspect(read)
+        guard.recordResults(ok)
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(read))
+    }
+
+    @Test
+    fun givenAShellCommandInADirectory_whenInspected_thenItInvalidatesEveryRead() {
+        val guard = realGuard()
+        val read = listOf(ToolCall("read_file", mapOf("file_path" to "app/src/A.kt")))
+        guard.inspect(read)
+        guard.recordResults(ok)
+        guard.inspect(listOf(ToolCall("run_shell_command", mapOf("command" to "sed -i s/a/b/ src/A.kt", "working_directory" to "app"))))
+        guard.recordResults(ok)
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(read))
+    }
+
+    @Test
+    fun givenAShellCommandBatchedWithAnEdit_whenInspected_thenItStillInvalidatesEveryRead() {
+        val guard = realGuard()
+        val read = listOf(ToolCall("read_file", mapOf("file_path" to "B.kt")))
+        guard.inspect(read)
+        guard.recordResults(ok)
+        val edit = ToolCall("edit_file", mapOf("file_path" to "A.kt", "old_string" to "a", "new_string" to "b"))
+        guard.inspect(listOf(edit, ToolCall("run_shell_command", mapOf("command" to "rm B.kt"))))
+        guard.recordResults(ok + ok)
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(read))
+    }
 }
