@@ -11,8 +11,8 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
  * run, once it passes [TRIGGER_RATIO] of the budget (ADFA-6345). Without it the history only grew,
  * and a long chat ended on "prompt is too long" for every message after.
  *
- * No backend reports its window or a token count yet, so both are estimates: a fixed budget per
- * backend, and [CHARS_PER_TOKEN]. Pure apart from the summarize call, so it is JVM-testable.
+ * The budget is the window the backend reports, with a fallback for one that reports none; the
+ * request's size is estimated with [CHARS_PER_TOKEN]. Pure apart from the summarize call.
  */
 internal object HistoryCompactor {
 
@@ -25,15 +25,15 @@ internal object HistoryCompactor {
     /** Summarize calls one compaction may make; a history longer than that loses its middle. */
     const val MAX_SUMMARIZE_CALLS = 3
 
-    /** Budget for a remote backend: below every current window, and before quality degrades. */
-    const val REMOTE_BUDGET_TOKENS = 200_000
+    /** Most a request is kept within, whatever the window: answers degrade before larger ones fill. */
+    const val MAX_BUDGET_TOKENS = 200_000
 
-    /** Budget for the on-device backend, under its 16,384-token maximum context. */
-    const val LOCAL_BUDGET_TOKENS = 12_000
+    /** Budget for the on-device backend before it reports a window: the smallest context it loads. */
+    const val LOCAL_FALLBACK_BUDGET_TOKENS = 4096
 
     const val TEMPERATURE = 0.2f
 
-    /** A summary not back by then is abandoned, and the history is cut instead. */
+    /** A remote summary not back by then is abandoned, and the history is cut instead. */
     const val TIMEOUT_MS = 180_000L
 
     /** Fraction (1/N) of an overflowing summarizer input the first turn keeps; see [summarizerInput]. */
@@ -58,10 +58,30 @@ internal object HistoryCompactor {
 
     /**
      * @param backendId the backend the run is against.
+     * @param reportedWindowTokens the window the backend reports; 0 or less when it reports none.
      * @return the token budget its requests are kept within.
      */
-    fun budgetTokens(backendId: String): Int =
-        if (backendId == AiBackend.LOCAL_ID) LOCAL_BUDGET_TOKENS else REMOTE_BUDGET_TOKENS
+    fun budgetTokens(backendId: String, reportedWindowTokens: Int): Int = when {
+        reportedWindowTokens > 0 -> minOf(reportedWindowTokens, MAX_BUDGET_TOKENS)
+        backendId == AiBackend.LOCAL_ID -> LOCAL_FALLBACK_BUDGET_TOKENS
+        else -> MAX_BUDGET_TOKENS
+    }
+
+    /**
+     * @param backendId the backend the run is against.
+     * @return whether its history is summarized; on device that takes minutes, so it is cut instead.
+     */
+    fun summarizes(backendId: String): Boolean = backendId != AiBackend.LOCAL_ID
+
+    /**
+     * @param fixedChars see [fixedChars].
+     * @param pendingUserTurn the new message, with its attached files.
+     * @param budgetTokens see [budgetTokens].
+     * @return the most characters of history the request can carry without passing [TRIGGER_RATIO].
+     */
+    fun historyRoomChars(fixedChars: Int, pendingUserTurn: String, budgetTokens: Int): Int =
+        ((budgetTokens * TRIGGER_RATIO).toInt() * CHARS_PER_TOKEN - fixedChars - pendingUserTurn.length)
+            .coerceAtLeast(0)
 
     /**
      * @param systemPrompt the run's system prompt.
@@ -85,7 +105,7 @@ internal object HistoryCompactor {
     /**
      * @param estimatedTokens see [estimateTokens].
      * @param budgetTokens see [budgetTokens].
-     * @param forced a Retry after a failed run, which may have overflowed a window the estimate missed.
+     * @param forced a Retry after a context overflow, which the estimate missed.
      * @return whether the history is summarized before the request is sent.
      */
     fun needsCompaction(estimatedTokens: Int, budgetTokens: Int, forced: Boolean = false): Boolean =

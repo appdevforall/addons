@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentgemini.errors
 
 import androidx.annotation.StringRes
 import com.itsaky.androidide.plugins.aiagentgemini.R
+import com.itsaky.androidide.plugins.services.LlmInferenceService.FailureKind
 import org.json.JSONObject
 import java.io.IOException
 
@@ -115,6 +116,16 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
 /** Whether this failure is about the credential rather than the request, the model or the network. */
 internal val GeminiFailure.isCredentialProblem: Boolean
     get() = CredentialFailure.of(this) != null
+
+/**
+ * The kind AI Core is told alongside the sentence, so it compacts the history only after a real
+ * overflow rather than by matching the wording.
+ */
+internal val GeminiFailure.failureKind: FailureKind
+    get() = when (this) {
+        GeminiFailure.ContextTooLong -> FailureKind.CONTEXT_TOO_LONG
+        else -> FailureKind.OTHER
+    }
 
 /**
  * Classifies a Gemini failure so it can be reported as one translated sentence.

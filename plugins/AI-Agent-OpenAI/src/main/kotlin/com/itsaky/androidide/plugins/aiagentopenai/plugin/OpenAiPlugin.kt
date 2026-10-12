@@ -44,18 +44,22 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_PRESET = "ai_openai_preset"
         const val TOOLTIP_TAG_SETTINGS_KEY = "ai_openai_key"
         const val TOOLTIP_TAG_SETTINGS_MODEL = "ai_openai_model"
+        const val TOOLTIP_TAG_SETTINGS_CONTEXT_WINDOW = "ai_openai_context_window"
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_openai_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_openai_get_key"
 
         /**
-         * The settings that change what [OpenAiBackend.isAvailable], its model name or its
-         * embedding model answers; the last is set from Vector Search, which re-reads on notice.
+         * The settings that change what [OpenAiBackend.isAvailable], its model name, its context
+         * window or its embedding model answers; the last is set from Vector Search.
          */
         private val WATCHED_KEYS = setOf(
             OpenAiPreferences.KEY_BASE_URL,
             OpenAiPreferences.KEY_API_KEY,
             OpenAiPreferences.KEY_MODEL,
             OpenAiPreferences.KEY_EMBEDDING_MODEL,
+            OpenAiPreferences.KEY_CONTEXT_WINDOW,
+            OpenAiPreferences.KEY_CONTEXT_WINDOW_URL,
+            OpenAiPreferences.KEY_LISTED_CONTEXT_WINDOWS,
         )
 
         /** The settings that change whether the server answers [OpenAiBackend.checkServer]. */
@@ -266,6 +270,26 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
                 <p>Unlike Google's catalog, this list carries no "can chat" flag,
                 so obvious non-chat models (embeddings, audio, images) are filtered
                 out and anything unrecognised is kept.</p>
+            """.trimIndent(),
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_CONTEXT_WINDOW,
+            summary = "How many tokens the model can take at once. Leave blank to detect it automatically.",
+            detail = """
+                <p>Set this to the context size the <b>server</b> runs the model
+                with, not the model's advertised maximum. Local servers often run
+                with only a few thousand tokens: Ollama uses a small default unless
+                <code>num_ctx</code> or <code>OLLAMA_CONTEXT_LENGTH</code> is raised,
+                LM Studio uses the length chosen when the model was loaded, and
+                <code>llama-server</code> uses its <code>-c</code> flag.</p>
+                <p>Left blank, the window is taken from the server's model list
+                when it reports one (OpenRouter, LM Studio), or from OpenAI's
+                published figures on OpenAI's own API. Otherwise AI Core uses its
+                own default. The value is kept for the server it was entered for,
+                so switching servers goes back to automatic.</p>
+                <p>AI Core keeps the conversation under this size, so a value
+                larger than the server's real context leads to "conversation is
+                too long" errors.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(

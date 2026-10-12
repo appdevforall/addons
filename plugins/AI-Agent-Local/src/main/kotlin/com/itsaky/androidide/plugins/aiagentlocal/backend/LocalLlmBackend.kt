@@ -60,7 +60,8 @@ class LocalLlmBackend(
     private val modelSourceOverride: NativeModelSource? = null,
     private val engineOverride: ModelResidencyEngine? = null,
     private val watcherOverride: ModelSourceWatcher? = null,
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ActiveModelReportingBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ActiveModelReportingBackend,
+    ContextWindowReportingBackend {
 
     companion object {
         /**
@@ -118,6 +119,9 @@ class LocalLlmBackend(
     private val errorMessages by lazy { GenerationErrorMessages(context.androidContext) }
 
     @Volatile private var modelLoaded = false
+
+    /** The `n_ctx` actually allocated for the resident model; 0 while none is loaded. */
+    @Volatile private var allocatedContextTokens = 0
 
     /**
      * The configured reference — path or `content://` URI — of the resident model.
@@ -211,6 +215,23 @@ class LocalLlmBackend(
      * selection, else a plain file path's own name. A `content://` reference with no saved name
      * says nothing readable, so it reports none rather than a document id.
      */
+    /** The context the resident model was created with, which can be smaller than the one requested. */
+    override fun getContextWindowTokens(): Int = allocatedContextTokens
+
+    /**
+     * Records the resident model's context window and tells AI Core when it changed, so its
+     * history compaction resizes to it.
+     */
+    private fun updateContextWindow(tokens: Int) {
+        if (allocatedContextTokens == tokens) return
+        allocatedContextTokens = tokens
+        try {
+            SharedServices.get(LlmInferenceService::class.java)?.notifyBackendChanged(getId())
+        } catch (e: Exception) {
+            context.logger.warn("LocalLlmBackend: could not report the context window change", e)
+        }
+    }
+
     override fun getActiveModelName(): String? {
         val prefs = LocalLlmPreferences.of(context)
         prefs.getString(LocalLlmPreferences.KEY_MODEL_NAME, null)?.trim()
@@ -450,7 +471,7 @@ class LocalLlmBackend(
             releaseSupersededGrants(modelRef)
             startWatching(modelRef)
             context.logger.info("Model loaded successfully")
-            reportEffectiveContextSize(contextSize.contextTokens)
+            updateContextWindow(reportEffectiveContextSize(contextSize.contextTokens))
         } finally {
             if (!adopted) opened.close()
         }
@@ -494,15 +515,16 @@ class LocalLlmBackend(
      * cache was refused — and a prompt rejected as too long otherwise looks like it fit.
      *
      * @param requestedTokens the context [resolveContextSize] asked for
+     * @return the context in effect, or [requestedTokens] if it could not be read
      */
-    private suspend fun reportEffectiveContextSize(requestedTokens: Int) {
+    private suspend fun reportEffectiveContextSize(requestedTokens: Int): Int {
         val actual = try {
             engine.contextSize()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             context.logger.warn("Could not read the created context size: ${e.message}")
-            return
+            return requestedTokens
         }
         if (actual == requestedTokens) {
             context.logger.info("Context size in effect: $actual tokens")
@@ -512,6 +534,7 @@ class LocalLlmBackend(
                     " prompt-length limits follow the smaller number"
             )
         }
+        return actual
     }
 
     /**
@@ -569,6 +592,7 @@ class LocalLlmBackend(
         openModel?.close()
         openModel = null
         lastProbeAnsweredNanos = 0L
+        updateContextWindow(0)
     }
 
     /**
@@ -805,7 +829,8 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                future.complete(LlmResponse.failure(errorMessages.describe(e)))
+                val (message, kind) = errorMessages.describe(e)
+                future.complete(LlmResponse.failure(message, kind))
             }
         }
         currentGenerateJob = job
@@ -907,7 +932,8 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                callback.onError(errorMessages.describe(e))
+                val (message, kind) = errorMessages.describe(e)
+                callback.onError(message, kind)
             }
         }
     }

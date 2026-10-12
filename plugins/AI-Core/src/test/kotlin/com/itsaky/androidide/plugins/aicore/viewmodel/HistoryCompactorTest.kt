@@ -32,9 +32,34 @@ class HistoryCompactorTest {
     }
 
     @Test
-    fun givenTheLocalBackend_whenBudgeting_thenItGetsTheSmallBudget() {
-        assertEquals(HistoryCompactor.LOCAL_BUDGET_TOKENS, HistoryCompactor.budgetTokens(AiBackend.LOCAL_ID))
-        assertEquals(HistoryCompactor.REMOTE_BUDGET_TOKENS, HistoryCompactor.budgetTokens("claude"))
+    fun givenAReportedWindow_whenBudgeting_thenTheBudgetIsThatWindow() {
+        assertEquals(4096, HistoryCompactor.budgetTokens(AiBackend.LOCAL_ID, 4096))
+        assertEquals(128_000, HistoryCompactor.budgetTokens("openai", 128_000))
+    }
+
+    @Test
+    fun givenAWindowAboveTheCap_whenBudgeting_thenTheBudgetIsCapped() {
+        assertEquals(HistoryCompactor.MAX_BUDGET_TOKENS, HistoryCompactor.budgetTokens("gemini", 1_048_576))
+    }
+
+    @Test
+    fun givenNoReportedWindow_whenBudgeting_thenTheLocalBackendGetsItsSmallestContext() {
+        assertEquals(HistoryCompactor.LOCAL_FALLBACK_BUDGET_TOKENS, HistoryCompactor.budgetTokens(AiBackend.LOCAL_ID, 0))
+        assertEquals(HistoryCompactor.MAX_BUDGET_TOKENS, HistoryCompactor.budgetTokens("claude", 0))
+    }
+
+    @Test
+    fun givenTheOnDeviceBackend_whenAskedWhetherItSummarizes_thenItDoesNot() {
+        assertEquals(false, HistoryCompactor.summarizes(AiBackend.LOCAL_ID))
+        assertEquals(true, HistoryCompactor.summarizes("claude"))
+    }
+
+    @Test
+    fun givenABudget_whenSizingTheRoomForHistory_thenFixedPartsAndThePromptComeOffTheTrigger() {
+        val room = HistoryCompactor.historyRoomChars(fixedChars = 1_000, pendingUserTurn = "x".repeat(200), budgetTokens = 1_000)
+
+        assertEquals(800 * HistoryCompactor.CHARS_PER_TOKEN - 1_200, room)
+        assertEquals(0, HistoryCompactor.historyRoomChars(fixedChars = 10_000, pendingUserTurn = "", budgetTokens = 1_000))
     }
 
     @Test

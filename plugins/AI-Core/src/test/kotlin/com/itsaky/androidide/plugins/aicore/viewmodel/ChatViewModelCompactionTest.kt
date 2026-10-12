@@ -4,12 +4,14 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.models.AgentState
+import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.SHIPPED_ROOT
 import com.itsaky.androidide.plugins.aicore.prompt.config.sharedPromptConfig
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Role
+import com.itsaky.androidide.plugins.services.LlmInferenceService.FailureKind
 import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
@@ -44,12 +46,18 @@ private const val WAIT_MS = 5_000L
 private const val RESPOND_REPLY =
     """<tool_call>{"tool":"respond","args":{"message":"done"}}</tool_call>"""
 
-/** Past 80% of the local backend's budget on its own, so the next send compacts first. */
-private val LARGE_PROMPT = "x".repeat(HistoryCompactor.LOCAL_BUDGET_TOKENS * HistoryCompactor.CHARS_PER_TOKEN)
+/** The window the test backend reports, in tokens. */
+private const val WINDOW_TOKENS = 4096
+
+/** A remote backend id: one whose history is summarized, unlike the on-device one. */
+private const val REMOTE_ID = "claude"
+
+/** Past 80% of the reported window on its own, so the next send compacts first. */
+private val LARGE_PROMPT = "x".repeat(WINDOW_TOKENS * HistoryCompactor.CHARS_PER_TOKEN)
 
 /**
- * A chat near its backend's context limit is summarized before the next send, and a failed run is
- * rolled back rather than resent with every retry (ADFA-6345).
+ * A chat near its backend's context window is summarized before the next send, and a run that
+ * overflowed it is rolled back rather than resent with every retry (ADFA-6345).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelCompactionTest {
@@ -98,9 +106,9 @@ class ChatViewModelCompactionTest {
     }
 
     @Test
-    fun givenABackendError_whenTheRunFails_thenTheHistoryKeepsItsPreRunSize() {
+    fun givenAContextOverflow_whenTheRunFails_thenTheHistoryKeepsItsPreRunSize() {
         val (viewModel, _) = newViewModelWithBackend(summary = null) { callback ->
-            callback.onError("prompt is too long")
+            callback.onError("prompt is too long", FailureKind.CONTEXT_TOO_LONG)
         }
 
         send(viewModel, "Capital of new york")
@@ -109,6 +117,17 @@ class ChatViewModelCompactionTest {
         assertEquals(emptyList<LlmInferenceService.ChatMessage>(), viewModel.history.value)
         // The resend went out on the same history, not one grown by the failed turn.
         assertEquals(listOf(emptyList<LlmInferenceService.ChatMessage>(), emptyList()), sentHistories.toList())
+    }
+
+    @Test
+    fun givenAnyOtherBackendError_whenTheRunFails_thenTheHistoryKeepsItsPrompt() {
+        val (viewModel, _) = newViewModelWithBackend(summary = null) { callback ->
+            callback.onError("network down")
+        }
+
+        send(viewModel, "Capital of new york")
+
+        assertEquals(listOf(Role.USER to "Capital of new york"), viewModel.history.value.map { it.role to it.content })
     }
 
     @Test
@@ -161,11 +180,11 @@ class ChatViewModelCompactionTest {
     }
 
     @Test
-    fun givenARunThatFailed_whenRetried_thenTheHistoryIsSummarizedFirstWhateverItsSize() {
+    fun givenARunThatOverflowed_whenRetried_thenTheHistoryIsSummarizedFirstWhateverItsSize() {
         val failNext = AtomicBoolean(false)
         val (viewModel, service) = newViewModelWithBackend(summary = "The user said first.") { callback ->
             if (failNext.getAndSet(false)) {
-                callback.onError("This conversation is longer than the model can read.")
+                callback.onError("This conversation is longer than the model can read.", FailureKind.CONTEXT_TOO_LONG)
             } else {
                 callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
             }
@@ -179,6 +198,72 @@ class ChatViewModelCompactionTest {
         verify(exactly = 1) { service.generateWithHistory(any(), any(), any()) }
         val summaryTurn = "Summary of the earlier conversation:\nThe user said first."
         assertEquals(listOf(Role.USER to summaryTurn), sentHistories.last().map { it.role to it.content })
+    }
+
+    @Test
+    fun givenARunThatFailedForAnotherReason_whenRetried_thenNothingIsSummarized() {
+        val failNext = AtomicBoolean(false)
+        val (viewModel, service) = newViewModelWithBackend(summary = "unused") { callback ->
+            if (failNext.getAndSet(false)) {
+                callback.onError("429 rate limited")
+            } else {
+                callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+            }
+        }
+        send(viewModel, "first")
+        failNext.set(true)
+        send(viewModel, "second")
+
+        retry(viewModel)
+
+        verify(exactly = 0) { service.generateWithHistory(any(), any(), any()) }
+        assertEquals("first", sentHistories.last().first().content)
+    }
+
+    @Test
+    fun givenTheOnDeviceBackendPastItsWindow_whenSending_thenTheHistoryIsCutWithoutASummary() {
+        val (viewModel, service) = newViewModelWithBackend(summary = "unused", backendId = AiBackend.LOCAL_ID) { callback ->
+            callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+        }
+        send(viewModel, LARGE_PROMPT)
+
+        send(viewModel, "and now?")
+
+        verify(exactly = 0) { service.generateWithHistory(any(), any(), any()) }
+        assertFalse(sentHistories.last().any { it.content.contains(LARGE_PROMPT) })
+        assertEquals(null, viewModel.sessions.value.single().compaction)
+    }
+
+    @Test
+    fun givenABackendReportingALargeWindow_whenSendingTheSameHistory_thenNothingIsSummarized() {
+        val (viewModel, service) = newViewModelWithBackend(summary = "unused", windowTokens = 200_000) { callback ->
+            callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+        }
+        send(viewModel, LARGE_PROMPT)
+
+        send(viewModel, "and now?")
+
+        verify(exactly = 0) { service.generateWithHistory(any(), any(), any()) }
+    }
+
+    @Test
+    fun givenARunThatFailed_whenAnotherRunSucceeds_thenOnlyTheLastRunsErrorOffersRetry() {
+        val failNext = AtomicBoolean(false)
+        val (viewModel, _) = newViewModelWithBackend(summary = null) { callback ->
+            if (failNext.getAndSet(false)) {
+                callback.onError("network down")
+            } else {
+                callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+            }
+        }
+        failNext.set(true)
+        send(viewModel, "first")
+        val error = viewModel.messages.value.last { it.status == MessageStatus.ERROR }
+        assertEquals(setOf(error.id), viewModel.retryableErrorIds.value)
+
+        send(viewModel, "second")
+
+        assertEquals(emptySet<String>(), viewModel.retryableErrorIds.value)
     }
 
     @Test
@@ -222,12 +307,15 @@ class ChatViewModelCompactionTest {
      */
     private fun newViewModelWithBackend(
         summary: String?,
+        backendId: String = REMOTE_ID,
+        windowTokens: Int = WINDOW_TOKENS,
         reply: (LlmInferenceService.ToolStreamCallback) -> Unit,
     ): Pair<ChatViewModel, LlmInferenceService> {
-        val backend = mockk<LlmInferenceService.LlmBackend>(relaxed = true)
-        every { backend.id } returns AiBackend.LOCAL_ID
-        every { backend.name } returns "Local LLM"
+        val backend = mockk<LlmInferenceService.ContextWindowReportingBackend>(relaxed = true)
+        every { backend.id } returns backendId
+        every { backend.name } returns backendId
         every { backend.isAvailable } returns true
+        every { backend.contextWindowTokens } returns windowTokens
         val service = mockk<LlmInferenceService>(relaxed = true)
         every { service.availableBackends } returns listOf(backend)
         every { service.getBackend(any()) } returns backend

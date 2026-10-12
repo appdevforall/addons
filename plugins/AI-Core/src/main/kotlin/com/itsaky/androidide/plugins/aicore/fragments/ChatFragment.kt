@@ -801,6 +801,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 launch { observeAgentState() }
                 launch { observePendingApprovalRequest() }
                 launch { observeEditableMessage() }
+                launch { viewModel.retryableErrorIds.collect { chatAdapter.retryableErrorIds = it } }
             }
         }
     }

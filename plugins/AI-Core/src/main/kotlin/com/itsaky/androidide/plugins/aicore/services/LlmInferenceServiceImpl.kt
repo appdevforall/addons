@@ -194,6 +194,8 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         override fun onToken(token: String) = this@asStream.onToken(token)
         override fun onComplete(response: LlmResponse) = this@asStream.onComplete(response)
         override fun onError(error: String) = this@asStream.onError(error)
+        override fun onError(error: String, kind: LlmInferenceService.FailureKind) =
+            this@asStream.onError(error, kind)
     }
 
     /**

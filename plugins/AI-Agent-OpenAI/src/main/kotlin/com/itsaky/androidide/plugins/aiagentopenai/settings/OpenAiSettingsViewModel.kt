@@ -444,6 +444,40 @@ class OpenAiSettingsViewModel(
             ?: OpenAiBackend.DEFAULT_MODEL
 
     /**
+     * The context window the user entered for the saved server, or null for automatic — which is
+     * also the answer when it was entered for a different server.
+     */
+    fun getContextWindow(): Int? {
+        val prefs = prefs() ?: return null
+        if (prefs.getString(OpenAiPreferences.KEY_CONTEXT_WINDOW_URL, null) != getBaseUrl()) return null
+        return ContextWindowSetting.storedOrNull(prefs.getInt(OpenAiPreferences.KEY_CONTEXT_WINDOW, 0))
+    }
+
+    /**
+     * Judges [input] and stores it against the saved server; blank goes back to automatic.
+     *
+     * @return the verdict; nothing is written for [ContextWindowSetting.Rejected]
+     */
+    fun saveContextWindow(input: String): ContextWindowSetting {
+        val setting = ContextWindowSetting.parse(input)
+        val editor = prefs()?.edit() ?: return setting
+        when (setting) {
+            ContextWindowSetting.Automatic -> editor
+                .remove(OpenAiPreferences.KEY_CONTEXT_WINDOW)
+                .remove(OpenAiPreferences.KEY_CONTEXT_WINDOW_URL)
+                .apply()
+
+            is ContextWindowSetting.Tokens -> editor
+                .putInt(OpenAiPreferences.KEY_CONTEXT_WINDOW, setting.count)
+                .putString(OpenAiPreferences.KEY_CONTEXT_WINDOW_URL, getBaseUrl())
+                .apply()
+
+            is ContextWindowSetting.Rejected -> Unit
+        }
+        return setting
+    }
+
+    /**
      * Stores [model] as the embedding model, against the server it was chosen for — see
      * [OpenAiPreferences.KEY_EMBEDDING_MODEL_URL].
      */

@@ -19,13 +19,15 @@ import org.junit.Test
 class CompactionUseCaseTest {
 
     private val inFlight = mutableListOf<Boolean>()
-    private val useCase = CompactionUseCase({ shippedConfig }, { _, _ -> }) { inFlight += it }
+    /** Windows the backends report; the local one has not loaded a model yet. */
+    private val windows = mapOf("openai" to 8_000)
+    private val useCase = CompactionUseCase({ shippedConfig }, { windows[it] ?: 0 }, { _, _ -> }) { inFlight += it }
 
     private val history = listOf(ChatMessage(Role.USER, "hi"), ChatMessage(Role.ASSISTANT, "hello"))
 
     @Test
     fun givenTheLocalBackend_whenCappingAFile_thenItGetsAQuarterOfItsBudget() {
-        val local = HistoryCompactor.LOCAL_BUDGET_TOKENS * HistoryCompactor.CHARS_PER_TOKEN / 4
+        val local = HistoryCompactor.LOCAL_FALLBACK_BUDGET_TOKENS * HistoryCompactor.CHARS_PER_TOKEN / 4
 
         assertEquals(local, useCase.maxFileChars(AiBackend.LOCAL_ID))
         assertEquals(ContextFilesPrompt.MAX_FILE_CHARS, useCase.maxFileChars("claude"))
@@ -33,8 +35,14 @@ class CompactionUseCaseTest {
 
     @Test
     fun givenABackend_whenCappingAllAttachments_thenTheyShareThirtyPercentOfItsBudget() {
-        assertEquals(10_800, useCase.maxAttachmentChars(AiBackend.LOCAL_ID))
+        assertEquals(3_686, useCase.maxAttachmentChars(AiBackend.LOCAL_ID))
         assertEquals(180_000, useCase.maxAttachmentChars("claude"))
+    }
+
+    @Test
+    fun givenABackendReportingItsWindow_whenBudgeting_thenThatWindowIsTheBudget() {
+        assertEquals(8_000, useCase.budgetTokens("openai"))
+        assertEquals(8_000 * HistoryCompactor.CHARS_PER_TOKEN / 4, useCase.maxFileChars("openai"))
     }
 
     @Test

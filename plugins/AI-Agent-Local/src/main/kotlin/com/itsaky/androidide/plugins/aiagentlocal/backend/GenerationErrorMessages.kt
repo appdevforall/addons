@@ -2,6 +2,13 @@ package com.itsaky.androidide.plugins.aiagentlocal.backend
 
 import android.content.Context
 import com.itsaky.androidide.plugins.aiagentlocal.R
+import com.itsaky.androidide.plugins.services.LlmInferenceService.FailureKind
+
+/**
+ * A generation failure as reported to AI Core: the chat's error text and the typed reason
+ * it compacts history on.
+ */
+internal data class GenerationError(val message: String, val kind: FailureKind)
 
 /**
  * Renders a generation failure as the text sent through `onError`, without an "Error: " prefix
@@ -11,11 +18,12 @@ internal class GenerationErrorMessages(private val context: Context) {
 
     /**
      * @param error the failure thrown while prefilling or decoding
-     * @return display-ready text for the chat's error row
+     * @return display-ready text for the chat's error row, with [FailureKind.CONTEXT_TOO_LONG] for an overflow
      */
-    fun describe(error: Throwable): String = when {
-        isContextOverflow(error) -> context.getString(R.string.local_error_context_too_long)
-        else -> error.message ?: error.javaClass.simpleName
+    fun describe(error: Throwable): GenerationError = when {
+        isContextOverflow(error) ->
+            GenerationError(context.getString(R.string.local_error_context_too_long), FailureKind.CONTEXT_TOO_LONG)
+        else -> GenerationError(error.message ?: error.javaClass.simpleName, FailureKind.OTHER)
     }
 
     companion object {

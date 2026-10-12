@@ -87,6 +87,15 @@
       it to pick one the server reported. Typing is saved when you leave the
       field. For a local server the model is whatever you pulled, such as
       <code>qwen2.5-coder</code>.</li>
+    <li><b>Context window (tokens)</b> — optional. Leave it blank and the window
+      is detected: from the server's model list when it reports one (OpenRouter,
+      LM Studio), or from OpenAI's published figures on OpenAI's own API. Local
+      servers often run a model with only a few thousand tokens — Ollama's
+      <code>num_ctx</code>, the length LM Studio loaded the model with,
+      <code>llama-server</code>'s <code>-c</code> — so enter the size the server
+      actually uses. AI Core keeps the conversation under it. The value is kept
+      for the server it was entered for; switching servers goes back to
+      automatic.</li>
     <li><b>Test Connection &amp; List Models</b> — checks the URL and key together
       without saving either, so a typo is caught here rather than mid-chat. The
       same reply fills the model list, because listing models <em>is</em> the
@@ -148,6 +157,10 @@
     <li><b>"The server does not have a model called …"</b> — tap <b>Test
       Connection &amp; List Models</b>, then pick from the Model field, or type the
       exact name the server uses.</li>
+    <li><b>"This conversation is longer than …"</b> — the conversation no longer
+      fits the model's context window. With a local server, check that
+      <b>Context window (tokens)</b> matches the context size the server runs
+      with, or raise that size on the server.</li>
     <li><b>The <code>OpenAI</code> backend never appears</b> — AI Core isn't
       installed or activated; install it and restart the IDE.</li>
   </ul>

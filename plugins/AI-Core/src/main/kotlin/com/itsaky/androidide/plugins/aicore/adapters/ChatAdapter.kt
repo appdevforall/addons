@@ -82,6 +82,17 @@ class ChatAdapter(
             notifyUserRowsChanged { it == previous || it == value }
         }
 
+    /** The error rows that offer Retry, from ChatViewModel.retryableErrorIds; the last run's only. */
+    internal var retryableErrorIds: Set<String> = emptySet()
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            currentList.forEachIndexed { position, message ->
+                if ((message.id in previous) != (message.id in value)) notifyItemChanged(position)
+            }
+        }
+
     /** Rebinds the actions of the user rows [changed] picks; a payload keeps their text as it is. */
     private inline fun notifyUserRowsChanged(changed: (messageId: String) -> Boolean) {
         currentList.forEachIndexed { position, message ->
@@ -300,7 +311,9 @@ class ChatAdapter(
             MessageStatus.ERROR -> {
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
-                holder.btnRetry.visibility = View.VISIBLE
+                // Retry re-runs the last prompt, so an older or restored error offers nothing.
+                val offersAction = message.isSetupError || message.id in retryableErrorIds
+                holder.btnRetry.visibility = if (offersAction) View.VISIBLE else View.GONE
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
                 // Only a setup notice is fixed in settings; a run error is retried (ADFA-6345).

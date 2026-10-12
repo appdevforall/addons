@@ -13,11 +13,13 @@ import kotlinx.coroutines.withTimeoutOrNull
  * to summarize the history (ADFA-6345). Publishing the result is [ChatViewModel]'s job.
  *
  * @param config supplies the cached prompt config.
+ * @param contextWindow the window a backend reports, in tokens; 0 when it reports none.
  * @param logWarn records a summarize call that failed.
  * @param summarizing told true before each summarize call and false after, so a Stop can cancel it.
  */
 internal class CompactionUseCase(
     private val config: PromptConfigProvider<AgentPromptConfig>,
+    private val contextWindow: (backendId: String) -> Int,
     private val logWarn: (String, Throwable?) -> Unit,
     private val summarizing: (Boolean) -> Unit,
 ) {
@@ -25,8 +27,16 @@ internal class CompactionUseCase(
     /**
      * @property tokens the request's estimated size.
      * @property budgetTokens the backend's budget it was measured against.
+     * @property historyRoomChars see [HistoryCompactor.historyRoomChars]; what a cut history may keep.
      */
-    data class Estimate(val tokens: Int, val budgetTokens: Int)
+    data class Estimate(val tokens: Int, val budgetTokens: Int, val historyRoomChars: Int)
+
+    /**
+     * @param backendId the backend the run is against.
+     * @return its token budget; see [HistoryCompactor.budgetTokens].
+     */
+    fun budgetTokens(backendId: String): Int =
+        HistoryCompactor.budgetTokens(backendId, contextWindow(backendId))
 
     /**
      * @param backendId the backend the run is against.
@@ -34,7 +44,7 @@ internal class CompactionUseCase(
      */
     fun maxFileChars(backendId: String): Int = minOf(
         ContextFilesPrompt.MAX_FILE_CHARS,
-        HistoryCompactor.budgetTokens(backendId) * HistoryCompactor.CHARS_PER_TOKEN / FILE_BUDGET_SHARE,
+        budgetTokens(backendId) * HistoryCompactor.CHARS_PER_TOKEN / FILE_BUDGET_SHARE,
     )
 
     /**
@@ -42,7 +52,7 @@ internal class CompactionUseCase(
      * @return the most all of a message's attachments are sent with, so several cannot fill it.
      */
     fun maxAttachmentChars(backendId: String): Int =
-        HistoryCompactor.budgetTokens(backendId) * HistoryCompactor.CHARS_PER_TOKEN * ATTACHMENTS_PERCENT / 100
+        budgetTokens(backendId) * HistoryCompactor.CHARS_PER_TOKEN * ATTACHMENTS_PERCENT / 100
 
     /**
      * @param backendId the backend the run is against.
@@ -50,7 +60,7 @@ internal class CompactionUseCase(
      * @param toolDefinitions the tools every request of the run carries.
      * @param history the turns before the new message.
      * @param pendingUserTurn the new message with its attached files.
-     * @param forced a Retry after a failed run; see [HistoryCompactor.needsCompaction].
+     * @param forced a Retry after a context overflow; see [HistoryCompactor.needsCompaction].
      * @return the estimate when [history] has to be summarized first; null when it is sent as it is.
      */
     fun estimateIfOverBudget(
@@ -62,10 +72,11 @@ internal class CompactionUseCase(
         forced: Boolean,
     ): Estimate? {
         if (history.isEmpty()) return null
-        val budget = HistoryCompactor.budgetTokens(backendId)
+        val budget = budgetTokens(backendId)
         val fixedChars = HistoryCompactor.fixedChars(systemPrompt, toolDefinitions)
         val tokens = HistoryCompactor.estimateTokens(fixedChars, history, pendingUserTurn)
-        return Estimate(tokens, budget).takeIf { HistoryCompactor.needsCompaction(tokens, budget, forced) }
+        if (!HistoryCompactor.needsCompaction(tokens, budget, forced)) return null
+        return Estimate(tokens, budget, HistoryCompactor.historyRoomChars(fixedChars, pendingUserTurn, budget))
     }
 
     /**
@@ -85,7 +96,7 @@ internal class CompactionUseCase(
     ): HistoryCompactor.Outcome = HistoryCompactor.compact(
         config.config(),
         history,
-        HistoryCompactor.budgetTokens(backendId),
+        budgetTokens(backendId),
         replyTokens,
     ) { turns, request, systemPrompt ->
         summarize(llmService, backendId, turns, request, systemPrompt, replyTokens)

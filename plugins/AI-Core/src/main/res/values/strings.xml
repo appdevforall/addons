@@ -216,6 +216,7 @@
     <string name="agent_no_progress">Stopped: the model kept redoing actions it had already taken instead of making progress. Try rephrasing your request, or asking for a smaller step.</string>
     <string name="chat_compacted">Earlier messages were summarized to stay within the model\'s limit.</string>
     <string name="chat_compaction_failed">Earlier messages could not be summarized, so only the most recent ones were kept to stay within the model\'s limit.</string>
+    <string name="chat_compaction_trimmed">Only the most recent messages were kept to stay within the on-device model\'s limit.</string>
     <string name="agent_action_failed">I couldn\'t complete that, the last action failed. See the details above.</string>
     <string name="agent_reply_truncated">The model ran out of room mid-action, so nothing was changed. Ask for a smaller step \u2014 one file, or one method at a time.</string>
     <string name="agent_reply_malformed">The model\'s reply wasn\'t a readable action, so nothing was changed. Try rephrasing, or pick a larger model in AI Settings.</string>
