@@ -13,4 +13,7 @@ enum class ApprovalPreview {
 
     /** The whole shell command, uncut, under the directory it runs in. */
     SHELL_COMMAND,
+
+    /** The command a stop would interrupt, and the Terminal session it runs in. */
+    STOP_COMMAND,
 }

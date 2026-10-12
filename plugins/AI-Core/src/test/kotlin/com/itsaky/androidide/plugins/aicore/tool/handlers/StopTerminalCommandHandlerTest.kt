@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
+import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.services.IdeTerminalService
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
@@ -11,6 +12,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -24,6 +26,7 @@ class StopTerminalCommandHandlerTest {
     private lateinit var context: PluginContext
     private lateinit var services: ServiceRegistry
     private lateinit var terminal: IdeTerminalService
+    private lateinit var started: StartedCommands
     private lateinit var handler: StopTerminalCommandHandler
 
     @Before
@@ -34,13 +37,36 @@ class StopTerminalCommandHandlerTest {
         every { context.services } returns services
         every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeTerminalService::class.java) } returns terminal
-        handler = StopTerminalCommandHandler(context)
+        started = StartedCommands()
+        handler = StopTerminalCommandHandler(context, started)
     }
 
     @Test
     fun givenTheStopTool_whenAskingForApproval_thenItIsAskedEveryTime() {
         assertTrue(handler.requiresApproval)
         assertFalse(handler.allowsSessionApproval)
+    }
+
+    @Test
+    fun givenACommandThisChatStarted_whenValidating_thenTheApprovalShowsItsTextAndSession() = runTest {
+        started.record("3f9a1c2e", "npm run dev", "AI Core 2")
+
+        val validation = handler.validate(mapOf("command_id" to "3f9a1c2e")) as Validation.Accepted
+
+        assertEquals(ApprovalPreview.STOP_COMMAND, handler.approvalPreview)
+        assertEquals("npm run dev", validation.args[StopTerminalCommandHandler.DETAIL_COMMAND])
+        assertEquals("AI Core 2", validation.args[StopTerminalCommandHandler.DETAIL_SESSION])
+    }
+
+    @Test
+    fun givenTheModelNamesACommandItself_whenValidating_thenTheApprovalNeverShowsIt() = runTest {
+        val validation = handler.validate(
+            mapOf("command_id" to "3f9a1c2e", "command" to "echo harmless", "session" to "Mine"),
+        ) as Validation.Accepted
+
+        // The dialog would otherwise show the model's words as the command being stopped.
+        assertEquals(mapOf("command_id" to "3f9a1c2e"), validation.args)
+        assertNull(validation.args[StopTerminalCommandHandler.DETAIL_COMMAND])
     }
 
     @Test

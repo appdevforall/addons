@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ShellInvocation
+import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import org.json.JSONObject
 
@@ -24,6 +26,9 @@ object ApprovalTextFormatter {
         Character.LINE_SEPARATOR,
         Character.PARAGRAPH_SEPARATOR,
     )
+
+    private const val LTR_ISOLATE = '\u2066'
+    private const val POP_ISOLATE = '\u2069'
 
     private const val HIDDEN_CHARACTERS_WARNING =
         "⚠ This command contains invisible or control characters, shown as <U+XXXX>. " +
@@ -61,8 +66,8 @@ object ApprovalTextFormatter {
 
     /**
      * Renders a shell command uncut, since a hidden line would still run, with every invisible or
-     * control character spelled as `<U+XXXX>` so the text read is the text run. A working directory,
-     * when given, goes above the command as a label.
+     * control character spelled as `<U+XXXX>` and each line held left to right, so the text read is
+     * the text run. A working directory, when given, goes above the command as a label.
      * @param args the `run_shell_command` call arguments.
      * @param directoryLabel words the line naming the working directory.
      * @return the command text.
@@ -71,9 +76,30 @@ object ApprovalTextFormatter {
         val invocation = ShellInvocation.from(args) ?: return ""
         val command = revealHidden(invocation.command)
         val directory = invocation.workingDirectory?.let(::revealHidden)
-        val shown = directory?.let { "${directoryLabel(it)}\n\n$command" } ?: command
+        val shown = directory?.let { "${directoryLabel(leftToRight(it))}\n\n${leftToRight(command)}" }
+            ?: leftToRight(command)
         if (command == invocation.command && directory == invocation.workingDirectory) return shown
         return "$shown\n\n$HIDDEN_CHARACTERS_WARNING"
+    }
+
+    /**
+     * Renders a stop as the command it would interrupt, under the Terminal session it runs in, so two
+     * running commands can be told apart. An id this chat did not start is shown by its id alone.
+     * @param args the `stop_terminal_command` arguments its handler validated.
+     * @param sessionLabel words the line naming the session.
+     * @param unknownCommand words the line for an id whose command is not known.
+     * @return the text naming what would stop.
+     */
+    fun formatStopCommand(
+        args: Map<String, Any?>,
+        sessionLabel: (String) -> String,
+        unknownCommand: (String) -> String,
+    ): String {
+        val commandId = args[TerminalCommandHandler.ARG_COMMAND_ID]?.toString().orEmpty()
+        val command = args[StopTerminalCommandHandler.DETAIL_COMMAND]?.toString()
+            ?: return unknownCommand(commandId)
+        val session = args[StopTerminalCommandHandler.DETAIL_SESSION]?.toString().orEmpty()
+        return "${sessionLabel(session)}\n\n${leftToRight(revealHidden(command))}"
     }
 
     /**
@@ -87,6 +113,13 @@ object ApprovalTextFormatter {
             if (isHidden(codePoint)) append("<U+%04X>".format(codePoint)) else appendCodePoint(codePoint)
         }
     }
+
+    /**
+     * Holds each line of [text] left to right with an LRI…PDI isolate: a line opening with a Hebrew
+     * or Arabic letter would otherwise be laid out right to left, its parts shown out of order.
+     */
+    internal fun leftToRight(text: String): String =
+        text.lineSequence().joinToString("\n") { "$LTR_ISOLATE$it$POP_ISOLATE" }
 
     private fun isHidden(codePoint: Int): Boolean = when {
         codePoint == '\n'.code || codePoint == '\t'.code -> false

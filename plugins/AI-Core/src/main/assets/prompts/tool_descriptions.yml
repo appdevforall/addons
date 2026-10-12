@@ -103,8 +103,8 @@ built_in_tools:
       a new shell, so cd and export do not carry over to the next call: use working_directory, or
       chain in one call, e.g. "cd app && ls src". A non-zero exit code can be the answer, e.g.
       grep exits 1 when nothing matches. A command still running after 30 seconds, such as a
-      server, is left running and its output so far comes back. For a Gradle task use
-      run_gradle_task, not ./gradlew
+      server or one waiting for input, is left running and its output so far comes back. For a
+      Gradle task use run_gradle_task, not ./gradlew
     arguments:
       command: >-
         The command or script to run with bash, e.g. "ls -la app/src" or several lines of script.

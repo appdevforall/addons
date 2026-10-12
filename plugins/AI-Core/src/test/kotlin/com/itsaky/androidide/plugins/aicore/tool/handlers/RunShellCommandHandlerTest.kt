@@ -114,7 +114,7 @@ class RunShellCommandHandlerTest {
     }
 
     @Test
-    fun givenACommandStillRunning_whenRunning_thenItSucceedsAndSaysToLeaveItRunning() = runTest {
+    fun givenACommandStillRunning_whenRunning_thenItSaysToLeaveItRunning() = runTest {
         answerWith(TerminalCommandResult.Running("cmd-1", "AI Core 1", "$ npm start\nlistening on 3000"))
 
         val result = handler.execute(mapOf("command" to "npm start"))
@@ -122,9 +122,32 @@ class RunShellCommandHandlerTest {
         assertTrue(result.success)
         assertTrue(result.message.contains("still running in Terminal session \"AI Core 1\""))
         assertTrue(result.message.contains("command id \"cmd-1\""))
-        assertTrue(result.data!!.contains("Do not run it again"))
+        assertTrue(result.data!!.contains("do not run it again"))
         assertTrue(result.data!!.contains("leave it running unless the user asks you to stop it"))
         assertTrue(result.data!!.endsWith("listening on 3000"))
+    }
+
+    @Test
+    fun givenACommandWaitingForInput_whenRunning_thenItIsNotReportedAsSucceeded() = runTest {
+        answerWith(TerminalCommandResult.Running("cmd-2", "AI Core 1", "Do you want to continue? [Y/n]"))
+
+        val result = handler.execute(mapOf("command" to "pkg install foo"))
+
+        // An install stopped at a prompt must not reach the user as one that worked.
+        assertFalse(result.data!!.contains("succeeded"))
+        assertTrue(result.data!!.contains("has not exited yet"))
+        assertTrue(result.data!!.contains("if it asks for input"))
+        assertTrue(result.data!!.contains("tell the user to answer it there"))
+    }
+
+    @Test
+    fun givenACommandLeftRunning_whenRunning_thenItIsRecordedUnderItsId() = runTest {
+        val started = StartedCommands()
+        answerWith(TerminalCommandResult.Running("cmd-3", "AI Core 2", "PING 1.1.1.1"))
+
+        RunShellCommandHandler(context, started).execute(mapOf("command" to "ping 1.1.1.1"))
+
+        assertEquals(StartedCommands.Started("ping 1.1.1.1", "AI Core 2"), started.find("cmd-3"))
     }
 
     @Test
@@ -135,6 +158,17 @@ class RunShellCommandHandlerTest {
 
         assertFalse(result.success)
         assertTrue(result.message.contains("did not start: The terminal environment is not installed"))
+    }
+
+    @Test
+    fun givenAFixableReasonNotToStart_whenRunning_thenTheModelIsNotToldRetryingWillNotHelp() = runTest {
+        answerWith(TerminalCommandResult.NotStarted("Working directory does not exist: ap"))
+
+        val result = handler.execute(mapOf("command" to "ls", "working_directory" to "ap"))
+
+        assertFalse(result.success)
+        assertTrue(result.message.contains("Working directory does not exist: ap"))
+        assertFalse(result.error_details!!.contains("will not help"))
     }
 
     @Test

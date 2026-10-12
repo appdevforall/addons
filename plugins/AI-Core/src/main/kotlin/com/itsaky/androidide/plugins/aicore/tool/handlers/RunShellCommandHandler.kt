@@ -19,6 +19,7 @@ import kotlin.time.measureTimedValue
  */
 class RunShellCommandHandler(
     pluginContext: PluginContext,
+    private val startedCommands: StartedCommands = StartedCommands(),
 ) : ToolHandler {
     override val toolName = TOOL_NAME
 
@@ -73,6 +74,9 @@ class RunShellCommandHandler(
                 SHELL_STAGE,
                 "$toolName outcome=${outcome::class.simpleName} waitedMs=${waited.inWholeMilliseconds}"
             )
+            if (outcome is TerminalCommandResult.Running) {
+                startedCommands.record(outcome.commandId, invocation.command, outcome.sessionName)
+            }
             resultFor(outcome)
         }
     }
@@ -83,11 +87,14 @@ class RunShellCommandHandler(
         const val ARG_WORKING_DIRECTORY = "working_directory"
 
         // Naming the stop tool as a next step made Gemini stop a ping the user had just started.
+        // Not "succeeded": an install stopped at [Y/n] also comes back Running.
         private const val STILL_RUNNING_NOTE =
-            "The command has not exited and keeps running, e.g. a server, a watch task or a ping; " +
-                "the output below is what it printed so far. That is expected and the command " +
-                "succeeded: report this output. Do not run it again, and leave it running unless " +
-                "the user asks you to stop it. Its command id is what " +
+            "The command has not exited yet; the output below is what it printed so far. Check its " +
+                "last line: if it asks for input, such as a [Y/n] question, a password or an editor, " +
+                "the command is waiting in the Terminal session named above, so tell the user to " +
+                "answer it there and do not say it finished. Otherwise it keeps running, e.g. a " +
+                "server, a watch task or a ping: report this output, do not run it again, and leave " +
+                "it running unless the user asks you to stop it. Its command id is what " +
                 "${ReadTerminalCommandHandler.TOOL_NAME} and ${StopTerminalCommandHandler.TOOL_NAME} " +
                 "take. Another command runs in a separate Terminal session meanwhile."
 
@@ -98,7 +105,7 @@ class RunShellCommandHandler(
 
         /**
          * The tool result for [outcome]: a command that exited succeeds whatever its code, as grep
-         * finding nothing exits 1; one still running (a server) succeeds with its output so far.
+         * finding nothing exits 1; one still running (a server, or a prompt) returns its output so far.
          */
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
@@ -112,9 +119,10 @@ class RunShellCommandHandler(
                     "with command id \"${outcome.commandId}\"",
                 data = "$STILL_RUNNING_NOTE\n\n${TerminalOutput.tailOf(outcome.output)}"
             )
+            // The reason says what would help: a mistyped directory, or a session to stop first.
             is TerminalCommandResult.NotStarted -> ToolResult.failure(
                 "Command did not start: ${outcome.reason}",
-                "Nothing ran. Tell the user why; retrying the same command will not help."
+                "Nothing ran."
             )
             else -> ToolResult.failure("Command ended with an unknown result: $outcome")
         }

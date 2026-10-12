@@ -16,6 +16,7 @@ internal object ApprovalPresentation {
     fun argsLabel(preview: ApprovalPreview): Int = when (preview) {
         ApprovalPreview.EDIT -> R.string.approval_proposed_change
         ApprovalPreview.SHELL_COMMAND -> R.string.approval_command
+        ApprovalPreview.STOP_COMMAND -> R.string.approval_command_to_stop
         ApprovalPreview.ARGS -> R.string.approval_args
     }
 
@@ -26,6 +27,11 @@ internal object ApprovalPresentation {
             ApprovalPreview.SHELL_COMMAND -> ApprovalTextFormatter.formatShellCommand(args) { directory ->
                 resources.getString(R.string.approval_working_directory, directory)
             }
+            ApprovalPreview.STOP_COMMAND -> ApprovalTextFormatter.formatStopCommand(
+                args,
+                sessionLabel = { resources.getString(R.string.approval_terminal_session, it) },
+                unknownCommand = { resources.getString(R.string.approval_unknown_command, it) },
+            )
             ApprovalPreview.ARGS -> ApprovalTextFormatter.formatArgs(args)
         }
 

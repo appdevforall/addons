@@ -15,6 +15,7 @@ class ApprovalPresentationTest {
     fun givenEachPreview_whenItsLabelIsPicked_thenTheMatchingHeadingComesBack() {
         assertEquals(R.string.approval_proposed_change, ApprovalPresentation.argsLabel(ApprovalPreview.EDIT))
         assertEquals(R.string.approval_command, ApprovalPresentation.argsLabel(ApprovalPreview.SHELL_COMMAND))
+        assertEquals(R.string.approval_command_to_stop, ApprovalPresentation.argsLabel(ApprovalPreview.STOP_COMMAND))
         assertEquals(R.string.approval_args, ApprovalPresentation.argsLabel(ApprovalPreview.ARGS))
     }
 

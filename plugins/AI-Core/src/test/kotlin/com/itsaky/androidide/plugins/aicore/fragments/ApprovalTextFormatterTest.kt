@@ -2,6 +2,9 @@ package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalCommandHandler
+import java.text.Bidi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,6 +18,9 @@ import org.junit.Test
 class ApprovalTextFormatterTest {
 
     private fun editArgs(vararg pairs: Pair<String, Any?>) = mapOf(*pairs)
+
+    /** [text] with each line held left to right, as the shell previews show it. */
+    private fun ltr(text: String) = text.lineSequence().joinToString("\n") { "\u2066$it\u2069" }
 
     @Test
     fun givenAnEdit_whenFormatted_thenItNamesThePathAndBothSidesOfTheChange() {
@@ -152,7 +158,7 @@ class ApprovalTextFormatterTest {
             directoryLabel = { "in $it" },
         )
 
-        assertEquals(script, text)
+        assertEquals(ltr(script), text)
     }
 
     @Test
@@ -165,7 +171,7 @@ class ApprovalTextFormatterTest {
             directoryLabel = { "Runs in: $it" },
         )
 
-        assertEquals("Runs in: -L dir\n\nls", text)
+        assertEquals("Runs in: ${ltr("-L dir")}\n\n${ltr("ls")}", text)
         assertFalse(text.contains("cd "))
     }
 
@@ -176,7 +182,7 @@ class ApprovalTextFormatterTest {
             directoryLabel = { "in $it" },
         )
 
-        assertTrue(text.startsWith("rm -rf app<U+000D>ls"))
+        assertTrue(text.startsWith(ltr("rm -rf app<U+000D>ls")))
         assertTrue(text.contains("invisible or control characters"))
     }
 
@@ -199,11 +205,52 @@ class ApprovalTextFormatterTest {
             directoryLabel = { "Runs in: $it" },
         )
 
-        assertTrue(text.startsWith("Runs in: app<U+202E>tset\n\nls"))
+        assertTrue(text.startsWith("Runs in: ${ltr("app<U+202E>tset")}\n\n${ltr("ls")}"))
     }
 
     @Test
     fun givenNewlinesAndTabs_whenRevealed_thenTheyStayAsWritten() {
         assertEquals("a\n\tb", ApprovalTextFormatter.revealHidden("a\n\tb"))
+    }
+
+    @Test
+    fun givenACommandStartingWithAnRtlLetter_whenFormatted_thenItIsLaidOutLeftToRight() {
+        val command = "\u05D0; rm -rf app/src; echo \u05D1"
+
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to command),
+            directoryLabel = { "in $it" },
+        )
+
+        // Bare, the paragraph takes its direction from the Hebrew letter and shows the parts reversed.
+        assertEquals(1, Bidi(command, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseLevel)
+        assertEquals(ltr(command), text)
+        assertEquals(0, Bidi(text, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseLevel)
+    }
+
+    @Test
+    fun givenAStopOfACommandThisChatStarted_whenFormatted_thenItShowsTheCommandUnderItsSession() {
+        val text = ApprovalTextFormatter.formatStopCommand(
+            mapOf(
+                TerminalCommandHandler.ARG_COMMAND_ID to "3f9a1c2e",
+                StopTerminalCommandHandler.DETAIL_COMMAND to "npm run dev",
+                StopTerminalCommandHandler.DETAIL_SESSION to "AI Core 2",
+            ),
+            sessionLabel = { "In: $it" },
+            unknownCommand = { "Unknown $it" },
+        )
+
+        assertEquals("In: AI Core 2\n\n${ltr("npm run dev")}", text)
+    }
+
+    @Test
+    fun givenAStopOfAnUnknownCommand_whenFormatted_thenItShowsTheIdAlone() {
+        val text = ApprovalTextFormatter.formatStopCommand(
+            mapOf(TerminalCommandHandler.ARG_COMMAND_ID to "3f9a1c2e"),
+            sessionLabel = { "In: $it" },
+            unknownCommand = { "Unknown $it" },
+        )
+
+        assertEquals("Unknown 3f9a1c2e", text)
     }
 }

@@ -167,7 +167,7 @@ class ApprovalDialogFragment : DialogFragment() {
                 when (preview) {
                     ApprovalPreview.EDIT -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
                     ApprovalPreview.SHELL_COMMAND -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_COMMAND
-                    ApprovalPreview.ARGS -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW
+                    ApprovalPreview.STOP_COMMAND, ApprovalPreview.ARGS -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW
                 },
             )
             wireTooltip(

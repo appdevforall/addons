@@ -39,11 +39,13 @@ object BuiltInToolHandlers {
         GradleSyncHandler(context),
     ) + (if (hostHasGradleTaskApi()) listOf(RunGradleTaskHandler(context)) else emptyList()) +
         (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context)) else emptyList()) +
-        (if (hostHasTerminalService(context)) listOf(
-            RunShellCommandHandler(context),
-            ReadTerminalCommandHandler(context),
-            StopTerminalCommandHandler(context),
-        ) else emptyList()) +
+        (if (hostHasTerminalService(context)) StartedCommands().let { started ->
+            listOf(
+                RunShellCommandHandler(context, started),
+                ReadTerminalCommandHandler(context),
+                StopTerminalCommandHandler(context, started),
+            )
+        } else emptyList()) +
         listOf(
         // Template tool
         GenerateFromTemplateHandler(context),

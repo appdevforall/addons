@@ -43,8 +43,12 @@ abstract class TerminalCommandHandler(
     /** The result for [commandId] when the call finds it [completed]. */
     internal abstract fun completed(commandId: String, completed: TerminalCommandResult.Completed): ToolResult
 
+    /** The arguments [commandId]'s approval dialog shows and the call runs with; the call's own by default. */
+    internal open fun approvalArgs(commandId: String, args: Map<String, Any?>): Map<String, Any?> = args
+
     final override suspend fun validate(args: Map<String, Any?>): Validation =
-        commandIdOf(args)?.let { Validation.Accepted(args) } ?: Validation.Rejected(NO_COMMAND_ID)
+        commandIdOf(args)?.let { Validation.Accepted(approvalArgs(it, args)) }
+            ?: Validation.Rejected(NO_COMMAND_ID)
 
     final override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val commandId = commandIdOf(args) ?: return NO_COMMAND_ID

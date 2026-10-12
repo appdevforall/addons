@@ -1076,6 +1076,7 @@ class ChatViewModel(
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
+                        canonicalName = { name -> tools.router.getHandler(name)?.toolName ?: name },
                         requiredTool = requiredTool,
                         // Only a prose turn that showed an answer has one a recap could repeat.
                         events = AgentRunReporter(runNotices) { askedToFinishAfterProse = proseTurnShowedAnswer },
