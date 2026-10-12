@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fun and Games JME</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #111111;
+    --muted: #555555;
+    --accent: #0553b1;
+    --accent-light: #eaf2fc;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: var(--muted); margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Fun and Games JME</h1>
+  <p class="subtitle">Adds three playable jMonkeyEngine game projects to Code on the Go's New Project screen</p>
+  <div class="meta">Version 1.0.0 &middot; Author: James Turner &middot; Template bundle: <code>org.appdevforall.funandgamesjme</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#limitations">Limitations &amp; Scope</a></li>
+    <li><a href="#credits">Credits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Fun and Games JME is a <strong>template bundle</strong> for Code on the Go. It adds three
+    small Android <strong>games</strong> built with <a href="https://jmonkeyengine.org/">jMonkeyEngine</a>
+    (jME) to the New Project screen. Instead of starting from an empty activity, a developer picks
+    a game, enters an app name and package name, and gets a complete project that builds and plays
+    on the device straight away.
+  </p>
+  <p>
+    It runs no code. A <code>.cgt</code> bundle is a zip archive of project skeletons and their
+    metadata, which the IDE reads directly. There is nothing to enable, no permissions to
+    grant, and no process to load.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The three templates</h3>
+  <table>
+    <thead>
+      <tr><th>Template</th><th>Language</th><th>Engine</th><th>Game</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Demo (jME)</td><td>Java</td><td>jME 3.6.1</td><td>A 3D Earth you drag to spin, an
+        orbiting rocket with an exhaust trail and bloom glow, and a starfield. Tap for points.</td></tr>
+      <tr><td>Tetris (jME)</td><td>Kotlin</td><td>jME 3.9.0</td><td>The falling-block puzzle.</td></tr>
+      <tr><td>Bubble Wand (jME)</td><td>Kotlin</td><td>jME 3.9.0</td><td>A first-person shooter: catch
+        floating balloon animals in bubbles.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Controls</h3>
+  <table>
+    <thead>
+      <tr><th>Game</th><th>Controls</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Demo</td><td>Drag to rotate the Earth, flick to spin it with inertia, tap for +10 points.</td></tr>
+      <tr><td>Tetris</td><td>Drag left or right to move, drag down to soft-drop, tap to rotate,
+        long-press to hard-drop.</td></tr>
+      <tr><td>Bubble Wand</td><td>Left half: drag to walk. Right half: drag to look, tap to shoot. Or
+        use the on-screen D-pad and <strong>FIRE</strong>. <strong>HIDE UI</strong> toggles the buttons.</td></tr>
+    </tbody>
+  </table>
+  <p>A hardware keyboard also works: arrow keys, space and WASD.</p>
+
+  <h3>What each template generates</h3>
+  <ul>
+    <li>A Gradle project with an <code>app</code> module, a version catalog
+      (<code>gradle/libs.versions.toml</code>) and the Gradle wrapper.</li>
+    <li>The game source under <code>app/src/main/java/</code>, in the package you entered.</li>
+    <li>Launcher icons, and for Demo the Earth and particle textures it draws.</li>
+  </ul>
+
+  <h3>Parameter substitution</h3>
+  <p>
+    The app name and package name entered in the New Project dialog are substituted into the
+    generated files. The Android Gradle Plugin, Kotlin, Gradle, SDK and Java versions are taken
+    from the IDE, so a generated project follows whatever toolchain the installed Code on the Go
+    ships.
+  </p>
+</section>
+
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>What is in the archive</h3>
+  <p>
+    A <code>.cgt</code> is a zip archive. Its root holds <code>templates.json</code>, which lists
+    the templates, and one directory per template. Each of those carries
+    <code>template/template.json</code> for its name, description and parameters, and
+    <code>template/thumb.png</code> for the picture on the New Project screen.
+  </p>
+  <div class="diagram">
+  fun-and-games-jme.cgt
+  |
+  +-- templates.json              lists the three templates
+  +-- cgt-build.properties        the commit this bundle was built from
+  |
+  +-- demo/
+  |     +-- template/template.json
+  |     +-- template/thumb.png
+  |     +-- settings.gradle.peb
+  |     +-- gradle/libs.versions.toml.peb
+  |     +-- app/build.gradle.peb
+  |     +-- app/src/main/java/PACKAGE_NAME/CubeGame.java.peb
+  |
+  +-- tetris/      ... and bubblewand/</div>
+
+  <h3>Authoring with Pebble</h3>
+  <p>
+    Files ending in <code>.peb</code> are processed by the Pebble template engine at
+    project-creation time (<code>${{APP_NAME}}</code>, <code>${{PACKAGE_NAME}}</code> and friends
+    are substituted) and the suffix is dropped; other files are copied verbatim. This is the same
+    authoring format the core Android templates use.
+  </p>
+
+  <h3>How the IDE finds it</h3>
+  <p>
+    Code on the Go discovers project templates by scanning its templates directory and the
+    Downloads folder for <code>.cgt</code> archives. Putting the file in either place is the whole
+    installation. Nothing registers it, because there is no code to run.
+  </p>
+
+  <h3>Provenance</h3>
+  <p>
+    Every published bundle carries <code>cgt-build.properties</code> at its archive root,
+    recording the commit it was built from and the date of that commit. Read it with
+    <code>unzip -p fun-and-games-jme.cgt cgt-build.properties</code>.
+  </p>
+
+  <h3>Permissions</h3>
+  <p>
+    None. A template bundle declares no permissions, because it runs no code. The IDE writes the
+    generated project, exactly as it does for a built-in template. The games themselves request
+    no Android permissions either.
+  </p>
+</section>
+
+<section id="usage">
+  <h2>4. Usage</h2>
+
+  <h3>Install</h3>
+  <ol>
+    <li>Download <code>fun-and-games-jme.cgt</code> from the add-on gallery.</li>
+    <li>In Code on the Go, open <em>Preferences &rarr; Extensions Manager</em> and switch to the
+      <strong>Templates</strong> tab.</li>
+    <li>Tap <strong>+</strong>, browse to the downloaded <code>.cgt</code> and select it.</li>
+    <li>A dialog lists the three templates. Tap <strong>Install</strong>.</li>
+  </ol>
+
+  <h3>Create and run a game</h3>
+  <ol>
+    <li>Open <strong>New Project</strong>.</li>
+    <li>Pick <strong>Demo (jME)</strong>, <strong>Tetris (jME)</strong> or
+      <strong>Bubble Wand (jME)</strong>.</li>
+    <li>Enter an <strong>app name</strong> and a <strong>package name</strong>, then tap
+      <strong>Create</strong>.</li>
+    <li>Wait for <em>Project initialized</em>, then tap <strong>Run</strong>.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>The first build needs an internet connection.</strong> It downloads jMonkeyEngine from
+    Maven Central. Later builds use Gradle's cache and work offline.
+  </div>
+</section>
+
+<section id="benefits">
+  <h2>5. Key Benefits</h2>
+  <ul>
+    <li><strong>Playable from the first build.</strong> Each template is a finished game, not a
+      skeleton, so there is something to run and change straight away.</li>
+    <li><strong>A real 3D engine.</strong> jMonkeyEngine brings scene graphs, lighting, particles and
+      post-processing filters to a project made on the device.</li>
+    <li><strong>Java and Kotlin.</strong> Demo is written in Java, Tetris and Bubble Wand in Kotlin.</li>
+    <li><strong>Follows the IDE's toolchain.</strong> Plugin, language and SDK versions come from Code
+      on the Go, so the projects keep building as the IDE updates.</li>
+    <li><strong>No code, no permissions.</strong> A data bundle the IDE reads. Nothing loads into
+      the editor's process.</li>
+  </ul>
+</section>
+
+<section id="limitations">
+  <h2>6. Limitations &amp; Scope</h2>
+  <ul>
+    <li>Generated projects build for <code>armeabi-v7a</code> and <code>arm64-v8a</code> only. That
+      covers every phone and tablet that runs Code on the Go, but not x86 emulators.</li>
+    <li>The first build of each project needs network access to fetch jMonkeyEngine.</li>
+    <li>Demo uses jME 3.6.1; Tetris and Bubble Wand use jME 3.9.0.</li>
+  </ul>
+</section>
+
+<section id="credits">
+  <h2>7. Credits</h2>
+  <ul>
+    <li><strong>Author:</strong> James Turner.</li>
+    <li><strong>Source:</strong> converted from the standalone
+      <a href="https://github.com/appdevforall/FunandGames-jme">FunandGames-jme</a> repository. The
+      template skeletons are unchanged; only the packaging moved into this repository.</li>
+    <li>A libGDX version of the same games lives in
+      <a href="https://github.com/appdevforall/FunandGames-libGDX">FunandGames-libGDX</a>.</li>
+  </ul>
+</section>
+
+<footer>
+  Fun and Games JME Documentation &middot; Version 1.0.0 &middot; org.appdevforall.funandgamesjme
+</footer>
+
+</body>
+</html>
