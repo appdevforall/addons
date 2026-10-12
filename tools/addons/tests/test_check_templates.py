@@ -150,3 +150,74 @@ def test_a_non_string_template_path_fails_cleanly(tmp_path):
     make_template(tmp_path, index='{"templates": [{"path": 5}]}')
     problems = check.check_names(tmp_path)
     assert any("has no 'path'" in p for p in problems)
+
+
+SHA = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+
+
+def with_libraries(libraries):
+    return {"templates": [{"path": "FlutterBasic", "libraries": libraries}]}
+
+
+def test_a_well_formed_library_passes(tmp_path):
+    make_template(tmp_path, index=with_libraries(
+        [{"src": "https://h/lib1.so", "dst": "app/lib", "sha256": SHA},
+         {"src": "https://h/lib2.so?v=2", "dst": "app/lib/"}]))
+    assert check.check_names(tmp_path) == []
+
+
+def test_libraries_must_be_a_list_of_objects(tmp_path):
+    make_template(tmp_path, index=with_libraries({"src": "https://h/a.so"}))
+    assert any('"libraries" must be a list' in p
+               for p in check.check_names(tmp_path))
+
+
+def test_a_library_needs_src_and_dst(tmp_path):
+    make_template(tmp_path, index=with_libraries(
+        [{"src": "https://h/a.so", "sha256": SHA}]))
+    assert any('needs both "src" and "dst"' in p
+               for p in check.check_names(tmp_path))
+
+
+def test_a_library_src_must_be_https(tmp_path):
+    make_template(tmp_path, index=with_libraries(
+        [{"src": "http://h/a.so", "dst": "x"}]))
+    assert any("not an https URL" in p for p in check.check_names(tmp_path))
+
+
+def test_a_library_dst_must_stay_inside_the_template(tmp_path):
+    for i, dst in enumerate(("../x", "/x", "a/./b", "a//b")):
+        root = tmp_path / str(i)
+        root.mkdir()
+        make_template(root, index=with_libraries(
+            [{"src": "https://h/a.so", "dst": dst}]))
+        problems = check.check_names(root)
+        assert any("must be a relative path" in p for p in problems), dst
+
+
+def test_a_malformed_sha256_fails(tmp_path):
+    make_template(tmp_path, index=with_libraries(
+        [{"src": "https://h/a.so", "dst": "x", "sha256": "abc123"}]))
+    assert any("not 64 hex digits" in p for p in check.check_names(tmp_path))
+
+
+def test_a_library_src_must_end_in_a_file_name(tmp_path):
+    make_template(tmp_path, index=with_libraries(
+        [{"src": "https://h/dir/", "dst": "x"}]))
+    assert any("does not end in a file name" in p
+               for p in check.check_names(tmp_path))
+
+
+def test_a_library_cannot_replace_a_template_file(tmp_path):
+    d = make_template(tmp_path, index=with_libraries(
+        [{"src": "https://h/template.json", "dst": "template"}]))
+    assert (d / "FlutterBasic" / "template" / "template.json").exists()
+    assert any("already in the template" in p
+               for p in check.check_names(tmp_path))
+
+
+def test_two_libraries_cannot_share_a_target(tmp_path):
+    make_template(tmp_path, index=with_libraries(
+        [{"src": "https://h/a.so", "dst": "x"},
+         {"src": "https://other/a.so", "dst": "x/"}]))
+    assert any("would both write" in p for p in check.check_names(tmp_path))

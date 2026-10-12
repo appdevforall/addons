@@ -169,6 +169,24 @@ list: a directory you leave out is not packaged.
 
 Add `"experimental": true` to an entry to hide it unless the user turns experiments on.
 
+A template that needs a file too large or too binary to commit, such as a native library,
+lists it under `libraries`. The build downloads it and packages it. It is never committed.
+
+```json
+{ "path": "MyFirstTemplate",
+  "libraries": [
+    { "src": "https://downloads.appdevforall.org/lib1.so",
+      "dst": "app/lib",
+      "sha256": "<64 hex digits>" }
+  ] }
+```
+
+`src` must be an `https` URL. `dst` is a directory relative to the template's own directory,
+so this example ships `MyFirstTemplate/app/lib/lib1.so`. The file keeps the name its URL ends
+in. Give `sha256` every time. A download that does not match it fails the build. Without
+`sha256`, the build only warns and its archive is no longer reproducible. A library cannot
+replace a file that is already committed in the template.
+
 ## 8. Write `addon.json`
 
 This is what the gallery shows.
