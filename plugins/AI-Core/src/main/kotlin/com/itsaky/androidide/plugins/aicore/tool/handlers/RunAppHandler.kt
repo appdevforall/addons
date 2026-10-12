@@ -15,15 +15,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-/** How long to wait for the build callback before reporting the build still running. */
-internal const val BUILD_TIMEOUT_MS = 10 * 60 * 1000L
-
-/**
- * How often to log that the wait is still alive. A build can hold the agent for ten minutes, and
- * without a heartbeat that stretch of logcat is indistinguishable from a hung agent.
- */
-internal const val BUILD_PROGRESS_LOG_INTERVAL_MS = 30 * 1000L
-
 /**
  * Handler for running/building the app.
  */
