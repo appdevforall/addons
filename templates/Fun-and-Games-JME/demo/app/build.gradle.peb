@@ -37,10 +37,10 @@ android {
 }
 
 dependencies {
-    implementation(libs.jme.core)
-    implementation(libs.jme.android)
-    implementation(libs.jme.android.native)
-    implementation(libs.jme.effects)
+    implementation(files("libs/jme3-core-3.6.1-stable.jar"))
+    implementation(files("libs/jme3-android-3.6.1-stable.jar"))
+    implementation(files("libs/jme3-android-native-3.6.1-stable.jar"))
+    implementation(files("libs/jme3-effects-3.6.1-stable.jar"))
 
 ${% if LANGUAGE == 'kotlin' %}
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

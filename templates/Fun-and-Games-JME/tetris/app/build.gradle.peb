@@ -44,7 +44,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(libs.jme.core)
-    implementation(libs.jme.android)
-    implementation(libs.jme.android.native)
+    implementation(files("libs/jme3-core-3.9.0-stable.jar"))
+    implementation(files("libs/jme3-android-3.9.0-stable.jar"))
+    implementation(files("libs/jme3-android-native-3.9.0-stable.jar"))
 }
