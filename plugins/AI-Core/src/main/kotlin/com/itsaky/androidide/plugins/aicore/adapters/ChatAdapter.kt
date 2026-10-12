@@ -107,12 +107,12 @@ class ChatAdapter(
         private const val DISABLED_ALPHA = 0.38f
 
         /**
-         * The button an error row from [sender] offers, or null for none. A tool failure gets none:
-         * the run carries on past it, and Retry would rewind the whole run.
+         * The button error row [message] offers, or null for none. A tool failure gets none, since
+         * the run carries on past it, unless the user denied the call: Retry asks for it again.
          */
-        internal fun errorActionFor(sender: Sender): String? = when (sender) {
+        internal fun errorActionFor(message: ChatMessage): String? = when (message.sender) {
             Sender.SYSTEM -> ACTION_OPEN_SETTINGS
-            Sender.TOOL -> null
+            Sender.TOOL -> ACTION_RETRY.takeIf { message.isDenial }
             else -> ACTION_RETRY
         }
     }
@@ -312,7 +312,7 @@ class ChatAdapter(
                 holder.messageContent.visibility = View.VISIBLE
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
-                val action = errorActionFor(message.sender)
+                val action = errorActionFor(message)
                 holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
                 when (action) {
                     ACTION_OPEN_SETTINGS -> {

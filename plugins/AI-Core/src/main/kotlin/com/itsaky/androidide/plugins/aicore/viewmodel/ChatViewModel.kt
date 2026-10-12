@@ -804,7 +804,8 @@ class ChatViewModel(
                     id = UUID.randomUUID().toString(),
                     text = "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}",
                     sender = Sender.TOOL,
-                    status = MessageStatus.ERROR
+                    status = MessageStatus.ERROR,
+                    isDenial = result.denied,
                 )
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)

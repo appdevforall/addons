@@ -173,6 +173,28 @@ class SearchProjectHandlerTest {
     }
 
     @Test
+    fun givenMatchLongerThanSnippetWindow_whenSearching_thenSnippetKeepsWholeMatch() = runBlocking {
+        val query = "implementation(\"androidx.compose.material3:material3:1.2.0\") // pinned for M3 theming"
+        File(projectRoot, "build.gradle.kts").writeText("    " + query + " and a trailing note that runs on")
+
+        val result = handler.execute(mapOf("query" to query, "project_dir" to "build.gradle.kts"))
+
+        val snippet = result.data.orEmpty().substringAfter("→ ")
+        assertTrue("Snippet cut the match: $snippet", snippet.contains(query))
+    }
+
+    @Test
+    fun givenUnreadableFileInTree_whenSearchingContents_thenSkippedAndOthersFound() = runBlocking {
+        File(projectRoot, "locked.txt").apply { writeText("curl"); setReadable(false) }
+        File(projectRoot, "open.txt").writeText("curl")
+
+        val result = handler.execute(mapOf("query" to "curl", "search_in_contents" to true))
+
+        assertTrue("Expected success, got: ${result.message}", result.success)
+        assertTrue(result.data.orEmpty().contains("open.txt:1 → curl"))
+    }
+
+    @Test
     fun givenDirectory_whenSearching_thenPathsAreProjectRelative() = runBlocking {
         File(projectRoot, "app").mkdirs()
         File(projectRoot, "app/Curl.kt").writeText("x")

@@ -110,9 +110,10 @@ class SearchProjectHandler(
                 }
 
                 // Second: check file contents if requested
-                if (searchInContents && isTextFile(file)) {
+                // The sniff opens the file too, so a file deleted mid-walk is skipped, not fatal.
+                if (searchInContents) {
                     try {
-                        searchFileContents(file, query, results, maxResults)
+                        if (isTextFile(file)) searchFileContents(file, query, results, maxResults)
                     } catch (e: IOException) {
                         Log.d(TAG, "Skipped unreadable file: ${file.name}", e)
                     }
@@ -127,7 +128,7 @@ class SearchProjectHandler(
             for ((index, line) in lines.withIndex()) {
                 if (results.size >= maxResults) return
                 val at = line.indexOf(query, ignoreCase = true)
-                if (at >= 0) results.add("📄 ${displayPath(file)}:${index + 1} → ${snippet(line, at)}")
+                if (at >= 0) results.add("📄 ${displayPath(file)}:${index + 1} → ${snippet(line, at, query.length)}")
             }
         }
     }
@@ -151,11 +152,11 @@ class SearchProjectHandler(
         const val SNIPPET_LEAD = 20
         val BINARY_EXTENSIONS = listOf(".apk", ".dex", ".so", ".zip", ".jar", ".class", ".bin")
 
-        /** Up to [SNIPPET_LENGTH] chars of [line] that keep the match at [at] in view. */
-        fun snippet(line: String, at: Int): String {
+        /** At least [SNIPPET_LENGTH] chars of [line], widened to keep the whole [length]-char match at [at]. */
+        fun snippet(line: String, at: Int, length: Int): String {
             if (line.length <= SNIPPET_LENGTH) return line
             val start = (at - SNIPPET_LEAD).coerceIn(0, line.length - SNIPPET_LENGTH)
-            val end = start + SNIPPET_LENGTH
+            val end = maxOf(start + SNIPPET_LENGTH, at + length)
             return (if (start > 0) "…" else "") + line.substring(start, end) + (if (end < line.length) "…" else "")
         }
     }

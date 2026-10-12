@@ -58,6 +58,11 @@ data class ChatMessage(
      */
     val isSetupError: Boolean = false,
     /**
+     * Whether this tool error row reports a call the user denied, the one tool failure that offers
+     * Retry. False for every message stored before this field existed.
+     */
+    val isDenial: Boolean = false,
+    /**
      * Absolute paths of the context files attached when this user prompt was sent, so Edit can put
      * the same chips back. Null on every other message, and on a prompt stored before this existed.
      */
