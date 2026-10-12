@@ -1,14 +1,12 @@
 # JME Android Game
 
-![Screenshot](screenshot.png)
-
 A simple 3D space game for Android built with [jMonkeyEngine 3.6](https://jmonkeyengine.org/).
 
 ## Features
 
 - **Touch drag** to rotate the Earth on any axis
 - **Inertia** — flick and it coasts to a stop
-- **Tap** to earn points and cycle the Earth's colour
+- **Tap** to earn points
 - **Orbiting rocket** — a procedural rocket ship (red nose, white body, 4 fins) circles the Earth on a tilted plane
 - **Orange exhaust trail** behind the rocket (particle emitter)
 - **Bloom glow** on the engine nozzle (`BloomFilter`, `GlowMode.Objects`)
@@ -17,48 +15,44 @@ A simple 3D space game for Android built with [jMonkeyEngine 3.6](https://jmonke
 
 ## Requirements
 
-| Tool | Version |
+| Item | Version |
 |------|---------|
-| Android Studio | Hedgehog or later |
-| Android NDK | bundled via jme3-android-native |
-| Min SDK | 21 (Android 5.0) |
-| Target SDK | 34 |
+| Android NDK | not needed; the native libraries come in `jme3-android-native` |
+| SDK levels | set by Code on the Go when the project is created |
 | OpenGL ES | 2.0+ |
 
 ## Getting Started
 
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/yaturner/jme-android-game.git
-   ```
-2. Open the `jme-android-game` folder in Android Studio (**File → Open**).
-3. Let Gradle sync complete — it will download jME 3.6.1 from Maven Central.
-4. Connect an Android device (API 21+) or start an emulator.
-5. Run **app**.
+1. Tap **Run** in Code on the Go.
+
+jMonkeyEngine 3.6.1 is already in `app/libs`, so the build does not fetch it from Maven Central.
 
 ## Project Structure
 
 ```
-app/src/main/
-├── java/com/example/jmegame/
-│   ├── MainActivity.java   # AndroidHarness entry point
-│   └── CubeGame.java       # SimpleApplication — all game logic
-├── AndroidManifest.xml
-└── res/
-    ├── mipmap-*/ic_launcher.png
-    └── values/strings.xml
-gradle/
-└── libs.versions.toml      # jME 3.6.1-stable dependency versions
+app/
+├── libs/                   # jMonkeyEngine 3.6.1 jars
+└── src/main/
+    ├── java/<your package>/
+    │   ├── MainActivity.java   # AndroidHarness entry point
+    │   └── CubeGame.java       # SimpleApplication — all game logic
+    ├── assets/Textures/        # earth.png, Particle.png
+    ├── AndroidManifest.xml
+    └── res/
+        ├── mipmap-*/ic_launcher.png
+        └── values/strings.xml
 ```
 
 ## Key Dependencies
 
-```toml
-jme3-core          = "3.6.1-stable"   # engine core, math, scene graph
-jme3-android       = "3.6.1-stable"   # Android backend + AndroidHarness
-jme3-android-native= "3.6.1-stable"   # native .so libs for OpenGL ES
-jme3-effects       = "3.6.1-stable"   # BloomFilter, post-processing
 ```
+app/libs/jme3-core-3.6.1-stable.jar            # engine core, math, scene graph
+app/libs/jme3-android-3.6.1-stable.jar         # Android backend + AndroidHarness
+app/libs/jme3-android-native-3.6.1-stable.jar  # native .so libs for OpenGL ES
+app/libs/jme3-effects-3.6.1-stable.jar         # BloomFilter, post-processing
+```
+
+jMonkeyEngine is distributed under the BSD 3-Clause license.
 
 ## Controls
 
@@ -66,8 +60,4 @@ jme3-effects       = "3.6.1-stable"   # BloomFilter, post-processing
 |---------|--------|
 | Drag | Rotate the Earth |
 | Flick | Spin with inertia |
-| Tap | +10 points, cycle Earth colour |
-
-## License
-
-MIT
+| Tap | +10 points |

@@ -27,8 +27,10 @@ templates take the toolchain from the IDE: `${{AGP_VERSION}}`, `${{KOTLIN_VERSIO
 `${{GRADLE_VERSION}}`, `${{COMPILE_SDK}}`, `${{TARGET_SDK}}`, `${{MIN_SDK}}` and the Java
 compatibility tokens. The projects follow whatever toolchain the installed Code on the Go ships.
 
-The first build of a generated project downloads jMonkeyEngine from Maven Central, so it needs
-an internet connection. Later builds use Gradle's cache.
+jMonkeyEngine ships inside the bundle. `templates.json` lists each game's jME jars under
+`libraries`, the build downloads them into `app/libs`, and each game's `app/build.gradle` uses
+them with `implementation(files("libs/…"))`. A generated project does not fetch jME from Maven
+Central.
 
 ## Controls
 
@@ -65,4 +67,5 @@ See [`../README.md`](../README.md) for authoring guidance and the format referen
 
 Written by **James Turner**. Converted from the standalone
 [FunandGames-jme](https://github.com/appdevforall/FunandGames-jme) repository to a template
-bundle in this repository; the template skeletons are unchanged.
+bundle in this repository. The one change to the skeletons: each `app/build.gradle.peb` takes
+jME from the jars in `app/libs` instead of from Maven Central.

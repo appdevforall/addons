@@ -204,9 +204,9 @@
 
   <h3>How the IDE finds it</h3>
   <p>
-    Code on the Go discovers project templates by scanning its templates directory and the
-    Downloads folder for <code>.cgt</code> archives. Putting the file in either place is the whole
-    installation. Nothing registers it, because there is no code to run.
+    Code on the Go lists the <code>.cgt</code> archives it finds in the Downloads folder in the
+    Extensions Manager, marked <em>Not installed</em>. Installing one with the <strong>+</strong>
+    button, as described under Usage, is what adds its templates to New Project.
   </p>
 
   <h3>Provenance</h3>
@@ -247,8 +247,8 @@
   </ol>
 
   <div class="callout">
-    <strong>The first build needs an internet connection.</strong> It downloads jMonkeyEngine from
-    Maven Central. Later builds use Gradle's cache and work offline.
+    <strong>jMonkeyEngine comes with the template.</strong> Its jars are in each project's
+    <code>app/libs</code>, so the build does not fetch jME from Maven Central.
   </div>
 </section>
 
@@ -272,7 +272,7 @@
   <ul>
     <li>Generated projects build for <code>armeabi-v7a</code> and <code>arm64-v8a</code> only. That
       covers every phone and tablet that runs Code on the Go, but not x86 emulators.</li>
-    <li>The first build of each project needs network access to fetch jMonkeyEngine.</li>
+    <li>The bundle is about 20 MB, because it carries the jMonkeyEngine jars for each game.</li>
     <li>Demo uses jME 3.6.1; Tetris and Bubble Wand use jME 3.9.0.</li>
   </ul>
 </section>
@@ -283,7 +283,8 @@
     <li><strong>Author:</strong> James Turner.</li>
     <li><strong>Source:</strong> converted from the standalone
       <a href="https://github.com/appdevforall/FunandGames-jme">FunandGames-jme</a> repository. The
-      template skeletons are unchanged; only the packaging moved into this repository.</li>
+      one change to the skeletons: each game's <code>app/build.gradle</code> takes jMonkeyEngine
+      from the jars in <code>app/libs</code> instead of from Maven Central.
     <li>A libGDX version of the same games lives in
       <a href="https://github.com/appdevforall/FunandGames-libGDX">FunandGames-libGDX</a>.</li>
   </ul>

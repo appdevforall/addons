@@ -83,7 +83,7 @@ public class CubeGame extends SimpleApplication {
 
                 case UP:
                     isDragging = false;
-                    // Small movement = tap: award score and change color
+                    // Small movement = tap: award score
                     if (totalDragDistance < TAP_THRESHOLD) {
                         score += 10;
                     }
