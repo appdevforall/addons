@@ -7,13 +7,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.BuildAndLaunchCallback
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
+import java.util.concurrent.CompletableFuture
 
 /**
  * Handler for running/building the app.
@@ -48,16 +42,7 @@ class RunAppHandler(
 
             AgentTrace.stage("BUILD", "run_app triggered; waiting for the build callback")
             val startMs = System.currentTimeMillis()
-            val outcome = withTimeoutOrNull(BUILD_TIMEOUT_MS) {
-                coroutineScope {
-                    val heartbeat = launch { logProgressUntilCancelled(startMs) }
-                    try {
-                        awaitBuild(buildService)
-                    } finally {
-                        heartbeat.cancel()
-                    }
-                }
-            }
+            val outcome = awaitBuild(toolName, startBuild(buildService)) { buildService.cancelBuild() }
             val waitedMs = System.currentTimeMillis() - startMs
 
             if (outcome == null) {
@@ -110,43 +95,17 @@ class RunAppHandler(
     }
 
     /**
-     * Logs one line every [BUILD_PROGRESS_LOG_INTERVAL_MS] for as long as the wait lasts, so a long
-     * build reads as a running build rather than as a stalled agent. Cancelled by its caller the
-     * moment the callback lands.
-     *
-     * @param startMs when the wait began, for the elapsed figure.
-     */
-    private suspend fun logProgressUntilCancelled(startMs: Long) {
-        while (true) {
-            delay(BUILD_PROGRESS_LOG_INTERVAL_MS)
-            val seconds = (System.currentTimeMillis() - startMs) / 1000
-            AgentTrace.detail("BUILD", "run_app still waiting elapsed=${seconds}s")
-        }
-    }
-
-    /**
-     * Starts the build and suspends until [BuildAndLaunchCallback] reports back.
+     * Starts the build, completing the future when [BuildAndLaunchCallback] reports back.
      * @return the callback's success flag paired with its message.
      */
-    private suspend fun awaitBuild(buildService: IdeBuildService): Pair<Boolean, String> =
-        suspendCancellableCoroutine { continuation ->
-            // The host reports completion from several paths, and synchronously when it has no
-            // run-app provider at all; a second resume on a resumed continuation throws.
-            val reported = AtomicBoolean(false)
-            val callback = object : BuildAndLaunchCallback {
-                override fun onComplete(success: Boolean, message: String) {
-                    if (reported.compareAndSet(false, true)) {
-                        continuation.resume(success to message)
-                    }
-                }
+    private fun startBuild(buildService: IdeBuildService): CompletableFuture<Pair<Boolean, String>> {
+        val future = CompletableFuture<Pair<Boolean, String>>()
+        // The host can report more than once, even synchronously; complete keeps only the first.
+        buildService.runApp(object : BuildAndLaunchCallback {
+            override fun onComplete(success: Boolean, message: String) {
+                future.complete(success to message)
             }
-            try {
-                buildService.runApp(callback)
-            } catch (e: Exception) {
-                // Reported to the caller, which logs it once with the stack trace.
-                if (reported.compareAndSet(false, true)) {
-                    continuation.resumeWith(Result.failure(e))
-                }
-            }
-        }
+        })
+        return future
+    }
 }

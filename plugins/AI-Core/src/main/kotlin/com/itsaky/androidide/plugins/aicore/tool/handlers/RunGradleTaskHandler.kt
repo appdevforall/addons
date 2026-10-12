@@ -9,15 +9,6 @@ import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.services.GradleTaskResult
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Handler for running any Gradle task (`test`, `lint`, `clean`, `:app:testDebugUnitTest`) with
@@ -71,25 +62,7 @@ class RunGradleTaskHandler(
             AgentTrace.stage("BUILD", "$toolName tasks=$label args=${invocation.arguments}")
             val startMs = System.currentTimeMillis()
             val future = buildService.executeTasks(invocation.tasks, invocation.arguments)
-            val outcome = try {
-                withTimeoutOrNull(BUILD_TIMEOUT_MS) {
-                    coroutineScope {
-                        val heartbeat = launch { logProgressUntilCancelled(startMs) }
-                        try {
-                            awaitResult(future)
-                        } finally {
-                            heartbeat.cancel()
-                        }
-                    }
-                }
-            } catch (ce: CancellationException) {
-                // Stop pressed while the build runs: the agent started it, so the agent ends it.
-                if (!future.isDone) {
-                    AgentTrace.stage("BUILD", "$toolName stopped; cancelling the build")
-                    buildService.cancelBuild()
-                }
-                throw ce
-            }
+            val outcome = awaitBuild(toolName, future) { buildService.cancelBuild() }
             val waitedMs = System.currentTimeMillis() - startMs
 
             if (outcome == null) {
@@ -120,29 +93,6 @@ class RunGradleTaskHandler(
         }
     }
 
-    /** Logs one line every [BUILD_PROGRESS_LOG_INTERVAL_MS] while the wait lasts. */
-    private suspend fun logProgressUntilCancelled(startMs: Long) {
-        while (true) {
-            delay(BUILD_PROGRESS_LOG_INTERVAL_MS)
-            val seconds = (System.currentTimeMillis() - startMs) / 1000
-            AgentTrace.detail("BUILD", "$toolName still waiting elapsed=${seconds}s")
-        }
-    }
-
-    /**
-     * Suspends until [future] completes. Unlike `CompletableFuture.await`, a cancelled wait leaves
-     * the future alone, so the caller can still tell whether the build was running when it stopped.
-     */
-    private suspend fun awaitResult(future: CompletableFuture<GradleTaskResult>): GradleTaskResult =
-        suspendCancellableCoroutine { continuation ->
-            future.whenComplete { result, error ->
-                if (!continuation.isActive) return@whenComplete
-                // A dependent stage wraps the host's exception; the model should read the original.
-                val cause = (error as? CompletionException)?.cause ?: error
-                if (cause != null) continuation.resumeWithException(cause) else continuation.resume(result)
-            }
-        }
-
     companion object {
         private val NO_TASKS = ToolResult.failure(
             "tasks is required",
@@ -160,7 +110,7 @@ class RunGradleTaskHandler(
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
         internal fun resultFor(label: String, outcome: GradleTaskResult, output: String?): ToolResult {
-            val log = output?.takeIf { it.isNotBlank() }?.let { ReadBuildOutputHandler.windowFor(it).text }
+            val log = output?.takeIf { it.isNotBlank() }?.let { BuildOutputWindowCalculator.windowFor(it).text }
             return when (outcome) {
                 GradleTaskResult.Success -> if (nothingRan(output)) {
                     ToolResult.success(

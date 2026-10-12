@@ -84,7 +84,7 @@ class ReadBuildOutputHandlerTest {
     @Test
     fun givenOutputLongerThanTheLimit_whenReading_thenItIsCappedAtTheLimit() = runTest {
         val output = noise(2000)
-        assertTrue("fixture must exceed the budget", output.length > ReadBuildOutputHandler.MAX_OUTPUT_CHARS)
+        assertTrue("fixture must exceed the budget", output.length > BuildOutputWindowCalculator.MAX_OUTPUT_CHARS)
         every { buildService.getBuildOutput() } returns output
 
         val result = handler.execute(emptyMap())
@@ -180,7 +180,7 @@ class ReadBuildOutputHandlerTest {
         assertTrue(data.startsWith("...[truncated]..."))
         assertTrue(
             "budget exceeded: ${data.length}",
-            data.length <= ReadBuildOutputHandler.MAX_OUTPUT_CHARS + "...[truncated]...\n".length,
+            data.length <= BuildOutputWindowCalculator.MAX_OUTPUT_CHARS + "...[truncated]...\n".length,
         )
     }
 

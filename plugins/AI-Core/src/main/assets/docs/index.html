@@ -108,6 +108,14 @@
       <code>--tests com.example.FooTest</code>. It asks first, runs on the IDE's
       own Gradle daemon, and reports whether the task passed along with the test
       failures or compiler errors. Pressing Stop cancels the task.</li>
+    <li>Start <b>Quick Build</b> when you ask it to Quick Build, try a change
+      live or update the app. It asks first, then runs exactly as the toolbar
+      button does: the IDE still asks before replacing an installed app, and the
+      run shows in the toolbar and Build Output. It reports whether the app was
+      reloaded or restarted and how long it took, why the build failed, or why
+      Quick Build could not start (experiments off, a plugin project, a release
+      variant, a sync still running), and suggests a normal build instead where
+      one fits. Pressing Stop cancels it.</li>
     <li>List the project's Gradle tasks, your own custom tasks included, with
       each task's group and description as of the last sync, so it runs a task
       that exists. A task you just added appears after the next Gradle sync.</li>
