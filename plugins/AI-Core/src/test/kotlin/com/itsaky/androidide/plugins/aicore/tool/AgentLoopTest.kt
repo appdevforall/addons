@@ -34,10 +34,10 @@ class AgentLoopTest {
         maxIterations: Int = AgentLoop.DEFAULT_MAX_ITERATIONS,
         maxConsecutiveRepeats: Int = AgentLoop.DEFAULT_MAX_CONSECUTIVE_REPEATS,
         terminalTool: String? = null,
-        toolOutputCharLimit: Int = ToolResultsPrompt.DEFAULT_CHAR_LIMIT,
+        toolOutputCharLimit: Int = ToolOutputBudget.DEFAULT_CHARS,
         unfinishedTurn: (suspend () -> String)? = null,
     ) = AgentLoop(
-        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond", toolOutputCharLimit),
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond") { toolOutputCharLimit },
         maxIterations = maxIterations,
         maxConsecutiveRepeats = maxConsecutiveRepeats,
         terminalTool = terminalTool,

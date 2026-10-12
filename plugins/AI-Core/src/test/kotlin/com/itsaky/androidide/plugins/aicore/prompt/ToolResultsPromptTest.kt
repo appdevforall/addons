@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedWith
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -75,6 +76,15 @@ class ToolResultsPromptTest {
     }
 
     @Test
+    fun givenALongCrlfResult_whenRendering_thenTheCutDropsTheCarriageReturnWithItsLine() {
+        val turn = ToolResultsPrompt.render(
+            shippedConfig, "respond", 14, openFile, listOf(ToolResult.success("line1\r\nline2\r\nline3")),
+        )
+
+        assertTrue(turn, turn.contains("[open_file] line1\r\nline2\n…[truncated"))
+    }
+
+    @Test
     fun givenToolOutputThatLooksLikeATag_whenRendering_thenItReachesTheModelVerbatim() {
         // A file's contents are data: a `{{X}}` in them must not be read as a template tag.
         val turn = render(openFile, listOf(ToolResult.failure("{{KEPT}} {{#X}}")))
@@ -127,7 +137,7 @@ class ToolResultsPromptTest {
         calls: List<ToolCall>,
         results: List<ToolResult>,
         config: AgentPromptConfig = shippedConfig,
-    ): String = ToolResultsPrompt.render(config, "respond", ToolResultsPrompt.DEFAULT_CHAR_LIMIT, calls, results)
+    ): String = ToolResultsPrompt.render(config, "respond", ToolOutputBudget.DEFAULT_CHARS, calls, results)
 
     @Test
     fun givenTheShippedConfig_whenRenderingTheUnfinishedTurn_thenItNamesTheTerminalTool() {
@@ -148,7 +158,7 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenASearchReportPastTheDefaultCap_whenRendering_thenItsSourcesAreNotCut() {
-        val report = "x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT) + "\n\nSources:\n- https://ktor.io/docs"
+        val report = "x".repeat(ToolOutputBudget.DEFAULT_CHARS) + "\n\nSources:\n- https://ktor.io/docs"
 
         val turn = render(listOf(ToolCall("web_search", emptyMap())), listOf(ToolResult.success("Searched", report)))
 
@@ -157,7 +167,7 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenAFetchedPagePastTheDefaultCap_whenRendering_thenItIsNotCut() {
-        val page = "x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT) + "END"
+        val page = "x".repeat(ToolOutputBudget.DEFAULT_CHARS) + "END"
 
         val turn = render(listOf(ToolCall("fetch_url", emptyMap())), listOf(ToolResult.success("Fetched", page)))
 
@@ -166,7 +176,7 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenAProjectResultPastTheDefaultCap_whenRendering_thenItIsStillCut() {
-        val turn = render(openFile, listOf(ToolResult.success("x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT + 10))))
+        val turn = render(openFile, listOf(ToolResult.success("x".repeat(ToolOutputBudget.DEFAULT_CHARS + 10))))
 
         assertTrue(turn.contains("[truncated"))
     }

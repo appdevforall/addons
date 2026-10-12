@@ -50,7 +50,10 @@ class ToolDescriptionsTest {
     fun givenTheShippedConfig_whenListingTools_thenEachDefinitionCarriesItsDescriptionAndArguments() {
         val readFile = definitions().first { it.name == "read_file" }
 
-        assertEquals("Read the contents of a file", readFile.description)
+        assertEquals(
+            "Read the contents of a file, a page at a time; follow its \"Next:\" hint to read on",
+            readFile.description,
+        )
         assertEquals(
             mapOf("type" to "string", "description" to "Project-relative path of the file to read."),
             argumentsOf(readFile.parametersSchema)["file_path"],
@@ -61,7 +64,7 @@ class ToolDescriptionsTest {
     @Test
     fun givenNewWording_whenListingTools_thenItIsSentWithNoCodeChange() {
         val config = shippedWith("tool_descriptions.yml") {
-            it.replace("    description: Read the contents of a file", "    description: Lee el contenido de un archivo")
+            it.replace(Regex("    description: Read the contents of a file.*"), "    description: Lee el contenido de un archivo")
                 .replace("file_path: Project-relative path of the file to read.", "file_path: Ruta del archivo.")
         }
 

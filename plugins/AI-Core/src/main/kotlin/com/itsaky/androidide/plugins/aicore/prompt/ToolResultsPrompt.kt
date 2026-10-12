@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.ai.prompt.PromptTemplateEngine
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolResultsFormatter
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
 
@@ -15,16 +16,17 @@ import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
  *
  * @param config supplies the cached prompt config.
  * @param terminalTool the name of the tool that ends a run by answering the user.
- * @param charLimit each result's cap, so a big output does not blow a local model's context.
+ * @param budget each result's cap, so a big output does not blow a local model's context. The
+ *   handlers that page or window their output fit it first; the cut here is the backstop.
  */
 class ToolResultsPrompt(
     private val config: PromptConfigProvider<AgentPromptConfig>,
     private val terminalTool: String,
-    private val charLimit: Int = DEFAULT_CHAR_LIMIT,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolResultsFormatter {
 
     override suspend fun format(calls: List<ToolCall>, results: List<ToolResult>): String =
-        render(config.config(), terminalTool, charLimit, calls, results)
+        render(config.config(), terminalTool, budget.chars(), calls, results)
 
     /** The turn sent after a reply that ran tools and ended without the terminal tool. */
     suspend fun unfinished(): String = renderUnfinished(config.config(), terminalTool)
@@ -33,11 +35,8 @@ class ToolResultsPrompt(
     suspend fun requiredTool(tool: String): String = renderRequiredTool(config.config(), terminalTool, tool)
 
     companion object {
-        /** Per-result cap fed back into the prompt, so big outputs don't blow a local model's context. */
-        const val DEFAULT_CHAR_LIMIT = 4000
-
         /**
-         * A search report's or fetched page's cap: [DEFAULT_CHAR_LIMIT] cut a report before its Sources
+         * A search report's or fetched page's cap: the default budget cut a report before its Sources
          * list, and a page before anything past its navigation.
          */
         const val WEB_SEARCH_CHAR_LIMIT = 12000
@@ -146,12 +145,23 @@ class ToolResultsPrompt(
             limit: Int,
         ): String {
             if (text.length <= limit) return text
+            val kept = keptLines(text, limit)
             val values = mapOf(
                 PromptVariables.TERMINAL_TOOL to terminalTool,
-                PromptVariables.KEPT to text.take(limit),
-                PromptVariables.COUNT to (text.length - limit).toString(),
+                PromptVariables.KEPT to kept,
+                PromptVariables.COUNT to (text.length - kept.length).toString(),
             )
             return PromptTemplateEngine.render(config.agentLoop.truncated, values)
+        }
+
+        /**
+         * The first [limit] characters of [text], back to its last line break unless that gives up
+         * more than half: a long single line keeps its start rather than shrinking to the message.
+         */
+        private fun keptLines(text: String, limit: Int): String {
+            val head = text.take(limit)
+            val lineEnd = head.lastIndexOf('\n')
+            return if (lineEnd >= limit / 2) head.substring(0, lineEnd).removeSuffix("\r") else head
         }
 
         private const val CHECK_TERMINAL_TOOL = "respond"
