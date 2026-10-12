@@ -1,0 +1,329 @@
+package ${{PACKAGE_NAME}};
+
+import com.jme3.app.SimpleApplication;
+import com.jme3.font.BitmapText;
+import com.jme3.input.RawInputListener;
+import com.jme3.input.event.JoyAxisEvent;
+import com.jme3.input.event.JoyButtonEvent;
+import com.jme3.input.event.KeyInputEvent;
+import com.jme3.input.event.MouseButtonEvent;
+import com.jme3.input.event.MouseMotionEvent;
+import com.jme3.input.event.TouchEvent;
+import com.jme3.light.AmbientLight;
+import com.jme3.light.DirectionalLight;
+import com.jme3.material.Material;
+import com.jme3.math.ColorRGBA;
+import com.jme3.math.FastMath;
+import com.jme3.math.Quaternion;
+import com.jme3.math.Vector3f;
+import com.jme3.effect.ParticleEmitter;
+import com.jme3.effect.ParticleMesh;
+import com.jme3.post.FilterPostProcessor;
+import com.jme3.post.filters.BloomFilter;
+import com.jme3.scene.BatchNode;
+import com.jme3.scene.Geometry;
+import com.jme3.scene.Node;
+import com.jme3.scene.shape.Box;
+import com.jme3.scene.shape.Cylinder;
+import com.jme3.scene.shape.Sphere;
+import java.util.Random;
+
+public class CubeGame extends SimpleApplication {
+
+    private Geometry cube;
+    private Node     rocketNode;
+    private Node     orbitPivot;
+    private int score = 0;
+    private BitmapText scoreText;
+
+    // Drag state
+    private boolean isDragging = false;
+    private float lastX, lastY;
+    private float totalDragDistance = 0f;
+
+    // Inertia: carry over drag velocity after finger lifts
+    private float velocityX = 0f;
+    private float velocityY = 0f;
+
+    private static final float DRAG_SENSITIVITY = 0.008f;
+    private static final float TAP_THRESHOLD    = 15f;   // pixels
+    private static final float INERTIA_DECAY    = 0.92f;
+
+    private final RawInputListener touchListener = new RawInputListener() {
+
+        @Override
+        public void onTouchEvent(TouchEvent evt) {
+            switch (evt.getType()) {
+                case DOWN:
+                    isDragging = true;
+                    lastX = evt.getX();
+                    lastY = evt.getY();
+                    totalDragDistance = 0f;
+                    // Kill inertia when finger touches down
+                    velocityX = 0f;
+                    velocityY = 0f;
+                    break;
+
+                case MOVE:
+                    if (isDragging) {
+                        float dx = evt.getX() - lastX;
+                        float dy = evt.getY() - lastY;
+
+                        rotateCube(dx, dy);
+
+                        // Store as inertia velocity (pixels/frame, decayed on lift)
+                        velocityX = dx;
+                        velocityY = dy;
+
+                        totalDragDistance += FastMath.sqrt(dx * dx + dy * dy);
+                        lastX = evt.getX();
+                        lastY = evt.getY();
+                    }
+                    break;
+
+                case UP:
+                    isDragging = false;
+                    // Small movement = tap: award score and change color
+                    if (totalDragDistance < TAP_THRESHOLD) {
+                        score += 10;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+            evt.setConsumed();
+        }
+
+        // Required no-ops for non-touch events
+        @Override public void beginInput() {}
+        @Override public void endInput() {}
+        @Override public void onMouseMotionEvent(MouseMotionEvent evt) {}
+        @Override public void onMouseButtonEvent(MouseButtonEvent evt) {}
+        @Override public void onKeyEvent(KeyInputEvent evt) {}
+        @Override public void onJoyAxisEvent(JoyAxisEvent evt) {}
+        @Override public void onJoyButtonEvent(JoyButtonEvent evt) {}
+    };
+
+    @Override
+    public void simpleInitApp() {
+        cam.setLocation(new Vector3f(0, 0, 6));
+        cam.lookAt(Vector3f.ZERO, Vector3f.UNIT_Y);
+        flyCam.setEnabled(false);
+        setDisplayFps(false);
+        setDisplayStatView(false);
+        viewPort.setBackgroundColor(ColorRGBA.Black);
+
+        // Starfield — 250 tiny boxes on a sphere shell, batched to one draw call
+        BatchNode starBatch = new BatchNode("Stars");
+        Material starMat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        starMat.setColor("Color", ColorRGBA.White);
+        Box starMesh = new Box(0.06f, 0.06f, 0.06f);
+        Random rand = new Random(12345L); // fixed seed for deterministic layout
+
+        for (int i = 0; i < 250; i++) {
+            // Uniform distribution on sphere surface
+            float theta = rand.nextFloat() * FastMath.TWO_PI;
+            float phi   = FastMath.acos(2f * rand.nextFloat() - 1f);
+            float r     = 25f + rand.nextFloat() * 15f; // shell between radius 25 and 40
+
+            Geometry star = new Geometry("s" + i, starMesh);
+            star.setMaterial(starMat);
+            star.setLocalTranslation(
+                r * FastMath.sin(phi) * FastMath.cos(theta),
+                r * FastMath.sin(phi) * FastMath.sin(theta),
+                r * FastMath.cos(phi));
+            star.setLocalScale(0.5f + rand.nextFloat()); // vary star size
+            starBatch.attachChild(star);
+        }
+        starBatch.batch(); // merges all children into a single mesh per material
+        rootNode.attachChild(starBatch);
+
+        // Earth — textured sphere; DiffuseMap drives colour, Specular adds ocean glint
+        cube = new Geometry("Earth", new Sphere(48, 48, 1.0f));
+        Material mat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        mat.setBoolean("UseMaterialColors", true);
+        mat.setColor("Ambient",  new ColorRGBA(0.30f, 0.30f, 0.30f, 1f));
+        mat.setColor("Diffuse",  ColorRGBA.White);
+        mat.setColor("Specular", new ColorRGBA(0.40f, 0.55f, 0.85f, 1f));
+        mat.setFloat("Shininess", 60f);
+        mat.setTexture("DiffuseMap", assetManager.loadTexture("Textures/earth.png"));
+        cube.setMaterial(mat);
+        rootNode.attachChild(cube);
+
+        // Orbit pivot — sits at world origin; rotating it sweeps orbitCube in a circle
+        orbitPivot = new Node("OrbitPivot");
+        // Tilt the orbit plane 20° around X so it reads as 3-D from the camera
+        orbitPivot.rotate(FastMath.DEG_TO_RAD * 20f, 0, 0);
+        rootNode.attachChild(orbitPivot);
+
+        // orbitNode carries both the cube geometry and the trail emitter at the orbit radius.
+        // Geometry is a scene-graph leaf and cannot have children, so a Node wrapper is required.
+        Node orbitNode = new Node("OrbitNode");
+        orbitNode.setLocalTranslation(2.5f, 0, 0);
+        orbitPivot.attachChild(orbitNode);
+
+        // ── Generic Rocket Ship (procedural) ──────────────────────────────────
+        rocketNode = new Node("Rocket");
+        orbitNode.attachChild(rocketNode);
+
+        // Body — white/light gray hull
+        Material bodyMat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        bodyMat.setBoolean("UseMaterialColors", true);
+        bodyMat.setColor("Ambient",  new ColorRGBA(0.65f, 0.65f, 0.65f, 1f));
+        bodyMat.setColor("Diffuse",  new ColorRGBA(0.88f, 0.88f, 0.88f, 1f));
+        bodyMat.setColor("Specular", ColorRGBA.White);
+        bodyMat.setFloat("Shininess", 48f);
+
+        // Nose cone / fins accent — red
+        Material accentMat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        accentMat.setBoolean("UseMaterialColors", true);
+        accentMat.setColor("Ambient",  new ColorRGBA(0.65f, 0.05f, 0.05f, 1f));
+        accentMat.setColor("Diffuse",  new ColorRGBA(0.88f, 0.10f, 0.10f, 1f));
+        accentMat.setColor("Specular", ColorRGBA.White);
+        accentMat.setFloat("Shininess", 24f);
+
+        // Engine nozzle — dark metal with orange glow (picked up by BloomFilter)
+        Material nozzleMat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        nozzleMat.setBoolean("UseMaterialColors", true);
+        nozzleMat.setColor("Ambient",  new ColorRGBA(0.20f, 0.20f, 0.20f, 1f));
+        nozzleMat.setColor("Diffuse",  new ColorRGBA(0.38f, 0.38f, 0.38f, 1f));
+        nozzleMat.setColor("Specular", ColorRGBA.White);
+        nozzleMat.setFloat("Shininess", 64f);
+        nozzleMat.setColor("GlowColor", new ColorRGBA(1.0f, 0.45f, 0.0f, 1f));
+
+        // Porthole window — dark blue
+        Material windowMat = new Material(assetManager, "Common/MatDefs/Light/Lighting.j3md");
+        windowMat.setBoolean("UseMaterialColors", true);
+        windowMat.setColor("Ambient",  new ColorRGBA(0.05f, 0.10f, 0.30f, 1f));
+        windowMat.setColor("Diffuse",  new ColorRGBA(0.10f, 0.20f, 0.55f, 1f));
+        windowMat.setColor("Specular", ColorRGBA.White);
+        windowMat.setFloat("Shininess", 128f);
+
+        // Nose — red sphere at top of rocket
+        Geometry nose = new Geometry("Nose", new Sphere(8, 16, 0.10f));
+        nose.setMaterial(accentMat);
+        nose.setLocalTranslation(0, 0.38f, 0);
+        rocketNode.attachChild(nose);
+
+        // Body cylinder — long axis along +Y (nose up)
+        Geometry body = new Geometry("Body", new Cylinder(8, 16, 0.10f, 0.55f, true));
+        body.setMaterial(bodyMat);
+        body.setLocalTranslation(0, 0.08f, 0);
+        rocketNode.attachChild(body);
+
+        // Porthole window on the upper body
+        Geometry window = new Geometry("Window", new Sphere(6, 12, 0.038f));
+        window.setMaterial(windowMat);
+        window.setLocalTranslation(0.10f, 0.20f, 0);
+        rocketNode.attachChild(window);
+
+        // 4 stabiliser fins around the base (+X, -X along Z-thin; +Z, -Z along X-thin)
+        Geometry finPX = new Geometry("FinPX", new Box(0.13f, 0.16f, 0.015f));
+        finPX.setMaterial(accentMat);
+        finPX.setLocalTranslation(0.20f, -0.16f, 0);
+        rocketNode.attachChild(finPX);
+
+        Geometry finNX = new Geometry("FinNX", new Box(0.13f, 0.16f, 0.015f));
+        finNX.setMaterial(accentMat);
+        finNX.setLocalTranslation(-0.20f, -0.16f, 0);
+        rocketNode.attachChild(finNX);
+
+        Geometry finPZ = new Geometry("FinPZ", new Box(0.015f, 0.16f, 0.13f));
+        finPZ.setMaterial(accentMat);
+        finPZ.setLocalTranslation(0, -0.16f, 0.20f);
+        rocketNode.attachChild(finPZ);
+
+        Geometry finNZ = new Geometry("FinNZ", new Box(0.015f, 0.16f, 0.13f));
+        finNZ.setMaterial(accentMat);
+        finNZ.setLocalTranslation(0, -0.16f, -0.20f);
+        rocketNode.attachChild(finNZ);
+
+        // Engine nozzle bell — wider than body, glows orange
+        Geometry nozzle = new Geometry("Nozzle", new Cylinder(8, 16, 0.13f, 0.10f, true));
+        nozzle.setMaterial(nozzleMat);
+        nozzle.setLocalTranslation(0, -0.26f, 0);
+        rocketNode.attachChild(nozzle);
+
+        // Trail — particles emitted at the cube's world position, then left behind as it moves
+        ParticleEmitter trail = new ParticleEmitter("OrbitTrail", ParticleMesh.Type.Triangle, 150);
+        Material trailMat = new Material(assetManager, "Common/MatDefs/Misc/Particle.j3md");
+        trailMat.setTexture("Texture", assetManager.loadTexture("Textures/Particle.png"));
+        trail.setMaterial(trailMat);
+        trail.setImagesX(1);
+        trail.setImagesY(1);
+        trail.setStartColor(new ColorRGBA(1.0f, 0.65f, 0.10f, 1f));  // bright orange-yellow
+        trail.setEndColor(  new ColorRGBA(0.5f, 0.05f, 0.00f, 0f));  // dark red, transparent
+        trail.setStartSize(0.25f);
+        trail.setEndSize(0.02f);
+        trail.setGravity(0f, 0f, 0f);
+        trail.setLowLife(0.4f);
+        trail.setHighLife(0.65f);
+        trail.setParticlesPerSec(120);
+        trail.getParticleInfluencer().setInitialVelocity(new Vector3f(0, 0, 0));
+        trail.getParticleInfluencer().setVelocityVariation(0.05f);
+        orbitNode.attachChild(trail);
+
+        // Lights
+        AmbientLight ambient = new AmbientLight();
+        ambient.setColor(new ColorRGBA(0.25f, 0.25f, 0.35f, 1f)); // cool blue-white fill
+        rootNode.addLight(ambient);
+
+        DirectionalLight sun = new DirectionalLight();
+        sun.setColor(ColorRGBA.White.mult(1.5f));
+        sun.setDirection(new Vector3f(-1, -1, -2).normalizeLocal());
+        rootNode.addLight(sun);
+
+        // Bloom — GlowMode.Objects only blooms geometry that has GlowColor set,
+        // so the main cube and background are unaffected
+        BloomFilter bloom = new BloomFilter(BloomFilter.GlowMode.Objects);
+        bloom.setBloomIntensity(1.5f);
+        bloom.setBlurScale(1.2f);
+        bloom.setDownSamplingFactor(2f);  // halve the FBO resolution for mobile perf
+        FilterPostProcessor fpp = new FilterPostProcessor(assetManager);
+        fpp.addFilter(bloom);
+        viewPort.addProcessor(fpp);
+
+        // HUD
+        guiFont = assetManager.loadFont("Interface/Fonts/Default.fnt");
+        scoreText = new BitmapText(guiFont, false);
+        scoreText.setSize(guiFont.getCharSet().getRenderedSize() * 2);
+        scoreText.setColor(ColorRGBA.White);
+        scoreText.setLocalTranslation(10, cam.getHeight() - 10, 0);
+        guiNode.attachChild(scoreText);
+
+        inputManager.addRawInputListener(touchListener);
+    }
+
+    @Override
+    public void simpleUpdate(float tpf) {
+        if (isDragging) {
+            // Finger is down — cube is driven entirely by touch events
+        } else if (velocityX != 0f || velocityY != 0f) {
+            // Apply inertia after finger lifts
+            rotateCube(velocityX, velocityY);
+            velocityX *= INERTIA_DECAY;
+            velocityY *= INERTIA_DECAY;
+            if (FastMath.abs(velocityX) < 0.01f) velocityX = 0f;
+            if (FastMath.abs(velocityY) < 0.01f) velocityY = 0f;
+        } else {
+            // Idle auto-spin when untouched
+            cube.rotate(tpf * 0.5f, tpf * 0.35f, 0);
+        }
+
+        // Orbit pivot rotates around its local Y — the 20° tilt makes the path look 3-D
+        orbitPivot.rotate(0, tpf * 1.2f, 0);
+        // Rocket spins slowly so all angles are visible during the orbit
+        rocketNode.rotate(0, tpf * 0.6f, 0);
+
+        scoreText.setText("Score: " + score + "  |  Drag to rotate  |  Tap for points");
+    }
+
+    // dx/dy are screen-pixel deltas; horizontal drag rotates around Y, vertical around X
+    private void rotateCube(float dx, float dy) {
+        Quaternion rotY = new Quaternion().fromAngleAxis( dx * DRAG_SENSITIVITY, Vector3f.UNIT_Y);
+        Quaternion rotX = new Quaternion().fromAngleAxis(-dy * DRAG_SENSITIVITY, Vector3f.UNIT_X);
+        cube.setLocalRotation(rotY.mult(rotX).mult(cube.getLocalRotation()));
+    }
+
+}

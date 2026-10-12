@@ -1,0 +1,50 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace = "${{PACKAGE_NAME}}"
+    compileSdk = ${{COMPILE_SDK}} 
+
+    defaultConfig {
+        applicationId = "${{PACKAGE_NAME}}"
+        minSdk = ${{MIN_SDK}}  
+        targetSdk = ${{TARGET_SDK}}  
+        versionCode = 1
+        versionName = "1.0"
+
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = ${{JAVA_SOURCE_COMPAT}} 
+        targetCompatibility = ${{JAVA_TARGET_COMPAT}}  
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+dependencies {
+    implementation(files("libs/jme3-core-3.6.1-stable.jar"))
+    implementation(files("libs/jme3-android-3.6.1-stable.jar"))
+    implementation(files("libs/jme3-android-native-3.6.1-stable.jar"))
+    implementation(files("libs/jme3-effects-3.6.1-stable.jar"))
+
+${% if LANGUAGE == 'kotlin' %}
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "${{JAVA_TARGET}}"
+}
+${% endif %}
+}

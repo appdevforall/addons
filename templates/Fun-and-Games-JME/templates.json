@@ -1,0 +1,60 @@
+{
+  "templates": [
+    { "path": "demo",
+      "libraries" : [
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-core/3.6.1-stable/jme3-core-3.6.1-stable.jar",
+          "dst": "app/libs",
+          "sha256": "54a81339faf6d9c39e1e87caa02d68b673b2141b62e21ad1564ac378cd14e005"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-android/3.6.1-stable/jme3-android-3.6.1-stable.jar",
+          "dst": "app/libs",
+          "sha256": "c6c01e2cc096c614ca7445f453fc241b180e603d3222afa341322137563bd91c"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-android-native/3.6.1-stable/jme3-android-native-3.6.1-stable.jar",
+          "dst": "app/libs",
+          "sha256": "d176f468d9b872266972106868e51508bae120b49f749b3e960d3d1402b5c518"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-effects/3.6.1-stable/jme3-effects-3.6.1-stable.jar",
+          "dst": "app/libs",
+          "sha256": "64978cc0f992001c4605b118dba431f819e6ba898eff066cd53bdec1dbed6c28"
+        } ] },
+    { "path": "tetris",
+      "libraries" : [
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-core/3.9.0-stable/jme3-core-3.9.0-stable.jar",
+          "dst": "app/libs",
+          "sha256": "204822b39e121343f3c5f913a3b920d894cfd03c92a35fb33df770afad2f4b87"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-android/3.9.0-stable/jme3-android-3.9.0-stable.jar",
+          "dst": "app/libs",
+          "sha256": "3a7d944ae20e7b7ca66d2ea685393a46a9507591cfef2bd0e37cb7c9311236f1"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-android-native/3.9.0-stable/jme3-android-native-3.9.0-stable.jar",
+          "dst": "app/libs",
+          "sha256": "9a0b3a5db2d2bff42467907bdfc52b2aa724b053dcda714b0fe64273b6b598da"
+        } ] },
+    { "path": "bubblewand",
+      "libraries" : [
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-core/3.9.0-stable/jme3-core-3.9.0-stable.jar",
+          "dst": "app/libs",
+          "sha256": "204822b39e121343f3c5f913a3b920d894cfd03c92a35fb33df770afad2f4b87"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-android/3.9.0-stable/jme3-android-3.9.0-stable.jar",
+          "dst": "app/libs",
+          "sha256": "3a7d944ae20e7b7ca66d2ea685393a46a9507591cfef2bd0e37cb7c9311236f1"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-android-native/3.9.0-stable/jme3-android-native-3.9.0-stable.jar",
+          "dst": "app/libs",
+          "sha256": "9a0b3a5db2d2bff42467907bdfc52b2aa724b053dcda714b0fe64273b6b598da"
+        } ] }
+  ]
+}
