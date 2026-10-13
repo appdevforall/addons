@@ -1,0 +1,12 @@
+[versions]
+agp = "${{AGP_VERSION}}"
+jme = "3.6.1-stable"
+
+[libraries]
+jme-core = { group = "org.jmonkeyengine", name = "jme3-core", version.ref = "jme" }
+jme-android = { group = "org.jmonkeyengine", name = "jme3-android", version.ref = "jme" }
+jme-android-native = { group = "org.jmonkeyengine", name = "jme3-android-native", version.ref = "jme" }
+jme-effects = { group = "org.jmonkeyengine", name = "jme3-effects", version.ref = "jme" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }

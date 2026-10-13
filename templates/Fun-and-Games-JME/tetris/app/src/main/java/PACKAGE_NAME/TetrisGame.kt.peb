@@ -1,0 +1,349 @@
+package ${{PACKAGE_NAME}} 
+
+import com.jme3.app.SimpleApplication
+import com.jme3.font.BitmapText
+import com.jme3.input.KeyInput
+import com.jme3.input.RawInputListener
+import com.jme3.input.event.JoyAxisEvent
+import com.jme3.input.event.JoyButtonEvent
+import com.jme3.input.event.KeyInputEvent
+import com.jme3.input.event.MouseButtonEvent
+import com.jme3.input.event.MouseMotionEvent
+import com.jme3.input.event.TouchEvent
+import com.jme3.material.Material
+import com.jme3.math.ColorRGBA
+import com.jme3.scene.Geometry
+import com.jme3.scene.Node
+import com.jme3.scene.Spatial
+import com.jme3.scene.shape.Quad
+import kotlin.math.abs
+import kotlin.math.max
+
+private const val CELL_SIZE = 0.9f
+private val LINE_SCORE = intArrayOf(0, 40, 100, 300, 1200)
+private const val TAP_MAX_NANOS = 250_000_000L
+private const val LONG_PRESS_MIN_NANOS = 400_000_000L
+private const val DRAG_THRESHOLD_PIXELS = 6f
+
+enum class GameState { PLAYING, GAME_OVER }
+
+/** SimpleApplication implementing a self-contained Tetris-like game, rendered with an orthographic board of quads. */
+class TetrisGame : SimpleApplication(), RawInputListener {
+
+    private lateinit var boardNode: Node
+    private lateinit var cellGeoms: Array<Array<Geometry>>
+    private lateinit var pieceGeoms: Array<Geometry>
+    private lateinit var scoreText: BitmapText
+    private lateinit var infoText: BitmapText
+    private lateinit var messageText: BitmapText
+
+    private val board = Board()
+    private val bag = ArrayDeque<TetrominoType>()
+    private lateinit var current: Piece
+    private lateinit var nextType: TetrominoType
+
+    private var state = GameState.PLAYING
+    private var score = 0
+    private var level = 1
+    private var linesCleared = 0
+    private var dropInterval = 1.0f
+    private var dropTimer = 0f
+
+    private var viewWidth = 1f
+
+    private var trackedPointer = -1
+    private var downX = 0f
+    private var downY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private var downTimeNanos = 0L
+    private var dragged = false
+
+    override fun simpleInitApp() {
+        flyCam.isEnabled = false
+        setDisplayStatView(false)
+        setDisplayFps(false)
+        inputManager.addRawInputListener(this)
+
+        setUpCamera()
+        setUpBoard()
+        setUpHud()
+        startNewGame()
+    }
+
+    override fun reshape(w: Int, h: Int) {
+        super.reshape(w, h)
+        if (this::boardNode.isInitialized) setUpCamera()
+    }
+
+    private fun setUpCamera() {
+        cam.setParallelProjection(true)
+        val aspect = cam.width.toFloat() / cam.height.toFloat()
+        val viewHeight = BOARD_ROWS + 2f
+        viewWidth = viewHeight * aspect
+        cam.setFrustum(-1000f, 1000f, -viewWidth / 2f, viewWidth / 2f, viewHeight / 2f, -viewHeight / 2f)
+    }
+
+    private fun setUpBoard() {
+        boardNode = Node("board")
+        rootNode.attachChild(boardNode)
+
+        val mesh = Quad(CELL_SIZE, CELL_SIZE)
+        cellGeoms = Array(BOARD_ROWS) { r ->
+            Array(BOARD_COLS) { c ->
+                val geom = createCellGeometry(mesh)
+                positionCell(geom, c, r)
+                geom
+            }
+        }
+        pieceGeoms = Array(4) { createCellGeometry(mesh) }
+    }
+
+    private fun createCellGeometry(mesh: Quad): Geometry {
+        val geom = Geometry("cell", mesh)
+        val mat = Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md")
+        mat.setColor("Color", ColorRGBA.Gray)
+        geom.material = mat
+        geom.cullHint = Spatial.CullHint.Always
+        boardNode.attachChild(geom)
+        return geom
+    }
+
+    private fun positionCell(geom: Geometry, col: Int, row: Int) {
+        val cx = col - BOARD_COLS / 2f + 0.5f
+        val cy = BOARD_ROWS / 2f - row - 0.5f
+        geom.setLocalTranslation(cx - CELL_SIZE / 2f, cy - CELL_SIZE / 2f, 0f)
+    }
+
+    private fun setUpHud() {
+        val font = assetManager.loadFont("Interface/Fonts/Default.fnt")
+
+        scoreText = BitmapText(font)
+        scoreText.setSize(font.charSet.renderedSize * 1.4f)
+        scoreText.color = ColorRGBA.White
+        scoreText.setLocalTranslation(10f, settings.height - 10f, 0f)
+        guiNode.attachChild(scoreText)
+
+        infoText = BitmapText(font)
+        infoText.setSize(font.charSet.renderedSize * 1.1f)
+        infoText.color = ColorRGBA.White
+        infoText.setLocalTranslation(10f, settings.height - 10f - scoreText.lineHeight * 1.4f, 0f)
+        guiNode.attachChild(infoText)
+
+        messageText = BitmapText(font)
+        messageText.setSize(font.charSet.renderedSize * 1.6f)
+        messageText.color = ColorRGBA.Yellow
+        messageText.setLocalTranslation(20f, settings.height / 2f + 40f, 0f)
+        guiNode.attachChild(messageText)
+    }
+
+    private fun nextFromBag(): TetrominoType {
+        if (bag.isEmpty()) bag.addAll(TetrominoType.entries.shuffled())
+        return bag.removeFirst()
+    }
+
+    private fun startNewGame() {
+        board.reset()
+        score = 0
+        level = 1
+        linesCleared = 0
+        dropInterval = 1.0f
+        dropTimer = 0f
+        bag.clear()
+        nextType = nextFromBag()
+        state = GameState.PLAYING
+        messageText.text = ""
+        spawnPiece()
+    }
+
+    private fun spawnPiece() {
+        val type = nextType
+        nextType = nextFromBag()
+        current = Piece(type, 0, (BOARD_COLS - 4) / 2, 0)
+        if (!board.isValidPosition(current)) {
+            state = GameState.GAME_OVER
+            messageText.text = "GAME OVER\nTap to restart"
+        }
+    }
+
+    private fun tryMove(dCol: Int, dRow: Int): Boolean {
+        val nc = current.col + dCol
+        val nr = current.row + dRow
+        if (board.isValidPosition(current, current.rotation, nc, nr)) {
+            current.col = nc
+            current.row = nr
+            return true
+        }
+        return false
+    }
+
+    private fun tryRotate() {
+        val nr = (current.rotation + 1) % 4
+        if (board.isValidPosition(current, nr)) {
+            current.rotation = nr
+            return
+        }
+        for (dx in intArrayOf(-1, 1, -2, 2)) {
+            if (board.isValidPosition(current, nr, current.col + dx, current.row)) {
+                current.rotation = nr
+                current.col += dx
+                return
+            }
+        }
+    }
+
+    private fun softDrop(rows: Int) {
+        for (i in 0 until rows) {
+            if (state != GameState.PLAYING) return
+            if (tryMove(0, 1)) {
+                score += 1
+            } else {
+                lockAndProceed()
+                return
+            }
+        }
+    }
+
+    private fun hardDrop() {
+        var dropped = 0
+        while (tryMove(0, 1)) dropped++
+        score += dropped * 2
+        lockAndProceed()
+    }
+
+    private fun lockAndProceed() {
+        board.lockPiece(current)
+        val cleared = board.clearLines()
+        if (cleared > 0) {
+            linesCleared += cleared
+            score += LINE_SCORE[cleared] * level
+            level = linesCleared / 10 + 1
+            dropInterval = max(0.1f, 1.0f - (level - 1) * 0.075f)
+        }
+        spawnPiece()
+    }
+
+    override fun simpleUpdate(tpf: Float) {
+        if (state == GameState.PLAYING) {
+            dropTimer += tpf
+            if (dropTimer >= dropInterval) {
+                dropTimer = 0f
+                if (!tryMove(0, 1)) lockAndProceed()
+            }
+        }
+        updateHud()
+        renderBoard()
+    }
+
+    private fun updateHud() {
+        scoreText.text = "Score: $score"
+        infoText.text = "Level: $level   Lines: $linesCleared   Next: ${nextType.name}"
+    }
+
+    private fun renderBoard() {
+        for (r in 0 until BOARD_ROWS) {
+            for (c in 0 until BOARD_COLS) {
+                val geom = cellGeoms[r][c]
+                val color = board.grid[r][c]
+                if (color != null) {
+                    geom.cullHint = Spatial.CullHint.Inherit
+                    geom.material.setColor("Color", color)
+                } else {
+                    geom.cullHint = Spatial.CullHint.Always
+                }
+            }
+        }
+
+        if (state == GameState.PLAYING) {
+            val cells = current.boardCells()
+            for (i in 0 until 4) {
+                val (c, r) = cells[i]
+                val geom = pieceGeoms[i]
+                if (r >= 0) {
+                    geom.cullHint = Spatial.CullHint.Inherit
+                    positionCell(geom, c, r)
+                    geom.material.setColor("Color", current.type.color)
+                } else {
+                    geom.cullHint = Spatial.CullHint.Always
+                }
+            }
+        } else {
+            pieceGeoms.forEach { it.cullHint = Spatial.CullHint.Always }
+        }
+    }
+
+    // --- RawInputListener: keyboard is a convenience for desktop/emulator testing, touch is primary ---
+
+    override fun onKeyEvent(evt: KeyInputEvent) {
+        if (!evt.isPressed) return
+        if (state == GameState.GAME_OVER) {
+            if (evt.keyCode == KeyInput.KEY_RETURN || evt.keyCode == KeyInput.KEY_SPACE) startNewGame()
+            return
+        }
+        when (evt.keyCode) {
+            KeyInput.KEY_LEFT -> tryMove(-1, 0)
+            KeyInput.KEY_RIGHT -> tryMove(1, 0)
+            KeyInput.KEY_DOWN -> softDrop(1)
+            KeyInput.KEY_UP -> tryRotate()
+            KeyInput.KEY_SPACE -> hardDrop()
+        }
+    }
+
+    // Drag left/right to move, drag down to soft-drop, tap to rotate, long-press to hard-drop.
+    override fun onTouchEvent(evt: TouchEvent) {
+        when (evt.type) {
+            TouchEvent.Type.DOWN -> {
+                if (trackedPointer == -1) {
+                    trackedPointer = evt.pointerId
+                    downX = evt.x
+                    downY = evt.y
+                    lastX = evt.x
+                    lastY = evt.y
+                    downTimeNanos = System.nanoTime()
+                    dragged = false
+                }
+            }
+            TouchEvent.Type.MOVE -> {
+                if (evt.pointerId != trackedPointer) return
+                val dx = evt.x - lastX
+                val dy = evt.y - lastY
+                if (abs(dx) > DRAG_THRESHOLD_PIXELS || abs(dy) > DRAG_THRESHOLD_PIXELS) dragged = true
+                if (state == GameState.PLAYING) {
+                    val pixelsPerCell = cam.width / viewWidth
+                    val colsDelta = (dx / pixelsPerCell).toInt()
+                    if (colsDelta != 0) {
+                        repeat(abs(colsDelta)) { tryMove(if (colsDelta > 0) 1 else -1, 0) }
+                        lastX += colsDelta * pixelsPerCell
+                    }
+                    val rowsDelta = (-dy / pixelsPerCell).toInt()
+                    if (rowsDelta > 0) {
+                        softDrop(rowsDelta)
+                        lastY -= rowsDelta * pixelsPerCell
+                    }
+                }
+            }
+            TouchEvent.Type.UP -> {
+                if (evt.pointerId != trackedPointer) return
+                val elapsed = System.nanoTime() - downTimeNanos
+                if (!dragged) {
+                    if (state == GameState.GAME_OVER) {
+                        startNewGame()
+                    } else if (elapsed >= LONG_PRESS_MIN_NANOS) {
+                        hardDrop()
+                    } else if (elapsed <= TAP_MAX_NANOS) {
+                        tryRotate()
+                    }
+                }
+                trackedPointer = -1
+            }
+            else -> {}
+        }
+    }
+
+    override fun beginInput() {}
+    override fun endInput() {}
+    override fun onJoyAxisEvent(evt: JoyAxisEvent) {}
+    override fun onJoyButtonEvent(evt: JoyButtonEvent) {}
+    override fun onMouseMotionEvent(evt: MouseMotionEvent) {}
+    override fun onMouseButtonEvent(evt: MouseButtonEvent) {}
+}
