@@ -1,5 +1,8 @@
 package com.itsaky.androidide.plugins.aiagentmcp.client
 
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchange
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeLog
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpClient
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import java.net.HttpURLConnection
@@ -26,6 +29,18 @@ class McpSessionLifecycleTest {
         const val LIST_TOOLS = "tools/list"
         const val SESSION = "s-1"
         const val TOOL = "search"
+
+        /** A bare record of one POST, enough to count what a recording saw. */
+        fun exchangeFor(url: String, body: JSONObject) = McpExchange(
+            method = "POST",
+            url = url,
+            requestHeaders = emptyList(),
+            requestBody = McpExchange.Body.capped(body.toString()),
+            status = null,
+            responseHeaders = emptyList(),
+            responseBody = null,
+            failure = null,
+        )
     }
 
     /**
@@ -63,9 +78,11 @@ class McpSessionLifecycleTest {
             protocolVersion: String?,
             extraHeaders: Map<String, String>,
             onConnected: (HttpURLConnection) -> Unit,
+            exchangeListener: McpExchangeListener,
         ): Response {
             val method = body.optString("method")
             requests += Request(method, sessionId)
+            exchangeListener.onExchange(exchangeFor(url, body))
             if (method == expiringMethod && expiriesLeft > 0) {
                 expiriesLeft--
                 throw McpHttpException(HttpURLConnection.HTTP_NOT_FOUND, "session expired")
@@ -188,5 +205,29 @@ class McpSessionLifecycleTest {
 
         assertEquals(listOf(SESSION), http.deletedSessions)
         assertEquals(2, http.methods.count { it == INITIALIZE })
+    }
+
+    @Test
+    fun givenARecordingAroundTheHandshake_whenInitializing_thenEveryExchangeReachesTheSink() {
+        val http = FakeHttpClient(McpSession.PREFERRED_PROTOCOL_VERSION, sessionId = SESSION)
+        val session = sessionOn(http)
+        val log = McpExchangeLog()
+
+        session.recording(log) { session.initialize() }
+
+        assertEquals(2, log.snapshot().size)
+        assertTrue(log.snapshot().first().requestBody.text.contains(INITIALIZE))
+    }
+
+    @Test
+    fun givenARecordingThatEnded_whenTheSessionIsUsedAgain_thenTheSinkHearsNothingMore() {
+        val http = FakeHttpClient(McpSession.PREFERRED_PROTOCOL_VERSION, sessionId = SESSION)
+        val session = sessionOn(http)
+        val log = McpExchangeLog()
+
+        session.recording(log) { session.initialize() }
+        session.listTools()
+
+        assertEquals(2, log.snapshot().size)
     }
 }

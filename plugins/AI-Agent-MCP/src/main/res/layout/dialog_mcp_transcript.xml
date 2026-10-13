@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A failed Connect's log: one card per HTTP exchange, filled in code by McpConnectionLogView.
+  Bodies wrap rather than scroll sideways: a JSON reply is often one long line.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/plugin_surface">
+
+    <LinearLayout
+        android:id="@+id/mcpLogEntries"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/mcp_dialog_padding_horizontal"
+        android:paddingTop="8dp"
+        android:paddingEnd="@dimen/mcp_dialog_padding_horizontal"
+        android:paddingBottom="8dp" />
+
+</ScrollView>

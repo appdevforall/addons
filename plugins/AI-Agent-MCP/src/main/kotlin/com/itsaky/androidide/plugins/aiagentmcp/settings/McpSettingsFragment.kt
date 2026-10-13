@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputLayout
@@ -46,6 +47,7 @@ class McpSettingsFragment : Fragment() {
      */
     private var serverDialog: AlertDialog? = null
     private var deleteDialog: AlertDialog? = null
+    private var logDialog: AlertDialog? = null
 
     /**
      * The token field's reveal control, while the add/edit dialog is up. Held so a revealed token
@@ -179,7 +181,15 @@ class McpSettingsFragment : Fragment() {
         val urlField = view.findViewById<EditText>(R.id.mcpUrl)
         val tokenBox = view.findViewById<TextInputLayout>(R.id.mcpTokenBox)
         val tokenField = view.findViewById<EditText>(R.id.mcpToken)
-        val status = view.findViewById<TextView>(R.id.mcpStatus)
+        val detailsButton = view.findViewById<MaterialButton>(R.id.mcpShowDetails)
+        McpButtons.text(detailsButton, R.drawable.ic_mcp_log)
+        wireTooltip(detailsButton, McpPlugin.TOOLTIP_TAG_SHOW_DETAILS)
+        val status = McpStatusLine(view.findViewById(R.id.mcpStatus), detailsButton) { log ->
+            logDialog?.dismiss()
+            logDialog = McpTranscriptDialog.show(
+                requireContext(), layoutInflater, viewLifecycleOwner.lifecycleScope, log,
+            )
+        }
 
         wireTooltip(nameField, McpPlugin.TOOLTIP_TAG_SERVER_NAME)
         wireTooltip(urlField, McpPlugin.TOOLTIP_TAG_SERVER_URL)
@@ -219,7 +229,8 @@ class McpSettingsFragment : Fragment() {
             button.setOnClickListener { addHeaderRow(view) }
         }
 
-        val clearButton = view.findViewById<Button>(R.id.mcpClearCredential)
+        val clearButton = view.findViewById<MaterialButton>(R.id.mcpClearCredential)
+        McpButtons.text(clearButton)
         wireTooltip(clearButton, McpPlugin.TOOLTIP_TAG_CLEAR_CREDENTIAL)
         clearButton.setOnClickListener {
             clearButton.isEnabled = false
@@ -236,7 +247,7 @@ class McpSettingsFragment : Fragment() {
                         tokenField.text = null
                         tokenField.hint = getString(R.string.mcp_hint_token)
                         renderHeaders(view, emptyMap())
-                        status.text = getString(R.string.mcp_credential_cleared)
+                        status.show(getString(R.string.mcp_credential_cleared))
                     }
                 }
             }
@@ -270,9 +281,9 @@ class McpSettingsFragment : Fragment() {
                     // credential that has to be entered again is the worse news.
                     when {
                         form.tokenUnreadable || form.headersUnreadable ->
-                            status.text = getString(R.string.mcp_secrets_unreadable)
+                            status.show(getString(R.string.mcp_secrets_unreadable))
                         form.tokenUnavailable || form.headersUnavailable ->
-                            status.text = getString(R.string.mcp_secrets_unavailable)
+                            status.show(getString(R.string.mcp_secrets_unavailable))
                     }
                     // Offered only once something is known to be stored; there is nothing to
                     // clear otherwise, and an unreadable secret is exactly what it is for.
@@ -303,17 +314,17 @@ class McpSettingsFragment : Fragment() {
                 )
                 val headers = collectHeaders(view)
                 if (headers == null) {
-                    status.text = getString(R.string.mcp_headers_invalid)
+                    status.show(getString(R.string.mcp_headers_invalid))
                     return@setOnClickListener
                 }
                 val validation =
                     validate(candidate, tokenField.text.toString(), credential, headers, headersState)
                 if (validation != null) {
-                    status.text = validation
+                    status.show(validation)
                     return@setOnClickListener
                 }
                 // Stored first: connecting reads the URL and credentials from the store.
-                status.text = getString(R.string.mcp_status_connecting)
+                status.show(getString(R.string.mcp_status_connecting))
                 button.isEnabled = false
                 viewModel.save(
                     candidate,
@@ -331,15 +342,15 @@ class McpSettingsFragment : Fragment() {
                     // An unstored credential would go out missing and come back a puzzling 401.
                     if (failure != null) {
                         whileDialogShown {
-                            status.text = failure
+                            status.show(failure)
                             button.isEnabled = true
                         }
                         return@save
                     }
-                    viewModel.connect(saved) { message, tools ->
+                    viewModel.connect(saved) { result ->
                         whileDialogShown {
-                            status.text = message
-                            renderTools(view, saved.id, tools)
+                            status.show(result.message, result.log)
+                            renderTools(view, saved.id, result.tools)
                             button.isEnabled = true
                         }
                     }
@@ -377,13 +388,13 @@ class McpSettingsFragment : Fragment() {
                 // A malformed header stops the save: storing it would drop it later in silence.
                 val headers = collectHeaders(view)
                 if (headers == null) {
-                    status.text = getString(R.string.mcp_headers_invalid)
+                    status.show(getString(R.string.mcp_headers_invalid))
                     return@setOnClickListener
                 }
                 val problem =
                     validate(candidate, tokenField.text.toString(), credential, headers, headersState)
                 if (problem != null) {
-                    status.text = problem
+                    status.show(problem)
                     return@setOnClickListener
                 }
                 saveButton.isEnabled = false
@@ -400,7 +411,7 @@ class McpSettingsFragment : Fragment() {
                         return@save
                     }
                     whileDialogShown {
-                        status.text = failure
+                        status.show(failure)
                         saveButton.isEnabled = true
                     }
                 }
@@ -560,11 +571,13 @@ class McpSettingsFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // Both are anchored to the view being destroyed; see the fields' comment.
+        // All three are anchored to the view being destroyed; see the fields' comment.
         serverDialog?.dismiss()
         serverDialog = null
         deleteDialog?.dismiss()
         deleteDialog = null
+        logDialog?.dismiss()
+        logDialog = null
         tokenReveal = null
         // The activity window outlives this screen, so a flag left on it would outlive it too.
         setSecureWindows(false)

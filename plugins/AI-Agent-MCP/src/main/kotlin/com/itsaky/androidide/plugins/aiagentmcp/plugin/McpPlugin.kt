@@ -103,6 +103,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_SERVER_ROW = "mcp_server_row"
         const val TOOLTIP_TAG_SERVER_ENABLED = "mcp_server_enabled"
         const val TOOLTIP_TAG_CONNECT = "mcp_connect"
+        const val TOOLTIP_TAG_SHOW_DETAILS = "mcp_show_details"
         const val TOOLTIP_TAG_TOOL_TOGGLE = "mcp_tool_toggle"
         const val TOOLTIP_TAG_SERVER_NAME = "mcp_server_name"
         const val TOOLTIP_TAG_SERVER_URL = "mcp_server_url"
@@ -607,6 +608,24 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>The Agent reads this list from memory, so connecting again is
                 also what makes a newly added tool visible to a chat that is
                 already open.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SHOW_DETAILS,
+            summary = "See exactly what was sent to the server and what it answered.",
+            detail = """
+                <p>Appears under a Connect that failed. It lists every request
+                the attempt made — method, URL, headers and body — and the
+                server's status line, headers and body for each, in the order
+                they happened.</p>
+                <p>The token and the values of your extra headers are hidden,
+                keeping only the scheme in front (such as <code>Bearer</code>)
+                and their length, and are masked wherever the server echoes
+                them back. <b>Copy</b> puts the whole transcript on the
+                clipboard, ready to paste into a bug report.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)

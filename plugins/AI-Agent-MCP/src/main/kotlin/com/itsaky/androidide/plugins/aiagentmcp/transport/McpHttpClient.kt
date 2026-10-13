@@ -65,6 +65,7 @@ open class McpHttpClient(
      * @param sessionId the session to continue, or null before one exists.
      * @param protocolVersion the negotiated revision, or null before `initialize` has answered.
      * @param onConnected receives the live connection, so a caller can disconnect it to cancel.
+     * @param exchangeListener receives each request made and what came back, redirects included.
      * @return the reply document and any session id the server sent.
      * @throws McpHttpException on a non-2xx answer, carrying the server's error body.
      */
@@ -76,28 +77,36 @@ open class McpHttpClient(
         protocolVersion: String? = null,
         extraHeaders: Map<String, String> = emptyMap(),
         onConnected: (HttpURLConnection) -> Unit = {},
+        exchangeListener: McpExchangeListener = McpExchangeListener.NONE,
     ): Response {
+        val payload = body.toString()
+        val bytes = payload.toByteArray(Charsets.UTF_8)
+        val userHeaders = McpHeaders.sanitize(extraHeaders)
+        // Both are advertised because the server picks, and offering one earns 406 from some.
+        val headers = headersFor(token, userHeaders, sessionId, protocolVersion) +
+            listOf("Content-Type" to "application/json", "Accept" to "application/json, $CONTENT_TYPE_SSE")
+        val redactor = McpRedactor(listOf(token) + userHeaders.values, userHeaders.keys)
+        val credential = McpCredential.of(token, userHeaders)
         var target = url
         var hops = 0
         while (true) {
-            val conn = open(target, "POST", token, sessionId, protocolVersion, extraHeaders).apply {
+            val conn = open(target, "POST", token, headers).apply {
                 readTimeout = readTimeoutMs
                 doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-                // Both are advertised because the server picks, and a client that offers only one
-                // gets 406 from servers that stream by default.
-                setRequestProperty("Accept", "application/json, $CONTENT_TYPE_SSE")
             }
+            val trace = McpExchangeTrace("POST", target, headers, payload, bytes.size, redactor)
             onConnected(conn)
             // Only a socket that cannot be reused is disconnected: `disconnect()` evicts it from
             // the pool, so doing it on the success path made every call — initialize, each
             // tools/list page, each tools/call — pay a fresh TCP and TLS handshake.
             var reusable = false
+            var failure: Throwable? = null
             val redirect = try {
-                conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                conn.outputStream.use { it.write(bytes) }
+                trace.answered(conn)
                 val next = conn.redirectTargetFrom(target)
                 if (next == null) {
-                    conn.failIfNotOk()
+                    conn.failIfNotOk(trace, credential)
 
                     val assignedSession =
                         conn.getHeaderField(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
@@ -105,14 +114,20 @@ open class McpHttpClient(
                     // than ignored, since a body left unread keeps the socket out of the pool.
                     if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
                         // A half-read body is neither pooled nor closed, so only a whole drain counts.
-                        reusable = runCatching { conn.inputStream.use { it.readBytes() } }.isSuccess
+                        val drained = runCatching { conn.inputStream.use { it.readBytes() } }
+                        drained.getOrNull()?.let { trace.received(String(it, Charsets.UTF_8)) }
+                        reusable = drained.isSuccess
                         return Response(null, assignedSession)
                     }
 
                     val streaming =
                         conn.contentType.orEmpty().contains(CONTENT_TYPE_SSE, ignoreCase = true)
                     val document = conn.inputStream.bufferedReader().use { reader ->
-                        if (streaming) readFirstSseDocument(reader) else reader.readText()
+                        if (streaming) {
+                            readFirstSseDocument(reader, trace::received)
+                        } else {
+                            reader.readText().also(trace::received)
+                        }
                     }
                     // A JSON reply was read to EOF and its socket can serve the next call; an SSE
                     // stream is abandoned after its first event, so that one is never reusable.
@@ -120,8 +135,12 @@ open class McpHttpClient(
                     return Response(document, assignedSession)
                 }
                 next
+            } catch (e: Throwable) {
+                failure = e
+                throw e
             } finally {
                 if (!reusable) conn.disconnect()
+                runCatching { exchangeListener.onExchange(trace.toExchange(failure)) }
             }
 
             if (++hops > MAX_REDIRECTS) {
@@ -148,7 +167,8 @@ open class McpHttpClient(
         sessionId: String,
         extraHeaders: Map<String, String> = emptyMap(),
     ) {
-        val conn = open(url, "DELETE", token, sessionId, null, extraHeaders)
+        val headers = headersFor(token, McpHeaders.sanitize(extraHeaders), sessionId, null)
+        val conn = open(url, "DELETE", token, headers)
         try {
             Log.d(TAG, "Closing session, server answered ${conn.responseCode}")
         } catch (e: Exception) {
@@ -166,31 +186,58 @@ open class McpHttpClient(
      * caller waiting on it.
      *
      * @param reader the response body.
+     * @param onRaw receives the stream's lines as read, for the exchange record.
      * @return the reply document, or an empty string when the stream ended without one.
      */
-    private fun readFirstSseDocument(reader: BufferedReader): String {
+    private fun readFirstSseDocument(reader: BufferedReader, onRaw: (String) -> Unit): String {
+        val raw = StringBuilder()
         val payload = StringBuilder()
-        while (true) {
-            val line = reader.readLine() ?: break
-            when (val event = SseChunk.parse(line)) {
-                is SseChunk.Event.Data -> payload.append(event.payload)
-                is SseChunk.Event.Named -> Log.d(TAG, "SSE event '${event.name}'")
-                SseChunk.Event.Dispatch -> if (payload.isNotEmpty()) return payload.toString()
-                SseChunk.Event.Ignored -> Unit
+        try {
+            while (true) {
+                val line = reader.readLine() ?: break
+                raw.append(line).append('\n')
+                when (val event = SseChunk.parse(line)) {
+                    is SseChunk.Event.Data -> payload.append(event.payload)
+                    is SseChunk.Event.Named -> Log.d(TAG, "SSE event '${event.name}'")
+                    SseChunk.Event.Dispatch -> if (payload.isNotEmpty()) return payload.toString()
+                    SseChunk.Event.Ignored -> Unit
+                }
             }
+            return payload.toString()
+        } finally {
+            onRaw(raw.toString())
         }
-        return payload.toString()
     }
 
     /**
-     * Opens a connection carrying the session and bearer headers this call needs.
+     * The headers one request carries, in order; a later name replaces an earlier one. The token
+     * is a header, never a query string, which leaks into logs; the session and protocol headers
+     * come after the user's, so a user header cannot displace them.
      *
-     * The token travels as a header, never a query string: query strings leak into logs, proxies
-     * and crash reports. The read timeout starts at the connect budget; only a POST raises it.
-     *
-     * The token is checked before the socket is opened for the same reason a user's own header is:
-     * a CR or LF in it would forge a second header. The settings screen refuses one on Save, so
-     * reaching this is a value that predates that check — refusing beats sending it.
+     * @param userHeaders the user's own headers, already sanitised.
+     * @return the name/value pairs, which [open] applies and the exchange record shows.
+     */
+    private fun headersFor(
+        token: String,
+        userHeaders: Map<String, String>,
+        sessionId: String?,
+        protocolVersion: String?,
+    ): List<Pair<String, String>> {
+        val byName = LinkedHashMap<String, Pair<String, String>>()
+        fun set(name: String, value: String) {
+            byName[name.lowercase()] = name to value
+        }
+        if (token.isNotBlank()) set("Authorization", "Bearer $token")
+        userHeaders.forEach { (name, value) -> set(name, value) }
+        sessionId?.let { set(HEADER_SESSION_ID, it) }
+        protocolVersion?.let { set(HEADER_PROTOCOL_VERSION, it) }
+        return byName.values.toList()
+    }
+
+    /**
+     * Opens a connection carrying [headers]; the read timeout starts at the connect budget. The
+     * token is checked first: a CR or LF in it would forge a second header, and Save refuses one,
+     * so reaching this means a value that predates that check.
      *
      * @throws IOException when the token cannot be put in a header.
      */
@@ -198,9 +245,7 @@ open class McpHttpClient(
         url: String,
         method: String,
         token: String,
-        sessionId: String?,
-        protocolVersion: String?,
-        extraHeaders: Map<String, String> = emptyMap(),
+        headers: List<Pair<String, String>>,
     ): HttpURLConnection {
         if (token.isNotBlank() && !McpHeaders.isSendableToken(token)) {
             throw IOException("The stored token cannot be sent: it contains a line break or control character.")
@@ -210,14 +255,7 @@ open class McpHttpClient(
             connectTimeout = connectTimeoutMs
             readTimeout = connectTimeoutMs
             instanceFollowRedirects = false
-            if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer $token")
-            // Before the session and protocol headers, so a user cannot displace either; the
-            // sanitiser already refuses those names, and this makes the order irrelevant.
-            McpHeaders.sanitize(extraHeaders).forEach { (name, value) ->
-                setRequestProperty(name, value)
-            }
-            sessionId?.let { setRequestProperty(HEADER_SESSION_ID, it) }
-            protocolVersion?.let { setRequestProperty(HEADER_PROTOCOL_VERSION, it) }
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }
     }
 
@@ -247,11 +285,12 @@ open class McpHttpClient(
      * Fails with the server's error body attached, so the status reaches its readers as a number
      * rather than as text they have to match.
      */
-    private fun HttpURLConnection.failIfNotOk() {
+    private fun HttpURLConnection.failIfNotOk(trace: McpExchangeTrace, credential: McpCredential) {
         val code = responseCode
         if (code !in 200..299) {
             val body = errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            throw McpHttpException(code, body)
+            trace.received(body)
+            throw McpHttpException(code, body, credential)
         }
     }
 }

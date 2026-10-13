@@ -3,10 +3,12 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpClient
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONObject
@@ -68,6 +70,9 @@ class McpSession(
 
     /** The connection a call is currently using, so [cancel] can drop it mid-flight. */
     @Volatile private var liveConnection: HttpURLConnection? = null
+
+    /** Who is watching this session's exchanges; see [recording]. */
+    private val recorders = CopyOnWriteArrayList<McpExchangeListener>()
 
     /** What the server called itself in `initialize`, for the settings pane's verdict. */
     @Volatile var serverName: String? = null
@@ -161,6 +166,23 @@ class McpSession(
             McpCallResult(false, text, text.takeIf { it.isNotBlank() } ?: "The tool reported an error.")
         } else {
             McpCallResult(true, text)
+        }
+    }
+
+    /**
+     * Runs [block], handing [listener] every HTTP exchange this session makes meanwhile — a call
+     * running at the same time on another thread included. Nothing is recorded outside a block.
+     *
+     * @param listener receives each exchange as it ends.
+     * @param block the work to watch.
+     * @return what [block] returned.
+     */
+    fun <T> recording(listener: McpExchangeListener, block: () -> T): T {
+        recorders += listener
+        return try {
+            block()
+        } finally {
+            recorders -= listener
         }
     }
 
@@ -268,6 +290,7 @@ class McpSession(
                 protocolVersion = negotiatedVersion,
                 extraHeaders = current.headers,
                 onConnected = { liveConnection = it },
+                exchangeListener = { exchange -> recorders.forEach { it.onExchange(exchange) } },
             )
         } finally {
             liveConnection = null
