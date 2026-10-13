@@ -3,8 +3,11 @@ package com.itsaky.androidide.plugins.aicore.tool
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -453,5 +456,41 @@ class ExecutorTest {
 
         assertTrue("in-project path should be allowed through", handler.dispatched)
         assertTrue(results.single().success)
+    }
+
+    /** Runs one approval-gated call, answering its dialog with [decision] once it is pending. */
+    private fun executeAnswering(decision: ApprovalResult, correction: String? = null): ToolResult = runBlocking {
+        val handler = object : ToolHandler {
+            override val toolName = "fake_gated"
+            override val description = "fake gated"
+            override val requiresApproval = true
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ran")
+        }
+        val approvalManager = ToolApprovalManager({ shippedConfig })
+        val executor = Executor(ToolRouter(listOf(handler)), approvalManager)
+        // Dispatchers.Default: the wait below must not sit on the thread it needs to progress on.
+        val pending = async(Dispatchers.Default) { executor.execute(listOf(ToolCall("fake_gated", emptyMap()))) }
+        withTimeout(5_000) {
+            while (!approvalManager.hasPendingApproval()) delay(5)
+            approvalManager.submitApproval(decision, correction)
+            pending.await().single()
+        }
+    }
+
+    @Test
+    fun givenTheUserDenies_whenExecuting_thenTheResultIsADenial() {
+        val result = executeAnswering(ApprovalResult.DENIED)
+
+        assertFalse(result.success)
+        assertTrue("a Deny is what offers Retry", result.denied)
+    }
+
+    @Test
+    fun givenTheUserCorrects_whenExecuting_thenTheResultIsAFailureButNotADenial() {
+        val result = executeAnswering(ApprovalResult.CORRECTED, "use a different file")
+
+        assertFalse(result.success)
+        assertFalse("Retry would rewind the run the correction steers", result.denied)
+        assertTrue(result.message.contains("use a different file"))
     }
 }

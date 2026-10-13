@@ -639,8 +639,9 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             summary = "Run your last request again after a failed reply or a step you declined.",
             detail = """
                 <p>Appears on a step that failed — a dropped network request, a
-                model that wasn't loaded, a tool that errored, a turn you stopped,
-                or a tool call you declined.</p>
+                model that wasn't loaded, a turn you stopped, or a tool call you
+                declined. A tool that errors on its own offers none: the agent
+                carries on past it.</p>
                 <p><b>Retry</b> re-sends your last prompt with the same attached
                 context files, from the conversation as it stood before that
                 attempt: the failed turn is dropped rather than left for the model

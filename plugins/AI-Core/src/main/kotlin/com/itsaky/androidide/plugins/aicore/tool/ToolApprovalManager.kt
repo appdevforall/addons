@@ -160,7 +160,8 @@ class ToolApprovalManager(
             Log.d(TAG, "Approval denied for $toolName")
             ApprovalResponse(
                 approved = false,
-                denialMessage = ApprovalPrompt.denied(config.config(), toolName)
+                denialMessage = ApprovalPrompt.denied(config.config(), toolName),
+                deniedByUser = true
             )
         }
         null -> {
@@ -214,10 +215,12 @@ class ToolApprovalManager(
 
 /**
  * Result of an approval request.
+ * @property deniedByUser the user chose Deny; not set for a correction or a timeout.
  */
 data class ApprovalResponse(
     val approved: Boolean,
-    val denialMessage: String? = null
+    val denialMessage: String? = null,
+    val deniedByUser: Boolean = false
 )
 
 /**

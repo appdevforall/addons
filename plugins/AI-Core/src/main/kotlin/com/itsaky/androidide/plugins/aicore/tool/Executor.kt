@@ -216,7 +216,8 @@ class Executor(
             val message = approvalResponse.denialMessage ?: "Action denied by user."
             Log.i(TAG, "($executionMode): Tool '$toolName' denied. $message")
             AgentTrace.stage("APPROVAL", "$toolName approved=false waitedMs=$approvalMs", AgentTrace.preview(message))
-            return ToolResult.denied(message)
+            // Only an explicit Deny offers Retry; a correction steers the run that is still going.
+            return if (approvalResponse.deniedByUser) ToolResult.denied(message) else ToolResult.failure(message)
         }
         AgentTrace.stage("APPROVAL", "$toolName approved=true waitedMs=$approvalMs")
 
