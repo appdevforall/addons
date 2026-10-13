@@ -1,0 +1,318 @@
+package ${{PACKAGE_NAME}} 
+
+import com.badlogic.gdx.ApplicationAdapter
+import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.Input
+import com.badlogic.gdx.InputAdapter
+import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.GL20
+import com.badlogic.gdx.graphics.OrthographicCamera
+import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.SpriteBatch
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer
+import kotlin.math.abs
+import kotlin.math.max
+
+private const val CELL_SIZE = 0.9f
+private val LINE_SCORE = intArrayOf(0, 40, 100, 300, 1200)
+private const val TAP_MAX_NANOS = 250_000_000L
+private const val LONG_PRESS_MIN_NANOS = 400_000_000L
+private const val DRAG_THRESHOLD_PIXELS = 6f
+
+private const val SCORE_TEXT_SCALE = 1.4f
+private const val INFO_TEXT_SCALE = 1.1f
+private const val MESSAGE_TEXT_SCALE = 1.6f
+
+enum class GameState { PLAYING, GAME_OVER }
+
+/** libGDX application implementing a self-contained Tetris-like game, rendered as filled rects under an orthographic camera. */
+class TetrisGame : ApplicationAdapter() {
+
+    private lateinit var camera: OrthographicCamera
+    private lateinit var shapes: ShapeRenderer
+    private lateinit var hudBatch: SpriteBatch
+    private lateinit var font: BitmapFont
+
+    private var messageText = ""
+
+    private val board = Board()
+    private val bag = ArrayDeque<TetrominoType>()
+    private lateinit var current: Piece
+    private lateinit var nextType: TetrominoType
+
+    private var state = GameState.PLAYING
+    private var score = 0
+    private var level = 1
+    private var linesCleared = 0
+    private var dropInterval = 1.0f
+    private var dropTimer = 0f
+
+    private var viewWidth = 1f
+
+    private var trackedPointer = -1
+    private var downX = 0f
+    private var downY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private var downTimeNanos = 0L
+    private var dragged = false
+
+    override fun create() {
+        camera = OrthographicCamera()
+        shapes = ShapeRenderer()
+        hudBatch = SpriteBatch()
+        font = BitmapFont()
+        Gdx.input.inputProcessor = input
+
+        setUpCamera(Gdx.graphics.width, Gdx.graphics.height)
+        startNewGame()
+    }
+
+    override fun resize(width: Int, height: Int) {
+        setUpCamera(width, height)
+        hudBatch.projectionMatrix.setToOrtho2D(0f, 0f, width.toFloat(), height.toFloat())
+    }
+
+    private fun setUpCamera(width: Int, height: Int) {
+        val aspect = width.toFloat() / height.toFloat()
+        val viewHeight = BOARD_ROWS + 2f
+        viewWidth = viewHeight * aspect
+        // Centred on the origin with y up, like the jME parallel-projection frustum
+        camera.setToOrtho(false, viewWidth, viewHeight)
+        camera.position.set(0f, 0f, 0f)
+        camera.update()
+    }
+
+    private fun nextFromBag(): TetrominoType {
+        if (bag.isEmpty()) bag.addAll(TetrominoType.entries.shuffled())
+        return bag.removeFirst()
+    }
+
+    private fun startNewGame() {
+        board.reset()
+        score = 0
+        level = 1
+        linesCleared = 0
+        dropInterval = 1.0f
+        dropTimer = 0f
+        bag.clear()
+        nextType = nextFromBag()
+        state = GameState.PLAYING
+        messageText = ""
+        spawnPiece()
+    }
+
+    private fun spawnPiece() {
+        val type = nextType
+        nextType = nextFromBag()
+        current = Piece(type, 0, (BOARD_COLS - 4) / 2, 0)
+        if (!board.isValidPosition(current)) {
+            state = GameState.GAME_OVER
+            messageText = "GAME OVER\nTap to restart"
+        }
+    }
+
+    private fun tryMove(dCol: Int, dRow: Int): Boolean {
+        val nc = current.col + dCol
+        val nr = current.row + dRow
+        if (board.isValidPosition(current, current.rotation, nc, nr)) {
+            current.col = nc
+            current.row = nr
+            return true
+        }
+        return false
+    }
+
+    private fun tryRotate() {
+        val nr = (current.rotation + 1) % 4
+        if (board.isValidPosition(current, nr)) {
+            current.rotation = nr
+            return
+        }
+        for (dx in intArrayOf(-1, 1, -2, 2)) {
+            if (board.isValidPosition(current, nr, current.col + dx, current.row)) {
+                current.rotation = nr
+                current.col += dx
+                return
+            }
+        }
+    }
+
+    private fun softDrop(rows: Int) {
+        for (i in 0 until rows) {
+            if (state != GameState.PLAYING) return
+            if (tryMove(0, 1)) {
+                score += 1
+            } else {
+                lockAndProceed()
+                return
+            }
+        }
+    }
+
+    private fun hardDrop() {
+        var dropped = 0
+        while (tryMove(0, 1)) dropped++
+        score += dropped * 2
+        lockAndProceed()
+    }
+
+    private fun lockAndProceed() {
+        board.lockPiece(current)
+        val cleared = board.clearLines()
+        if (cleared > 0) {
+            linesCleared += cleared
+            score += LINE_SCORE[cleared] * level
+            level = linesCleared / 10 + 1
+            dropInterval = max(0.1f, 1.0f - (level - 1) * 0.075f)
+        }
+        spawnPiece()
+    }
+
+    override fun render() {
+        val tpf = Gdx.graphics.deltaTime
+        if (state == GameState.PLAYING) {
+            dropTimer += tpf
+            if (dropTimer >= dropInterval) {
+                dropTimer = 0f
+                if (!tryMove(0, 1)) lockAndProceed()
+            }
+        }
+
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+        renderBoard()
+        renderHud()
+    }
+
+    private fun renderHud() {
+        val height = Gdx.graphics.height.toFloat()
+        hudBatch.begin()
+
+        font.data.setScale(SCORE_TEXT_SCALE)
+        font.color = Color.WHITE
+        font.draw(hudBatch, "Score: $score", 10f, height - 10f)
+        val scoreLineHeight = font.lineHeight
+
+        font.data.setScale(INFO_TEXT_SCALE)
+        font.draw(
+            hudBatch, "Level: $level   Lines: $linesCleared   Next: ${nextType.name}",
+            10f, height - 10f - scoreLineHeight * 1.4f
+        )
+
+        if (messageText.isNotEmpty()) {
+            font.data.setScale(MESSAGE_TEXT_SCALE)
+            font.color = Color.YELLOW
+            font.draw(hudBatch, messageText, 20f, height / 2f + 40f)
+        }
+
+        hudBatch.end()
+    }
+
+    private fun drawCell(col: Int, row: Int, color: Color) {
+        val cx = col - BOARD_COLS / 2f + 0.5f
+        val cy = BOARD_ROWS / 2f - row - 0.5f
+        shapes.color = color
+        shapes.rect(cx - CELL_SIZE / 2f, cy - CELL_SIZE / 2f, CELL_SIZE, CELL_SIZE)
+    }
+
+    private fun renderBoard() {
+        shapes.projectionMatrix = camera.combined
+        shapes.begin(ShapeRenderer.ShapeType.Filled)
+        for (r in 0 until BOARD_ROWS) {
+            for (c in 0 until BOARD_COLS) {
+                val color = board.grid[r][c] ?: continue
+                drawCell(c, r, color)
+            }
+        }
+
+        if (state == GameState.PLAYING) {
+            for ((c, r) in current.boardCells()) {
+                if (r >= 0) drawCell(c, r, current.type.color)
+            }
+        }
+        shapes.end()
+    }
+
+    override fun dispose() {
+        shapes.dispose()
+        hudBatch.dispose()
+        font.dispose()
+    }
+
+    // --- Input: keyboard is a convenience for desktop/emulator testing, touch is primary.
+    // Screen y is flipped to bottom-up so the drag math matches the original jME TouchEvent coordinates.
+    private val input = object : InputAdapter() {
+
+        override fun keyDown(keycode: Int): Boolean {
+            if (state == GameState.GAME_OVER) {
+                if (keycode == Input.Keys.ENTER || keycode == Input.Keys.SPACE) startNewGame()
+                return true
+            }
+            when (keycode) {
+                Input.Keys.LEFT -> tryMove(-1, 0)
+                Input.Keys.RIGHT -> tryMove(1, 0)
+                Input.Keys.DOWN -> softDrop(1)
+                Input.Keys.UP -> tryRotate()
+                Input.Keys.SPACE -> hardDrop()
+                else -> return false
+            }
+            return true
+        }
+
+        // Drag left/right to move, drag down to soft-drop, tap to rotate, long-press to hard-drop.
+        override fun touchDown(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean {
+            if (trackedPointer == -1) {
+                val x = screenX.toFloat()
+                val y = Gdx.graphics.height - screenY.toFloat()
+                trackedPointer = pointer
+                downX = x
+                downY = y
+                lastX = x
+                lastY = y
+                downTimeNanos = System.nanoTime()
+                dragged = false
+            }
+            return true
+        }
+
+        override fun touchDragged(screenX: Int, screenY: Int, pointer: Int): Boolean {
+            if (pointer != trackedPointer) return false
+            val x = screenX.toFloat()
+            val y = Gdx.graphics.height - screenY.toFloat()
+            val dx = x - lastX
+            val dy = y - lastY
+            if (abs(dx) > DRAG_THRESHOLD_PIXELS || abs(dy) > DRAG_THRESHOLD_PIXELS) dragged = true
+            if (state == GameState.PLAYING) {
+                val pixelsPerCell = Gdx.graphics.width / viewWidth
+                val colsDelta = (dx / pixelsPerCell).toInt()
+                if (colsDelta != 0) {
+                    repeat(abs(colsDelta)) { tryMove(if (colsDelta > 0) 1 else -1, 0) }
+                    lastX += colsDelta * pixelsPerCell
+                }
+                val rowsDelta = (-dy / pixelsPerCell).toInt()
+                if (rowsDelta > 0) {
+                    softDrop(rowsDelta)
+                    lastY -= rowsDelta * pixelsPerCell
+                }
+            }
+            return true
+        }
+
+        override fun touchUp(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean {
+            if (pointer != trackedPointer) return false
+            val elapsed = System.nanoTime() - downTimeNanos
+            if (!dragged) {
+                if (state == GameState.GAME_OVER) {
+                    startNewGame()
+                } else if (elapsed >= LONG_PRESS_MIN_NANOS) {
+                    hardDrop()
+                } else if (elapsed <= TAP_MAX_NANOS) {
+                    tryRotate()
+                }
+            }
+            trackedPointer = -1
+            return true
+        }
+    }
+}
