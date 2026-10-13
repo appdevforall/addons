@@ -2,7 +2,11 @@ package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
+import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -453,5 +457,20 @@ class ExecutorTest {
 
         assertTrue("in-project path should be allowed through", handler.dispatched)
         assertTrue(results.single().success)
+    }
+
+    @Test
+    fun givenAShellCommandOutsideTheProject_whenExecuting_thenItIsRejectedBeforeApprovalOrTheTerminal() = runBlocking {
+        val context = mockk<PluginContext>(relaxed = true)
+        val executor = executorFor(RunShellCommandHandler(context))
+
+        val results = executor.execute(
+            listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, mapOf("command" to "ls", "cwd" to "../outside")))
+        )
+
+        assertFalse(results.single().success)
+        // The containment guard's message: it runs before validate() and the approval dialog.
+        assertTrue(results.single().message.contains("outside the project directory"))
+        verify(exactly = 0) { context.services }
     }
 }

@@ -41,7 +41,15 @@ object BuiltInToolHandlers {
         RunAppHandler(context, hasLogTools = hostHasLogApi()),
         GradleSyncHandler(context),
     ) + (if (hostHasGradleTaskApi()) listOf(RunGradleTaskHandler(context, budget)) else emptyList()) +
-        (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context, budget)) else emptyList()) + listOf(
+        (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context, budget)) else emptyList()) +
+        (if (hostHasTerminalService(context)) StartedCommands().let { started ->
+            listOf(
+                RunShellCommandHandler(context, started),
+                ReadTerminalCommandHandler(context),
+                StopTerminalCommandHandler(context, started),
+            )
+        } else emptyList()) +
+        listOf(
         // Template tool
         GenerateFromTemplateHandler(context),
         // Web tools
@@ -60,6 +68,12 @@ object BuiltInToolHandlers {
     // Same reason: a host from before IdeBuildService.getTasks lacks the class, and the call would throw.
     private fun hostHasTaskListApi(): Boolean =
         runCatching { Class.forName("com.itsaky.androidide.plugins.services.GradleTaskInfo") }.isSuccess
+
+    // Same reason for the string; a host can also ship the class (ADFA-6385) without registering it.
+    private fun hostHasTerminalService(context: PluginContext): Boolean =
+        runCatching {
+            context.services.get(Class.forName("com.itsaky.androidide.plugins.services.IdeTerminalService")) != null
+        }.getOrDefault(false)
 }
 
 /** The log tools, kept apart so [LogSource] is only touched on a host that has it. */
