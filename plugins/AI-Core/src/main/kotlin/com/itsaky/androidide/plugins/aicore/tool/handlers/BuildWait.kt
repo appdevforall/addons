@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -44,9 +45,9 @@ internal suspend fun <T> awaitBuild(toolName: String, future: CompletableFuture<
         }
     } catch (ce: CancellationException) {
         if (!future.isDone) {
-            AgentTrace.stage("BUILD", "$toolName stopped; cancelling the build")
+            AgentTrace.stage(BUILD_STAGE, "$toolName stopped; cancelling the build")
             // A throw here would replace the cancellation, and Stop would read as a build failure.
-            runCatching(cancel).onFailure { AgentTrace.refusal("BUILD", "$toolName cancel failed", it.toString()) }
+            runCatching(cancel).onFailure { AgentTrace.refusal(BUILD_STAGE, "$toolName cancel failed", it.toString()) }
         }
         throw ce
     }
@@ -57,7 +58,7 @@ private suspend fun logProgressUntilCancelled(toolName: String, startMs: Long) {
     while (true) {
         delay(BUILD_PROGRESS_LOG_INTERVAL_MS)
         val seconds = (System.currentTimeMillis() - startMs) / 1000
-        AgentTrace.detail("BUILD", "$toolName still waiting elapsed=${seconds}s")
+        AgentTrace.detail(BUILD_STAGE, "$toolName still waiting elapsed=${seconds}s")
     }
 }
 

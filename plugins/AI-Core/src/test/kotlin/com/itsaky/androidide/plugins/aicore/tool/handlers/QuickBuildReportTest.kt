@@ -18,12 +18,12 @@ class QuickBuildReportTest {
         QuickBuildReport.unavailable(QuickBuildAvailability.Unavailable(reason, message))
 
     @Test
-    fun givenAnOlderHost_whenUnavailable_thenItSaysThisIdeVersionHasNoQuickBuild() {
+    fun givenNotSupported_whenUnavailable_thenItPointsToRunAppWithoutBlamingTheIdeVersion() {
         val result = unavailable(QuickBuildUnavailableReason.NOT_SUPPORTED, "Quick Build is not supported")
 
         assertFalse(result.success)
         assertEquals("Quick Build is not available: Quick Build is not supported", result.message)
-        assertTrue(result.error_details!!.contains("This IDE version does not support Quick Build"))
+        assertFalse(result.error_details!!.contains("IDE version"))
         assertTrue(result.error_details!!.contains("run_app"))
     }
 
@@ -63,13 +63,13 @@ class QuickBuildReportTest {
     }
 
     @Test
-    fun givenTheAppIsNotRunning_whenReported_thenItSaysTheChangeWasNotAppliedAndHowToLaunch() {
+    fun givenTheAppIsNotRunning_whenReported_thenItFailsAndSaysHowToLaunch() {
         val result = QuickBuildReport.resultFor(QuickBuildResult.AppNotRunning("The app is not running."))
 
-        assertTrue(result.success)
+        assertFalse(result.success)
         assertTrue(result.message.contains("not running"))
-        assertTrue(result.data!!.startsWith("The app is not running."))
-        assertTrue(result.data!!.contains("call quick_build again", ignoreCase = true))
+        assertTrue(result.error_details!!.startsWith("The app is not running."))
+        assertTrue(result.error_details!!.contains("call quick_build again", ignoreCase = true))
     }
 
     @Test

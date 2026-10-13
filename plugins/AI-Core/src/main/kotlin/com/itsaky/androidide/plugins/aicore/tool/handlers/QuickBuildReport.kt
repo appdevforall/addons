@@ -20,6 +20,12 @@ internal object QuickBuildReport {
             "Quick Build did not start. ${adviceFor(availability.reason)}"
         )
 
+    /** The result for a Quick Build the host would refuse because another build is running. */
+    val BUILD_IN_PROGRESS: ToolResult = ToolResult.failure(
+        "Quick Build did not start: a build is already in progress",
+        "No build ran. Wait for the running build to finish, then call quick_build again."
+    )
+
     /**
      * The result for [outcome], carrying the build output window on a failure so the compiler
      * errors reach the model without a second call.
@@ -38,14 +44,15 @@ internal object QuickBuildReport {
             message = "Quick Build found nothing to update; the app already runs the latest code",
             data = UP_TO_DATE_NOTE
         )
-        is QuickBuildResult.AppNotRunning -> ToolResult.success(
-            message = "Quick Build built the app, but the app is not running",
-            data = "${outcome.message}\n\n$APP_NOT_RUNNING_NOTE"
+        // A failure: the user asked for a running app with the change, and the change is not applied.
+        is QuickBuildResult.AppNotRunning -> ToolResult.failure(
+            "Quick Build built the app, but the app is not running",
+            "${outcome.message}\n\n$APP_NOT_RUNNING_NOTE"
         )
         // The reason holds the host's own summary, the first compile errors included.
         is QuickBuildResult.Failed -> ToolResult.failure(
             "Quick Build failed: ${headlineOf(outcome.reason)}",
-            "${outcome.reason}\n\n${outputOf(outcome.output)}"
+            "${outcome.reason}\n\n${BuildOutputWindowCalculator.windowOrNull(outcome.output) ?: NO_OUTPUT_NOTE}"
         )
         is QuickBuildResult.Refused -> ToolResult.failure(
             "Quick Build did not start: ${outcome.reason}",
@@ -63,9 +70,9 @@ internal object QuickBuildReport {
     // The else is for a reason a newer host adds; without it that reason throws at runtime.
     @Suppress("REDUNDANT_ELSE_IN_WHEN")
     private fun adviceFor(reason: QuickBuildUnavailableReason): String = when (reason) {
-        // Reached on a host with the API too: one without a Quick Build provider, or whose check threw.
+        // Also a host with the API whose check threw, so the advice must not blame the IDE version.
         QuickBuildUnavailableReason.NOT_SUPPORTED ->
-            "This IDE version does not support Quick Build. Call run_app to build and install the app instead."
+            "Quick Build is not available in the IDE right now. Call run_app to build and install the app instead."
         QuickBuildUnavailableReason.EXPERIMENTS_DISABLED ->
             "Quick Build is an experimental feature and experiments are turned off in the IDE settings. " +
                 "Tell the user, or call run_app for a normal install."
@@ -82,10 +89,6 @@ internal object QuickBuildReport {
             "The project is still syncing. Wait for the sync to finish, then call quick_build again."
         else -> "Call run_app for a normal install instead."
     }
-
-    /** The build output window from the first error, or where to read it when there is none. */
-    private fun outputOf(output: String?): String =
-        output?.takeIf { it.isNotBlank() }?.let { BuildOutputWindowCalculator.windowFor(it).text } ?: NO_OUTPUT_NOTE
 
     /** The first line of [reason] with text on it, as a host summary can open with a blank line. */
     private fun headlineOf(reason: String): String =

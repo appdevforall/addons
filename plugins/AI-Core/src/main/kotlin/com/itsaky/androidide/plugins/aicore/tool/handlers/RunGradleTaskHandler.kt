@@ -18,7 +18,7 @@ import com.itsaky.androidide.plugins.services.IdeBuildService
 class RunGradleTaskHandler(
     pluginContext: PluginContext,
 ) : ToolHandler {
-    override val toolName = "run_gradle_task"
+    override val toolName = TOOL_NAME
 
     private val buildCall = HostServiceCall(
         pluginContext, toolName, IdeBuildService::class.java, BUILD_STAGE, "Build",
@@ -79,6 +79,8 @@ class RunGradleTaskHandler(
     }
 
     companion object {
+        const val TOOL_NAME = "run_gradle_task"
+
         private val NO_TASKS = ToolResult.failure(
             "tasks is required",
             "Name the Gradle task to run, e.g. tasks=\"test\" or tasks=\":app:testDebugUnitTest\"."
@@ -95,7 +97,7 @@ class RunGradleTaskHandler(
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
         internal fun resultFor(label: String, outcome: GradleTaskResult, output: String?): ToolResult {
-            val log = output?.takeIf { it.isNotBlank() }?.let { BuildOutputWindowCalculator.windowFor(it).text }
+            val log = BuildOutputWindowCalculator.windowOrNull(output)
             return when (outcome) {
                 GradleTaskResult.Success -> if (nothingRan(output)) {
                     ToolResult.success(

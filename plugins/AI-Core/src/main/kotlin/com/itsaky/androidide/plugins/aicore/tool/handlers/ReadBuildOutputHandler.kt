@@ -13,7 +13,7 @@ import com.itsaky.androidide.plugins.services.IdeBuildService
 class ReadBuildOutputHandler(
     pluginContext: PluginContext
 ) : ToolHandler {
-    override val toolName = "read_build_output"
+    override val toolName = TOOL_NAME
     override val requiresApproval = false
 
     private val buildCall = HostServiceCall(
@@ -47,5 +47,9 @@ class ReadBuildOutputHandler(
                 )
             }
         }
+    }
+
+    companion object {
+        const val TOOL_NAME = "read_build_output"
     }
 }

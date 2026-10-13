@@ -6,7 +6,11 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolResultsFormatter
+import com.itsaky.androidide.plugins.aicore.tool.handlers.BuildOutputWindowCalculator
+import com.itsaky.androidide.plugins.aicore.tool.handlers.QuickBuildHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadBuildOutputHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunGradleTaskHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
@@ -52,8 +56,17 @@ class ToolResultsPrompt(
          */
         const val SHELL_CHAR_LIMIT = TerminalOutput.MAX_CHARS + 1000
 
+        /**
+         * A build result's cap: the window [BuildOutputWindowCalculator] keeps, plus room for the
+         * reason. [DEFAULT_CHAR_LIMIT] keeps the start, so it would cut the Gradle summary away.
+         */
+        const val BUILD_CHAR_LIMIT = BuildOutputWindowCalculator.MAX_OUTPUT_CHARS + 2000
+
         /** The tools whose result needs more than [DEFAULT_CHAR_LIMIT], with the least each needs. */
         private val MIN_CHAR_LIMITS = mapOf(
+            QuickBuildHandler.TOOL_NAME to BUILD_CHAR_LIMIT,
+            RunGradleTaskHandler.TOOL_NAME to BUILD_CHAR_LIMIT,
+            ReadBuildOutputHandler.TOOL_NAME to BUILD_CHAR_LIMIT,
             WebAccess.WEB_SEARCH_TOOL to WEB_SEARCH_CHAR_LIMIT,
             WebAccess.FETCH_URL_TOOL to WEB_SEARCH_CHAR_LIMIT,
             RunShellCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,

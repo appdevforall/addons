@@ -108,6 +108,10 @@
       <code>--tests com.example.FooTest</code>. It asks first, runs on the IDE's
       own Gradle daemon, and reports whether the task passed along with the test
       failures or compiler errors. Pressing Stop cancels the task.</li>
+    <li>Build the app and install it on this device, after asking. You still
+      confirm the system install prompt. Pressing Stop while it builds cancels
+      the running build, so stop the agent before starting a build of your own
+      from the toolbar.</li>
     <li>Start <b>Quick Build</b> when you ask it to Quick Build, try a change
       live or update the app. It asks first, then runs exactly as the toolbar
       button does: the IDE still asks before replacing an installed app, and the

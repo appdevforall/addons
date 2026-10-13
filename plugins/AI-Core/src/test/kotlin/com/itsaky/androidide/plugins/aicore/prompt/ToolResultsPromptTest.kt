@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedWith
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.handlers.BuildOutputWindowCalculator
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
@@ -77,6 +78,17 @@ class ToolResultsPromptTest {
         )
 
         assertTrue(turn.startsWith("<tool_response>\n[open_file] 01234\n…[truncated 5 chars]\n</tool_response>"))
+    }
+
+    @Test
+    fun givenAFullBuildOutputWindow_whenRenderingABuildTool_thenTheGradleSummaryIsKept() {
+        val window = "e: first error\n" + "x".repeat(BuildOutputWindowCalculator.MAX_OUTPUT_CHARS) + "\nBUILD FAILED"
+        for (tool in listOf("quick_build", "run_gradle_task", "read_build_output")) {
+            val turn = render(listOf(ToolCall(tool, emptyMap())), listOf(ToolResult.failure("failed", window)))
+
+            assertTrue(tool, turn.contains("BUILD FAILED"))
+            assertFalse(tool, turn.contains("[truncated"))
+        }
     }
 
     @Test

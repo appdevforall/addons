@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import com.itsaky.androidide.plugins.services.QuickBuildAvailability
 import com.itsaky.androidide.plugins.services.QuickBuildResult
+import com.itsaky.androidide.plugins.services.QuickBuildState
 import com.itsaky.androidide.plugins.services.QuickBuildUnavailableReason
 import io.mockk.every
 import io.mockk.mockk
@@ -46,6 +47,8 @@ class QuickBuildHandlerTest {
         every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeBuildService::class.java) } returns buildService
         every { buildService.getQuickBuildAvailability() } returns QuickBuildAvailability.Available
+        every { buildService.isBuildInProgress() } returns false
+        every { buildService.getQuickBuildStatus() } returns QuickBuildState.READY
         handler = QuickBuildHandler(context)
     }
 
@@ -70,6 +73,36 @@ class QuickBuildHandlerTest {
         assertFalse(result.success)
         assertTrue(result.message.contains("Quick Build runs apps, not plugins."))
         assertTrue(result.error_details!!.contains("run_gradle_task"))
+    }
+
+    @Test
+    fun givenAGradleBuildRunning_whenValidating_thenItIsRejectedBeforeApproval() = runTest {
+        every { buildService.isBuildInProgress() } returns true
+
+        val validation = handler.validate(emptyMap())
+
+        val result = (validation as Validation.Rejected).result
+        assertFalse(result.success)
+        assertTrue(result.message.contains("already in progress"))
+    }
+
+    @Test
+    fun givenAQuickBuildRunning_whenValidating_thenItIsRejectedBeforeApproval() = runTest {
+        every { buildService.getQuickBuildStatus() } returns QuickBuildState.BUILDING
+
+        val validation = handler.validate(emptyMap())
+
+        assertTrue(validation is Validation.Rejected)
+    }
+
+    @Test
+    fun givenABuildStartedDuringApproval_whenRunning_thenNoQuickBuildStarts() = runTest {
+        every { buildService.isBuildInProgress() } returns true
+
+        val result = handler.execute(emptyMap())
+
+        assertFalse(result.success)
+        verify(exactly = 0) { buildService.startQuickBuild() }
     }
 
     @Test

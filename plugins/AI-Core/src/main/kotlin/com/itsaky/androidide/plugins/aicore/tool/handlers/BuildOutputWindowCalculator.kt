@@ -43,6 +43,10 @@ internal object BuildOutputWindowCalculator {
         )
     }
 
+    /** The [windowFor] text of [output], or null when the host gave no output to read. */
+    fun windowOrNull(output: String?): String? =
+        output?.takeIf { it.isNotBlank() }?.let { windowFor(it).text }
+
     /** Character offset of the first line that looks like a compiler or Gradle failure. */
     private fun firstErrorOffset(output: String): Int? {
         var lineStart = 0

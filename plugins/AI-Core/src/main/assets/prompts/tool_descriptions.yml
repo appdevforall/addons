@@ -98,9 +98,9 @@ built_in_tools:
     description: >-
       Start Quick Build, which updates the running app in place without a reinstall, and get back
       whether the app was reloaded, the build failed and why, or why Quick Build could not start.
-      Use it, not run_app, when the user says "Quick Build", "try it live", "push the change" or
-      "update the app". A result from an earlier message is out of date: whenever the user asks
-      again, call this tool again instead of repeating that result
+      Use it, not run_app, when the user says "Quick Build", "try it live" or "update the app".
+      A result from an earlier message is out of date: whenever the user asks again, call this
+      tool again instead of repeating that result
   run_shell_command:
     # Without the second sentence models hand the user a script to run themselves (ADFA-6339);
     # without the third, Gemini ran "ls -la" when asked for "ls". The host runs each call in a
