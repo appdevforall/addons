@@ -8,7 +8,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
+import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -188,8 +188,10 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenAStillRunningCommandWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
-        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "listening on 3000"
-        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "listening on 3000"
+        val result = RunShellCommandHandler.resultFor(
+            TerminalCommandResult.Running("cmd-1", "AI Core 1", output), ToolOutputBudget.DEFAULT.dataChars()
+        )
 
         val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
@@ -198,8 +200,8 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenANonZeroExitWithFullOutput_whenRendering_thenTheErrorAtTheEndIsNotCut() {
-        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "error: no such file"
-        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Completed(1, output))
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "error: no such file"
+        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Completed(1, output), ToolOutputBudget.DEFAULT.dataChars())
 
         val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
@@ -209,11 +211,21 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenACommandReadWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
-        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "GET / 200"
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "GET / 200"
         val result = ReadTerminalCommandHandler(mockk(relaxed = true)).resultFor("cmd-1", TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
 
         val turn = render(listOf(ToolCall(ReadTerminalCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
         assertTrue(turn.contains("GET / 200\n</tool_response>"))
+    }
+
+    @Test
+    fun givenAStopThatLeftTheCommandRunning_whenRendering_thenItsLatestOutputIsNotCut() {
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "still pinging"
+        val result = StopTerminalCommandHandler(mockk(relaxed = true)).resultFor("cmd-1", TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
+
+        val turn = render(listOf(ToolCall(StopTerminalCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
+
+        assertTrue(turn.contains("still pinging\n</tool_response>"))
     }
 }

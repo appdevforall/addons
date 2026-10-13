@@ -44,9 +44,9 @@ object BuiltInToolHandlers {
         (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context, budget)) else emptyList()) +
         (if (hostHasTerminalService(context)) StartedCommands().let { started ->
             listOf(
-                RunShellCommandHandler(context, started),
-                ReadTerminalCommandHandler(context),
-                StopTerminalCommandHandler(context, started),
+                RunShellCommandHandler(context, started, budget),
+                ReadTerminalCommandHandler(context, budget),
+                StopTerminalCommandHandler(context, started, budget),
             )
         } else emptyList()) +
         listOf(
