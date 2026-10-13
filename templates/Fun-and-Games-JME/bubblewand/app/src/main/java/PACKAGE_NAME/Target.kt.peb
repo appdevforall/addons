@@ -1,0 +1,10 @@
+package ${{PACKAGE_NAME}} 
+
+import com.jme3.scene.Node
+
+enum class TargetState { ACTIVE, CAPTURED }
+
+/** A target in the arena: [node] holds its world position/mesh; once hit it is encased in a bubble and floats away. */
+class Target(val node: Node, val radius: Float) {
+    var state: TargetState = TargetState.ACTIVE
+}

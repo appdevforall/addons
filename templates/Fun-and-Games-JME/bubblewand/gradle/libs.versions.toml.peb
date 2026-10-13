@@ -1,0 +1,13 @@
+[versions]
+agp = "${{AGP_VERSION}}"
+kotlin = "${{KOTLIN_VERSION}}"
+jme = "3.9.0-stable"
+
+[libraries]
+jme-core = { group = "org.jmonkeyengine", name = "jme3-core", version.ref = "jme" }
+jme-android = { group = "org.jmonkeyengine", name = "jme3-android", version.ref = "jme" }
+jme-android-native = { group = "org.jmonkeyengine", name = "jme3-android-native", version.ref = "jme" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

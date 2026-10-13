@@ -1,0 +1,55 @@
+package ${{PACKAGE_NAME}} 
+
+import com.jme3.math.ColorRGBA
+
+const val BOARD_COLS = 10
+const val BOARD_ROWS = 20
+
+class Board {
+    val grid: Array<Array<ColorRGBA?>> = Array(BOARD_ROWS) { arrayOfNulls(BOARD_COLS) }
+
+    fun isValidPosition(
+        piece: Piece,
+        rot: Int = piece.rotation,
+        col: Int = piece.col,
+        row: Int = piece.row
+    ): Boolean {
+        for ((c, r) in piece.boardCells(rot, col, row)) {
+            if (c < 0 || c >= BOARD_COLS || r >= BOARD_ROWS) return false
+            if (r >= 0 && grid[r][c] != null) return false
+        }
+        return true
+    }
+
+    fun lockPiece(piece: Piece) {
+        for ((c, r) in piece.boardCells()) {
+            if (r in 0 until BOARD_ROWS && c in 0 until BOARD_COLS) {
+                grid[r][c] = piece.type.color
+            }
+        }
+    }
+
+    /** Clears completed rows, shifting everything above down. Returns the number of rows cleared. */
+    fun clearLines(): Int {
+        var cleared = 0
+        var r = BOARD_ROWS - 1
+        while (r >= 0) {
+            if (grid[r].all { it != null }) {
+                for (rr in r downTo 1) {
+                    grid[rr] = grid[rr - 1].copyOf()
+                }
+                grid[0] = arrayOfNulls(BOARD_COLS)
+                cleared++
+            } else {
+                r--
+            }
+        }
+        return cleared
+    }
+
+    fun reset() {
+        for (r in 0 until BOARD_ROWS) {
+            grid[r] = arrayOfNulls(BOARD_COLS)
+        }
+    }
+}
