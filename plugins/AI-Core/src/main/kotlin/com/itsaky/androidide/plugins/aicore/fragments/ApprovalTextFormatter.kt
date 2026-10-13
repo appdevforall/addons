@@ -27,12 +27,37 @@ object ApprovalTextFormatter {
         Character.PARAGRAPH_SEPARATOR,
     )
 
+    /**
+     * Code points that draw nothing yet fall outside [HIDDEN_TYPES]: the rest of Unicode's
+     * Default_Ignorable set (Hangul fillers, variation selectors, tag characters) and the braille blank.
+     */
+    private val INVISIBLE_CODE_POINTS = listOf(
+        0x034F..0x034F,
+        0x115F..0x1160,
+        0x17B4..0x17B5,
+        0x180B..0x180F,
+        0x2065..0x2065,
+        0x2800..0x2800,
+        0x3164..0x3164,
+        0xFE00..0xFE0F,
+        0xFFA0..0xFFA0,
+        0xFFF0..0xFFF8,
+        0xE0000..0xE0FFF,
+    )
+
+    /** Blank lines in a row shown as written; a longer run could push the rest below the dialog. */
+    private const val MAX_BLANK_LINES = 2
+
     private const val LTR_ISOLATE = '\u2066'
     private const val POP_ISOLATE = '\u2069'
 
     private const val HIDDEN_CHARACTERS_WARNING =
         "⚠ This command contains invisible or control characters, shown as <U+XXXX>. " +
             "They will be sent to the shell as they are. Decline unless you know why they are there."
+
+    private const val BLANK_LINES_WARNING =
+        "⚠ This command contains long runs of blank lines, shown as [N blank lines]. " +
+            "Read every line below them. Decline unless you know why they are there."
 
     /**
      * Renders the proposed edit as a diff-style before/after block.
@@ -65,9 +90,9 @@ object ApprovalTextFormatter {
     }
 
     /**
-     * Renders a shell command uncut, since a hidden line would still run, with every invisible or
-     * control character spelled as `<U+XXXX>` and each line held left to right, so the text read is
-     * the text run. A working directory, when given, goes above the command as a label.
+     * Renders a shell command uncut, with invisible characters spelled as `<U+XXXX>`, long runs of
+     * blank lines counted and each line held left to right, so the text read is the text run. A
+     * working directory, when given, goes above the command as a label.
      * @param args the `run_shell_command` call arguments.
      * @param directoryLabel words the line naming the working directory.
      * @return the command text.
@@ -76,10 +101,15 @@ object ApprovalTextFormatter {
         val invocation = ShellInvocation.from(args) ?: return ""
         val command = revealHidden(invocation.command)
         val directory = invocation.workingDirectory?.let(::revealHidden)
-        val shown = directory?.let { "${directoryLabel(leftToRight(it))}\n\n${leftToRight(command)}" }
-            ?: leftToRight(command)
-        if (command == invocation.command && directory == invocation.workingDirectory) return shown
-        return "$shown\n\n$HIDDEN_CHARACTERS_WARNING"
+        val shownCommand = collapseBlankLines(command)
+        val shown = directory?.let { "${directoryLabel(leftToRight(it))}\n\n${leftToRight(shownCommand)}" }
+            ?: leftToRight(shownCommand)
+        val revealed = command != invocation.command || directory != invocation.workingDirectory
+        val warnings = buildList {
+            if (revealed) add(HIDDEN_CHARACTERS_WARNING)
+            if (shownCommand != command) add(BLANK_LINES_WARNING)
+        }
+        return (listOf(shown) + warnings).joinToString("\n\n")
     }
 
     /**
@@ -99,12 +129,13 @@ object ApprovalTextFormatter {
         val command = args[StopTerminalCommandHandler.DETAIL_COMMAND]?.toString()
             ?: return unknownCommand(commandId)
         val session = args[StopTerminalCommandHandler.DETAIL_SESSION]?.toString().orEmpty()
-        return "${sessionLabel(session)}\n\n${leftToRight(revealHidden(command))}"
+        return "${sessionLabel(session)}\n\n${leftToRight(collapseBlankLines(revealHidden(command)))}"
     }
 
     /**
      * Spells out each code point that draws nothing or moves the cursor: `\r`, ESC and other
-     * controls, bidi overrides, zero-width marks. Newlines and tabs stay, as they show as themselves.
+     * controls, bidi overrides, zero-width marks, Hangul fillers, variation selectors. Newlines and
+     * tabs stay, as they show as themselves.
      * @param text the model-written text.
      * @return [text], with each such code point replaced by `<U+XXXX>`.
      */
@@ -112,6 +143,29 @@ object ApprovalTextFormatter {
         text.codePoints().forEach { codePoint ->
             if (isHidden(codePoint)) append("<U+%04X>".format(codePoint)) else appendCodePoint(codePoint)
         }
+    }
+
+    /**
+     * Replaces each run of more than [MAX_BLANK_LINES] blank lines with one `[N blank lines]` line,
+     * so a short first line cannot push the rest of a command out of view.
+     */
+    internal fun collapseBlankLines(text: String): String {
+        val shown = mutableListOf<String>()
+        val blanks = mutableListOf<String>()
+        fun flushBlanks() {
+            if (blanks.size > MAX_BLANK_LINES) shown += "[${blanks.size} blank lines]" else shown += blanks
+            blanks.clear()
+        }
+        text.lines().forEach { line ->
+            if (line.isBlank()) {
+                blanks += line
+            } else {
+                flushBlanks()
+                shown += line
+            }
+        }
+        flushBlanks()
+        return shown.joinToString("\n")
     }
 
     /**
@@ -124,6 +178,7 @@ object ApprovalTextFormatter {
     private fun isHidden(codePoint: Int): Boolean = when {
         codePoint == '\n'.code || codePoint == '\t'.code -> false
         Character.isISOControl(codePoint) -> true
+        INVISIBLE_CODE_POINTS.any { codePoint in it } -> true
         else -> Character.getType(codePoint).toByte() in HIDDEN_TYPES
     }
 

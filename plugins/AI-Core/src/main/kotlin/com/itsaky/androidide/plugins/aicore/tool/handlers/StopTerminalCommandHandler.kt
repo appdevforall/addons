@@ -42,9 +42,9 @@ class StopTerminalCommandHandler(
             TerminalOutput.tailOf(running.output)
     )
 
-    // Any exit code succeeds, since Ctrl-C itself makes most commands exit non-zero.
+    // Any exit code succeeds, since Ctrl-C makes most exit non-zero; one that exited before is left alone.
     override fun completed(commandId: String, completed: TerminalCommandResult.Completed) = ToolResult.success(
-        message = "Command \"$commandId\" has stopped: it ${TerminalOutput.exitOf(completed.exitCode)}",
+        message = "Command \"$commandId\" is no longer running: it ${TerminalOutput.exitOf(completed.exitCode)}",
         data = TerminalOutput.tailOf(completed.output)
     )
 

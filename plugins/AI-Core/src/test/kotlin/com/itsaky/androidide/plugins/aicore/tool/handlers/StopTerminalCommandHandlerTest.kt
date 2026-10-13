@@ -82,7 +82,7 @@ class StopTerminalCommandHandlerTest {
         val result = handler.execute(mapOf("command_id" to "cmd-1"))
 
         assertTrue(result.success)
-        assertTrue(result.message.contains("has stopped: it exited with code 130"))
+        assertTrue(result.message.contains("is no longer running: it exited with code 130"))
         assertTrue(result.data!!.contains("^C"))
     }
 

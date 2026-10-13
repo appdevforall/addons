@@ -628,8 +628,9 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>Runs the command in a Terminal session, in the project folder
                 unless a working directory is named above it. The command is shown
                 in full, never shortened: what you read is what runs. Invisible or
-                control characters are shown as <code>&lt;U+XXXX&gt;</code> codes so
-                they cannot hide part of it.</p>
+                control characters are shown as <code>&lt;U+XXXX&gt;</code> codes, and
+                a long run of blank lines as a count such as <code>[200 blank lines]</code>,
+                so neither can hide part of it.</p>
                 <p>A shell command can change or delete any file in your project,
                 so read it before you tap. You'll be asked again for every command;
                 there is no <b>Always Allow</b> for the shell.</p>

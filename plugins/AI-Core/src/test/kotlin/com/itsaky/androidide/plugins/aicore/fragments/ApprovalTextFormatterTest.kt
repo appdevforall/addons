@@ -209,6 +209,61 @@ class ApprovalTextFormatterTest {
     }
 
     @Test
+    fun givenBlankGlyphLettersAndDefaultIgnorables_whenRevealed_thenEachIsSpelledOut() {
+        val command = "cat configㅤ.txt ᅟᅠﾠ ⠀ ok️ ͏"
+
+        val text = ApprovalTextFormatter.revealHidden(command)
+
+        assertEquals(
+            "cat config<U+3164>.txt <U+115F><U+1160><U+FFA0> <U+2800> ok<U+FE0F> <U+034F>",
+            text,
+        )
+    }
+
+    @Test
+    fun givenAHangulFillerInAFileName_whenFormatted_thenTheHiddenCharacterWarningIsShown() {
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to "cat configㅤ.txt"),
+            directoryLabel = { "in $it" },
+        )
+
+        assertTrue(text.contains("invisible or control characters"))
+    }
+
+    @Test
+    fun givenALongRunOfBlankLines_whenFormatted_thenItIsCountedAndWarnedAbout() {
+        val command = "ls" + "\n".repeat(201) + "rm -rf app/src"
+
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to command),
+            directoryLabel = { "in $it" },
+        )
+
+        assertTrue(text.startsWith(ltr("ls\n[200 blank lines]\nrm -rf app/src")))
+        assertTrue(text.contains("long runs of blank lines"))
+        assertFalse(text.contains("invisible or control characters"))
+    }
+
+    @Test
+    fun givenAFewBlankLinesInAScript_whenFormatted_thenTheyStayAsWrittenWithoutAWarning() {
+        val script = "echo a\n\n  \necho b"
+
+        val text = ApprovalTextFormatter.formatShellCommand(
+            mapOf(RunShellCommandHandler.ARG_COMMAND to script),
+            directoryLabel = { "in $it" },
+        )
+
+        assertEquals(ltr(script), text)
+    }
+
+    @Test
+    fun givenLeadingAndTrailingBlankRuns_whenCollapsed_thenEachRunIsCounted() {
+        val text = ApprovalTextFormatter.collapseBlankLines("\n\n\nls\n \n\t\n\n")
+
+        assertEquals("[3 blank lines]\nls\n[4 blank lines]", text)
+    }
+
+    @Test
     fun givenNewlinesAndTabs_whenRevealed_thenTheyStayAsWritten() {
         assertEquals("a\n\tb", ApprovalTextFormatter.revealHidden("a\n\tb"))
     }
