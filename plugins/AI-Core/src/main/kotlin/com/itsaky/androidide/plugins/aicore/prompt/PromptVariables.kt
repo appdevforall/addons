@@ -86,9 +86,6 @@ object PromptVariables {
     /** The chat's first user message, cut to its start; inside `layout.chat_title`. */
     const val USER_TEXT = "USER_TEXT"
 
-    /** The agent's reply to it, cut to its start; inside `layout.chat_title`. */
-    const val REPLY_TEXT = "REPLY_TEXT"
-
     /** An attached file's text, verbatim; inside `{{#FILES}}`. */
     const val CONTENT = "CONTENT"
 

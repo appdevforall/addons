@@ -21,11 +21,11 @@ internal object ChatTitle {
 
     const val TEMPERATURE = 0.2f
 
-    /** A title the backend has not produced by then is abandoned; the chat keeps its fallback. */
-    const val TIMEOUT_MS = 30_000L
+    /** The first reply waits on the title; one not written by then is dropped for the fallback. */
+    const val TIMEOUT_MS = 20_000L
 
-    /** Longest excerpt of each side of the exchange sent to the model; the gist is at the start. */
-    const val EXCERPT_CHARS = 1_000
+    /** Longest excerpt of the prompt sent; the gist is at the start, and less prefills faster. */
+    const val EXCERPT_CHARS = 500
 
     const val MAX_WORDS = 8
 
@@ -47,14 +47,10 @@ internal object ChatTitle {
     /**
      * @param config the loaded prompt config.
      * @param userText the conversation's first user message.
-     * @param replyText the agent's reply to it.
-     * @return the request's user turn, each side cut to [EXCERPT_CHARS] and inserted verbatim.
+     * @return the request's user turn, the message cut to [EXCERPT_CHARS] and inserted verbatim.
      */
-    fun prompt(config: AgentPromptConfig, userText: String, replyText: String): String {
-        val values = mapOf(
-            PromptVariables.USER_TEXT to userText.trim().take(EXCERPT_CHARS),
-            PromptVariables.REPLY_TEXT to replyText.trim().take(EXCERPT_CHARS),
-        )
+    fun prompt(config: AgentPromptConfig, userText: String): String {
+        val values = mapOf(PromptVariables.USER_TEXT to userText.trim().take(EXCERPT_CHARS))
         return PromptTemplateEngine.render(config.layout.chatTitle, values)
     }
 
@@ -65,7 +61,7 @@ internal object ChatTitle {
      * @return one message per distinct failure; empty when both render.
      */
     fun problems(config: AgentPromptConfig): List<String> {
-        val renders: List<() -> String> = listOf({ systemPrompt(config) }, { prompt(config, "q", "a") })
+        val renders: List<() -> String> = listOf({ systemPrompt(config) }, { prompt(config, "q") })
         return renders.mapNotNull { check ->
             try {
                 check()

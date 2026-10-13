@@ -35,17 +35,29 @@ class ChatSessionRowsTest {
     }
 
     @Test
-    fun givenASessionWhoseTitleIsBeingWritten_whenBuildingRows_thenItShowsThePlaceholderAsUntitled() {
+    fun givenASessionWhoseTitleIsBeingWritten_whenBuildingRows_thenItShowsAsUntitledWithASpinner() {
         val rows = ChatSessionRows.from(
             listOf(session("s1", userText = "why does the build fail")),
             currentSessionId = null,
             untitledTitle = UNTITLED,
             titlePending = setOf("s1"),
-            pendingTitle = "Naming chat…",
         )
 
-        assertEquals("Naming chat…", rows.single().title)
+        assertEquals(UNTITLED, rows.single().title)
         assertTrue(rows.single().isUntitled)
+        assertTrue(rows.single().isTitlePending)
+    }
+
+    @Test
+    fun givenASessionWhoseTitleSettled_whenBuildingRows_thenItShowsItsPromptWithoutASpinner() {
+        val rows = ChatSessionRows.from(
+            listOf(session("s1", userText = "why does the build fail")),
+            currentSessionId = null,
+            untitledTitle = UNTITLED,
+        )
+
+        assertEquals("why does the build fail", rows.single().title)
+        assertFalse(rows.single().isTitlePending)
     }
 
     @Test
