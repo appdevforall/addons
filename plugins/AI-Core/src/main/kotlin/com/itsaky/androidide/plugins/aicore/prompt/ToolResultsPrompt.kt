@@ -6,6 +6,10 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolResultsFormatter
+import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
 
 /**
@@ -43,11 +47,26 @@ class ToolResultsPrompt(
         const val WEB_SEARCH_CHAR_LIMIT = 12000
 
         /**
+         * A shell result's cap: the output tail [TerminalOutput] keeps, plus room for the message and
+         * the still-running note. [DEFAULT_CHAR_LIMIT] keeps the start, so it would cut the error away.
+         */
+        const val SHELL_CHAR_LIMIT = TerminalOutput.MAX_CHARS + 1000
+
+        /** The tools whose result needs more than [DEFAULT_CHAR_LIMIT], with the least each needs. */
+        private val MIN_CHAR_LIMITS = mapOf(
+            WebAccess.WEB_SEARCH_TOOL to WEB_SEARCH_CHAR_LIMIT,
+            WebAccess.FETCH_URL_TOOL to WEB_SEARCH_CHAR_LIMIT,
+            RunShellCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
+            ReadTerminalCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
+            StopTerminalCommandHandler.TOOL_NAME to SHELL_CHAR_LIMIT,
+        )
+
+        /**
          * Renders one batch's turn. Pure and thread-safe.
          *
          * @param config the loaded prompt config.
          * @param terminalTool the name of the tool that ends a run by answering the user.
-         * @param charLimit each result's cap; a web search's or fetch's is at least [WEB_SEARCH_CHAR_LIMIT].
+         * @param charLimit each result's cap; a tool in [MIN_CHAR_LIMITS] gets at least its own.
          * @param calls the tool calls that ran.
          * @param results their results, positionally aligned with [calls].
          * @return the turn to add to the transcript.
@@ -62,8 +81,7 @@ class ToolResultsPrompt(
             val responses = buildString {
                 results.forEachIndexed { index, result ->
                     val name = calls.getOrNull(index)?.name ?: "tool"
-                    val limit =
-                        if (name == WebAccess.WEB_SEARCH_TOOL || name == WebAccess.FETCH_URL_TOOL) maxOf(charLimit, WEB_SEARCH_CHAR_LIMIT) else charLimit
+                    val limit = maxOf(charLimit, MIN_CHAR_LIMITS[name] ?: 0)
                     val body = truncate(config, terminalTool, body(config, terminalTool, result), limit)
                     append("<tool_response>\n[").append(name).append("] ").append(body)
                     append("\n</tool_response>\n\n")

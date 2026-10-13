@@ -39,7 +39,15 @@ object BuiltInToolHandlers {
         GradleSyncHandler(context),
     ) + (if (hostHasGradleTaskApi()) listOf(RunGradleTaskHandler(context)) else emptyList()) +
         (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context)) else emptyList()) +
-        (if (hostHasQuickBuildApi()) listOf(QuickBuildHandler(context)) else emptyList()) + listOf(
+        (if (hostHasQuickBuildApi()) listOf(QuickBuildHandler(context)) else emptyList()) +
+        (if (hostHasTerminalService(context)) StartedCommands().let { started ->
+            listOf(
+                RunShellCommandHandler(context, started),
+                ReadTerminalCommandHandler(context),
+                StopTerminalCommandHandler(context, started),
+            )
+        } else emptyList()) +
+        listOf(
         // Template tool
         GenerateFromTemplateHandler(context),
         // Web tools
@@ -62,6 +70,12 @@ object BuiltInToolHandlers {
     // Same reason: a host from before ADFA-6493 lacks IdeBuildService.startQuickBuild, and the call would throw.
     private fun hostHasQuickBuildApi(): Boolean =
         runCatching { Class.forName("com.itsaky.androidide.plugins.services.QuickBuildResult") }.isSuccess
+
+    // Same reason for the string; a host can also ship the class (ADFA-6385) without registering it.
+    private fun hostHasTerminalService(context: PluginContext): Boolean =
+        runCatching {
+            context.services.get(Class.forName("com.itsaky.androidide.plugins.services.IdeTerminalService")) != null
+        }.getOrDefault(false)
 }
 
 /** The log tools, kept apart so [LogSource] is only touched on a host that has it. */

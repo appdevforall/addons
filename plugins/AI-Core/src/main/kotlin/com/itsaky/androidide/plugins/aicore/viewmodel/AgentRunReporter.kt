@@ -12,8 +12,12 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
  * thing to read here, and the wording of a stop stays with the screen that shows it.
  *
  * @param notices where a user-visible stop is announced.
+ * @param onAskedToFinish called when a prose answer is followed by a request to finish the run.
  */
-internal class AgentRunReporter(private val notices: Notices) : AgentLoop.Events {
+internal class AgentRunReporter(
+    private val notices: Notices,
+    private val onAskedToFinish: () -> Unit = {},
+) : AgentLoop.Events {
 
     /**
      * The stops worth telling the user about, and nothing else the chat can do. The reporter
@@ -79,6 +83,7 @@ internal class AgentRunReporter(private val notices: Notices) : AgentLoop.Events
 
     override suspend fun onUnfinishedReply(turn: Int) {
         AgentTrace.stage("LOOP", "turn=$turn asked-to-finish=no-terminal-tool")
+        onAskedToFinish()
     }
 
     // Reaching this means the backend did not force the call; see VerificationPolicy.
