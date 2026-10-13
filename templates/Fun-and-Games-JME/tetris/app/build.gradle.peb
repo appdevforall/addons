@@ -1,0 +1,50 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace = "${{PACKAGE_NAME}}" 
+    compileSdk = ${{COMPILE_SDK}} 
+
+    defaultConfig {
+        applicationId = "${{PACKAGE_NAME}}" 
+        minSdk = ${{MIN_SDK}} 
+        targetSdk = ${{TARGET_SDK}} 
+        versionCode = 1
+        versionName = "1.0"
+
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = ${{JAVA_SOURCE_COMPAT}} 
+        targetCompatibility = ${{JAVA_TARGET_COMPAT}} 
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+// AGP 9+ compiles Kotlin itself (built-in Kotlin), so there is no kotlin-android plugin here
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${{JAVA_TARGET}}")
+    }
+}
+
+dependencies {
+    implementation(files("libs/jme3-core-3.9.0-stable.jar"))
+    implementation(files("libs/jme3-android-3.9.0-stable.jar"))
+    implementation(files("libs/jme3-android-native-3.9.0-stable.jar"))
+}

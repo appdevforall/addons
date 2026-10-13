@@ -31,6 +31,16 @@
 # produces one archive, byte for byte. Compression happens at the HTTP layer -- Cloudflare
 # serves the gallery. This mirrors dev-assets' core.cgt build; see templates/README.md.
 #
+# LIBRARIES: a templates.json entry may carry a "libraries" list. Each item downloads "src"
+# (an https URL) into the directory "dst", taken relative to that template's own directory, under
+# the file name the URL ends in. So { "path": "FlutterBasic", "libraries": [{ "src":
+# "https://host/lib1.so", "dst": "app/lib" }] } ships FlutterBasic/app/lib/lib1.so. When
+# "sha256" is given the download must match it or the build fails. Without it the build still
+# succeeds but warns, because an unpinned download is the one input git does not fix, and the
+# byte-for-byte guarantee below then holds only as long as the server keeps serving the same
+# bytes. A library may not land on a tracked file: the commit and the download would disagree
+# about what that path holds, so the build refuses rather than pick one in silence.
+#
 # Bash 3.2 compatible on purpose: macOS ships it, and a community contributor building a
 # bundle locally is the main audience. No mapfile, no associative arrays.
 #
@@ -192,6 +202,108 @@ TREE="$TREE" xargs -0 -n 50 sh -c 'for f; do
     mkdir -p "$TREE/$(dirname "$f")"
     cp "$f" "$TREE/$f"
 done' _ < "$LIST"
+
+# ---------------------------------------------------------------------------
+# Fetch the libraries
+# ---------------------------------------------------------------------------
+# One row per library: template path, src, dst, sha256 (empty when absent). The separator is
+# the ASCII unit separator, not a tab: tab is whitespace to `read`, so an empty middle field
+# would collapse and shift the ones after it.
+# Validation runs over every row before the first download, so a typo in the last entry
+# does not cost a slow fetch of the first.
+LIBS="$STAGE/.libraries"
+if ! jq -r '
+    .templates[]
+    | .path as $p
+    | (.libraries // [])
+    | if type == "array" then .[] else error("\($p): \"libraries\" must be a list") end
+    | if type == "object" then . else error("\($p): a \"libraries\" item must be an object") end
+    | [$p, (.src // ""), (.dst // ""), (.sha256 // "")]
+    | map(tostring)
+    | if any(.[]; any(explode[]; . < 32)) then error("\($p): a \"libraries\" value holds a control character") else . end
+    | join("\u001f")' templates.json > "$LIBS"; then
+    echo "Error: templates.json has a malformed \"libraries\" entry." >&2
+    exit 1
+fi
+
+if [[ -s "$LIBS" ]]; then
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "Error: curl is required to fetch the libraries templates.json lists." >&2
+        exit 1
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256_of() { sha256sum "$1" | cut -d' ' -f1; }
+    elif command -v shasum >/dev/null 2>&1; then
+        sha256_of() { shasum -a 256 "$1" | cut -d' ' -f1; }
+    else
+        echo "Error: sha256sum or shasum is required to verify libraries." >&2
+        exit 1
+    fi
+
+    US="$(printf '\037')"
+    while IFS="$US" read -r tpl src dst sha; do
+        where="templates.json: library in '$tpl'"
+        if [[ -z "$src" || -z "$dst" ]]; then
+            echo "Error: $where needs both \"src\" and \"dst\"." >&2
+            exit 1
+        fi
+        case "$src" in
+            https://*) ;;
+            *) echo "Error: $where has src '$src', which is not an https URL." >&2; exit 1 ;;
+        esac
+        # dst becomes part of a zip entry name: keep it inside the template directory.
+        case "/${dst%/}/" in
+            */../*|*/./*|*//*) echo "Error: $where has dst '$dst', which must be a relative path inside the template, with no '.' or '..'." >&2; exit 1 ;;
+        esac
+        if [[ -n "$sha" ]] && ! printf '%s' "$sha" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+            echo "Error: $where has sha256 '$sha', which is not 64 hex digits." >&2
+            exit 1
+        fi
+        name="${src%%[?#]*}"
+        name="${name##*/}"
+        if [[ -z "$name" || "$name" == "." || "$name" == ".." ]]; then
+            echo "Error: $where has src '$src', which does not end in a file name." >&2
+            exit 1
+        fi
+    done < "$LIBS"
+
+    FETCH="$STAGE/.fetch"
+    mkdir -p "$FETCH"
+    n=0
+    while IFS="$US" read -r tpl src dst sha; do
+        n=$((n + 1))
+        name="${src%%[?#]*}"
+        name="${name##*/}"
+        dst="${dst%/}"
+        rel="$tpl/$dst/$name"
+        # Checked against the staged tree, so it covers tracked files and earlier libraries.
+        if [[ -e "$TREE/$rel" ]]; then
+            echo "Error: library '$src' would overwrite '$rel', which is already in the template." >&2
+            exit 1
+        fi
+
+        tmp="$FETCH/$n"
+        echo "Fetching $src -> $rel" >&2
+        if ! curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$tmp" "$src"; then
+            echo "Error: could not download '$src'." >&2
+            exit 1
+        fi
+
+        if [[ -n "$sha" ]]; then
+            want="$(printf '%s' "$sha" | tr '[:upper:]' '[:lower:]')"
+            got="$(sha256_of "$tmp")"
+            if [[ "$got" != "$want" ]]; then
+                echo "Error: '$src' has sha256 $got, but templates.json expects $want." >&2
+                exit 1
+            fi
+        else
+            echo "Warning: '$src' has no sha256 in templates.json, so it is not verified and the build is not reproducible." >&2
+        fi
+
+        mkdir -p "$TREE/$tpl/$dst"
+        mv "$tmp" "$TREE/$rel"
+    done < "$LIBS"
+fi
 
 write_provenance "$PWD" "$TREE/cgt-build.properties"
 

@@ -60,6 +60,8 @@ def check_template(path: Path, directory: str) -> list[str]:
                 f"{directory}: templates.json names '{name}', which is not a "
                 f"directory")
             continue
+        problems.extend(check_libraries(folder, item.get("libraries"),
+                                        f"{directory}: library in '{name}'"))
         meta = folder / "template" / "template.json"
         if not meta.exists():
             problems.append(f"{directory}: {name}/template/template.json is missing")
@@ -86,6 +88,62 @@ def check_template(path: Path, directory: str) -> list[str]:
         problems.append(
             f"{directory}: addon.json declares no 'template' object with id, "
             f"version and minAppVersion")
+    return problems
+
+
+SHA256 = re.compile(r"[0-9a-fA-F]{64}")
+
+
+def check_libraries(folder: Path, libraries, where: str) -> list[str]:
+    """The rules scripts/build-cgt.sh applies to a template's "libraries".
+
+    The build enforces these too, but only when someone builds, and a build is
+    where a bad entry costs a download. Mirror them here so the pull request
+    gate names the problem first. Keep the two in step.
+    """
+    if libraries is None:
+        return []
+    if not isinstance(libraries, list):
+        return [f"{where}: \"libraries\" must be a list"]
+    problems = []
+    targets = set()
+    for lib in libraries:
+        if not isinstance(lib, dict):
+            problems.append(f"{where}: a \"libraries\" item must be an object")
+            continue
+        src, dst, sha = lib.get("src"), lib.get("dst"), lib.get("sha256")
+        if not isinstance(src, str) or not src or not isinstance(dst, str) or not dst:
+            problems.append(f"{where} needs both \"src\" and \"dst\"")
+            continue
+        if any(ord(c) < 32 for c in src + dst + (sha if isinstance(sha, str) else "")):
+            problems.append(f"{where} holds a control character")
+            continue
+        if not src.startswith("https://"):
+            problems.append(f"{where} has src '{src}', which is not an https URL")
+            continue
+        # dst becomes part of a zip entry name: keep it inside the template.
+        parts = dst.rstrip("/").split("/")
+        if dst.startswith("/") or any(part in ("", ".", "..") for part in parts):
+            problems.append(
+                f"{where} has dst '{dst}', which must be a relative path "
+                f"inside the template, with no '.' or '..'")
+            continue
+        # sha256 is optional; the build warns when it is absent.
+        if sha is not None and (not isinstance(sha, str) or not SHA256.fullmatch(sha)):
+            problems.append(f"{where} has sha256 '{sha}', which is not 64 hex digits")
+        file_name = re.split(r"[?#]", src, maxsplit=1)[0].rsplit("/", 1)[-1]
+        if file_name in ("", ".", ".."):
+            problems.append(f"{where} has src '{src}', which does not end in a file name")
+            continue
+        target = "/".join(parts + [file_name])
+        if (folder / target).exists():
+            problems.append(
+                f"{where}: '{src}' would overwrite '{folder.name}/{target}', "
+                f"which is already in the template")
+        elif target in targets:
+            problems.append(
+                f"{where}: two libraries would both write '{folder.name}/{target}'")
+        targets.add(target)
     return problems
 
 
