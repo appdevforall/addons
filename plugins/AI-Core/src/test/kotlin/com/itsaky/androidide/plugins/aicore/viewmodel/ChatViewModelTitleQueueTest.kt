@@ -83,11 +83,9 @@ class ChatViewModelTitleQueueTest {
         every { llmService.cancelGeneration() } answers { titleResponse.cancel(true); Unit }
         SharedServices.register(LlmInferenceService::class.java, llmService)
         runBlocking { sharedPromptConfig.preload(configScope, DirectoryPromptConfigSource(SHIPPED_ROOT)).await() }
+        // Empty: only a chat's first prompt is titled, and it is asked before the prompt is posted.
         stored[SESSIONS_KEY] =
-            """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[""" +
-            """{"id":"m1","text":"explain this build script","sender":"USER","status":"SENT","timestamp":1},""" +
-            """{"id":"m2","text":"it applies the plugin builder","sender":"AGENT","status":"SENT",""" +
-            """"timestamp":2,"durationMs":1200}]}]"""
+            """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[]}]"""
     }
 
     @After
@@ -124,9 +122,7 @@ class ChatViewModelTitleQueueTest {
         titleResponse.complete(LlmInferenceService.LlmResponse.success("Build script walkthrough", 4, 10))
         runBlocking { viewModel.awaitTitleRequest() }
 
-        val session = viewModel.sessions.value.single { it.id == SESSION_ID }
-        assertNull(session.generatedTitle)
-        assertEquals("explain this build script", session.displayTitle)
+        assertNull(viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle)
         // The title's own job is cancelled; the global cancel would reach other plugins' calls.
         verify(exactly = 0) { llmService.cancelGeneration() }
     }
@@ -204,7 +200,7 @@ class ChatViewModelTitleQueueTest {
         runBlocking { viewModel.awaitTitleRequest() }
 
         assertFalse(SESSION_ID in viewModel.titlePending.value)
-        assertEquals("explain this build script", viewModel.sessions.value.single { it.id == SESSION_ID }.displayTitle)
+        assertNull(viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle)
     }
 
     @Test
@@ -216,7 +212,7 @@ class ChatViewModelTitleQueueTest {
         runBlocking { viewModel.awaitTitleRequest() }
 
         assertFalse(SESSION_ID in viewModel.titlePending.value)
-        assertEquals("explain this build script", viewModel.sessions.value.single { it.id == SESSION_ID }.displayTitle)
+        assertNull(viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle)
     }
 
     @Test
@@ -228,13 +224,11 @@ class ChatViewModelTitleQueueTest {
         runBlocking { viewModel.awaitTitleRequest() }
 
         assertFalse(SESSION_ID in viewModel.titlePending.value)
-        assertEquals("explain this build script", viewModel.sessions.value.single { it.id == SESSION_ID }.displayTitle)
+        assertNull(viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle)
     }
 
     @Test
     fun givenANewChat_whenItsFirstPromptIsSent_thenTheAgentRunsOnlyAfterTheTitleSettles() {
-        stored[SESSIONS_KEY] =
-            """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[]}]"""
         val viewModel = newViewModelWithBackend()
 
         assertTrue(viewModel.sendMessage("add a dark mode toggle"))
@@ -252,14 +246,59 @@ class ChatViewModelTitleQueueTest {
 
     @Test
     fun givenAnEmptyChat_whenItsFirstPromptIsTitled_thenTheTitleIsAskedFromThatPromptAlone() {
-        stored[SESSIONS_KEY] =
-            """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[]}]"""
         val viewModel = newViewModel()
 
         assertTrue(viewModel.requestTitleIfUntitled(llmService, "add a dark mode toggle"))
 
         assertTrue(SESSION_ID in viewModel.titlePending.value)
         verify { llmService.generateCompletion(match { it.contains("add a dark mode toggle") }, any()) }
+    }
+
+    @Test
+    fun givenAnUntitledChatWithAnEarlierPrompt_whenAnotherPromptIsSent_thenNoTitleIsAsked() {
+        stored[SESSIONS_KEY] =
+            """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[""" +
+            """{"id":"m1","text":"explain this build script","sender":"USER","status":"SENT","timestamp":1}]}]"""
+        val viewModel = newViewModel()
+
+        assertFalse(viewModel.requestTitleIfUntitled(llmService, "now add a test"))
+
+        assertFalse(SESSION_ID in viewModel.titlePending.value)
+        verify(exactly = 0) { llmService.generateCompletion(any(), any()) }
+    }
+
+    @Test
+    fun givenATitleInFlight_whenTheChatIsRenamed_thenTheQueuedPromptIsReleasedAtOnce() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "explain this build script"))
+
+        viewModel.renameSession(SESSION_ID, "Gradle notes")
+        val released = runBlocking { withTimeoutOrNull(HOLD_MS) { viewModel.awaitTitleRequest() } }
+
+        assertEquals(Unit, released)
+        assertFalse(SESSION_ID in viewModel.titlePending.value)
+        assertEquals("Gradle notes", viewModel.sessions.value.single { it.id == SESSION_ID }.displayTitle)
+    }
+
+    @Test
+    fun givenAStoppedTitle_whenTheFirstPromptIsSentAgain_thenTheTitleIsAskedAgain() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "explain this build script"))
+
+        viewModel.stopProcessing(reason = "test")
+
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "explain this build script"))
+    }
+
+    @Test
+    fun givenAFailedTitle_whenTheFirstPromptIsSentAgain_thenTheTitleIsNotAskedAgain() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "explain this build script"))
+
+        titleResponse.complete(LlmInferenceService.LlmResponse.failure("no titles"))
+        runBlocking { viewModel.awaitTitleRequest() }
+
+        assertFalse(viewModel.requestTitleIfUntitled(llmService, "explain this build script"))
     }
 
     @Test

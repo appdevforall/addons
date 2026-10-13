@@ -40,6 +40,8 @@
 
     <!-- Chat history: the per-project session list (see ChatSidebarController) -->
     <string name="session_untitled">New chat</string>
+    <!-- Read out for the title spinner; the title beside it says "New chat" meanwhile. -->
+    <string name="session_title_generating">Naming chat</string>
     <string name="session_rename">Rename</string>
     <string name="session_delete">Delete</string>
     <string name="session_export">Export</string>

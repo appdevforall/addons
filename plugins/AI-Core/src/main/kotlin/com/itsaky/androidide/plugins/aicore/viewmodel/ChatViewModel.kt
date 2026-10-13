@@ -288,7 +288,7 @@ class ChatViewModel(
     @Volatile
     private var modelTurnInFlight = false
 
-    /** Sessions asked for a title this process; a failing backend is not re-asked every run. */
+    /** Sessions whose title failed this process, so an edited first prompt does not wait again. */
     private val titleRequested = mutableSetOf<String>()
 
     /**
@@ -1184,18 +1184,17 @@ class ChatViewModel(
     }
 
     /**
-     * Asks the selected backend to name the current chat from its first prompt, once, before that
-     * prompt runs. Leaves chats the user named, or that already have a title, alone. Main only; the
-     * request runs on IO as [titleRequest], which the run waits out before generating.
+     * Asks the selected backend to name the current chat from its first prompt, before that prompt
+     * runs. Leaves chats the user named, that already have a title, or that hold an earlier prompt
+     * alone. Main only; the request runs on IO as [titleRequest], which the run waits out.
      *
      * @param llmService the inference service the run will use.
-     * @param prompt the prompt about to run; named after unless the chat holds an earlier one.
+     * @param prompt the prompt about to run, not yet posted to the chat.
      * @return whether a request was started; it then settles [titlePending] itself when it ends.
      */
     internal fun requestTitleIfUntitled(llmService: LlmInferenceService, prompt: String): Boolean {
         val session = currentSessionOrNull() ?: return false
         if (!needsTitle(session)) return false
-        val userText = session.messages.firstOrNull { it.sender == Sender.USER }?.text ?: prompt
         titleRequested.add(session.id)
         val sessionId = session.id
         _titlePending.value = _titlePending.value + sessionId
@@ -1203,7 +1202,7 @@ class ChatViewModel(
         val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val self = coroutineContext.job
             try {
-                generateTitle(llmService, sessionId, userText)
+                generateTitle(llmService, sessionId, prompt)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -1231,18 +1230,24 @@ class ChatViewModel(
         request.job.join()
     }
 
-    /** Whether [session] is still to be titled: not named by the user, untitled, and not yet asked. */
+    /**
+     * Whether [session] is still to be titled: unnamed, untitled, not failed this process, and on its
+     * first prompt. Older chats keep their prompt's words, so no restart makes a reply wait again.
+     */
     private fun needsTitle(session: ChatSession): Boolean =
-        session.name == null && session.generatedTitle == null && session.id !in titleRequested
+        session.name == null && session.generatedTitle == null && session.id !in titleRequested &&
+            session.messages.none { it.sender == Sender.USER }
 
     /**
      * Cancels [sessionId]'s title request, if one is in flight, and ends its spinner; the chat falls
      * back to its prompt's first words. Not the global cancel: that would reach other plugins' calls.
+     * A dropped request did not fail, so the chat may be asked again if its first prompt is re-sent.
      */
     private fun dropTitleRequest(sessionId: String) {
         titleRequest?.takeIf { it.sessionId == sessionId }?.let {
             it.job.cancel()
             titleRequest = null
+            titleRequested.remove(sessionId)
         }
         settleTitle(sessionId)
     }
@@ -2006,8 +2011,8 @@ class ChatViewModel(
         _sessions.value = _sessions.value.map {
             if (it.id == sessionId) it.copy(name = trimmed) else it
         }
-        // A user name outranks the title being written, so its placeholder must not outlast it.
-        if (trimmed != null) settleTitle(sessionId)
+        // A user name outranks the title being written, so a reply queued behind it starts now.
+        if (trimmed != null) dropTitleRequest(sessionId)
         // Written now rather than debounced: a rename is deliberate and may be the last thing the
         // user does before leaving the tab, where no streamed token follows to flush it.
         persistState()
