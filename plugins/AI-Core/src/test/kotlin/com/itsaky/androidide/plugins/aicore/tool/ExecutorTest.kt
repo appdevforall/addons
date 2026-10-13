@@ -2,7 +2,11 @@ package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
+import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
+import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -492,5 +496,20 @@ class ExecutorTest {
         assertFalse(result.success)
         assertFalse("Retry would rewind the run the correction steers", result.denied)
         assertTrue(result.message.contains("use a different file"))
+    }
+
+    @Test
+    fun givenAShellCommandOutsideTheProject_whenExecuting_thenItIsRejectedBeforeApprovalOrTheTerminal() = runBlocking {
+        val context = mockk<PluginContext>(relaxed = true)
+        val executor = executorFor(RunShellCommandHandler(context))
+
+        val results = executor.execute(
+            listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, mapOf("command" to "ls", "cwd" to "../outside")))
+        )
+
+        assertFalse(results.single().success)
+        // The containment guard's message: it runs before validate() and the approval dialog.
+        assertTrue(results.single().message.contains("outside the project directory"))
+        verify(exactly = 0) { context.services }
     }
 }
