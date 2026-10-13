@@ -1,7 +1,5 @@
 # libGDX Android Game
 
-![Screenshot](screenshot.png)
-
 A simple 3D space game for Android built with [libGDX 1.13.1](https://libgdx.com/) (ported from jMonkeyEngine 3.6).
 
 ## Features
@@ -17,48 +15,48 @@ A simple 3D space game for Android built with [libGDX 1.13.1](https://libgdx.com
 
 ## Requirements
 
-| Tool | Version |
+| Item | Version |
 |------|---------|
-| Android Studio | Hedgehog or later |
-| Native libs | unpacked from gdx-platform natives jars by `copyAndroidNatives` |
-| Min SDK | 21 (Android 5.0) |
-| Target SDK | 34 |
+| Native libs | unpacked from the gdx-platform natives jars by `copyAndroidNatives` |
+| SDK levels | set by Code on the Go when the project is created |
 | OpenGL ES | 2.0+ |
 
 ## Getting Started
 
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/yaturner/jme-android-game.git
-   ```
-2. Open the `jme-android-game` folder in Android Studio (**File → Open**).
-3. Let Gradle sync complete — it will download libGDX 1.13.1 from Maven Central.
-4. Connect an Android device (API 21+) or start an emulator.
-5. Run **app**.
+1. Tap **Run** in Code on the Go.
+
+libGDX 1.13.1 is already in `app/libs`, so the build does not fetch it from Maven Central.
 
 ## Project Structure
 
 ```
-app/src/main/
-├── java/com/example/jmegame/
-│   ├── MainActivity.java   # AndroidApplication entry point
-│   ├── CubeGame.java       # ApplicationAdapter — all game logic
-│   └── BloomEffect.java    # glow/bloom post-process
-├── AndroidManifest.xml
-└── res/
-    ├── mipmap-*/ic_launcher.png
-    └── values/strings.xml
-gradle/
-└── libs.versions.toml      # libGDX 1.13.1 dependency versions
+app/
+├── libs/                   # libGDX 1.13.1 jars and .aar
+└── src/main/
+    ├── java/<your package>/
+    │   ├── MainActivity.java   # AndroidApplication entry point
+    │   ├── CubeGame.java       # ApplicationAdapter — all game logic
+    │   └── BloomEffect.java    # glow/bloom post-process
+    ├── assets/Textures/        # earth.png, Particle.png
+    ├── AndroidManifest.xml
+    └── res/
+        ├── mipmap-*/ic_launcher.png
+        └── values/strings.xml
 ```
 
 ## Key Dependencies
 
-```toml
-gdx                 = "1.13.1"   # core: math, 3D models, 2D batching
-gdx-backend-android = "1.13.1"   # Android backend + AndroidApplication
-gdx-platform        = "1.13.1"   # natives-<abi> classifier jars with libgdx.so
 ```
+app/libs/gdx-1.13.1.jar                                  # core: math, 3D models, 2D batching
+app/libs/gdx-jnigen-loader-2.5.2.jar                     # loads the native library
+app/libs/gdx-backend-android-1.13.1.aar                  # Android backend + AndroidApplication
+app/libs/gdx-platform-1.13.1-natives-armeabi-v7a.jar     # libgdx.so for armeabi-v7a
+app/libs/gdx-platform-1.13.1-natives-arm64-v8a.jar       # libgdx.so for arm64-v8a
+```
+
+`androidx.core` comes from Code on the Go's offline repository.
+
+libGDX is distributed under the Apache License 2.0.
 
 ## Controls
 
@@ -67,7 +65,3 @@ gdx-platform        = "1.13.1"   # natives-<abi> classifier jars with libgdx.so
 | Drag | Rotate the Earth |
 | Flick | Spin with inertia |
 | Tap | +10 points |
-
-## License
-
-MIT
