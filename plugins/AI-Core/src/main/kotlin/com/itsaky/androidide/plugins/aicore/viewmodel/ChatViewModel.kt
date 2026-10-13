@@ -794,8 +794,8 @@ class ChatViewModel(
      * leaves [AgentState.Idle] to the loop.
      *
      * A successful call is reported only on the run's single activity line, which this rewrites as
-     * each call starts. A failure keeps its own message: it is the one thing here a user has to act
-     * on, and it carries the Retry button.
+     * each call starts. A failure keeps its own message so the user sees it, but no Retry button:
+     * the model is told and carries on, and a Retry would rewind the whole run.
      *
      * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
@@ -839,7 +839,8 @@ class ChatViewModel(
                     id = UUID.randomUUID().toString(),
                     text = "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}",
                     sender = Sender.TOOL,
-                    status = MessageStatus.ERROR
+                    status = MessageStatus.ERROR,
+                    isDenial = result.denied,
                 )
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)

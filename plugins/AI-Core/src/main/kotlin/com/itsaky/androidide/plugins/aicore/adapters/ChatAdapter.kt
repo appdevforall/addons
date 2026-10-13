@@ -116,6 +116,17 @@ class ChatAdapter(
 
         /** A version arrow with nowhere to go, or held back while the agent works. */
         private const val DISABLED_ALPHA = 0.38f
+
+        /**
+         * The button error row [message] offers, or null for none. Only a setup notice is fixed in
+         * settings (ADFA-6345); a tool failure gets none unless the user denied the call.
+         */
+        internal fun errorActionFor(message: ChatMessage, retryable: Boolean): String? = when {
+            message.isSetupError -> ACTION_OPEN_SETTINGS
+            !retryable -> null
+            message.sender == Sender.TOOL -> ACTION_RETRY.takeIf { message.isDenial }
+            else -> ACTION_RETRY
+        }
     }
 
     sealed class MessageViewHolder(view: View) : RecyclerView.ViewHolder(view)
@@ -311,26 +322,33 @@ class ChatAdapter(
             MessageStatus.ERROR -> {
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
-                // Retry re-runs the last prompt, so an older or restored error offers nothing.
-                val offersAction = message.isSetupError || message.id in retryableErrorIds
-                holder.btnRetry.visibility = if (offersAction) View.VISIBLE else View.GONE
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
-                // Only a setup notice is fixed in settings; a run error is retried (ADFA-6345).
-                if (message.isSetupError) {
-                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
-                    holder.btnRetry.setOnClickListener {
-                        onMessageAction(ACTION_OPEN_SETTINGS, message)
+                // Retry re-runs the last prompt, so an older or restored error offers nothing.
+                val action = errorActionFor(message, retryable = message.id in retryableErrorIds)
+                holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
+                when (action) {
+                    ACTION_OPEN_SETTINGS -> {
+                        holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
+                        holder.btnRetry.setOnClickListener {
+                            onMessageAction(ACTION_OPEN_SETTINGS, message)
+                        }
+                        // Re-wired per bind: the same recycled button plays both roles, so the
+                        // tag has to follow the role it currently has.
+                        wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
                     }
-                    // Re-wired per bind: the same recycled button plays both roles, so the
-                    // tag has to follow the role it currently has.
-                    wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
-                } else {
-                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
-                    holder.btnRetry.setOnClickListener {
-                        onMessageAction(ACTION_RETRY, message)
+                    ACTION_RETRY -> {
+                        holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
+                        holder.btnRetry.setOnClickListener {
+                            onMessageAction(ACTION_RETRY, message)
+                        }
+                        wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
                     }
-                    wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
+                    // Drop the last bind's listeners so a hidden button holds no stale message.
+                    else -> {
+                        holder.btnRetry.setOnClickListener(null)
+                        holder.btnRetry.setOnLongClickListener(null)
+                    }
                 }
                 updateMessageMetadata(holder, message)
             }

@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import java.io.File
+import java.io.IOException
 
 private const val TAG = "$LOG_PREFIX.SearchProjectHandler"
 
@@ -47,26 +48,44 @@ class SearchProjectHandler(
         }
 
         return try {
-            if (!searchRoot.exists() || !searchRoot.isDirectory) {
-                return ToolResult.failure("Invalid project directory: ${searchRoot.absolutePath}")
-            }
-
-            val results = mutableListOf<String>()
-            searchFilesRecursive(searchRoot, query, results, searchInContents, maxResults = 100)
-
-            if (results.isEmpty()) {
-                ToolResult.success("No ${if (searchInContents) "content" else "files"} found matching '$query'", "")
-            } else {
-                ToolResult.success(
-                    message = "Found ${results.size} match(es) for '$query'",
-                    data = results.joinToString("\n")
-                )
+            when {
+                !searchRoot.exists() ->
+                    ToolResult.failure("No such file or directory: ${displayPath(searchRoot)}")
+                searchRoot.isFile -> searchSingleFile(searchRoot, query)
+                else -> searchTree(searchRoot, query, searchInContents)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error searching project", e)
             ToolResult.failure("Error searching project: ${e.message}", e.stackTraceToString())
         }
     }
+
+    /** Searches a file's contents; its name is moot because the model already named it. */
+    private fun searchSingleFile(file: File, query: String): ToolResult {
+        if (!isTextFile(file)) {
+            return ToolResult.failure("${file.name} is not a text file")
+        }
+        val results = mutableListOf<String>()
+        searchFileContents(file, query, results, MAX_RESULTS)
+        return resultOf(results, query, "No lines matching '$query' in ${file.name}", " in ${file.name}")
+    }
+
+    private fun searchTree(root: File, query: String, searchInContents: Boolean): ToolResult {
+        val results = mutableListOf<String>()
+        searchFilesRecursive(root, query, results, searchInContents, MAX_RESULTS)
+        val noMatches = "No ${if (searchInContents) "content" else "files"} found matching '$query'"
+        return resultOf(results, query, noMatches)
+    }
+
+    private fun resultOf(results: List<String>, query: String, noMatches: String, scope: String = ""): ToolResult =
+        if (results.isEmpty()) {
+            ToolResult.success(noMatches, "")
+        } else {
+            ToolResult.success(
+                message = "Found ${results.size} match(es) for '$query'$scope",
+                data = results.joinToString("\n")
+            )
+        }
 
     private fun searchFilesRecursive(
         dir: File,
@@ -86,37 +105,59 @@ class SearchProjectHandler(
             } else if (file.isFile) {
                 // First: check filename
                 if (file.name.contains(query, ignoreCase = true)) {
-                    results.add("📄 [FILE] ${file.absolutePath}")
+                    results.add("📄 [FILE] ${displayPath(file)}")
                     return@forEach
                 }
 
                 // Second: check file contents if requested
-                if (searchInContents && isSearchableFile(file)) {
+                // The sniff opens the file too, so a file deleted mid-walk is skipped, not fatal.
+                if (searchInContents) {
                     try {
-                        val content = file.readText()
-                        if (content.contains(query, ignoreCase = true)) {
-                            // Find matching lines with context
-                            val lines = content.split("\n")
-                            lines.forEachIndexed { index, line ->
-                                if (line.contains(query, ignoreCase = true) && results.size < maxResults) {
-                                    val lineNum = index + 1
-                                    val context = line.take(80)
-                                    results.add("📄 ${file.absolutePath}:$lineNum → $context")
-                                }
-                            }
-                        }
-                    } catch (e: Exception) {
-                        // Skip files that can't be read as text
-                        Log.d(TAG, "Skipped non-text file: ${file.name}")
+                        if (isTextFile(file)) searchFileContents(file, query, results, maxResults)
+                    } catch (e: IOException) {
+                        Log.d(TAG, "Skipped unreadable file: ${file.name}", e)
                     }
                 }
             }
         }
     }
 
-    private fun isSearchableFile(file: File): Boolean {
+    /** Streams [file] line by line, appending each line containing [query] to [results]. */
+    private fun searchFileContents(file: File, query: String, results: MutableList<String>, maxResults: Int) {
+        file.bufferedReader().useLines { lines ->
+            for ((index, line) in lines.withIndex()) {
+                if (results.size >= maxResults) return
+                val at = line.indexOf(query, ignoreCase = true)
+                if (at >= 0) results.add("📄 ${displayPath(file)}:${index + 1} → ${snippet(line, at, query.length)}")
+            }
+        }
+    }
+
+    private fun displayPath(file: File): String =
+        file.relativeToOrSelf(File(PathGuard.projectRoot())).path
+
+    /** Known binary extensions, else git's heuristic: a NUL byte in the first block means binary. */
+    private fun isTextFile(file: File): Boolean {
         val name = file.name.lowercase()
-        val binaryExtensions = listOf(".apk", ".dex", ".so", ".zip", ".jar", ".class", ".bin")
-        return !binaryExtensions.any { name.endsWith(it) }
+        if (BINARY_EXTENSIONS.any { name.endsWith(it) }) return false
+        val head = ByteArray(SNIFF_BYTES)
+        val read = file.inputStream().use { it.read(head) }
+        return (0 until read.coerceAtLeast(0)).none { head[it] == 0.toByte() }
+    }
+
+    private companion object {
+        const val MAX_RESULTS = 100
+        const val SNIFF_BYTES = 8 * 1024
+        const val SNIPPET_LENGTH = 80
+        const val SNIPPET_LEAD = 20
+        val BINARY_EXTENSIONS = listOf(".apk", ".dex", ".so", ".zip", ".jar", ".class", ".bin")
+
+        /** At least [SNIPPET_LENGTH] chars of [line], widened to keep the whole [length]-char match at [at]. */
+        fun snippet(line: String, at: Int, length: Int): String {
+            if (line.length <= SNIPPET_LENGTH) return line
+            val start = (at - SNIPPET_LEAD).coerceIn(0, line.length - SNIPPET_LENGTH)
+            val end = maxOf(start + SNIPPET_LENGTH, at + length)
+            return (if (start > 0) "…" else "") + line.substring(start, end) + (if (end < line.length) "…" else "")
+        }
     }
 }
