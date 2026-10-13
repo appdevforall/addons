@@ -1,0 +1,49 @@
+{
+    "name": "Bubble Wand (jME)",
+    "description": "Creates a Bubble Wand Shooter Game (jME)",
+    "version": "0.1",
+    "parameters": {
+        "required": {
+            "appName": {
+                "identifier": "APP_NAME"
+            },
+            "packageName": {
+                "identifier": "PACKAGE_NAME"
+            },
+            "saveLocation": {
+                "identifier": "SAVE_LOCATION"
+            }
+        },
+        "optional": {
+            "minsdk": {
+                "identifier": "MIN_SDK"
+            }
+        }
+    },
+    "system": {
+        "agpVersion": {
+            "identifier": "AGP_VERSION"
+        },
+        "kotlinVersion": {
+            "identifier": "KOTLIN_VERSION"
+        },
+        "gradleVersion": {
+            "identifier": "GRADLE_VERSION"
+        },
+        "compileSdk": {
+            "identifier": "COMPILE_SDK"
+        },
+        "targetSdk": {
+            "identifier": "TARGET_SDK"
+        },
+        "javaSourceCompat": {
+            "identifier": "JAVA_SOURCE_COMPAT"
+        },
+        "javaTargetCompat": {
+            "identifier": "JAVA_TARGET_COMPAT"
+        },
+        "javaTarget": {
+            "identifier": "JAVA_TARGET"
+        }
+    }
+}
