@@ -323,7 +323,9 @@ class ChatAdapter(
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 hideGeneratingDots(holder)
-                holder.messageContent.text = message.text
+                // An agent bubble can be a cut-off reply, whose prose and code still need rendering.
+                if (message.sender == Sender.AGENT) markwon.setMarkdown(holder.messageContent, message.text)
+                else holder.messageContent.text = message.text
                 // Retry re-runs the last prompt, so an older or restored error offers nothing.
                 val action = errorActionFor(message, retryable = message.id in retryableErrorIds)
                 holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE

@@ -291,13 +291,14 @@
 
   <h2>Reading the conversation</h2>
   <ul>
-    <li><b>Retry</b> appears on a step of your last prompt that failed — a reply,
-      an error from the backend, or a tool call you declined — and runs that
-      prompt again with the same attached files, from the conversation as it
-      stood before that attempt. The failed turn is dropped rather than left for
-      the model to read, so a declined tool asks for approval again instead of
-      the agent reporting that it was declined. When the conversation was too
-      long for the model, retrying summarizes the earlier messages first. A tool
+    <li><b>Retry</b> appears on a step of your last prompt that failed — an empty
+      or garbled reply from the model, a dropped connection, or a tool call you
+      declined — and runs that prompt again with the same attached files, from
+      the conversation as it stood before that attempt. The failed turn is
+      dropped rather than left for the model to read, so a declined tool asks for
+      approval again instead of the agent reporting that it was declined. When the
+      conversation was too long for the model, retrying summarizes the earlier
+      messages first. A tool
       that errors on its own, or a call you corrected, offers no Retry: the agent
       carries on past it.</li>
     <li><b>Earlier messages were summarized</b> appears when a long conversation

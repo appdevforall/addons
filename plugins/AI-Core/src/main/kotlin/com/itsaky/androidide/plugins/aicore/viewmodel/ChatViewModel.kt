@@ -768,6 +768,18 @@ class ChatViewModel(
         null
     }
 
+    /**
+     * Whether the current backend still says it is configured, asked after it failed a run. Blocking.
+     *
+     * @return false when it is gone or reports itself unavailable; true when it cannot be asked
+     */
+    private fun backendStillAvailable(llmService: LlmInferenceService): Boolean = try {
+        llmService.getBackend(currentBackendId)?.isAvailable == true
+    } catch (e: Throwable) {
+        logWarn("backend '$currentBackendId' could not report availability", e)
+        true
+    }
+
     /** The window [backendId] reports, in tokens; 0 when it reports none or the call fails. */
     private fun reportedContextWindow(backendId: String): Int = try {
         (getLlmService()?.getBackend(backendId) as? LlmInferenceService.ContextWindowReportingBackend)
@@ -1162,10 +1174,15 @@ class ChatViewModel(
                 lastRunOverflowed = e is ContextOverflowException
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
-                setState(AgentState.Error(str(R.string.state_error, e.message)))
+                val failure = RunFailure.describe(e, str(R.string.agent_run_failed))
+                // A key cleared or unreadable mid-chat is fixed in settings, which Retry can't do.
+                val isSetupError = e is BackendFailure && !backendStillAvailable(llmService)
+                setState(AgentState.Error(failure))
                 addSystemMessage(
-                    str(R.string.state_error, e.message), MessageStatus.ERROR, isSettingsError = e is BackendSettingsException,
+                    failure, MessageStatus.ERROR, isSetupError, isSettingsError = e is BackendSettingsException,
                 )
+                // So the next send is stopped by the pre-flight, and the notice clears once fixed.
+                if (isSetupError) withContext(Dispatchers.Main) { checkBackendAvailability() }
             } finally {
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.value = false
@@ -1664,7 +1681,8 @@ class ChatViewModel(
                 }
 
                 override fun onComplete(response: LlmInferenceService.LlmResponse) {
-                    // Null text means a failed response, which arrives through onError instead.
+                    // Null text means a failed response, which arrives through onError instead; text
+                    // on an unsuccessful one is a reply the backend cut off, shown with its Retry.
                     val written = response.text.orEmpty()
                     val calls = synchronized(nativeCalls) { nativeCalls.toList() }
                     val text = withNativeCalls(written, calls)
@@ -1720,13 +1738,16 @@ class ChatViewModel(
                     if (AnswerReview.holdsCode(displayText)) {
                         runCodeReply = CodeReply(agentMessageId, displayText, reply.historyText)
                     }
+                    // An unreadable call usually parses on a second try, so its bubble carries Retry.
+                    val unparsed = toolCalls.isEmpty() && ToolCallExtractor.diagnoseUnparsedReply(text) != null
+                    val failed = unparsed || !response.success
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val finalMsg = ChatMessage(
                             id = agentMessageId,
                             text = displayText,
                             sender = Sender.AGENT,
-                            status = MessageStatus.COMPLETED,
+                            status = if (failed) MessageStatus.ERROR else MessageStatus.COMPLETED,
                             durationMs = durationMs,
                             // Only when it differs, so a turn is not stored twice over.
                             historyText = reply.historyText.takeIf { it != displayText }
@@ -1753,7 +1774,7 @@ class ChatViewModel(
                     val failure = when (kind) {
                         LlmInferenceService.FailureKind.CONTEXT_TOO_LONG -> ContextOverflowException(error)
                         LlmInferenceService.FailureKind.CONFIGURATION -> BackendSettingsException(error)
-                        else -> RuntimeException(error)
+                        else -> BackendFailure(error)
                     }
                     deferred.completeExceptionally(failure)
                 }
@@ -1967,14 +1988,21 @@ class ChatViewModel(
      * Appends a SYSTEM message to the chat (on the main thread).
      * @param text the message text.
      * @param status the message status.
+     * @param isSetupError whether the backend is unconfigured; see [ChatMessage.isSetupError].
      * @param isSettingsError see [ChatMessage.isSettingsError].
      */
-    private suspend fun addSystemMessage(text: String, status: MessageStatus, isSettingsError: Boolean = false) {
+    private suspend fun addSystemMessage(
+        text: String,
+        status: MessageStatus,
+        isSetupError: Boolean = false,
+        isSettingsError: Boolean = false,
+    ) {
         val message = ChatMessage(
             id = UUID.randomUUID().toString(),
             text = text,
             sender = Sender.SYSTEM,
             status = status,
+            isSetupError = isSetupError,
             isSettingsError = isSettingsError
         )
         withContext(Dispatchers.Main) {

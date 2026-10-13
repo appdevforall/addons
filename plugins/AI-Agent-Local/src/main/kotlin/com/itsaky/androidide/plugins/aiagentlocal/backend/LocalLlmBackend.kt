@@ -854,7 +854,7 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                val (message, kind) = errorMessages.describe(e)
+                val (message, kind) = userFacingFailure(e)
                 future.complete(LlmResponse.failure(message, kind))
             }
         }
@@ -886,6 +886,16 @@ class LocalLlmBackend(
     ) {
         context.logger.info("LocalLlmBackend.generateStreamingWithHistory() called with ${history.size} messages")
         streamGeneration(buildPrompt(config.systemPrompt, prompt, history), config, callback)
+    }
+
+    /**
+     * What a failed generation tells the user: an overflow's own sentence, a [UserActionableLlmException]'s
+     * advice, else blank, which ai-core shows as its generic failure. The exception only reaches the log.
+     */
+    private fun userFacingFailure(e: Exception): GenerationError {
+        val described = errorMessages.describe(e)
+        if (described.kind == FailureKind.CONTEXT_TOO_LONG) return described
+        return described.copy(message = (e as? UserActionableLlmException)?.message.orEmpty())
     }
 
     /**
@@ -957,7 +967,7 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                val (message, kind) = errorMessages.describe(e)
+                val (message, kind) = userFacingFailure(e)
                 callback.onError(message, kind)
             }
         }

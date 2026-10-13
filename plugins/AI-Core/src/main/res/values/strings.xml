@@ -224,8 +224,9 @@
     <string name="chat_compaction_failed">Earlier messages could not be summarized, so only the most recent ones were kept to stay within the model\'s limit.</string>
     <string name="chat_compaction_trimmed">Only the most recent messages were kept to stay within the on-device model\'s limit.</string>
     <string name="agent_action_failed">I couldn\'t complete that, the last action failed. See the details above.</string>
-    <string name="agent_reply_truncated">The model ran out of room mid-action, so nothing was changed. Ask for a smaller step \u2014 one file, or one method at a time.</string>
-    <string name="agent_reply_malformed">The model\'s reply wasn\'t a readable action, so nothing was changed. Try rephrasing, or pick a larger model in AI Settings.</string>
+    <string name="agent_reply_truncated">The model ran out of room before it finished, so nothing was changed. Tap Retry, or ask for a smaller step \u2014 one file, or one method at a time.</string>
+    <string name="agent_reply_malformed">The model\'s reply came out garbled, so nothing was changed. Tap Retry \u2014 it usually works the second time. If it keeps happening, rephrase the request or pick a larger model in AI Settings.</string>
+    <string name="agent_run_failed">Something went wrong while talking to the model. Tap Retry to try again.</string>
     <string name="agent_no_response">(No response. Try rephrasing, or pick a larger model in AI Settings — very small models struggle with tool use.)</string>
     <string name="generating_response">Generating response…</string>
 
@@ -256,7 +257,6 @@
     <string name="backend_selected_missing_short">Backend not installed</string>
     <string name="backend_no_settings">%1$s has no settings to configure.</string>
     <string name="backend_pane_unavailable">This backend\'s settings are unavailable. It may have been uninstalled or disabled.</string>
-    <string name="state_error">Error: %s</string>
 
     <!-- Capability tags under the chat input: what the agent is connected to (ADFA-6279). -->
     <string name="capability_backend_model">%1$s \u00b7 %2$s</string>

@@ -60,6 +60,8 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
             GeminiPreferences.KEY_MODEL,
             GeminiPreferences.KEY_MODEL_CONTEXT_WINDOWS,
             GeminiPreferences.KEY_EMBEDDING_MODEL,
+            // A refused key makes the backend unavailable until it is replaced or works again.
+            GeminiPreferences.KEY_CREDENTIAL_FAILURE,
         )
 
         @Volatile
