@@ -287,11 +287,13 @@
 
   <h2>Reading the conversation</h2>
   <ul>
-    <li><b>Retry</b> appears on a step that failed — including a tool call you
-      declined — and runs your last prompt again with the same attached files,
+    <li><b>Retry</b> appears on a reply that failed and on a tool call you
+      declined, and runs your last prompt again with the same attached files,
       from the conversation as it stood before that attempt. The failed turn is
       dropped rather than left for the model to read, so a declined tool asks for
-      approval again instead of the agent reporting that it was declined.</li>
+      approval again instead of the agent reporting that it was declined. A tool
+      that errors on its own, or a call you corrected, offers no Retry: the agent
+      carries on past it.</li>
     <li><b>Open AI Settings</b> appears instead when the agent has not been
       configured yet — no local model chosen, or no Gemini key saved. It opens the
       <b>Agent</b> settings screen directly.</li>
