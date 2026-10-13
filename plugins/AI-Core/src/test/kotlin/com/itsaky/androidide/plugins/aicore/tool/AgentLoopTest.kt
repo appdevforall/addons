@@ -928,6 +928,29 @@ class AgentLoopTest {
         assertEquals(1, result.turns)
     }
 
+    @Test
+    fun givenALooselyNamedShellCall_whenItsResultIsFormatted_thenTheShellToolsLargerCapApplies() = runTest {
+        val model = ScriptedModel(listOf(toolCall("Run_Shell_Command"), "Done."))
+        val history = mutableListOf(ChatMessage(Role.USER, "run the check"))
+        val executed = mutableListOf<String>()
+
+        agentLoop().run(
+            history = history,
+            generate = model::generate,
+            executeTools = { calls ->
+                executed += calls.map { it.name }
+                calls.map { ToolResult.success("Command exited with code 1", "x".repeat(5000) + "THE ERROR") }
+            },
+            canonicalName = { name -> if (name.equals("run_shell_command", true)) "run_shell_command" else name },
+        )
+
+        // Under the emitted name the default 4000-character cap kept the start and cut the error.
+        assertEquals(listOf("run_shell_command"), executed)
+        val results = history.last { it.role == Role.USER }.content
+        assertTrue(results.contains("[run_shell_command]"))
+        assertTrue(results.contains("THE ERROR"))
+    }
+
     private companion object {
         const val UNFINISHED = "finish or carry on"
         const val REQUIRED = "call first:"
