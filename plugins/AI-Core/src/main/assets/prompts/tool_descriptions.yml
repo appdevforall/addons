@@ -24,7 +24,7 @@ built_in_tools:
     description: Search for files by name or content in the project
     arguments:
       query: Text to search for; a file name unless searching contents.
-      project_dir: Project-relative directory to search under. Defaults to the whole project.
+      project_dir: Project-relative directory to search under, or a single file to search inside. Defaults to the whole project.
       search_in_contents: Search inside files instead of matching their names.
   open_file:
     description: Open a file in the IDE editor
