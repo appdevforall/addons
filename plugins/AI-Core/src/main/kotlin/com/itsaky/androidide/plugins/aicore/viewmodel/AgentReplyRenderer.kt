@@ -12,6 +12,8 @@ import com.itsaky.androidide.plugins.aicore.tool.respondMessageOf
  */
 object AgentReplyRenderer {
 
+    private val THINKING = Regex("(?s)<think>.*?(</think>|$)")
+
     /**
      * Whether this turn leaves no bubble behind.
      *
@@ -20,16 +22,39 @@ object AgentReplyRenderer {
      * a failure still gets its own message. Before that line existed every such turn appended a
      * badge bubble and every result another, which is what buried the answer.
      *
-     * A turn carrying the terminal call always keeps its bubble: that is the only place the answer
-     * is rendered.
+     * A turn carrying the terminal call keeps its bubble, as the only place the answer is rendered,
+     * unless it is the one-line recap the finish request asks for after a prose answer already on
+     * screen; a longer reply is the real answer, and a failure's warning still shows.
      *
      * @param toolCalls the calls parsed out of this turn.
      * @param terminalTool the name of the answer-carrying pseudo-tool (`respond`).
+     * @param recapsShownAnswer whether the run was asked to finish after a prose turn [showsAnswer] kept.
+     * @param lastToolFailed whether this run's most recent tool call failed.
      * @return true when the turn should not reach the transcript.
      */
-    fun isSilentTurn(toolCalls: List<ToolCall>, terminalTool: String): Boolean {
+    fun isSilentTurn(
+        toolCalls: List<ToolCall>,
+        terminalTool: String,
+        recapsShownAnswer: Boolean = false,
+        lastToolFailed: Boolean = false,
+    ): Boolean {
         if (toolCalls.isEmpty()) return false
-        return toolCalls.none { isTerminalToolName(it.name, terminalTool) }
+        val answers = toolCalls.filter { isTerminalToolName(it.name, terminalTool) }
+        if (answers.isEmpty()) return true
+        if (!recapsShownAnswer || lastToolFailed || answers.size != toolCalls.size) return false
+        return answers.all { respondMessageOf(it.args).orEmpty().trim().lines().size <= 1 }
+    }
+
+    /**
+     * Whether a prose turn put an answer on screen, so a recap of it would show it twice: not only
+     * thinking, and not a fallback such as [noResponseText] standing in for nothing.
+     * @param displayText what [render] returned for the turn.
+     * @param noResponseText the fallback [render] was given.
+     * @return true when the bubble holds text the model wrote for the user.
+     */
+    fun showsAnswer(displayText: String, noResponseText: String): Boolean {
+        val visible = displayText.replace(THINKING, "").trim()
+        return visible.isNotEmpty() && visible != noResponseText
     }
 
     /**
