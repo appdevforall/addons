@@ -55,11 +55,19 @@ class HistoryCompactorTest {
     }
 
     @Test
+    fun givenAReplyCap_whenSizingTheInput_thenTheCapIsReservedUpToHalfTheWindow() {
+        // An 8k vLLM window with a 4k reply cap takes about 4k of input, not 8k.
+        assertEquals(4_096, HistoryCompactor.inputBudgetTokens(budgetTokens = 8_192, replyTokens = 4_096))
+        assertEquals(196_000, HistoryCompactor.inputBudgetTokens(budgetTokens = 200_000, replyTokens = 4_000))
+        assertEquals(2_048, HistoryCompactor.inputBudgetTokens(budgetTokens = 4_096, replyTokens = 16_384))
+    }
+
+    @Test
     fun givenABudget_whenSizingTheRoomForHistory_thenFixedPartsAndThePromptComeOffTheTrigger() {
-        val room = HistoryCompactor.historyRoomChars(fixedChars = 1_000, pendingUserTurn = "x".repeat(200), budgetTokens = 1_000)
+        val room = HistoryCompactor.historyRoomChars(fixedChars = 1_000, pendingUserTurn = "x".repeat(200), inputTokens = 1_000)
 
         assertEquals(800 * HistoryCompactor.CHARS_PER_TOKEN - 1_200, room)
-        assertEquals(0, HistoryCompactor.historyRoomChars(fixedChars = 10_000, pendingUserTurn = "", budgetTokens = 1_000))
+        assertEquals(0, HistoryCompactor.historyRoomChars(fixedChars = 10_000, pendingUserTurn = "", inputTokens = 1_000))
     }
 
     @Test
@@ -71,13 +79,13 @@ class HistoryCompactorTest {
 
     @Test
     fun givenAnEstimateUnderEightyPercent_whenChecked_thenNoCompactionIsNeeded() {
-        assertFalse(HistoryCompactor.needsCompaction(estimatedTokens = 800, budgetTokens = 1_000))
-        assertTrue(HistoryCompactor.needsCompaction(estimatedTokens = 801, budgetTokens = 1_000))
+        assertFalse(HistoryCompactor.needsCompaction(estimatedTokens = 800, inputTokens = 1_000))
+        assertTrue(HistoryCompactor.needsCompaction(estimatedTokens = 801, inputTokens = 1_000))
     }
 
     @Test
     fun givenARetryAfterAFailure_whenChecked_thenCompactionIsForcedWhateverTheEstimate() {
-        assertTrue(HistoryCompactor.needsCompaction(estimatedTokens = 1, budgetTokens = 1_000, forced = true))
+        assertTrue(HistoryCompactor.needsCompaction(estimatedTokens = 1, inputTokens = 1_000, forced = true))
     }
 
     @Test

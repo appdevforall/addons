@@ -60,6 +60,7 @@ internal class CompactionUseCase(
      * @param toolDefinitions the tools every request of the run carries.
      * @param history the turns before the new message.
      * @param pendingUserTurn the new message with its attached files.
+     * @param replyTokens the run's reply cap; see [HistoryCompactor.inputBudgetTokens].
      * @param forced a Retry after a context overflow; see [HistoryCompactor.needsCompaction].
      * @return the estimate when [history] has to be summarized first; null when it is sent as it is.
      */
@@ -69,14 +70,16 @@ internal class CompactionUseCase(
         toolDefinitions: List<LlmInferenceService.ToolDefinition>,
         history: List<LlmInferenceService.ChatMessage>,
         pendingUserTurn: String,
+        replyTokens: Int,
         forced: Boolean,
     ): Estimate? {
         if (history.isEmpty()) return null
         val budget = budgetTokens(backendId)
+        val input = HistoryCompactor.inputBudgetTokens(budget, replyTokens)
         val fixedChars = HistoryCompactor.fixedChars(systemPrompt, toolDefinitions)
         val tokens = HistoryCompactor.estimateTokens(fixedChars, history, pendingUserTurn)
-        if (!HistoryCompactor.needsCompaction(tokens, budget, forced)) return null
-        return Estimate(tokens, budget, HistoryCompactor.historyRoomChars(fixedChars, pendingUserTurn, budget))
+        if (!HistoryCompactor.needsCompaction(tokens, input, forced)) return null
+        return Estimate(tokens, budget, HistoryCompactor.historyRoomChars(fixedChars, pendingUserTurn, input))
     }
 
     /**

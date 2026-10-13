@@ -57,7 +57,7 @@ private val LARGE_PROMPT = "x".repeat(WINDOW_TOKENS * HistoryCompactor.CHARS_PER
 
 /**
  * A chat near its backend's context window is summarized before the next send, and a run that
- * overflowed it is rolled back rather than resent with every retry (ADFA-6345).
+ * overflowed it keeps its turns for the next run to summarize, which is forced (ADFA-6345).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelCompactionTest {
@@ -106,17 +106,34 @@ class ChatViewModelCompactionTest {
     }
 
     @Test
-    fun givenAContextOverflow_whenTheRunFails_thenTheHistoryKeepsItsPreRunSize() {
+    fun givenAContextOverflow_whenTheRunFails_thenTheHistoryKeepsItsTurns() {
+        // Rolled back, the tool calls that already ran were lost to the model and repeated on Retry.
         val (viewModel, _) = newViewModelWithBackend(summary = null) { callback ->
             callback.onError("prompt is too long", FailureKind.CONTEXT_TOO_LONG)
         }
 
         send(viewModel, "Capital of new york")
+
+        assertEquals(listOf(Role.USER to "Capital of new york"), viewModel.history.value.map { it.role to it.content })
+    }
+
+    @Test
+    fun givenAContextOverflow_whenTheNextMessageIsTyped_thenTheHistoryIsSummarizedFirst() {
+        val failNext = AtomicBoolean(true)
+        val (viewModel, service) = newViewModelWithBackend(summary = "The user asked for a capital.") { callback ->
+            if (failNext.getAndSet(false)) {
+                callback.onError("prompt is too long", FailureKind.CONTEXT_TOO_LONG)
+            } else {
+                callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+            }
+        }
         send(viewModel, "Capital of new york")
 
-        assertEquals(emptyList<LlmInferenceService.ChatMessage>(), viewModel.history.value)
-        // The resend went out on the same history, not one grown by the failed turn.
-        assertEquals(listOf(emptyList<LlmInferenceService.ChatMessage>(), emptyList()), sentHistories.toList())
+        send(viewModel, "continue")
+
+        verify(exactly = 1) { service.generateWithHistory(any(), any(), any()) }
+        val summaryTurn = "Summary of the earlier conversation:\nThe user asked for a capital."
+        assertEquals(listOf(Role.USER to summaryTurn), sentHistories.last().map { it.role to it.content })
     }
 
     @Test
@@ -195,7 +212,10 @@ class ChatViewModelCompactionTest {
 
         retry(viewModel)
 
-        verify(exactly = 1) { service.generateWithHistory(any(), any(), any()) }
+        // The overflowed run is summarized with the rest, so what it already did is not lost.
+        verify(exactly = 1) {
+            service.generateWithHistory(match { turns -> turns.any { it.content == "second" } }, any(), any())
+        }
         val summaryTurn = "Summary of the earlier conversation:\nThe user said first."
         assertEquals(listOf(Role.USER to summaryTurn), sentHistories.last().map { it.role to it.content })
     }

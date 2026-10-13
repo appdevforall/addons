@@ -19,7 +19,7 @@ internal object HistoryCompactor {
     /** Code tokenizes denser than prose; erring low compacts early rather than hitting a 400. */
     const val CHARS_PER_TOKEN = 3
 
-    /** Share of the budget an estimated request may reach before the history is summarized. */
+    /** Share of the input budget an estimated request may reach before the history is summarized. */
     const val TRIGGER_RATIO = 0.8
 
     /** Summarize calls one compaction may make; a history longer than that loses its middle. */
@@ -68,6 +68,17 @@ internal object HistoryCompactor {
     }
 
     /**
+     * Servers such as vLLM reject a request whose input plus its reply cap passes the window, and on
+     * device the reply fills the same context, so the cap is reserved first, up to half the budget.
+     *
+     * @param budgetTokens see [budgetTokens].
+     * @param replyTokens the reply cap the request is sent with.
+     * @return the tokens a request's input may use.
+     */
+    fun inputBudgetTokens(budgetTokens: Int, replyTokens: Int): Int =
+        budgetTokens - minOf(replyTokens, budgetTokens / 2)
+
+    /**
      * @param backendId the backend the run is against.
      * @return whether its history is summarized; on device that takes minutes, so it is cut instead.
      */
@@ -76,11 +87,11 @@ internal object HistoryCompactor {
     /**
      * @param fixedChars see [fixedChars].
      * @param pendingUserTurn the new message, with its attached files.
-     * @param budgetTokens see [budgetTokens].
+     * @param inputTokens see [inputBudgetTokens].
      * @return the most characters of history the request can carry without passing [TRIGGER_RATIO].
      */
-    fun historyRoomChars(fixedChars: Int, pendingUserTurn: String, budgetTokens: Int): Int =
-        ((budgetTokens * TRIGGER_RATIO).toInt() * CHARS_PER_TOKEN - fixedChars - pendingUserTurn.length)
+    fun historyRoomChars(fixedChars: Int, pendingUserTurn: String, inputTokens: Int): Int =
+        ((inputTokens * TRIGGER_RATIO).toInt() * CHARS_PER_TOKEN - fixedChars - pendingUserTurn.length)
             .coerceAtLeast(0)
 
     /**
@@ -104,12 +115,12 @@ internal object HistoryCompactor {
 
     /**
      * @param estimatedTokens see [estimateTokens].
-     * @param budgetTokens see [budgetTokens].
+     * @param inputTokens see [inputBudgetTokens].
      * @param forced a Retry after a context overflow, which the estimate missed.
      * @return whether the history is summarized before the request is sent.
      */
-    fun needsCompaction(estimatedTokens: Int, budgetTokens: Int, forced: Boolean = false): Boolean =
-        forced || estimatedTokens > budgetTokens * TRIGGER_RATIO
+    fun needsCompaction(estimatedTokens: Int, inputTokens: Int, forced: Boolean = false): Boolean =
+        forced || estimatedTokens > inputTokens * TRIGGER_RATIO
 
     /**
      * Cuts [history] until it fits [maxChars], so the summarize request cannot overflow the way the
@@ -195,7 +206,7 @@ internal object HistoryCompactor {
      * @param config the loaded prompt config.
      * @param history the turns before the new message, oldest first; not empty.
      * @param budgetTokens see [budgetTokens].
-     * @param replyTokens the summary's output cap, reserved inside the budget up to half of it.
+     * @param replyTokens the summary's output cap; see [inputBudgetTokens].
      * @param summarize sends the turns with [request] as the last user turn and [systemPrompt];
      *   returns the reply, or null when it failed.
      * @return [Outcome.Summarized], or [Outcome.Failed] when a call failed or wrote nothing.
@@ -209,9 +220,7 @@ internal object HistoryCompactor {
     ): Outcome {
         val systemPrompt = systemPrompt(config)
         val request = PromptTemplateEngine.render(config.compaction.request, emptyMap())
-        // At most half the budget, or a reply cap above the budget leaves the summarizer nothing.
-        val reserved = minOf(replyTokens, budgetTokens / 2)
-        val room = (budgetTokens - reserved) * CHARS_PER_TOKEN - systemPrompt.length - request.length
+        val room = inputBudgetTokens(budgetTokens, replyTokens) * CHARS_PER_TOKEN - systemPrompt.length - request.length
         var carried: ChatMessage? = null
         var remaining = history
         for (call in 1 until MAX_SUMMARIZE_CALLS) {

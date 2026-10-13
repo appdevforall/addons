@@ -12,7 +12,7 @@
     <string name="claude_error_key_missing">Claude needs an API key. Add one in Agent settings.</string>
     <string name="claude_error_key_forbidden">Your API key is not allowed to do this. Choose another model, or check the key\'s workspace in the Claude Console.</string>
     <string name="claude_error_key_needs_workspace">This API key is not in a workspace, so Claude needs a workspace ID with it. Tap Edit in Agent settings and enter one. Workspace IDs start with wrkspc_ and are listed in the Claude Console under Workspaces.</string>
-    <string name="claude_error_too_large">This conversation is too long for Claude to accept. Attach less of the project, or tap Retry to summarize the earlier messages.</string>
+    <string name="claude_error_too_large">This conversation is too long for Claude to accept. Start a new chat, or attach less of the project.</string>
     <string name="claude_error_context_too_long">This conversation is longer than the model can read. Tap Retry to summarize the earlier messages and send it again.</string>
     <string name="claude_error_request_rejected">Claude rejected the request.</string>
     <string name="claude_error_request_rejected_reason">Claude rejected the request. %1$s</string>

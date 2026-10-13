@@ -123,6 +123,15 @@ class LocalLlmBackend(
     /** The `n_ctx` actually allocated for the resident model; 0 while none is loaded. */
     @Volatile private var allocatedContextTokens = 0
 
+    /** The context a model was last sized to, kept after it unloads; see [getContextWindowTokens]. */
+    @Volatile private var plannedContext: PlannedContext? = null
+
+    /**
+     * @property modelRef the configured model path or content URI it was sized for.
+     * @property tokens its context: the one [resolveContextSize] chose, then the one in effect.
+     */
+    private data class PlannedContext(val modelRef: String, val tokens: Int)
+
     /**
      * The configured reference — path or `content://` URI — of the resident model.
      *
@@ -211,20 +220,25 @@ class LocalLlmBackend(
     override fun getName(): String = "Local LLM"
 
     /**
-     * The configured model's name, for the Agent's backend tag: the one the settings pane saved at
-     * selection, else a plain file path's own name. A `content://` reference with no saved name
-     * says nothing readable, so it reports none rather than a document id.
+     * The context the resident model was created with, which can be smaller than the one requested.
+     * With none resident, what the configured model was last sized to, so the send that loads it is
+     * not budgeted at the floor; 0 for a model never sized in this process.
      */
-    /** The context the resident model was created with, which can be smaller than the one requested. */
-    override fun getContextWindowTokens(): Int = allocatedContextTokens
+    override fun getContextWindowTokens(): Int {
+        if (allocatedContextTokens > 0) return allocatedContextTokens
+        val planned = plannedContext ?: return 0
+        val configured = LocalLlmPreferences.of(context).getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
+        return if (planned.modelRef == configured) planned.tokens else 0
+    }
 
     /**
-     * Records the resident model's context window and tells AI Core when it changed, so its
-     * history compaction resizes to it.
+     * Applies [change] to the window state and tells AI Core when the reported window changed, so
+     * its history compaction resizes to it.
      */
-    private fun updateContextWindow(tokens: Int) {
-        if (allocatedContextTokens == tokens) return
-        allocatedContextTokens = tokens
+    private fun updateContextWindow(change: () -> Unit) {
+        val before = getContextWindowTokens()
+        change()
+        if (getContextWindowTokens() == before) return
         try {
             SharedServices.get(LlmInferenceService::class.java)?.notifyBackendChanged(getId())
         } catch (e: Exception) {
@@ -232,6 +246,11 @@ class LocalLlmBackend(
         }
     }
 
+    /**
+     * The configured model's name, for the Agent's backend tag: the one the settings pane saved at
+     * selection, else a plain file path's own name. A `content://` reference with no saved name
+     * says nothing readable, so it reports none rather than a document id.
+     */
     override fun getActiveModelName(): String? {
         val prefs = LocalLlmPreferences.of(context)
         prefs.getString(LocalLlmPreferences.KEY_MODEL_NAME, null)?.trim()
@@ -441,6 +460,8 @@ class LocalLlmBackend(
             }
 
             val contextSize = resolveContextSize(modelRef, availableBytes, header, modelSizeBytes)
+            // Before the load, which takes seconds: a send queued behind a warm-up is sized now.
+            updateContextWindow { plannedContext = PlannedContext(modelRef, contextSize.contextTokens) }
 
             context.logger.info("Loading model: $modelRef via ${opened.nativePath}")
             try {
@@ -471,7 +492,11 @@ class LocalLlmBackend(
             releaseSupersededGrants(modelRef)
             startWatching(modelRef)
             context.logger.info("Model loaded successfully")
-            updateContextWindow(reportEffectiveContextSize(contextSize.contextTokens))
+            val effectiveTokens = reportEffectiveContextSize(contextSize.contextTokens)
+            updateContextWindow {
+                allocatedContextTokens = effectiveTokens
+                plannedContext = PlannedContext(modelRef, effectiveTokens)
+            }
         } finally {
             if (!adopted) opened.close()
         }
@@ -592,7 +617,7 @@ class LocalLlmBackend(
         openModel?.close()
         openModel = null
         lastProbeAnsweredNanos = 0L
-        updateContextWindow(0)
+        updateContextWindow { allocatedContextTokens = 0 }
     }
 
     /**

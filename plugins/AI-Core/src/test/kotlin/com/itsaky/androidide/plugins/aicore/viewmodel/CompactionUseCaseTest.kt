@@ -47,13 +47,22 @@ class CompactionUseCaseTest {
 
     @Test
     fun givenASmallRequest_whenEstimated_thenNothingIsCompactedUnlessForced() {
-        assertNull(useCase.estimateIfOverBudget(AiBackend.LOCAL_ID, "sys", emptyList(), history, "next", forced = false))
-        assertNotNull(useCase.estimateIfOverBudget(AiBackend.LOCAL_ID, "sys", emptyList(), history, "next", forced = true))
+        assertNull(useCase.estimateIfOverBudget(AiBackend.LOCAL_ID, "sys", emptyList(), history, "next", replyTokens = 1_000, forced = false))
+        assertNotNull(useCase.estimateIfOverBudget(AiBackend.LOCAL_ID, "sys", emptyList(), history, "next", replyTokens = 1_000, forced = true))
+    }
+
+    @Test
+    fun givenAHistoryThatFitsTheWindowButNotBesideTheReplyCap_whenEstimated_thenItIsCompacted() {
+        // 8,000-token window: ~4,700 tokens of history passes 80% of the 4,000 left after a 4,000 cap.
+        val long = listOf(ChatMessage(Role.USER, "x".repeat(14_000)), ChatMessage(Role.ASSISTANT, "ok"))
+
+        assertNull(useCase.estimateIfOverBudget("openai", "sys", emptyList(), long, "next", replyTokens = 0, forced = false))
+        assertNotNull(useCase.estimateIfOverBudget("openai", "sys", emptyList(), long, "next", replyTokens = 4_000, forced = false))
     }
 
     @Test
     fun givenAnEmptyHistory_whenForced_thenThereIsNothingToCompact() {
-        assertNull(useCase.estimateIfOverBudget(AiBackend.LOCAL_ID, "sys", emptyList(), emptyList(), "next", forced = true))
+        assertNull(useCase.estimateIfOverBudget(AiBackend.LOCAL_ID, "sys", emptyList(), emptyList(), "next", replyTokens = 1_000, forced = true))
     }
 
     @Test

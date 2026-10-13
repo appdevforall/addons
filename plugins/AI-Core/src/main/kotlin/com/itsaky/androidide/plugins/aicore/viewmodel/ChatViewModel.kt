@@ -373,12 +373,9 @@ class ChatViewModel(
      */
     private val lastRunUserMessageId = MutableStateFlow<String?>(null)
 
-    /** Whether the last run overflowed the context window; a Retry of it then compacts first. */
+    /** Whether the last run overflowed the context window; the next send or Retry compacts first. */
     @Volatile
     private var lastRunOverflowed = false
-
-    /** Set by [retryLastRun] for the run it starts; [launchRun] consumes it. Main only. */
-    private var forceCompactionNextRun = false
 
     /** The error rows that offer Retry: the last run's, while its retry point is known; see [RunRetry]. */
     internal val retryableErrorIds: StateFlow<Set<String>> =
@@ -942,7 +939,8 @@ class ChatViewModel(
         val llmService = passPreflight(userMessage) ?: return false
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) return false
-        launchRun(llmService, userMessage, contextFiles)
+        // An overflow's turns are still in the history, and the estimate that let it through missed.
+        launchRun(llmService, userMessage, contextFiles, forceCompaction = lastRunOverflowed)
         return true
     }
 
@@ -985,8 +983,14 @@ class ChatViewModel(
      * @param llmService the service [passPreflight] returned.
      * @param userMessage the prompt to send.
      * @param runFiles the attachments, read by the caller before anything it changed could move them.
+     * @param forceCompaction compact the history first whatever its estimate; see [fitHistory].
      */
-    private fun launchRun(llmService: LlmInferenceService, userMessage: String, runFiles: List<File>) {
+    private fun launchRun(
+        llmService: LlmInferenceService,
+        userMessage: String,
+        runFiles: List<File>,
+        forceCompaction: Boolean = false,
+    ) {
         AgentTrace.beginRun(currentBackendId, userMessage, runFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
@@ -1007,8 +1011,6 @@ class ChatViewModel(
         lastRunPrompt = userMessage
         lastRunUserMessageId.value = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
-        val forceCompaction = forceCompactionNextRun
-        forceCompactionNextRun = false
         lastRunOverflowed = false
         // Read once: prompt, grammar and executor must all describe the same tool set.
         val tools = agentTools
@@ -1077,7 +1079,7 @@ class ChatViewModel(
                 }
                 requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }
                 var firstTurn = true
-                // Whether the run's turns are dropped: kept, an overflow's resend grew the request it failed on.
+                // Whether the run's turns are dropped; only a Stop, so a failure keeps the tool calls that ran.
                 var rollBack = true
 
                 try {
@@ -1123,8 +1125,8 @@ class ChatViewModel(
                         }
                     }
                 } catch (e: Exception) {
-                    // The prompt and the tool calls that already ran stay, so a typed follow-up knows them.
-                    rollBack = e is ContextOverflowException || e is CancellationException
+                    // Kept on an overflow too: the next run compacts them, so the edits made are not repeated.
+                    rollBack = e is CancellationException
                     throw e
                 } finally {
                     // On Main, so a Stop, clear or chat switch can't bump the epoch between check and write.
@@ -1194,7 +1196,7 @@ class ChatViewModel(
     ): List<LlmInferenceService.ChatMessage> {
         val current = _history.value
         val estimate = compaction.estimateIfOverBudget(
-            currentBackendId, config.systemPrompt, toolDefinitions, current, pendingUserTurn, forced,
+            currentBackendId, config.systemPrompt, toolDefinitions, current, pendingUserTurn, config.maxTokens, forced,
         ) ?: return current
         AgentTrace.stage(
             "COMPACT",
@@ -1419,9 +1421,9 @@ class ChatViewModel(
     }
 
     /**
-     * Re-runs the last prompt, dropping the failed run's turns from [history] first: a denied tool
-     * leaves "FAILED: User denied permission" there, and retrying behind it had the model answer
-     * from that line rather than ask for the tool again, so the dialog never reappeared.
+     * Re-runs the last prompt, dropping the failed run's turns from [history] first (an overflow's
+     * are summarized instead): a denied tool leaves "FAILED: User denied permission" there, and the
+     * model answered from that line rather than ask for the tool again, so the dialog never reappeared.
      */
     fun retryLastRun() {
         val prompt = lastRunPrompt
@@ -1434,9 +1436,9 @@ class ChatViewModel(
             logDebug("retryLastRun: a run is already in flight")
             return
         }
-        _history.value = _history.value.take(historySizeBeforeLastRun)
-        forceCompactionNextRun = lastRunOverflowed
-        if (!sendMessage(prompt)) forceCompactionNextRun = false
+        // After an overflow the run's turns stay for the forced summary, which records what it changed.
+        if (!lastRunOverflowed) _history.value = _history.value.take(historySizeBeforeLastRun)
+        sendMessage(prompt)
     }
 
     /** How [editPrompt] ended, which decides whether the composer leaves edit mode. */

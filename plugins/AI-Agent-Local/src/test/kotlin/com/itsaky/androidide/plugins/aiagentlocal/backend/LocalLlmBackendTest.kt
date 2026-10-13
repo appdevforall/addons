@@ -83,6 +83,9 @@ class LocalLlmBackendTest {
         /** Whether the last load asked for a quantized KV cache, so that choice is observable. */
         var lastQuantizeKv = false
 
+        /** Runs inside each load, so a test can look at the backend while the weights load. */
+        var duringLoad: () -> Unit = {}
+
         override suspend fun load(
             nativePath: String,
             contextTokens: Int,
@@ -92,6 +95,7 @@ class LocalLlmBackendTest {
             loadCount++
             lastContextTokens = contextTokens
             lastQuantizeKv = quantizeKv
+            duringLoad()
         }
 
         override suspend fun unload() {
@@ -604,6 +608,53 @@ class LocalLlmBackendTest {
         assertThrows(ModelLoadException::class.java) {
             runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
         }
+
+        assertEquals(0, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenAModelLoading_whenAskedForTheContextWindow_thenTheSizeItWasGivenIsReported() {
+        // A send queued behind the warm-up is sized while the weights load, not at the floor.
+        configureModelPath(CONTENT_URI)
+        val engine = FakeEngine()
+        val backend = backendWith(FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel()))), engine)
+        var windowDuringLoad = 0
+        engine.duringLoad = { windowDuringLoad = backend.getContextWindowTokens() }
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(engine.lastContextTokens, windowDuringLoad)
+    }
+
+    @Test
+    fun givenTheConfiguredModelWasEvicted_whenAskedForTheContextWindow_thenItsLastSizeIsReported() {
+        // The send that reloads it is sized before the load, so it must not fall to the floor.
+        configureModelPath(CONTENT_URI)
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine().apply { createdContextTokens = 2048 }
+        val backend = backendWith(source, engine)
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals(2048, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenAnotherModelSelectedAfterAnEviction_whenAskedForTheContextWindow_thenItIsZero() {
+        // The old model's size says nothing about the new one's.
+        configureModelPath(CONTENT_URI)
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val backend = backendWith(source, FakeEngine())
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+
+        configureModelPath(OTHER_CONTENT_URI)
 
         assertEquals(0, backend.getContextWindowTokens())
     }
