@@ -93,6 +93,11 @@
             android:name="plugin.sidebar_items"
             android:value="0" />
 
+        <!-- One editor tab from getEditorTabs(): the bottom-sheet "Maps" tab. -->
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
+
         <!--
             No <activity> declarations: plugin APKs are loaded with
             DexClassLoader and never registered with the host's
