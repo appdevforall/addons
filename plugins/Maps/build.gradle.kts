@@ -88,7 +88,6 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // MapLibre OpenGL ES — Vulkan unreliable on API 26-29 target audience.
     // 13.x fixes PMTiles file-source range-header handling vs 11.x.

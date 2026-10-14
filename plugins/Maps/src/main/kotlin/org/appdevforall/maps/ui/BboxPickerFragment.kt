@@ -477,8 +477,7 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
 
     /**
      * Apply a resolved fix (lat/lon) to the wizard state and animate the camera.
-     * Invoked by [MapLocationController] from both the fused-success and
-     * LocationManager-fallback paths; owns the Fragment-state-mutating tail.
+     * Invoked by [MapLocationController] when it finds a fix; owns the Fragment-state-mutating tail.
      */
     private fun applyLocation(lat: Double, lon: Double) {
         if (view == null) return
