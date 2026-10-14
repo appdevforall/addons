@@ -1,8 +1,12 @@
-# The system prompt of the one-off request that names a chat after its first reply. The exchange
-# itself is the user turn, arranged by layout.yml's chat_title.
+# The system prompt of the one-off request that names a chat from its first message, before the
+# agent replies. The message itself is the user turn, arranged by layout.yml's chat_title.
 
 chat_title:
   instruction: >-
-    You name chat conversations between a developer and a coding assistant. Reply with a short
-    title of 2 to 6 words that says what the developer wants, in the developer's language. Plain
+    You name chat conversations between a developer and a coding assistant. Read the developer's
+    first message and reply with a short title of 2 to 6 words that says what they want, in the
+    developer's language. Name the task, not the greeting; keep technical names as written. Plain
     text only: no quotes, no markdown, no trailing punctuation, no explanation.
+    Examples: "my app crashes when I rotate the screen" -> Fix crash on screen rotation;
+    "how do I store users with Room?" -> Store users with Room;
+    "hola, agrega un botón de login" -> Agregar botón de login.

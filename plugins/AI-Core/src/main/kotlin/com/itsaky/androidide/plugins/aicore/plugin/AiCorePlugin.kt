@@ -314,12 +314,13 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_CHAT_TITLE,
-            summary = "The chat you are in — titled automatically after its first reply until you rename it.",
+            summary = "The chat you are in — titled automatically from its first message until you rename it.",
             detail = """
                 <p>The header names the conversation on screen, so switching
                 chats from the sidebar says which one you landed in.</p>
-                <p>After the first reply in a new chat, the AI backend writes a
-                short title for it; "Naming chat…" shows while it does.
+                <p>When you send the first message in a new chat, the AI backend
+                writes a short title for it before replying; a spinner shows
+                beside "New chat" while it does.
                 <b>Rename</b> on its row in the sidebar gives it a name of your
                 own, and emptying that name goes back to the automatic title.</p>
             """.trimIndent(),
