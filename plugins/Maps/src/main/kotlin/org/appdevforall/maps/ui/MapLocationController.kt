@@ -5,11 +5,9 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Location
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import com.google.android.gms.location.LocationServices
 import org.appdevforall.maps.MapsPlugin
 import org.appdevforall.maps.R
 import org.maplibre.android.location.LocationComponentActivationOptions
@@ -21,7 +19,8 @@ import org.maplibre.android.maps.Style
 /**
  * Owns the GPS-plumbing for [BboxPickerFragment] — the location permission check, the
  * permanently-denied recovery dialog, the MapLibre location component (blue dot), and
- * resolving a last-known fix (fused provider → system [LocationManager] fallback).
+ * resolving a last-known fix from the system [LocationManager]. No Play Services, so it works on
+ * devices without Google services, like the generated app.
  *
  * The controller does NOT mutate wizard/bbox state. When it resolves a location it calls
  * [onLocationFix]`(lat, lon)`, and the host Fragment is responsible for the state-mutating
@@ -159,39 +158,12 @@ class MapLocationController(
         fetchLastKnownLocation()
     }
 
-    @SuppressLint("MissingPermission")
-    fun fetchLastKnownLocation() {
-        val ctx = fragment.context ?: return
-        val client = LocationServices.getFusedLocationProviderClient(ctx)
-
-        // Step 1: fused getLastLocation — fast path. Returns null when no client
-        // has recently subscribed to updates (a known fused-provider quirk), even
-        // if Android's LocationManager holds an aged fix. Fall back below.
-        client.lastLocation
-            .addOnSuccessListener { loc: Location? ->
-                if (loc != null) {
-                    android.util.Log.i("BboxPicker", "fused.lastLocation: ${loc.latitude},${loc.longitude}")
-                    onLocationFix(loc.latitude, loc.longitude)
-                } else {
-                    android.util.Log.i("BboxPicker", "fused.lastLocation returned null; falling back to LocationManager")
-                    fallbackToLocationManager()
-                }
-            }
-            .addOnFailureListener {
-                android.util.Log.w("BboxPicker", "fused.lastLocation failed: ${it.message}; falling back to LocationManager")
-                fallbackToLocationManager()
-            }
-    }
-
     /**
-     * Permission-tolerant fallback when GMS' fused provider hands back null.
-     * Walks the system [LocationManager]'s passive → network → gps providers
-     * in order. Passive is cheapest (returns whatever any other app last cached);
-     * gps is the most stale-resistant but slowest to a first fix. Any non-null
-     * result wins.
+     * Report the first last-known fix from the passive, network and gps providers, in that order.
+     * Passive is cheapest (whatever another app last cached); gps is slowest to a first fix.
      */
     @SuppressLint("MissingPermission")
-    private fun fallbackToLocationManager() {
+    fun fetchLastKnownLocation() {
         val ctx = fragment.context ?: return
         val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
         val providers = listOf(
