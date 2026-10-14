@@ -194,9 +194,7 @@ class MapsPluginCoverageTest {
     @Test
     fun `tooltip entries expose the maps tab entry with an html tutorial button`() {
         val entries = MapsPlugin().getTooltipEntries()
-        assertEquals("exactly one tooltip entry", 1, entries.size)
-
-        val entry = entries[0]
+        val entry = entries.single { it.tag == MapsPlugin.TOOLTIP_TAG_MAPS_TAB }
         // The entry tag must match the tab's tooltipTag so the host can resolve it.
         assertEquals(MapsPlugin.TOOLTIP_TAG_MAPS_TAB, entry.tag)
         assertTrue("summary should be the HTML <b>Maps</b> headline",
@@ -209,6 +207,20 @@ class MapsPluginCoverageTest {
         // Tier-3 docs render in a WebView; the asset MUST be .html, not .md.
         assertEquals("osm-tutorial.html", button.uri)
         assertEquals(0, button.order)
+    }
+
+    @Test
+    fun `every tooltip tag the plugin attaches to UI has a registered entry`() {
+        val registered = MapsPlugin().getTooltipEntries().map { it.tag }.toSet()
+        // The tab and the New Project template card each carry a tag; an unregistered tag renders n/a.
+        assertEquals(
+            setOf(MapsPlugin.TOOLTIP_TAG_MAPS_TAB, MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE),
+            registered,
+        )
+        val template = MapsPlugin().getTooltipEntries()
+            .single { it.tag == MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE }
+        assertTrue(template.summary.contains("Offline OSM Map"))
+        assertEquals("osm-tutorial.html", template.buttons.single().uri)
     }
 
     @Test
