@@ -87,12 +87,13 @@ internal object ProjectMapEmitter {
             return EmitResult(success = false, reason = "source escapes cache root: $canonicalSrc")
         }
 
-        val mapsDir = File(appDir, MAPS_ASSETS_SUBPATH).apply { mkdirs() }
-        val canonicalMaps = mapsDir.canonicalFile
+        // Check containment before mkdirs, so a symlink out of the project gets no directory either.
+        val canonicalMaps = File(appDir, MAPS_ASSETS_SUBPATH).canonicalFile
         val canonicalApp = appDir.canonicalFile
         if (!canonicalMaps.toPath().startsWith(canonicalApp.toPath())) {
             return EmitResult(success = false, reason = "maps dir escapes project: $canonicalMaps")
         }
+        canonicalMaps.mkdirs()
 
         // Build the copy list: the required files that exist. A region missing
         // tiles.pmtiles is unusable, so require it.

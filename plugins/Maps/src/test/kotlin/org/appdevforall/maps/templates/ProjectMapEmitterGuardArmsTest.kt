@@ -81,4 +81,24 @@ class ProjectMapEmitterGuardArmsTest {
             File(outside, "tiles.pmtiles").exists(),
         )
     }
+
+    @Test
+    fun creates_nothing_outside_the_project_when_assets_symlinks_out() {
+        val project = tmp.newFolder("assetlinkproj")
+        val ktDir = File(project, "app/src/main/kotlin/com/example").apply { mkdirs() }
+        File(ktDir, "MapRegionActivity.kt").writeText("class MapRegionActivity")
+        val outside = tmp.newFolder("outside-assets")
+        try {
+            Files.createSymbolicLink(File(project, "app/src/main/assets").toPath(), outside.toPath())
+        } catch (e: Exception) {
+            assumeTrue("filesystem doesn't support symlinks here", false)
+        }
+        val cacheRoot = tmp.newFolder("cache2")
+
+        val result = ProjectMapEmitter.apply(project, seedRegion(cacheRoot), cacheRoot)
+
+        assertFalse(result.success)
+        // Creating the directory first and checking after left an empty maps/ in the link target.
+        assertFalse("no maps/ dir may be created through the link", File(outside, "maps").exists())
+    }
 }
