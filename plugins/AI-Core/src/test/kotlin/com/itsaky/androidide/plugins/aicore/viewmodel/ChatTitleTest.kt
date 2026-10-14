@@ -47,13 +47,12 @@ class ChatTitleTest {
     }
 
     @Test
-    fun givenALongExchange_whenBuildingThePrompt_thenEachSideIsCutAndItEndsOnTheTitleCue() {
-        // Letters that appear in none of the prompt's own labels.
-        val prompt = ChatTitle.prompt(shippedConfig, "q".repeat(5_000), "z".repeat(5_000))
+    fun givenALongMessage_whenBuildingThePrompt_thenItIsCutAndEndsOnTheTitleCue() {
+        // A letter that appears in none of the prompt's own labels.
+        val prompt = ChatTitle.prompt(shippedConfig, "q".repeat(5_000))
 
         assertTrue(prompt.endsWith("Title:"))
         assertEquals(ChatTitle.EXCERPT_CHARS, prompt.count { it == 'q' })
-        assertEquals(ChatTitle.EXCERPT_CHARS, prompt.count { it == 'z' })
     }
 
     @Test
@@ -62,17 +61,17 @@ class ChatTitleTest {
     }
 
     @Test
-    fun givenAnExchange_whenBuildingThePrompt_thenItIsFramedAsAConversation() {
+    fun givenAMessage_whenBuildingThePrompt_thenOnlyTheDevelopersWordsAreFramed() {
         assertEquals(
-            "Conversation:\nDeveloper: fix my build\nAssistant: Sync Gradle first.\n\nTitle:",
-            ChatTitle.prompt(shippedConfig, "  fix my build ", "Sync Gradle first."),
+            "Developer: fix my build\n\nTitle:",
+            ChatTitle.prompt(shippedConfig, "  fix my build "),
         )
     }
 
     @Test
-    fun givenAnExchangeThatLooksLikeATemplate_whenBuildingThePrompt_thenItIsInsertedVerbatim() {
+    fun givenAMessageThatLooksLikeATemplate_whenBuildingThePrompt_thenItIsInsertedVerbatim() {
         // The user's own words are data; rendering them would throw on a stray tag.
-        assertTrue(ChatTitle.prompt(shippedConfig, "{{#X}} name", "ok").contains("{{#X}} name"))
+        assertTrue(ChatTitle.prompt(shippedConfig, "{{#X}} name").contains("{{#X}} name"))
     }
 
     @Test
@@ -82,10 +81,10 @@ class ChatTitleTest {
 
     @Test
     fun givenANameTypoInTheLayout_whenChecked_thenTheProblemNamesTheText() {
-        val config = shippedWith("layout.yml") { it.replace("{{REPLY_TEXT}}", "{{REPLY_TXT}}") }
+        val config = shippedWith("layout.yml") { it.replace("{{USER_TEXT}}", "{{USER_TXT}}") }
 
         val problems = ChatTitle.problems(config)
 
-        assertEquals(listOf("layout.yml: layout.chat_title: unknown name {{REPLY_TXT}}"), problems)
+        assertEquals(listOf("layout.yml: layout.chat_title: unknown name {{USER_TXT}}"), problems)
     }
 }

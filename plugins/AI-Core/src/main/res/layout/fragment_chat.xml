@@ -37,6 +37,7 @@
           <!-- Beside the title while the backend is naming the chat; ChatFragment shows it. -->
           <ProgressBar
               android:id="@+id/chat_title_progress"
+              android:contentDescription="@string/session_title_generating"
               style="?android:attr/progressBarStyleSmall"
               android:layout_width="@dimen/chat_title_progress_size"
               android:layout_height="@dimen/chat_title_progress_size"

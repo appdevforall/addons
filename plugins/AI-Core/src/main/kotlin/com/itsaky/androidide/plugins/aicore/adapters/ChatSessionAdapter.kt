@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.ProgressBar
 import androidx.core.view.isVisible
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -43,6 +44,7 @@ class ChatSessionAdapter(
         val activeMarker: ImageView = view.findViewById(R.id.session_active_marker)
         val checkbox: MaterialCheckBox = view.findViewById(R.id.session_checkbox)
         val title: TextView = view.findViewById(R.id.session_title)
+        val titleProgress: ProgressBar = view.findViewById(R.id.session_title_progress)
         val subtitle: TextView = view.findViewById(R.id.session_subtitle)
         val menu: ImageButton = view.findViewById(R.id.session_row_menu)
 
@@ -73,6 +75,7 @@ class ChatSessionAdapter(
         holder.row = row
 
         holder.title.text = row.title
+        holder.titleProgress.isVisible = row.isTitlePending
         holder.subtitle.text = resources.getString(
             R.string.session_subtitle,
             row.date,
