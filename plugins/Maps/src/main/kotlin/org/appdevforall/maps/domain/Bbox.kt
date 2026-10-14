@@ -5,7 +5,8 @@ import kotlin.math.max
 import kotlin.math.pow
 
 /**
- * WGS84 bounding box, ordered south, west, north, east. All in degrees.
+ * WGS84 bounding box, ordered south, west, north, east. All in degrees. A data class so log
+ * lines print the four edges and two boxes with the same edges are equal.
  *
  * The wizard's bbox picker drives this object directly; the tile estimator and
  * downloader read from it. A pure value type with no Android dependencies.
@@ -14,7 +15,7 @@ import kotlin.math.pow
  * pass it through their callbacks without Kotlin's "exposes internal type"
  * diagnostic — it's still semantically plugin-internal.
  */
-class Bbox(
+data class Bbox(
     val south: Double,
     val west: Double,
     val north: Double,
@@ -32,7 +33,7 @@ class Bbox(
         return haversineKm(midLat, west, midLat, east)
     }
 
-    /** Height of the box, in kilometres (latitude span × 111.32). */
+    /** Height of the box along its west edge, in kilometres (great-circle distance). */
     fun heightKm(): Double = haversineKm(south, west, north, west)
 
     /**
