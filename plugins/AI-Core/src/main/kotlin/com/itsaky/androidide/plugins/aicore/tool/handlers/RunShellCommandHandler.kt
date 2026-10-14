@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.SHELL_STAGE
@@ -16,10 +17,12 @@ import kotlin.time.measureTimedValue
  * Handler for running a shell command or script with bash in the IDE's visible Terminal, so the
  * user sees what ran. The host reuses an idle session and opens another only while one is busy,
  * e.g. with a dev server. Stop interrupts the command; Android's sandbox bounds what it can reach.
+ * The output's end is sized to [budget].
  */
 class RunShellCommandHandler(
     pluginContext: PluginContext,
     private val startedCommands: StartedCommands = StartedCommands(),
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
     override val toolName = TOOL_NAME
 
@@ -77,7 +80,7 @@ class RunShellCommandHandler(
             if (outcome is TerminalCommandResult.Running) {
                 startedCommands.record(outcome.commandId, invocation.command, outcome.sessionName)
             }
-            resultFor(outcome)
+            resultFor(outcome, budget.dataChars())
         }
     }
 
@@ -106,18 +109,19 @@ class RunShellCommandHandler(
         /**
          * The tool result for [outcome]: a command that exited succeeds whatever its code, as grep
          * finding nothing exits 1; one still running (a server, or a prompt) returns its output so far.
+         * @param maxChars the most the result's data may carry, the still-running note included.
          */
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
-        internal fun resultFor(outcome: TerminalCommandResult): ToolResult = when (outcome) {
+        internal fun resultFor(outcome: TerminalCommandResult, maxChars: Int): ToolResult = when (outcome) {
             is TerminalCommandResult.Completed -> ToolResult.success(
                 message = "Command ${TerminalOutput.exitOf(outcome.exitCode)}",
-                data = TerminalOutput.tailOf(outcome.output)
+                data = TerminalOutput.tailOf(outcome.output, maxChars)
             )
             is TerminalCommandResult.Running -> ToolResult.success(
                 message = "Command is still running in Terminal session \"${outcome.sessionName}\" " +
                     "with command id \"${outcome.commandId}\"",
-                data = "$STILL_RUNNING_NOTE\n\n${TerminalOutput.tailOf(outcome.output)}"
+                data = "$STILL_RUNNING_NOTE\n\n${TerminalOutput.tailOf(outcome.output, maxChars - STILL_RUNNING_NOTE.length - 2)}"
             )
             // The reason says what would help: a mistyped directory, or a session to stop first.
             is TerminalCommandResult.NotStarted -> ToolResult.failure(

@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.LogSource
 
 /**
@@ -16,19 +17,21 @@ object BuiltInToolHandlers {
      * Builds one handler per built-in tool, the web tools included.
      * @param context the plugin context each handler works through.
      * @param webSearch runs one web search through the active backend.
+     * @param budget the per-result cap the agent loop applies, which paged and windowed reads fit.
      * @return the handlers, read-only tools first.
      */
     fun create(
         context: PluginContext,
         webSearch: suspend (String) -> ToolResult = { ToolResult.failure("Web search is unavailable") },
+        budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
     ): List<ToolHandler> = listOf(
         // Read-only tools
-        ReadFileHandler(context),
+        ReadFileHandler(context, budget),
         ListFilesHandler(context),
         SearchProjectHandler(context),
         OpenFileHandler(context),
-        ReadBuildOutputHandler(context),
-    ) + (if (hostHasLogApi()) LogToolHandlers.create(context) else emptyList()) + listOf(
+        ReadBuildOutputHandler(context, budget),
+    ) + (if (hostHasLogApi()) LogToolHandlers.create(context, budget) else emptyList()) + listOf(
         // Write tools
         CreateFileHandler(context),
         UpdateFileHandler(context),
@@ -37,13 +40,13 @@ object BuiltInToolHandlers {
         // Build tools
         RunAppHandler(context, hasLogTools = hostHasLogApi()),
         GradleSyncHandler(context),
-    ) + (if (hostHasGradleTaskApi()) listOf(RunGradleTaskHandler(context)) else emptyList()) +
-        (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context)) else emptyList()) +
+    ) + (if (hostHasGradleTaskApi()) listOf(RunGradleTaskHandler(context, budget)) else emptyList()) +
+        (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context, budget)) else emptyList()) +
         (if (hostHasTerminalService(context)) StartedCommands().let { started ->
             listOf(
-                RunShellCommandHandler(context, started),
-                ReadTerminalCommandHandler(context),
-                StopTerminalCommandHandler(context, started),
+                RunShellCommandHandler(context, started, budget),
+                ReadTerminalCommandHandler(context, budget),
+                StopTerminalCommandHandler(context, started, budget),
             )
         } else emptyList()) +
         listOf(
@@ -75,8 +78,8 @@ object BuiltInToolHandlers {
 
 /** The log tools, kept apart so [LogSource] is only touched on a host that has it. */
 private object LogToolHandlers {
-    fun create(context: PluginContext): List<ToolHandler> = listOf(
-        ReadLogsHandler(context, LogSource.APP),
-        ReadLogsHandler(context, LogSource.IDE),
+    fun create(context: PluginContext, budget: ToolOutputBudget): List<ToolHandler> = listOf(
+        ReadLogsHandler(context, LogSource.APP, budget),
+        ReadLogsHandler(context, LogSource.IDE, budget),
     )
 }

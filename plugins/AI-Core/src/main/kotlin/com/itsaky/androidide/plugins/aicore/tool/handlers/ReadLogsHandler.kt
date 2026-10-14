@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.services.IdeLogService
 import com.itsaky.androidide.plugins.services.LogLevel
@@ -13,11 +14,13 @@ import kotlinx.coroutines.CancellationException
 
 /**
  * Handler for reading one of the IDE's log tabs: App Logs (`read_app_logs`, the user's running
- * app) or IDE Logs (`read_ide_logs`, CoGo and its plugins). Read-only, so it never asks.
+ * app) or IDE Logs (`read_ide_logs`, CoGo and its plugins), windowed to fit [budget]. Read-only,
+ * so it never asks.
  */
 class ReadLogsHandler(
     private val pluginContext: PluginContext,
     private val source: LogSource,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
     private val tab = tabFor(source)
 
@@ -61,7 +64,7 @@ class ReadLogsHandler(
                 AgentTrace.detail("LOGS", "$toolName lines=0 levels=$levels filter=${filter.isNotEmpty()}")
                 ToolResult.success(message = "No $label", data = emptyMessage(filter, levels))
             } else {
-                val window = LogWindowCalculator.windowFor(result.entries, result.truncated)
+                val window = LogWindowCalculator(budget.dataChars()).windowFor(result.entries, result.truncated)
                 AgentTrace.detail(
                     "LOGS",
                     "$toolName lines=${result.entries.size} chars=${window.text.length} " +

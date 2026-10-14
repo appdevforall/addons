@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.IdeTerminalService
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
 
@@ -12,7 +13,8 @@ import com.itsaky.androidide.plugins.services.TerminalCommandResult
  */
 class ReadTerminalCommandHandler(
     pluginContext: PluginContext,
-) : TerminalCommandHandler(pluginContext, TOOL_NAME) {
+    budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
+) : TerminalCommandHandler(pluginContext, TOOL_NAME, budget) {
 
     // Reads output of a command the user already approved; changes nothing.
     override val requiresApproval = false
@@ -22,13 +24,13 @@ class ReadTerminalCommandHandler(
 
     override fun running(commandId: String, running: TerminalCommandResult.Running) = ToolResult.success(
         message = "Command \"$commandId\" is still running in Terminal session \"${running.sessionName}\"",
-        data = TerminalOutput.tailOf(running.output)
+        data = TerminalOutput.tailOf(running.output, budget.dataChars())
     )
 
     // Any exit code succeeds, as in RunShellCommandHandler: the model reads what the code means.
     override fun completed(commandId: String, completed: TerminalCommandResult.Completed) = ToolResult.success(
         message = "Command \"$commandId\" ${TerminalOutput.exitOf(completed.exitCode)}",
-        data = TerminalOutput.tailOf(completed.output)
+        data = TerminalOutput.tailOf(completed.output, budget.dataChars())
     )
 
     companion object {
