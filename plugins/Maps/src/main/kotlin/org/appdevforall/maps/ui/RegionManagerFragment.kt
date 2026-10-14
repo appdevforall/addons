@@ -516,8 +516,10 @@ class RegionManagerFragment : Fragment(),
                             }
                         }
                     }
-                    val msg = if (ok) "Deleted ${info.displayName}"
-                    else "Couldn't delete ${info.displayName}"
+                    val msg = getString(
+                        if (ok) R.string.maps_regions_deleted else R.string.maps_regions_delete_failed,
+                        info.displayName,
+                    )
                     Snackbar.make(requireView(), msg, Snackbar.LENGTH_SHORT).show()
                     refresh()
                 }
