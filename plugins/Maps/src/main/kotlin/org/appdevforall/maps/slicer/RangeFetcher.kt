@@ -89,13 +89,8 @@ internal object HttpRangeByteCache {
     }
 
     /**
-     * Drop every entry. Call before a download starts — the cache is intended
-     * for the bbox-picker's rapid-pan estimate loop, where we WANT stale-OK
-     * reads. A download is a different contract: the produced .pmtiles must
-     * match the upstream archive's *current* bytes, so we re-read everything
-     * fresh. Without this, an upstream mid-session swap of the archive at the
-     * same URL (the weekly OSM updates IIAB tracks) would produce a header from
-     * version N glued to leaf bytes from version N+1 — silently broken.
+     * Drop every entry. Call before a download starts: the estimate loop tolerates stale reads,
+     * but a download must not pair a cached header with leaves from a file replaced at the same URL.
      */
     @Synchronized
     fun clear() {

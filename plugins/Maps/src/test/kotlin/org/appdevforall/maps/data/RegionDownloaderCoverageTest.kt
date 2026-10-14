@@ -214,6 +214,32 @@ class RegionDownloaderCoverageTest {
     }
 
     @Test
+    fun `a download reads the archive named in IIAB's catalog, not the fallback date`() = runBlocking {
+        val catalog = """{"data":{"vector":{"14":"https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"}}}"""
+        val resolver = IiabArchiveResolver { catalog }
+        assertEquals(
+            "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles",
+            RegionDownloader.resolveTilesUrl(SourceKind.INTERNET, null, resolver),
+        )
+        // The estimate path reads the same resolved archive without I/O.
+        assertEquals(
+            RegionDownloader.resolveTilesUrl(SourceKind.INTERNET, null, resolver),
+            RegionDownloader.buildTilesUrl(SourceKind.INTERNET, null, resolver),
+        )
+    }
+
+    @Test
+    fun `a LAN download keeps the fallback name and never fetches the catalog`() = runBlocking {
+        var fetched = false
+        val resolver = IiabArchiveResolver { fetched = true; null }
+        assertEquals(
+            "http://box.local/maps/$tilesFile",
+            RegionDownloader.resolveTilesUrl(SourceKind.IIAB_LAN, "box.local", resolver),
+        )
+        assertFalse(fetched)
+    }
+
+    @Test
     fun `buildTilesUrl requires a non-blank host for a LAN source`() {
         try {
             RegionDownloader.buildTilesUrl(SourceKind.IIAB_LAN, sourceHost = "  ")
