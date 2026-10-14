@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Talks JSON-RPC to remote MCP servers over HTTPS (McpHttpClient, raw HttpURLConnection) -->
+    <!-- Talks JSON-RPC to MCP servers over HTTPS, or HTTP on this device (McpHttpClient) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -39,12 +39,12 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
-             this plugin reports one ToolGroup per server and its health (ADFA-6278).
-             Do not lower it. -->
+        <!-- 26.42: the first release whose plugin-api carries ServerUrl, which McpUrlPolicy
+             uses to allow http:// only to this device (ADFA-6314). 26.41 brought the
+             capability-tag contract (ADFA-6278). Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.41" />
+            android:value="26.42" />
 
         <meta-data
             android:name="plugin.max_ide_version"

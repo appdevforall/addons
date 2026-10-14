@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCleartextException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCredential
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
@@ -69,6 +70,9 @@ sealed interface McpFailure {
     /** The keystore would not open a stored credential just now, so nothing was sent — retry. */
     data object SecretUnavailable : McpFailure
 
+    /** An `http://` URL off this device, refused before anything was sent. */
+    data object CleartextRefused : McpFailure
+
     /** The server redirected somewhere the request cannot be repeated with its credentials. */
     data object RedirectRefused : McpFailure
 
@@ -93,6 +97,7 @@ object McpErrorFormatter {
         // Before the IOException branches below, which it is one of.
         is UnreadableSecretException -> McpFailure.SecretUnreadable
         is UnavailableSecretException -> McpFailure.SecretUnavailable
+        is McpCleartextException -> McpFailure.CleartextRefused
         is McpRedirectException -> McpFailure.RedirectRefused
         is McpHttpException -> forStatus(error.statusCode, error.credential)
         is McpProtocolException -> McpFailure.Rejected(error.message.orEmpty())
@@ -132,6 +137,7 @@ object McpErrorFormatter {
                 context.getString(R.string.mcp_error_secret_unreadable, serverName)
             McpFailure.SecretUnavailable ->
                 context.getString(R.string.mcp_error_secret_unavailable, serverName)
+            McpFailure.CleartextRefused -> context.getString(R.string.mcp_error_cleartext, serverName)
             McpFailure.RedirectRefused ->
                 context.getString(R.string.mcp_error_redirect_refused, serverName)
             is McpFailure.ServerError ->

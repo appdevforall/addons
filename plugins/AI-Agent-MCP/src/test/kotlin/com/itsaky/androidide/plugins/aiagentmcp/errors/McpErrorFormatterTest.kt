@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCleartextException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCredential
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
@@ -45,6 +46,14 @@ class McpErrorFormatterTest {
         val failure = McpErrorFormatter.classify(McpRedirectException("off origin"))
 
         assertEquals(McpFailure.RedirectRefused, failure)
+    }
+
+    @Test
+    fun givenARefusedCleartextUrl_whenClassified_thenItPointsAtTheUrlRatherThanTheNetwork() {
+        // Nothing was sent: the fix is switching the saved URL to https://, not checking Wi-Fi.
+        val failure = McpErrorFormatter.classify(McpCleartextException("off device"))
+
+        assertEquals(McpFailure.CleartextRefused, failure)
     }
 
     @Test
