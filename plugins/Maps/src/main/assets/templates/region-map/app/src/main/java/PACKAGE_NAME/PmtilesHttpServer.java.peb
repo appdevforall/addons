@@ -93,23 +93,12 @@ public class PmtilesHttpServer {
             // in the request path has no legitimate use here.
             if (path.contains("..")) { writeStatus(out, 404, "Not Found"); return; }
 
-            long rangeStart = 0;
-            long rangeEnd = -1;
+            String rangeSpec = null;
             String line;
             while ((line = r.readLine()) != null && !line.isEmpty()) {
                 if (line.regionMatches(true, 0, "Range:", 0, 6)) {
                     String v = line.substring(6).trim();
-                    if (v.startsWith("bytes=")) {
-                        String spec = v.substring(6);
-                        int dash = spec.indexOf('-');
-                        if (dash > 0) {
-                            try { rangeStart = Long.parseLong(spec.substring(0, dash)); } catch (Exception ignored) {}
-                            String rest = spec.substring(dash + 1);
-                            if (!rest.isEmpty()) {
-                                try { rangeEnd = Long.parseLong(rest); } catch (Exception ignored) {}
-                            }
-                        }
-                    }
+                    if (v.startsWith("bytes=")) rangeSpec = v.substring(6);
                 }
             }
 
@@ -118,11 +107,12 @@ public class PmtilesHttpServer {
             catch (IOException e) { writeStatus(out, 404, "Not Found"); return; }
             long totalLen = afd.getLength();
             try {
-                if (rangeEnd < 0 || rangeEnd >= totalLen) rangeEnd = totalLen - 1;
-                if (rangeStart < 0) rangeStart = 0;
-                if (rangeStart >= totalLen) {
+                long[] range = resolveRange(rangeSpec, totalLen);
+                if (range == null) {
                     writeStatus(out, 416, "Requested Range Not Satisfiable"); return;
                 }
+                long rangeStart = range[0];
+                long rangeEnd = range[1];
                 long sliceLen = rangeEnd - rangeStart + 1;
                 boolean partial = (rangeStart != 0) || (rangeEnd != totalLen - 1);
 
@@ -162,6 +152,34 @@ public class PmtilesHttpServer {
             }
         } catch (Exception e) {
             Log.w(TAG, "handle: " + e);
+        }
+    }
+
+    /**
+     * The {@code {start, end}} bytes (inclusive) a {@code Range: bytes=} value asks for, or null
+     * when it cannot be satisfied. Handles {@code a-b}, {@code a-} and the suffix form {@code -n};
+     * a missing or malformed value (including several ranges) means the whole file.
+     */
+    static long[] resolveRange(String spec, long totalLen) {
+        long last = totalLen - 1;
+        long[] whole = {0, last};
+        if (spec == null) return totalLen > 0 ? whole : null;
+        int dash = spec.indexOf('-');
+        if (dash < 0 || spec.indexOf(',') >= 0) return whole;
+        try {
+            String head = spec.substring(0, dash).trim();
+            String tail = spec.substring(dash + 1).trim();
+            if (head.isEmpty()) {
+                long suffix = Long.parseLong(tail);
+                if (suffix <= 0 || totalLen == 0) return null;
+                return new long[] {Math.max(0, totalLen - suffix), last};
+            }
+            long start = Long.parseLong(head);
+            long end = tail.isEmpty() ? last : Math.min(Long.parseLong(tail), last);
+            if (start >= totalLen) return null;
+            return end < start ? whole : new long[] {start, end};
+        } catch (NumberFormatException e) {
+            return whole;
         }
     }
 

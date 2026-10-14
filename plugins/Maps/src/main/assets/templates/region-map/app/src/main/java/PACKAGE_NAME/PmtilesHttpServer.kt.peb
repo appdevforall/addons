@@ -83,22 +83,13 @@ class PmtilesHttpServer(
                 // ".." in the request path has no legitimate use here.
                 if (path.contains("..")) { writeStatus(out, 404, "Not Found"); return }
 
-                var rangeStart = 0L
-                var rangeEnd = -1L
+                var rangeSpec: String? = null
                 var line: String?
                 while (r.readLine().also { line = it } != null && !line.isNullOrEmpty()) {
                     val l = line ?: continue
                     if (l.regionMatches(0, "Range:", 0, 6, ignoreCase = true)) {
                         val v = l.substring(6).trim()
-                        if (v.startsWith("bytes=")) {
-                            val spec = v.substring(6)
-                            val dash = spec.indexOf('-')
-                            if (dash > 0) {
-                                spec.substring(0, dash).toLongOrNull()?.let { rangeStart = it }
-                                val rest = spec.substring(dash + 1)
-                                if (rest.isNotEmpty()) rest.toLongOrNull()?.let { rangeEnd = it }
-                            }
-                        }
+                        if (v.startsWith("bytes=")) rangeSpec = v.substring(6)
                     }
                 }
 
@@ -109,11 +100,11 @@ class PmtilesHttpServer(
                 }
                 val totalLen = afd.length
                 try {
-                    if (rangeEnd < 0 || rangeEnd >= totalLen) rangeEnd = totalLen - 1
-                    if (rangeStart < 0) rangeStart = 0
-                    if (rangeStart >= totalLen) {
+                    val range = resolveRange(rangeSpec, totalLen)
+                    if (range == null) {
                         writeStatus(out, 416, "Requested Range Not Satisfiable"); return
                     }
+                    val (rangeStart, rangeEnd) = range
                     val sliceLen = rangeEnd - rangeStart + 1
                     val partial = rangeStart != 0L || rangeEnd != totalLen - 1
 
@@ -167,6 +158,30 @@ class PmtilesHttpServer(
     private companion object {
         const val TAG = "PmtilesHttpServer"
         const val BUF = 64 * 1024
+
+        /**
+         * The (start, end) bytes (inclusive) a `Range: bytes=` value asks for, or null when it
+         * cannot be satisfied. Handles `a-b`, `a-` and the suffix form `-n`; a missing or
+         * malformed value (including several ranges) means the whole file.
+         */
+        fun resolveRange(spec: String?, totalLen: Long): Pair<Long, Long>? {
+            val last = totalLen - 1
+            val whole = 0L to last
+            if (spec == null) return if (totalLen > 0) whole else null
+            val dash = spec.indexOf('-')
+            if (dash < 0 || ',' in spec) return whole
+            val head = spec.substring(0, dash).trim()
+            val tail = spec.substring(dash + 1).trim()
+            if (head.isEmpty()) {
+                val suffix = tail.toLongOrNull() ?: return whole
+                if (suffix <= 0 || totalLen == 0L) return null
+                return maxOf(0L, totalLen - suffix) to last
+            }
+            val start = head.toLongOrNull() ?: return whole
+            val end = if (tail.isEmpty()) last else minOf(tail.toLongOrNull() ?: return whole, last)
+            if (start >= totalLen) return null
+            return if (end < start) whole else start to end
+        }
 
         /**
          * Skips exactly [n] bytes of [input]. `InputStream.skip` may return 0 before the end of
