@@ -11,6 +11,7 @@ import java.nio.file.Files
 import javax.tools.ToolProvider
 import org.junit.AfterClass
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Test
@@ -61,10 +62,39 @@ class PmtilesHttpServerTemplateTest {
         assertEquals('c'.code, input.read())
     }
 
+    private fun range(spec: String?, total: Long): List<Long>? =
+        (invoke(resolveRange, spec, total) as LongArray?)?.toList()
+
+    @Test
+    fun `resolveRange serves the last n bytes for a suffix range`() {
+        // Ignoring "-500" would answer 200 with the whole file.
+        assertEquals(listOf(500L, 999L), range("-500", 1000))
+        assertEquals("a suffix longer than the file is the whole file", listOf(0L, 999L), range("-5000", 1000))
+        assertNull("a zero-length suffix cannot be satisfied", range("-0", 1000))
+    }
+
+    @Test
+    fun `resolveRange handles closed, open and out-of-range starts`() {
+        assertEquals(listOf(0L, 999L), range(null, 1000))
+        assertEquals(listOf(10L, 19L), range("10-19", 1000))
+        assertEquals(listOf(10L, 999L), range("10-", 1000))
+        assertEquals("an end past the file is clamped", listOf(10L, 999L), range("10-5000", 1000))
+        assertNull("a start past the file cannot be satisfied", range("1000-", 1000))
+        assertNull("an empty file cannot be served", range(null, 0))
+    }
+
+    @Test
+    fun `resolveRange treats malformed and multi-range values as the whole file`() {
+        for (spec in listOf("abc", "5-x", "1-2,4-5", "20-10", "")) {
+            assertEquals("spec '$spec'", listOf(0L, 999L), range(spec, 1000))
+        }
+    }
+
     companion object {
         private lateinit var outDir: File
         private lateinit var serverClass: Class<*>
         private lateinit var skipFully: Method
+        private lateinit var resolveRange: Method
 
         private val template =
             File("src/main/assets/templates/region-map/app/src/main/java/PACKAGE_NAME/PmtilesHttpServer.java.peb")
@@ -88,6 +118,8 @@ class PmtilesHttpServerTemplateTest {
             val loader = URLClassLoader(arrayOf(outDir.toURI().toURL()), PmtilesHttpServerTemplateTest::class.java.classLoader)
             serverClass = loader.loadClass("gen.test.PmtilesHttpServer")
             skipFully = serverClass.getDeclaredMethod("skipFully", InputStream::class.java, Long::class.javaPrimitiveType)
+                .apply { isAccessible = true }
+            resolveRange = serverClass.getDeclaredMethod("resolveRange", String::class.java, Long::class.javaPrimitiveType)
                 .apply { isAccessible = true }
         }
 
