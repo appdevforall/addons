@@ -165,4 +165,25 @@ class MapTemplateBuilderBuildTest {
         assertTrue("expected FileNotFoundException, got $thrown", thrown is FileNotFoundException)
         assertTrue("nothing may be registered", svc.registered.isEmpty())
     }
+
+    @Test
+    fun `an unreadable repo manifest fails the build`() {
+        val assets = TestAssetManagers.create { path ->
+            if (path.endsWith("repo-manifest.txt")) {
+                object : java.io.InputStream() {
+                    override fun read(): Int = throw java.io.IOException("manifest unreadable")
+                }
+            } else {
+                File(assetsRoot, path).takeIf { it.isFile }?.inputStream()
+            }
+        }
+        val svc = RecordingTemplateService(accept = true)
+
+        val thrown = runCatching {
+            MapTemplateBuilder.buildAndRegister(AssetPluginContext(assets), svc, File(tmp.root, "out"))
+        }.exceptionOrNull()
+
+        assertEquals("manifest unreadable", thrown?.message)
+        assertTrue(svc.registered.isEmpty())
+    }
 }
