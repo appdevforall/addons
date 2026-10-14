@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentlocal.packaging
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,6 +22,9 @@ class PrebuiltAarAbiTest {
 
     private val expectedAbi: String = System.getProperty("expectedAbi") ?: DEFAULT_ABI
 
+    private val wrapperSource: File =
+        File(System.getProperty("llamaAndroidSourcePath") ?: WRAPPER_SOURCE_RELATIVE_PATH)
+
     // One pass over the archive; every test reads this map instead of reopening it.
     private val jniLibs: Map<String, Long> by lazy {
         ZipFile(aar).use { zip ->
@@ -30,6 +34,8 @@ class PrebuiltAarAbiTest {
                 .associate { it.name to it.size }
         }
     }
+
+    private val wrapperEntry = "jni/$expectedAbi/libllama-android.so"
 
     private fun abisPresent(): Set<String> =
         jniLibs.keys.map { it.removePrefix("jni/").substringBefore('/') }.toSet()
@@ -64,7 +70,7 @@ class PrebuiltAarAbiTest {
 
     @Test
     fun givenTheCommittedAar_whenInspected_thenTheJniWrapperIsNotEmpty() {
-        val size = jniLibs["jni/$expectedAbi/libllama-android.so"] ?: -1
+        val size = jniLibs[wrapperEntry] ?: -1
         assertTrue("libllama-android.so is missing or empty (size=$size)", size > 0)
     }
 
@@ -83,6 +89,31 @@ class PrebuiltAarAbiTest {
             offenders,
         )
     }
+
+    @Test
+    fun givenTheCommittedAar_whenInspected_thenTheJniWrapperWasBuiltFromTheCommittedSource() {
+        // CI never compiles the .cpp, so an edit that skipped rebuild-llama-aar.sh would ship as a no-op.
+        assertTrue("AAR has no $wrapperEntry to read a stamp from", wrapperEntry in jniLibs)
+        val expected = SOURCE_STAMP_PREFIX + sha256Hex(wrapperSource.readText().replace("\r", ""))
+        val binary = String(wrapperBytes(), Charsets.ISO_8859_1)
+        val found = Regex(Regex.escape(SOURCE_STAMP_PREFIX) + "[0-9a-f]{64}").find(binary)?.value
+        assertEquals(
+            "libllama-android.so was not built from ${wrapperSource.path}; run" +
+                " scripts/rebuild-llama-aar.sh and commit the AAR (no stamp means it predates the check)",
+            expected,
+            found,
+        )
+    }
+
+    /** The whole JNI wrapper library; the stamp sits in its read-only data, so no prefix suffices. */
+    private fun wrapperBytes(): ByteArray = ZipFile(aar).use { zip ->
+        zip.getInputStream(zip.getEntry(wrapperEntry)).use { it.readBytes() }
+    }
+
+    private fun sha256Hex(text: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(text.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     /**
      * The PT_LOAD segment alignments of one ELF64 shared library in the AAR.
@@ -117,6 +148,11 @@ class PrebuiltAarAbiTest {
         const val DEFAULT_ABI = "arm64-v8a"
 
         const val AAR_RELATIVE_PATH = "libs/v8/llama-v8-release.aar"
+
+        const val WRAPPER_SOURCE_RELATIVE_PATH = "llama-impl/src/main/cpp/llama-android.cpp"
+
+        /** Must match SOURCE_STAMP in llama-android.cpp; the hash CMake appends follows it. */
+        const val SOURCE_STAMP_PREFIX = "llama-android-source-sha256:"
 
         /** The 16 KB page size arm64 Android may use; segments must align to it or the loader rejects. */
         const val MIN_SEGMENT_ALIGNMENT = 16384L

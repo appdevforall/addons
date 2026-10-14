@@ -27,6 +27,16 @@
 #define LOGv(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #endif
 
+#ifndef LLAMA_ANDROID_SOURCE_SHA256
+#error "LLAMA_ANDROID_SOURCE_SHA256 is set by CMakeLists.txt; build through it"
+#endif
+
+/**
+ * This file's own SHA-256, as CMake hashed it. PrebuiltAarAbiTest finds it in the committed .so, so
+ * an edit here that was never rebuilt into the AAR fails a test instead of shipping as a no-op.
+ */
+static const char SOURCE_STAMP[] = "llama-android-source-sha256:" LLAMA_ANDROID_SOURCE_SHA256;
+
 jclass la_int_var;
 jmethodID la_int_var_value;
 jmethodID la_int_var_inc;
@@ -335,6 +345,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_log_from_native_method = env->GetStaticMethodID(g_llama_android_class, "logFromNative",
                                                       "(ILjava/lang/String;)V");
     if (!g_log_from_native_method) return -1;
+
+    // Also the reference that keeps the linker from discarding the stamp; names the build in a report.
+    LOGi("jni: loaded, %s", SOURCE_STAMP);
 
     return JNI_VERSION_1_6;
 }

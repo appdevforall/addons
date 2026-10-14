@@ -2,9 +2,9 @@
 #
 # Regenerate the prebuilt llama.cpp AAR consumed by the ai-agent-local plugin.
 #
-# You only need this after bumping the llama.cpp submodule (i.e. when your fork
-# is updated). A normal plugin build does NOT use this script — it consumes the
-# committed AAR directly.
+# You need this after bumping the llama.cpp submodule or editing
+# llama-impl/src/main/cpp/llama-android.cpp; PrebuiltAarAbiTest fails until you do.
+# A normal plugin build does NOT use this script — it consumes the committed AAR.
 #
 # Requirements: the llama.cpp submodule and an Android NDK/CMake toolchain
 # (ANDROID_HOME / sdk.dir configured, NDK installed).

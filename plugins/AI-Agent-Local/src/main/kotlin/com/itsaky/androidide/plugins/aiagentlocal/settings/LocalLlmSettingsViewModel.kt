@@ -575,8 +575,8 @@ class LocalLlmSettingsViewModel(
     ): Boolean {
         val modelName = fileInfo.displayName
         val header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) }
-        // Prices at the floor by construction — it takes no context and no free-RAM figure at all,
-        // and names the cache type the load will pick, which depends only on the header.
+        // Prices at the floor and at f16 by construction — an upper bound over both cache types,
+        // whichever one the load later picks; it takes no context and no free-RAM figure at all.
         val estimate = ModelMemoryEstimator.estimateForSelection(fileInfo.sizeBytes, header)
         // Read last and never cached: the header parse above is blocking I/O over the model file,
         // and the user may have just closed apps to make room.

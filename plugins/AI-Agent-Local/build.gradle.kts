@@ -22,6 +22,7 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "1.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -86,6 +87,12 @@ dependencies {
     // LiveData's postValue needs the arch-core executor swapped for a synchronous one; the
     // settings pane publishes its state through it, so its tests cannot run without this.
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+
+    // The native fallback ladder only runs on a device. The AAR is a file dependency, so its own
+    // slf4j-api is not pulled in, and the host that normally supplies it is absent from a test APK.
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("org.slf4j:slf4j-api:2.0.12")
 }
 
 // The one ABI this plugin ships. Shared by the packaging check and the unit tests.
@@ -99,6 +106,10 @@ fun File.isPluginArtifactFor(isDebug: Boolean) =
 tasks.withType<Test>().configureEach {
     systemProperty("prebuiltAarPath", file("libs/v8/llama-v8-release.aar").absolutePath)
     systemProperty("expectedAbi", expectedAbi)
+    // The source the committed AAR's JNI wrapper must have been built from; a change here reruns the test.
+    val wrapperSource = file("llama-impl/src/main/cpp/llama-android.cpp")
+    inputs.file(wrapperSource)
+    systemProperty("llamaAndroidSourcePath", wrapperSource.absolutePath)
 }
 
 // Guards the abiFilters above: a regenerated AAR or a dropped filter would silently re-inflate the .cgp.
