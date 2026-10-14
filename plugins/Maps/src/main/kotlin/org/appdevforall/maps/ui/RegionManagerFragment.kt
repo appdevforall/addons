@@ -502,7 +502,7 @@ class RegionManagerFragment : Fragment(),
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.maps_regions_delete) { _, _ ->
                 viewLifecycleOwner.lifecycleScope.launch {
-                    val ok = withContext(Dispatchers.IO) { RegionCache.delete(info.regionId) }
+                    val ok = withContext(Dispatchers.IO) { RegionCache.delete(info) }
                     if (ok) {
                         // If the deleted region is the project's active one, clear
                         // the sentinel so a subsequent download can auto-activate

@@ -121,10 +121,16 @@ internal object RegionCache {
      * complementary: the regex prevents most attacks at the API boundary,
      * canonicalisation catches anything the regex missed (defense in depth).
      */
-    suspend fun delete(regionId: String): Boolean {
+    suspend fun delete(info: RegionInfo): Boolean {
         val root = runCatching { rootDir() }.getOrNull() ?: return false
-        return deleteFromRoot(root, regionId)
+        return deleteFromRoot(root, info)
     }
+
+    /**
+     * Deletes the directory [info] was read from. Keyed off the directory name, not
+     * [RegionInfo.regionId]: the id comes from `meta.json` and can differ from the folder.
+     */
+    suspend fun deleteFromRoot(root: File, info: RegionInfo): Boolean = deleteFromRoot(root, info.directory.name)
 
     /** Testable variant of [delete] taking an explicit root directory. Runs on `Dispatchers.IO`. */
     suspend fun deleteFromRoot(root: File, regionId: String): Boolean = withContext(Dispatchers.IO) {
