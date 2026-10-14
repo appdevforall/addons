@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import org.appdevforall.maps.MapsPlugin
 import org.appdevforall.maps.R
+import org.appdevforall.maps.data.IiabArchiveResolver
 import org.appdevforall.maps.data.MapFontExtractor
 import org.appdevforall.maps.data.RegionDownloader
 import org.appdevforall.maps.data.RegionSizeEstimator
@@ -344,6 +345,8 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
                 } else {
                     null
                 }
+                // Resolve the current archive before the first estimate builds its URL.
+                if (selectionModel.sourceKind == SourceKind.INTERNET) IiabArchiveResolver.shared.resolve()
                 resolveIiabTilesUrl() to fonts?.absolutePath
             }
             if (view == null) return@launch
@@ -498,8 +501,8 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
      * download uses — so the bbox-picker basemap and the download come from the
      * same place.
      *
-     * For internet sources, the URL uses the dated fallback file in
-     * [RegionDownloader.FALLBACK_VECTOR_DATE]. For LAN sources, uses
+     * For internet sources, the archive comes from IIAB's catalog (resolved in
+     * [loadStyleThenPosition]). For LAN sources, uses
      * `http://<host>/maps/openstreetmap-openmaptiles...`.
      *
      * Returns null only when sourceKind is UNKNOWN or LAN with no host — both

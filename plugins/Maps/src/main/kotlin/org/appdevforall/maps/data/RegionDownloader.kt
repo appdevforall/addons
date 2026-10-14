@@ -41,17 +41,15 @@ import kotlin.coroutines.coroutineContext
  *
  * URL contract:
  *  - **Internet** — `https://iiab.switnet.org/maps/2/`:
- *    - `openstreetmap-openmaptiles.<date>.z00-z14.pmtiles` (vector tiles)
- *  - **LAN** — `http://<host>/maps/` with the same filenames.
+ *    - `openstreetmap-openmaptiles.<date>.z00-z14.pmtiles` (vector tiles), with the date read
+ *      from IIAB's catalog by [IiabArchiveResolver]
+ *  - **LAN** — `http://<host>/maps/` with the fallback file name.
  *  The Natural Earth basemap is copied from the plugin bundle, not fetched.
  */
 internal object RegionDownloader {
 
     /** Schema version. Bump when adding required fields. */
     internal const val META_SCHEMA_VERSION = 1
-
-    /** Hard-coded fallback date for the IIAB archive filename. */
-    private const val FALLBACK_VECTOR_DATE = "2026-04-01"
 
     /**
      * The Natural Earth basemap bundled in the plugin assets. It's a global,
@@ -61,7 +59,7 @@ internal object RegionDownloader {
      */
     private const val BUNDLED_BASEMAP_ASSET = "maps/natural-earth-z0-z4.pmtiles"
 
-    private const val INTERNET_BASE = "https://iiab.switnet.org/maps/2/"
+    private const val INTERNET_BASE = IiabCatalog.MIRROR_BASE
     private const val LAN_PATH_SUFFIX = "/maps/"
 
     // OkHttp client tuned for the IIAB use case:
@@ -122,11 +120,10 @@ internal object RegionDownloader {
             "RegionDownloader",
             "download: regionId=$regionId bbox=$bbox z=$zoomMin..$zoomMax",
         )
-        // The estimate loop populates HttpRangeByteCache. A download needs fresh
-        // bytes — IIAB rotates the same URL weekly, and a mid-session swap would
-        // glue a header from version N to leaves from N+1.
+        // The estimate loop populates HttpRangeByteCache; a download re-reads everything so a
+        // replaced file cannot pair a cached header with fresh leaves.
         org.appdevforall.maps.slicer.HttpRangeByteCache.clear()
-        val tilesUrl = buildTilesUrl(sourceKind, sourceHost)
+        val tilesUrl = resolveTilesUrl(sourceKind, sourceHost)
         return downloadInto(
             // RegionCache.rootDir() is a suspend, self-enforcing-IO call (does exists()/mkdirs()
             // on /sdcard on Dispatchers.IO), so it's safe to call from this Main-dispatched scope.
@@ -138,7 +135,7 @@ internal object RegionDownloader {
             zoomMax = zoomMax,
             sourceKind = sourceKind,
             sourceHost = sourceHost,
-            sourceVersion = sourceVersion,
+            sourceVersion = sourceVersion ?: IiabCatalog.dateOf(tilesUrl.substringAfterLast('/')),
             nowMillis = System.currentTimeMillis(),
             onProgress = onProgress,
             // The bundled Natural Earth basemap is the same global file for every
@@ -316,15 +313,27 @@ internal object RegionDownloader {
     }
 
     /**
-     * package-internal: the vector tiles (OpenMapTiles) URL for [sourceKind].
-     *
-     * Exposed so [BboxPickerFragment] can drive a live size estimate
-     * via [PmtilesRegionSlicer.tilesInRegion] against the same URL the
-     * download will use — keeps "estimate ≈ actual download size" honest.
+     * The vector tiles URL for [sourceKind], so the bbox picker's size estimate reads the file the
+     * download will. Internet uses the archive [IiabArchiveResolver] last resolved, without I/O.
      */
-    internal fun buildTilesUrl(sourceKind: SourceKind, sourceHost: String?): String =
+    internal fun buildTilesUrl(
+        sourceKind: SourceKind,
+        sourceHost: String?,
+        resolver: IiabArchiveResolver = IiabArchiveResolver.shared,
+    ): String =
         base(sourceKind, sourceHost) +
-            "openstreetmap-openmaptiles.$FALLBACK_VECTOR_DATE.z00-z14.pmtiles"
+            if (sourceKind == SourceKind.IIAB_LAN) IiabCatalog.FALLBACK_VECTOR_ARCHIVE
+            else resolver.current()
+
+    /** The URL a download reads: internet resolves the current archive first. */
+    internal suspend fun resolveTilesUrl(
+        sourceKind: SourceKind,
+        sourceHost: String?,
+        resolver: IiabArchiveResolver = IiabArchiveResolver.shared,
+    ): String {
+        if (sourceKind != SourceKind.IIAB_LAN) resolver.resolve()
+        return buildTilesUrl(sourceKind, sourceHost, resolver)
+    }
 
     /**
      * Copy the bundled Natural Earth basemap ([BUNDLED_BASEMAP_ASSET]) into [dest].
