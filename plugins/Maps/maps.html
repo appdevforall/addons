@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Maps Plugin for Code on the Go</title>
+  <title>Maps</title>
   <style>
     html, body {
       background: #ffffff;
@@ -45,7 +45,7 @@ map region once, then ship an app that renders it with no internet.</p>
 <h2>Executive overview</h2>
 
 <p>The <strong>Maps plugin</strong> adds offline mapping to
-<strong>Code on the Go</strong> (CoGo), the offline-capable Android IDE built for
+<strong>Code on the Go</strong>, the offline-capable Android IDE built for
 low-end phones in low-bandwidth regions. It lets a developer save an
 <strong>OpenStreetMap</strong> region for offline use &mdash; downloaded from an
 <strong>Internet&nbsp;in&nbsp;a&nbsp;Box</strong> server over the internet or over
@@ -84,7 +84,7 @@ runs in the background; nothing needs an account or an API key.</p>
 
 <h2>Technical architecture</h2>
 
-<p>The plugin is a single Android module loaded by CoGo's plugin system via a
+<p>The plugin is a single Android module loaded by Code on the Go's plugin system via a
 <code>DexClassLoader</code>. It depends on the host's <code>plugin-api</code> as a
 <code>compileOnly</code> contract and is organised into clean layers so the pure
 logic is JVM-unit-testable:</p>
@@ -125,7 +125,7 @@ objects past its lifecycle &mdash; everything is released in
 <ol>
   <li>Install the Maps plugin from the Plugin Manager.</li>
   <li>Create a new project from the <strong>Maps</strong> template (Kotlin or
-  Java), or open any existing CoGo project.</li>
+  Java), or open any existing Code on the Go project.</li>
   <li>Open the <strong>Maps</strong> tab in the editor bottom sheet.</li>
   <li>Tap <strong>+ Download new region</strong>, draw a bounding box over the
   area you need, and confirm. The region downloads into the shared cache.</li>

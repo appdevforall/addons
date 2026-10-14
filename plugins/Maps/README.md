@@ -25,9 +25,10 @@ where you download a map region and bundle it into that app.
 ## Architecture
 
 ```
-maps/
-├── build.gradle.kts            # Build configuration (plugin API via ../libs)
-├── settings.gradle.kts         # Buildscript classpath (shared ../libs)
+plugins/Maps/
+├── addon.json                  # Gallery metadata
+├── build.gradle.kts            # Build configuration (plugin API via ../../libs)
+├── settings.gradle.kts         # Buildscript classpath (shared ../../libs)
 ├── maps.html                   # Full plugin documentation
 ├── src/main/
 │   ├── AndroidManifest.xml     # Plugin metadata, permissions, icons
@@ -58,8 +59,9 @@ maps/
 ## Building the plugin
 
 ```bash
-./gradlew assemblePlugin        # release -> build/plugin/maps-plugin.cgp
-./gradlew assemblePluginDebug   # debug
+cd plugins/Maps
+../../gradlew assemblePlugin        # release -> build/plugin/maps.cgp
+../../gradlew assemblePluginDebug   # debug
 ```
 
 ### Installation
@@ -77,7 +79,7 @@ maps/
 4. Build and run. The app renders your region offline.
 
 ## Dependencies
-- `plugin-api`: Code on the Go Plugin API (`compileOnly`, shared `../libs/plugin-api.jar`)
+- `plugin-api`: Code on the Go Plugin API (`compileOnly`, shared `../../libs/plugin-api.jar`)
 - `org.maplibre.gl:android-sdk-opengl`: offline vector map rendering
 - `com.github.davidmoten:hilbert-curve`: PMTiles tile-range decomposition
 - `okhttp`, `androidx.*`, `material`, `kotlinx-coroutines`: networking and UI
