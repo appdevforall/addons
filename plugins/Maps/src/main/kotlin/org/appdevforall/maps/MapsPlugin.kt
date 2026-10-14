@@ -1,5 +1,7 @@
 package org.appdevforall.maps
 
+import org.appdevforall.maps.data.IiabArchiveResolver
+import org.appdevforall.maps.data.RegionDownloader
 import org.appdevforall.maps.ui.RegionManagerFragment
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
@@ -150,6 +152,9 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun dispose() {
         pluginScope.cancel()
+        // The shared clients outlive this instance, so close their idle sockets on unload.
+        RegionDownloader.httpClient.connectionPool.evictAll()
+        IiabArchiveResolver.catalogClient.connectionPool.evictAll()
         // Clear the static plugin-context reference so a subsequent reload
         // doesn't leave Fragments resolving services from a defunct context.
         pluginContext = null

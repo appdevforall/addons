@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Resources
 import com.itsaky.androidide.plugins.PluginContext
+import org.appdevforall.maps.data.IiabArchiveResolver
+import org.appdevforall.maps.data.RegionDownloader
 import org.appdevforall.maps.testing.UnusedPluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.ResourceManager
@@ -311,5 +313,27 @@ class MapsPluginCoverageTest {
         val ctx2 = newContext()
         assertTrue(plugin.initialize(ctx2))
         assertSame(ctx2, MapsPlugin.pluginContext)
+    }
+
+    @Test
+    fun `dispose closes the idle connections of both shared http clients`() {
+        val server = okhttp3.mockwebserver.MockWebServer()
+        repeat(2) { server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("ok")) }
+        server.start()
+        try {
+            val clients = listOf(RegionDownloader.httpClient, IiabArchiveResolver.catalogClient)
+            for (client in clients) {
+                client.newCall(okhttp3.Request.Builder().url(server.url("/")).build()).execute().use { it.body!!.string() }
+            }
+            assertEquals("each client keeps its connection alive", listOf(1, 1), clients.map { it.connectionPool.idleConnectionCount() })
+
+            val plugin = MapsPlugin()
+            plugin.initialize(newContext())
+            plugin.dispose()
+
+            assertEquals(listOf(0, 0), clients.map { it.connectionPool.idleConnectionCount() })
+        } finally {
+            server.shutdown()
+        }
     }
 }
