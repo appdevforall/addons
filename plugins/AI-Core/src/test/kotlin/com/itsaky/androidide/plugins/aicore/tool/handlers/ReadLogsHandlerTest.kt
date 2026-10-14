@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.IdeLogService
 import com.itsaky.androidide.plugins.services.LogEntry
 import com.itsaky.androidide.plugins.services.LogLevel
@@ -193,7 +194,7 @@ class ReadLogsHandlerTest {
         assertTrue(data.endsWith("I MyApp: step2000"))
         assertTrue(
             "budget exceeded: ${data.length}",
-            data.length <= LogWindowCalculator.MAX_OUTPUT_CHARS,
+            data.length <= ToolOutputBudget.DEFAULT.dataChars(),
         )
     }
 

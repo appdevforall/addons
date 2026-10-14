@@ -43,6 +43,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
@@ -217,7 +218,9 @@ class ChatViewModel(
     private val approvalManager = ToolApprovalManager(sharedPromptConfig) { handler ->
         ToolDescriptions.describe(sharedPromptConfig.config(), RESPOND_TOOL, handler)
     }
-    private val toolResultsPrompt = ToolResultsPrompt(sharedPromptConfig, RESPOND_TOOL)
+    /** One cap for the loop's cut and the handlers that fit under it; see [ToolOutputBudget]. */
+    private val toolOutputBudget = ToolOutputBudget.DEFAULT
+    private val toolResultsPrompt = ToolResultsPrompt(sharedPromptConfig, RESPOND_TOOL, toolOutputBudget)
     private val agentLoop = AgentLoop(
         formatToolResults = toolResultsPrompt,
         terminalTool = RESPOND_TOOL,
@@ -476,7 +479,7 @@ class ChatViewModel(
     fun isStorageInitialized(): Boolean = ::storageManager.isInitialized
 
     init {
-        builtInHandlers = getContext()?.let { BuiltInToolHandlers.create(it, webSearch::search) }.orEmpty()
+        builtInHandlers = getContext()?.let { BuiltInToolHandlers.create(it, webSearch::search, toolOutputBudget) }.orEmpty()
         agentTools = buildAgentTools()
         ToolSourceStore.shared.addChangeListener(toolSourcesChanged)
     }
