@@ -1,6 +1,7 @@
 package org.appdevforall.maps.data
 
 import com.itsaky.androidide.plugins.PluginContext
+import org.appdevforall.maps.testing.UnusedPluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.ServiceRegistry
 import kotlinx.coroutines.runBlocking
@@ -38,7 +39,7 @@ class ProjectRegionCoordinatorLoggerRoutingTest {
         override fun error(message: String, throwable: Throwable) { errors += message to throwable }
     }
 
-    private fun contextWithLogger(recording: PluginLogger): PluginContext = object : PluginContext {
+    private fun contextWithLogger(recording: PluginLogger): PluginContext = object : PluginContext by UnusedPluginContext {
         override val androidContext: android.content.Context
             get() = throw UnsupportedOperationException("not used")
         override val services: ServiceRegistry = object : ServiceRegistry {

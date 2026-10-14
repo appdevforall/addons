@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Resources
 import com.itsaky.androidide.plugins.PluginContext
+import org.appdevforall.maps.testing.UnusedPluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.ResourceManager
 import com.itsaky.androidide.plugins.ServiceRegistry
@@ -129,7 +130,7 @@ class MapsPluginCoverageTest {
         services: ServiceRegistry,
         resources: ResourceManager,
         logger: PluginLogger,
-    ) : PluginContext {
+    ) : PluginContext by UnusedPluginContext {
         override val androidContext: Context = androidCtx
         override val services: ServiceRegistry = services
         override val eventBus: Any get() = throw UnsupportedOperationException("not used")
