@@ -140,8 +140,17 @@ internal class HttpRangeFetcher(
                 when (resp.code) {
                     206 -> {
                         val body = resp.body ?: throw IOException("No body for range $offset-$end of $url")
-                        val bytes = body.bytes()
-                        require(bytes.size == length || bytes.size == (end - offset + 1).toInt()) {
+                        // Check the size before buffering: a misbehaving server can send any amount.
+                        val declared = body.contentLength()
+                        require(declared < 0 || declared == length.toLong()) {
+                            "Range response returned a $declared-byte body, expected $length"
+                        }
+                        val source = body.source()
+                        require(!source.request(length + 1L)) {
+                            "Range response returned more than $length bytes, expected $length"
+                        }
+                        val bytes = source.buffer.readByteArray()
+                        require(bytes.size == length) {
                             "Range response returned ${bytes.size} bytes, expected $length"
                         }
                         HttpRangeByteCache.put(url, offset, length, bytes)

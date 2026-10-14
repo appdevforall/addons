@@ -153,10 +153,7 @@ class RangeFetcherCoverageTest {
 
   @Test
   fun http_206_with_wrong_size_body_fails_length_check() {
-    // A spec-compliant 206 must return exactly `length` bytes. A server that
-    // returns 206 but a body of the wrong size trips the
-    // `require(bytes.size == length || ...)` guard. (Both operands of the `||`
-    // reduce to the same length equality, so a wrong size fails both arms.)
+    // A spec-compliant 206 must return exactly `length` bytes; a short body is refused.
     val short = ByteArray(3) // requested 8, server returns only 3
     server.enqueue(MockResponse().setResponseCode(206).setBody(okio.Buffer().write(short)))
     val url = server.url("/a.pmtiles").toString()

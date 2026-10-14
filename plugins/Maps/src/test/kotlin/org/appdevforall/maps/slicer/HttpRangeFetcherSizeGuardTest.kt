@@ -4,6 +4,8 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -49,6 +51,34 @@ class HttpRangeFetcherSizeGuardTest {
       fetcher.readRange(0L, 10)
     }
     assertTrue(ex.message!!.contains("expected 10"))
+  }
+
+  @Test
+  fun rejects_206_whose_declared_length_exceeds_the_range_before_reading_it() {
+    // Without the up-front check the whole body is buffered and only then compared.
+    server.enqueue(MockResponse().setResponseCode(206).setBody(body(1 shl 20)))
+    val fetcher = HttpRangeFetcher(server.url("/c.pmtiles").toString(), RangeFetcher.defaultClient())
+
+    val ex = assertThrows(IllegalArgumentException::class.java) { fetcher.readRange(0L, 8) }
+    assertEquals("Range response returned a 1048576-byte body, expected 8", ex.message)
+  }
+
+  @Test
+  fun rejects_chunked_206_after_reading_one_byte_past_the_range() {
+    // Chunked, so there is no Content-Length; the read itself must stop at length + 1.
+    server.enqueue(MockResponse().setResponseCode(206).setChunkedBody(body(1 shl 20), 4096))
+    val fetcher = HttpRangeFetcher(server.url("/d.pmtiles").toString(), RangeFetcher.defaultClient())
+
+    val ex = assertThrows(IllegalArgumentException::class.java) { fetcher.readRange(0L, 8) }
+    assertEquals("Range response returned more than 8 bytes, expected 8", ex.message)
+  }
+
+  @Test
+  fun accepts_chunked_206_of_exactly_the_range() {
+    server.enqueue(MockResponse().setResponseCode(206).setChunkedBody(body(8), 3))
+    val fetcher = HttpRangeFetcher(server.url("/e.pmtiles").toString(), RangeFetcher.defaultClient())
+
+    assertArrayEquals(ByteArray(8) { it.toByte() }, fetcher.readRange(0L, 8))
   }
 
   @Test
