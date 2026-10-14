@@ -1,6 +1,7 @@
 package org.appdevforall.maps.data
 
 import com.itsaky.androidide.plugins.PluginContext
+import org.appdevforall.maps.testing.UnusedPluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
 import com.itsaky.androidide.plugins.extensions.IProject
 import com.itsaky.androidide.plugins.services.IdeProjectService
@@ -108,7 +109,7 @@ class ProjectRegionCoordinatorTest {
     //       this module deliberately has no mocking library) -----
 
     /** PluginContext whose ServiceRegistry serves exactly [service] (or nothing). */
-    private fun contextWith(service: IdeProjectService?): PluginContext = object : PluginContext {
+    private fun contextWith(service: IdeProjectService?): PluginContext = object : PluginContext by UnusedPluginContext {
         override val androidContext: android.content.Context
             get() = throw UnsupportedOperationException("not used")
         override val services: ServiceRegistry = object : ServiceRegistry {

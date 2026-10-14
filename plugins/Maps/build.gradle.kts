@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
     // Unit-test coverage. CoGo's root build uses JaCoCo 0.8.11 + Sonar; this
     // plugin keeps a single-module report (`./gradlew jacocoTestReport`) so the
@@ -21,12 +20,12 @@ pluginBuilder {
 
 android {
     namespace = "org.appdevforall.maps"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.appdevforall.maps"
         minSdk = 28
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -87,7 +86,7 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("androidx.fragment:fragment:1.8.8")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
@@ -112,7 +111,7 @@ dependencies {
 }
 
 tasks.wrapper {
-    gradleVersion = "8.14.3"
+    gradleVersion = "9.6.1"
     distributionType = Wrapper.DistributionType.BIN
 }
 
@@ -149,9 +148,15 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/R.class", "**/R\$*.class", "**/BuildConfig.*",
         "**/Manifest*.*", "**/*Test*.*", "**/databinding/**",
     )
-    classDirectories.setFrom(
-        fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) { exclude(fileFilter) }
-    )
+    // AGP 9 compiles Kotlin itself and writes the classes here, not to tmp/kotlin-classes.
+    val classes = fileTree(
+        layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")
+    ) { exclude(fileFilter) }
+    classDirectories.setFrom(classes)
+    // A wrong class path yields an empty report that still passes, so fail instead.
+    doFirst {
+        check(!classes.isEmpty) { "jacocoTestReport: no main classes under ${classes.dir}" }
+    }
     sourceDirectories.setFrom(files("src/main/kotlin"))
     // Scope execution data to the exact exec file (not a build-dir-wide scan) so
     // Gradle doesn't see this task as implicitly consuming other tasks' outputs.
