@@ -6,6 +6,9 @@ import java.io.File
 import java.io.InputStream
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.net.URLClassLoader
 import java.nio.file.Files
 import javax.tools.ToolProvider
@@ -90,7 +93,34 @@ class PmtilesHttpServerTemplateTest {
         }
     }
 
+    @Test
+    fun `a client that sends nothing is dropped after the read timeout`() {
+        val server = serverClass.getDeclaredConstructor(android.content.res.AssetManager::class.java, String::class.java)
+            .newInstance(null, "maps")
+        val handle = serverClass.getDeclaredMethod("handle", Socket::class.java).apply { isAccessible = true }
+        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { listener ->
+            Socket(listener.inetAddress, listener.localPort).use { silent ->
+                val accepted = listener.accept()
+                val worker = Thread { invokeOn(handle, server, accepted) }.apply { isDaemon = true; start() }
+                val timeoutMs = serverClass.getDeclaredField("READ_TIMEOUT_MS").apply { isAccessible = true }.getInt(null)
+                worker.join(timeoutMs + 5_000L)
+                // Without the timeout the handler blocks in readLine for as long as the client stays.
+                assertTrue("handler still blocked on a silent client", !worker.isAlive)
+                silent.soTimeout = 1_000
+                assertEquals("the server closes the connection", -1, silent.getInputStream().read())
+            }
+        }
+    }
+
+    private fun invokeOn(method: Method, target: Any, vararg args: Any?): Any? =
+        try {
+            method.invoke(target, *args)
+        } catch (e: InvocationTargetException) {
+            throw e.targetException
+        }
+
     companion object {
+
         private lateinit var outDir: File
         private lateinit var serverClass: Class<*>
         private lateinit var skipFully: Method

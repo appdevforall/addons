@@ -22,6 +22,9 @@ import java.util.concurrent.Executors
  * Requires assets to be stored uncompressed in the APK
  * (`androidResources { noCompress.add("pmtiles") }`) so [AssetManager.openFd]
  * returns a real seekable fd.
+ *
+ * The server has no authentication: any app on the device can connect to its port. Serve
+ * only data that is already public, like these map tiles.
  */
 class PmtilesHttpServer(
     private val assets: AssetManager,
@@ -40,7 +43,7 @@ class PmtilesHttpServer(
         socket = s
         port = s.localPort
         running = true
-        pool = Executors.newCachedThreadPool()
+        pool = Executors.newFixedThreadPool(MAX_CLIENTS)
         val accept = Thread({
             while (running) {
                 try {
@@ -66,6 +69,7 @@ class PmtilesHttpServer(
     private fun handle(client: Socket) {
         try {
             client.use { c ->
+                c.soTimeout = READ_TIMEOUT_MS
                 val out = c.getOutputStream()
                 val r = BufferedReader(InputStreamReader(c.getInputStream()))
                 val reqLine = r.readLine() ?: return
@@ -158,6 +162,12 @@ class PmtilesHttpServer(
     private companion object {
         const val TAG = "PmtilesHttpServer"
         const val BUF = 64 * 1024
+
+        /** A client that sends nothing for this long is dropped, so it cannot hold a thread. */
+        const val READ_TIMEOUT_MS = 5_000
+
+        /** MapLibre opens a handful of connections at once; further ones wait in the queue. */
+        const val MAX_CLIENTS = 8
 
         /**
          * The (start, end) bytes (inclusive) a `Range: bytes=` value asks for, or null when it
