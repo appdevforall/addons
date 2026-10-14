@@ -122,13 +122,9 @@ class MapLocationController(
      *  re-evaluate and fetch the GPS fix. */
     private fun showPermissionPermanentlyDeniedDialog(ctx: Context) {
         AlertDialog.Builder(ctx)
-            .setTitle("Location is off for Code on the Go")
-            .setMessage(
-                "The wizard uses your current location to center the region " +
-                    "you're about to download. Turn Location on for Code on the " +
-                    "Go in Settings, then come back."
-            )
-            .setPositiveButton("Open Settings") { _, _ ->
+            .setTitle(R.string.maps_location_off_title)
+            .setMessage(R.string.maps_location_off_message)
+            .setPositiveButton(R.string.maps_location_off_open_settings) { _, _ ->
                 runCatching {
                     val intent = android.content.Intent(
                         android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -140,7 +136,7 @@ class MapLocationController(
                     android.util.Log.w("BboxPicker", "Open Settings failed: ${it.message}")
                 }
             }
-            .setNegativeButton("Not now", null)
+            .setNegativeButton(R.string.maps_location_off_not_now, null)
             .show()
     }
 

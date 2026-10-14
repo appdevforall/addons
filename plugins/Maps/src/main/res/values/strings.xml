@@ -26,6 +26,8 @@
     <string name="maps_regions_empty">No regions cached yet. Tap "+ Download new region" to add one.</string>
     <string name="maps_regions_no_project">No project open. Open a Map project to apply a region.</string>
     <string name="maps_regions_delete">Delete</string>
+    <string name="maps_regions_deleted">Deleted %1$s</string>
+    <string name="maps_regions_delete_failed">Couldn\'t delete %1$s</string>
     <string name="maps_regions_redownload">Refresh</string>
     <string name="maps_regions_use_in_project">Use in this project</string>
     <string name="maps_regions_in_this_project">✓ In this project</string>
@@ -74,6 +76,10 @@
     <string name="maps_location_perm_rationale">The wizard uses your current location to center the region you\'re about to download. You can pick the region manually if you decline.</string>
     <string name="maps_location_perm_allow">While using the app</string>
     <string name="maps_location_perm_deny">Don\'t allow</string>
+    <string name="maps_location_off_title">Location is off for Code on the Go</string>
+    <string name="maps_location_off_message">The wizard uses your current location to center the region you\'re about to download. Turn Location on for Code on the Go in Settings, then come back.</string>
+    <string name="maps_location_off_open_settings">Open Settings</string>
+    <string name="maps_location_off_not_now">Not now</string>
 
     <!-- Step 3 (Save Region). Layer-row keys match the maps_layer_* labels used
          in Step 2's size overlay + the Download progress UI, so all three
