@@ -186,11 +186,12 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
     //  DocumentationExtension — tooltips for the bottom-sheet tab.
     // ---------------------------------------------------------------------
 
-    override fun getTooltipCategory(): String = "plugin_maps"
+    /** The host registers and looks up plugin tooltips under `plugin_<pluginId>`; any other value renders `n/a`. */
+    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
-            tag = "maps.bottom_sheet.maps_tab",
+            tag = TOOLTIP_TAG_MAPS_TAB,
             summary = "<b>Maps</b><br>Add OSM tile data to the currently-open project.",
             detail = """
                 <h3>Maps</h3>

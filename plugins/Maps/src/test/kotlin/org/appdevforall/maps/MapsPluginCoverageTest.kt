@@ -186,7 +186,8 @@ class MapsPluginCoverageTest {
     @Test
     fun `tooltip category and tier3 docs path are the documented constants`() {
         val plugin = MapsPlugin()
-        assertEquals("plugin_maps", plugin.getTooltipCategory())
+        // The host derives "plugin_" + the full plugin.id on lookup; a short slug renders n/a.
+        assertEquals("plugin_org.appdevforall.maps", plugin.getTooltipCategory())
         assertEquals("docs", plugin.getTier3DocsAssetPath())
     }
 
