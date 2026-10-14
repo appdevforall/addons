@@ -68,6 +68,9 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
         /** Tooltip tag for the bottom-sheet "Maps" tab. */
         const val TOOLTIP_TAG_MAPS_TAB = "maps.bottom_sheet.maps_tab"
 
+        /** Tooltip tag for the Offline OSM Map card on the New Project screen. */
+        const val TOOLTIP_TAG_REGION_MAP_TEMPLATE = "maps.template.region_map"
+
         @Volatile
         var pluginContext: PluginContext? = null
             internal set
@@ -189,7 +192,35 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
     /** The host registers and looks up plugin tooltips under `plugin_<pluginId>`; any other value renders `n/a`. */
     override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
-    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(mapsTabEntry(), regionMapTemplateEntry())
+
+    private fun tutorialButton() = PluginTooltipButton(
+        description = "OSM + MapLibre tutorial",
+        // HTML, not Markdown: the host renders tier-3 docs in a WebView and picks the
+        // content type from the file extension.
+        uri = "osm-tutorial.html",
+        order = 0,
+    )
+
+    /**
+     * Entry for the template card's tag. The host's New Project screen currently looks card
+     * tags up under the IDE category (`TemplateListFragment` -> `showIdeCategoryTooltip`), so
+     * the card does not find this entry until the host routes plugin templates to their category.
+     */
+    private fun regionMapTemplateEntry() = PluginTooltipEntry(
+        tag = TOOLTIP_TAG_REGION_MAP_TEMPLATE,
+        summary = "<b>Offline OSM Map</b><br>An app that shows an OpenStreetMap region with no internet.",
+        detail = """
+            <h3>Offline OSM Map</h3>
+            <p>Creates a MapLibre map app in Kotlin or Java. It starts with no map data.</p>
+            <p>After creating the project, open the <b>Maps</b> tab in the editor bottom
+            sheet, download a region, and tap <b>Use in this project</b>. The region's tiles
+            are copied into the app, which then builds and runs offline.</p>
+        """.trimIndent(),
+        buttons = listOf(tutorialButton()),
+    )
+
+    private fun mapsTabEntry() =
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_MAPS_TAB,
             summary = "<b>Maps</b><br>Add OSM tile data to the currently-open project.",
@@ -208,19 +239,8 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
                 <p>Tap <b>+ Download new region</b> at the bottom to launch
                 the bbox picker and create a new entry in the cache.</p>
             """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(
-                    description = "OSM + MapLibre tutorial",
-                    // HTML, not Markdown: CoGo renders tier-3 docs in a WebView,
-                    // which displays Markdown as raw text. The host resolves the
-                    // content type from the file extension (.html → text/html), so
-                    // the asset MUST be .html to render as a formatted page.
-                    uri = "osm-tutorial.html",
-                    order = 0
-                )
-            )
+            buttons = listOf(tutorialButton()),
         )
-    )
 
     override fun onDocumentationInstall(): Boolean {
         context.logger.info("MapsPlugin documentation installed")

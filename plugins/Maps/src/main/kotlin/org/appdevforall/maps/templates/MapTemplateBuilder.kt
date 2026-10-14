@@ -1,6 +1,7 @@
 package org.appdevforall.maps.templates
 
 import com.itsaky.androidide.plugins.PluginContext
+import org.appdevforall.maps.MapsPlugin
 import com.itsaky.androidide.plugins.services.IdeTemplateService
 import com.itsaky.androidide.plugins.templates.CgtTemplateBuilder
 import java.io.File
@@ -59,8 +60,6 @@ internal object MapTemplateBuilder {
      */
     val REGION_MAP_TEMPLATE_FILE: String =
         REGION_MAP_TEMPLATE_NAME.replace(Regex("[^\\p{L}\\p{N}]"), "") + ".cgt"
-
-    private const val REGION_MAP_TOOLTIP_TAG = "maps.template.region_map"
 
     private const val ASSETS_REGION_MAP = "templates/region-map"
 
@@ -143,7 +142,7 @@ internal object MapTemplateBuilder {
                     "download a region from the Maps tab and apply it to bundle one region " +
                     "offline. Available in Kotlin and Java."
             )
-            .tooltipTag(REGION_MAP_TOOLTIP_TAG)
+            .tooltipTag(MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE)
             .version("0.5.0")
             // Template tile icon in CoGo's New-Project grid (512x512). Without this the
             // tile renders blank. Lives beside the template dir; not emitted into projects.
