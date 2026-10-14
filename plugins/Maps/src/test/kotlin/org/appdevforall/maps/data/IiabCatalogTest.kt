@@ -1,5 +1,7 @@
 package org.appdevforall.maps.data
 
+import java.io.InterruptedIOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -8,6 +10,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -81,6 +84,26 @@ class IiabCatalogTest {
             fail("cancellation must propagate")
         } catch (e: CancellationException) {
             assertEquals("cancelled", e.message)
+        }
+    }
+
+    @Test
+    fun `the catalog client gives up on a server that trickles its body`() = runBlocking {
+        val server = MockWebServer()
+        // One byte a second never trips the 5 s read timeout, so only a whole-call limit ends it.
+        server.enqueue(MockResponse().setResponseCode(200).setBody("z".repeat(30)).throttleBody(1, 1, TimeUnit.SECONDS))
+        server.start()
+        try {
+            val started = System.nanoTime()
+            try {
+                IiabArchiveResolver.fetchText(IiabArchiveResolver.catalogClient, server.url("/slow").toString())
+                fail("a 30 s trickle must not complete")
+            } catch (e: InterruptedIOException) {
+                val secs = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started)
+                assertTrue("gave up after $secs s", secs < 10)
+            }
+        } finally {
+            server.shutdown()
         }
     }
 

@@ -44,10 +44,13 @@ internal class IiabArchiveResolver(private val fetchCatalog: suspend () -> Strin
 
         private const val THREAD_STATS_TAG = 0x4D41_5053 // "MAPS"
 
-        private val catalogClient =
+        // The picker waits on this fetch before loading its map, so bound the whole call: the
+        // connect and read timeouts alone do not cover DNS or a server that trickles bytes.
+        internal val catalogClient =
             OkHttpClient.Builder()
                 .connectTimeout(5, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
+                .callTimeout(5, TimeUnit.SECONDS)
                 .build()
 
         /** The process-wide resolver, reading [IiabCatalog.CATALOG_URL]. */
