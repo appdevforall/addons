@@ -86,7 +86,7 @@ cd plugins/Maps
 
 ### Requirements
 - Android API 28+ (Android 9)
-- Minimum IDE version: 1.0.0
+- Minimum IDE version: 26.23
 - Network once, to download a region's tiles (the generated app then runs and builds offline)
 
 ## License
