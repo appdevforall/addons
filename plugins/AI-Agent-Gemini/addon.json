@@ -1,0 +1,15 @@
+{
+  "summary": "Use Google Gemini as the AI backend for the Agent. Requires the AI Core addon and a Gemini API key.",
+  "description": "Connects the AI Core Agent and the other AI addons to Google's Gemini API with your own API key. Prompts and any file contents the Agent sends go to Google.",
+  "tags": [
+    "ai",
+    "agent",
+    "gemini"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "summary": "Use OpenAI or a compatible server as the AI backend. Requires the AI Core addon and, for most servers, an API key.",
+  "description": "Connects the AI Core Agent and the other AI addons to any server that speaks the OpenAI chat completions API: OpenAI itself, OpenRouter, or a local Ollama, LM Studio or llama-server. Set the server URL and, where needed, an API key. Prompts and any file contents the Agent sends go to that server.",
+  "tags": [
+    "ai",
+    "agent",
+    "openai"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
