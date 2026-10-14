@@ -37,11 +37,10 @@ import kotlinx.coroutines.launch
  *    `ActivityNotFoundException`. The bbox picker is therefore a Fragment swapped
  *    inside [RegionManagerFragment]'s child fragment manager, not its own Activity.
  *
- *  - **Project flow.** The user opens any CoGo project, taps the **Maps** tab,
- *    downloads a region (bbox picker → background download →
- *    `/sdcard/CodeOnTheGo/maps/<id>/`), and applies it via "Use in this project",
- *    which copies the region's PMTiles plus the minimal MapLibre
- *    boilerplate into the project. See [RegionManagerFragment.applyRegionToProject].
+ *  - **Project flow.** The user creates a project from the Offline OSM Map template, taps
+ *    the **Maps** tab, downloads a region (bbox picker → background download →
+ *    `/sdcard/CodeOnTheGo/maps/<id>/`), and applies it via "Use in this project", which
+ *    copies the region's data files into the project. See [RegionManagerFragment.applyRegionToProject].
  */
 class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
 
@@ -231,9 +230,9 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
                 across multiple projects so you don't re-download the same
                 tile pack twice.</p>
                 <p>Per region you can <b>Use in this project</b> (copies the
-                region's PMTiles plus the minimal MapLibre boilerplate into
-                the currently-open project's
-                <code>app/src/main/assets/maps/&lt;region&gt;/</code>),
+                region's data files into the open project's
+                <code>app/src/main/assets/maps/</code>; the project must come
+                from the Offline OSM Map template),
                 <b>Refresh</b> (re-download the region from source), or
                 <b>Delete</b> (free disk space).</p>
                 <p>Tap <b>+ Download new region</b> at the bottom to launch
