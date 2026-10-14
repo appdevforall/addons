@@ -150,7 +150,8 @@ class DownloadProgressFragment : Fragment() {
                     zoomMin = zoomMin,
                     zoomMax = zoomMax,
                 ) { phase, bytes, total ->
-                    val rootView = view ?: return@download
+                    // The fragment's view, not onViewCreated's parameter: null once the view is destroyed.
+                    val rootView = this@DownloadProgressFragment.view ?: return@download
                     val (status, progress) = when (phase) {
                         RegionDownloader.Phase.BASEMAP -> statusBasemap to progressBasemap
                         RegionDownloader.Phase.TILES -> statusTiles to progressTiles
