@@ -163,12 +163,12 @@ into one document:
 | `ide_context.yml` | `ide_context`, `session` | One line per fact the IDE can state: open files, module paths. `session` states the device's date and time on every prompt, and that the web tools are there. |
 | `agent_loop.yml` | `agent_loop`, `approval` | What the agent is told after each tool batch: the `FAILED:` marker, the truncation notice, what to do next after a success or a failure, the `unfinished` turn sent once when a run that has used tools replies without `respond`, and the `required_tool` turn sent once when a run that had to search first answers without searching. `approval` is what it is told when the user denies a call, asks for a revision, or leaves the dialog unanswered. |
 | `context_files.yml` | `context_files` | The heading over the files the user attached to a message, and the notice inside one cut to the size limit. |
-| `chat_title.yml` | `chat_title` | The system prompt of the one-off request that names a chat after its first reply. |
+| `chat_title.yml` | `chat_title` | The system prompt of the one-off request that names a chat from its first message, before the agent replies. |
 | `web_search.yml` | `web_search` | The system prompt of the one-off request the `web_search` tool makes through the active backend. It may use `CURRENT_TIME`, so "latest" is read as of the device's date. |
 | `answer_review.yml` | `answer_review` | The system prompt of the second pass over an answer holding code, and what stands in for the evidence when no tool ran. `layout.answer_review` arranges its user turn from `REQUEST`, `EVIDENCE`, `HAS_EVIDENCE` and `DRAFT`; the instruction may use `CURRENT_TIME` and must end on `END_MARKER`, the line the code checks to know the reply was not cut off. |
 | `compaction.yml` | `compaction` | The system prompt and closing request of the one-off call that summarizes a chat grown past 80% of its context budget (the window its backend reports), or retried after a context overflow; the on-device backend cuts the history instead, and the heading of the turn that then stands in for it. No template values. |
 | `tool_descriptions.yml` | `terminal_tool`, `built_in_tools` | What each of ai-core's own tools is for and what each argument means, keyed by tool name, plus the tool the agent answers with. The model reads it in the tool list and native definitions; the approval dialog shows the same description. |
-| `layout.yml` | `layout.system_prompt`, `layout.ide_context`, `layout.tool_results`, `layout.context_files`, `layout.chat_title` | Where each text goes. The IDE CONTEXT layout is also appended to a backend's own prompt; `tool_results` is the user turn after each tool batch; `context_files` frames the attached files appended to the user's message; `chat_title` is the exchange the title request sends. |
+| `layout.yml` | `layout.system_prompt`, `layout.ide_context`, `layout.tool_results`, `layout.context_files`, `layout.chat_title` | Where each text goes. The IDE CONTEXT layout is also appended to a backend's own prompt; `tool_results` is the user turn after each tool batch; `context_files` frames the attached files appended to the user's message; `chat_title` is the first message the title request sends. |
 
 **Connecting a new file** is two edits, and no code: create it, then add it to
 `include`. Which file holds a key is up to the files: a top-level key may move to
@@ -228,7 +228,7 @@ Every text is named by its YAML path in upper case, whichever file holds it: `id
 | `TOOL` | in `approval`: the tool the user did not approve; in `agent_loop.required_tool`: the tool the run had to call first |
 | `INSTRUCTION` | in `approval.corrected_with_instruction`: what the user typed, verbatim |
 | `MINUTES` | in `approval.timed_out`: how long the dialog waited |
-| `USER_TEXT`, `REPLY_TEXT` | in `layout.chat_title`: the chat's first message and the reply to it, each cut to its start, verbatim |
+| `USER_TEXT` | in `layout.chat_title`: the chat's first message, cut to its start, verbatim |
 | `FILES` | in `layout.context_files`: list of the attachments that could be read; each has `NAME`, `CONTENT` (verbatim) |
 | `HEAD`, `TAIL`, `COUNT` | in `context_files.truncated`: the start and end kept of an attachment over its size limit (50,000 characters, a quarter of the budget on a smaller one, and its share of 30% of the budget when several are attached), verbatim, and how many characters were cut between them |
 

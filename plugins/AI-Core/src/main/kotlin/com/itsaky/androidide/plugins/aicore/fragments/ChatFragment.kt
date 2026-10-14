@@ -461,21 +461,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     }
 
     /**
-     * @param naming whether the backend is still writing this chat's title: a spinner and a muted
-     *   placeholder stand in, so the raw prompt never flashes up before the real title.
+     * @param naming whether the backend is still writing this chat's title: a spinner beside the
+     *   untitled name stands in, so the raw prompt never flashes up before the real title.
      * @param title the chat's title, or null for one neither named nor started.
      */
     private fun showChatTitle(naming: Boolean, title: String?) {
         val binding = _binding ?: return
         binding.chatTitleProgress.isVisible = naming
         val shown = title?.oneLine()?.takeIf { it.isNotEmpty() }
-        binding.chatTitle.text = when {
-            naming -> getString(R.string.session_title_generating)
-            else -> shown ?: getString(R.string.session_untitled)
-        }
-        // The view's own Context: it carries the plugin's resources and the IDE's day/night mode.
-        val color = if (naming) R.color.plugin_on_surface_variant else R.color.plugin_on_surface
-        binding.chatTitle.setTextColor(binding.chatTitle.context.getColor(color))
+        binding.chatTitle.text = shown?.takeUnless { naming } ?: getString(R.string.session_untitled)
     }
 
     /**

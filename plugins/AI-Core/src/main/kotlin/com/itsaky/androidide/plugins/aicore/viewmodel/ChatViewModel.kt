@@ -282,7 +282,7 @@ class ChatViewModel(
     private var generationJob: Job? = null
 
     /**
-     * The in-flight chat title request. The next run waits for it before generating: backends keep
+     * The in-flight chat title request. A run waits for it before generating: backends keep
      * per-request state process-wide (Gemini's current job, the local model's token cap).
      */
     @Volatile
@@ -298,7 +298,7 @@ class ChatViewModel(
     @Volatile
     private var modelTurnInFlight = false
 
-    /** Sessions asked for a title this process; a failing backend is not re-asked every run. */
+    /** Sessions whose title failed this process, so an edited first prompt does not wait again. */
     private val titleRequested = mutableSetOf<String>()
 
     /**
@@ -1026,10 +1026,8 @@ class ChatViewModel(
         // Read once: prompt, grammar and executor must all describe the same tool set.
         val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
-        // The session this run may title; read before the message lands, so the header never
-        // shows it as the title first.
-        val titleSessionId = currentSessionOrNull()?.takeIf { needsTitle(it) }?.id
-        titleSessionId?.let { id -> _titlePending.value = _titlePending.value + id }
+        // Asked before the message lands, so the header never shows the raw prompt as the title.
+        requestTitleIfUntitled(llmService, userMessage)
         // Posted now, not from the run: a Stop before the run's first dispatch left a fork with no
         // prompt at its fork point, and so no arrows to reach the version it had put aside.
         _messages.value = _messages.value + userChatMessage
@@ -1038,10 +1036,8 @@ class ChatViewModel(
         // ATOMIC: a Stop before the first dispatch skipped the block, finally too, so isGenerating
         // stayed set and every later send was refused; now the cancel lands at the first suspension.
         generationJob = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.ATOMIC) {
-            // Whether a title request took over settling this run's title placeholder.
-            var titleRequestStarted = false
             try {
-                // Queued behind a title still being written; the prompt shows as generating meanwhile.
+                // The title is written first; the prompt shows as generating meanwhile.
                 awaitTitleRequest()
 
                 // One list for both halves of the protocol: the prompt describes it and a
@@ -1132,11 +1128,6 @@ class ChatViewModel(
                         runCodeReply?.let { draft -> reviewAnswer(llmService, userMessage, draft, history, epoch) }
                     }
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
-                    if (loopResult.completed && generationEpoch.get() == epoch) {
-                        titleRequestStarted = withContext(Dispatchers.Main) {
-                            requestTitleIfUntitled(llmService)
-                        }
-                    }
                 } catch (e: Exception) {
                     // Kept on an overflow too: the next run compacts them, so the edits made are not repeated.
                     rollBack = e is CancellationException
@@ -1177,8 +1168,6 @@ class ChatViewModel(
                 withContext(NonCancellable + Dispatchers.Main) {
                     finishActivity()
                     persistState()
-                    // No title is coming for a run that failed or stopped; the header shows the prompt.
-                    if (!titleRequestStarted) titleSessionId?.let(::settleTitle)
                 }
             }
         }
@@ -1326,26 +1315,30 @@ class ChatViewModel(
     }
 
     /**
-     * Asks the selected backend to name the current chat, once, after its first completed reply.
-     * Leaves chats the user named, or that already have a title, alone. Main-thread only; the
-     * request itself runs on IO as [titleRequest], which the next run waits out before generating.
+     * Asks the selected backend to name the current chat from its first prompt, before that prompt
+     * runs. Leaves chats the user named, that already have a title, or that hold an earlier prompt
+     * alone. Main only; the request runs on IO as [titleRequest], which the run waits out.
      *
-     * @param llmService the inference service the run just used.
+     * @param llmService the inference service the run will use.
+     * @param prompt the prompt about to run, not yet posted to the chat.
      * @return whether a request was started; it then settles [titlePending] itself when it ends.
      */
-    internal fun requestTitleIfUntitled(llmService: LlmInferenceService): Boolean {
+    internal fun requestTitleIfUntitled(llmService: LlmInferenceService, prompt: String): Boolean {
         val session = currentSessionOrNull() ?: return false
         if (!needsTitle(session)) return false
-        val userText = session.messages.firstOrNull { it.sender == Sender.USER }?.text ?: return false
-        val replyText = session.messages.lastOrNull { it.sender == Sender.AGENT && it.text.isNotBlank() }
-            ?.text ?: return false
         titleRequested.add(session.id)
         val sessionId = session.id
+        _titlePending.value = _titlePending.value + sessionId
         // Lazy, so titleRequest is set before the finally below can compare against it.
         val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val self = coroutineContext.job
             try {
-                generateTitle(llmService, sessionId, userText, replyText)
+                generateTitle(llmService, sessionId, prompt)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                // Nothing above this job handles it, and an escape would take the IDE down.
+                logWarn("title request failed for session $sessionId", e)
             } finally {
                 // A request clearMessages() dropped must not end the placeholder of the run after it.
                 withContext(NonCancellable + Dispatchers.Main) {
@@ -1368,9 +1361,27 @@ class ChatViewModel(
         request.job.join()
     }
 
-    /** Whether [session] is still to be titled: not named by the user, untitled, and not yet asked. */
+    /**
+     * Whether [session] is still to be titled: unnamed, untitled, not failed this process, and on its
+     * first prompt. Older chats keep their prompt's words, so no restart makes a reply wait again.
+     */
     private fun needsTitle(session: ChatSession): Boolean =
-        session.name == null && session.generatedTitle == null && session.id !in titleRequested
+        session.name == null && session.generatedTitle == null && session.id !in titleRequested &&
+            session.messages.none { it.sender == Sender.USER }
+
+    /**
+     * Cancels [sessionId]'s title request, if one is in flight, and ends its spinner; the chat falls
+     * back to its prompt's first words. Not the global cancel: that would reach other plugins' calls.
+     * A dropped request did not fail, so the chat may be asked again if its first prompt is re-sent.
+     */
+    private fun dropTitleRequest(sessionId: String) {
+        titleRequest?.takeIf { it.sessionId == sessionId }?.let {
+            it.job.cancel()
+            titleRequest = null
+            titleRequested.remove(sessionId)
+        }
+        settleTitle(sessionId)
+    }
 
     /** Ends [sessionId]'s loading title; it now shows its generated title or its clamped prompt. */
     private fun settleTitle(sessionId: String) {
@@ -1385,7 +1396,6 @@ class ChatViewModel(
         llmService: LlmInferenceService,
         sessionId: String,
         userText: String,
-        replyText: String,
     ) {
         val response = try {
             // Inside the try: a config that failed to load costs the title, not the chat.
@@ -1396,7 +1406,7 @@ class ChatViewModel(
                 systemPrompt = ChatTitle.systemPrompt(prompts)
             }
             withTimeoutOrNull(ChatTitle.TIMEOUT_MS) {
-                llmService.generateCompletion(ChatTitle.prompt(prompts, userText, replyText), config).await()
+                llmService.generateCompletion(ChatTitle.prompt(prompts, userText), config).await()
             }
         } catch (ce: CancellationException) {
             throw ce
@@ -2023,13 +2033,8 @@ class ChatViewModel(
     private fun resetGeneratedTitle() {
         val sessionId = _currentSessionId.value ?: return
         // Its reply would name the discarded chat, and its settle would end the next run's placeholder.
-        // Another chat's request is left to finish and settle its own placeholder.
-        titleRequest?.takeIf { it.sessionId == sessionId }?.let {
-            it.job.cancel()
-            titleRequest = null
-        }
+        dropTitleRequest(sessionId)
         titleRequested.remove(sessionId)
-        settleTitle(sessionId)
         _sessions.value = _sessions.value.map {
             if (it.id == sessionId) it.copy(generatedTitle = null) else it
         }
@@ -2050,7 +2055,7 @@ class ChatViewModel(
 
     /**
      * Cancels the run's job and, only while one of its model turns is generating, the backend
-     * stream too. A prompt still queued behind a title leaves that title running.
+     * stream too. A title being written is not the run's to cancel; see [dropTitleRequest].
      */
     private fun cancelGenerationJob() {
         // Read before the cancel: the turn's finally may clear it as soon as the job is cancelled.
@@ -2127,6 +2132,8 @@ class ChatViewModel(
      * @param reason what caused the change, for the CANCEL trace line.
      */
     private fun endRunBeforeSessionChange(reason: String) {
+        // Before the check: a title can outlive the run that asked for it, and its spinner with it.
+        _currentSessionId.value?.let(::dropTitleRequest)
         if (!_agentState.value.isRunning) return
         stopProcessing(reason = reason)
     }
@@ -2149,8 +2156,8 @@ class ChatViewModel(
         _sessions.value = _sessions.value.map {
             if (it.id == sessionId) it.copy(name = trimmed) else it
         }
-        // A user name outranks the title being written, so its placeholder must not outlast it.
-        if (trimmed != null) settleTitle(sessionId)
+        // A user name outranks the title being written, so a reply queued behind it starts now.
+        if (trimmed != null) dropTitleRequest(sessionId)
         // Written now rather than debounced: a rename is deliberate and may be the last thing the
         // user does before leaving the tab, where no streamed token follows to flush it.
         persistState()
@@ -2408,6 +2415,8 @@ class ChatViewModel(
         // Cancelling the job alone would strand an open approval dialog with nothing awaiting it.
         approvalManager.cancelPendingApproval()
         cancelGenerationJob()
+        // The run queued behind it is gone, so the chat takes its prompt's first words instead.
+        _currentSessionId.value?.let(::dropTitleRequest)
         stopStateTimer()
         finalizeInProgressMessages()
         setState(AgentState.Idle)

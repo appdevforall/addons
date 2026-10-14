@@ -79,13 +79,10 @@ layout:
 
     {{/FILES}}
 
-  # The user turn of the chat-title request. USER_TEXT and REPLY_TEXT are the first exchange, each
-  # cut to its start and inserted verbatim. It ends on the cue so a completion model answers with
-  # just the title.
+  # The user turn of the chat-title request. USER_TEXT is the chat's first message, cut to its start
+  # and inserted verbatim. It ends on the cue so a completion model answers with just the title.
   chat_title: |-
-    Conversation:
     Developer: {{USER_TEXT}}
-    Assistant: {{REPLY_TEXT}}
 
     Title:
 
