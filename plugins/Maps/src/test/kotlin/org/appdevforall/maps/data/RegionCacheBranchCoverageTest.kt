@@ -222,7 +222,20 @@ class RegionCacheBranchCoverageTest {
         // The no-arg delete() also reaches rootDir(); when it throws, the
         // `getOrNull() ?: return false` branch returns false (couldn't even
         // resolve the root, so nothing was deleted).
-        assertFalse(RegionCache.delete("goodregion"))
+        val dir = File(tempRoot, "goodregion").apply { mkdirs() }
+        assertFalse(RegionCache.delete(RegionCache.readDir(dir)!!))
+    }
+
+    @Test
+    fun deleteByInfoRemovesTheFolderEvenWhenMetaNamesAnotherId() = runBlocking {
+        val dir = File(tempRoot, "folder-name").apply { mkdirs() }
+        File(dir, "meta.json").writeText(JSONObject().apply { put("regionId", "meta-name") }.toString())
+        val info = RegionCache.readDir(dir)!!
+        assertEquals("meta-name", info.regionId)
+
+        assertTrue(RegionCache.deleteFromRoot(tempRoot, info))
+        // Keyed off regionId, the delete found no "meta-name" folder, reported success and left this one.
+        assertFalse("the region's own folder must be gone", dir.exists())
     }
 
     @Test
