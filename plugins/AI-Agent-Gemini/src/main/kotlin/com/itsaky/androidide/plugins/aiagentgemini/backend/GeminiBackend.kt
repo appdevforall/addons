@@ -427,7 +427,7 @@ class GeminiBackend(
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
-                        future.complete(LlmResponse.failure(missingKeyMessage()))
+                        future.complete(LlmResponse.failure(missingKeyMessage(), FailureKind.CONFIGURATION))
                         return@launch
                     }
 
@@ -543,7 +543,7 @@ class GeminiBackend(
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
-                        callback.onError(missingKeyMessage())
+                        callback.onError(missingKeyMessage(), FailureKind.CONFIGURATION)
                         return@launch
                     }
 
@@ -711,7 +711,7 @@ class GeminiBackend(
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
-                        future.complete(LlmResponse.failure(missingKeyMessage()))
+                        future.complete(LlmResponse.failure(missingKeyMessage(), FailureKind.CONFIGURATION))
                         return@launch
                     }
 

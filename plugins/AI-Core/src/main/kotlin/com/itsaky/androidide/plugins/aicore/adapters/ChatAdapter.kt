@@ -263,12 +263,8 @@ class ChatAdapter(
                         hideGeneratingDots(holder)
                         markwon.setMarkdown(holder.messageContent, payload.text)
                     }
-                    MessageStatus.ERROR -> {
-                        holder.loadingIndicator.visibility = View.GONE
-                        holder.messageContent.visibility = View.VISIBLE
-                        hideGeneratingDots(holder)
-                        holder.messageContent.text = payload.text
-                    }
+                    // A live reply turns ERROR in place, so this, not the full bind, is what shows it.
+                    MessageStatus.ERROR -> bindError(holder, message)
                 }
                 updateMessageActions(holder, message)
             } else if (payload is TextUpdatePayload && holder is SystemMessageViewHolder) {
@@ -320,39 +316,44 @@ class ChatAdapter(
                 updateMessageMetadata(holder, message)
             }
             MessageStatus.ERROR -> {
-                holder.loadingIndicator.visibility = View.GONE
-                holder.messageContent.visibility = View.VISIBLE
-                hideGeneratingDots(holder)
-                // An agent bubble can be a cut-off reply, whose prose and code still need rendering.
-                if (message.sender == Sender.AGENT) markwon.setMarkdown(holder.messageContent, message.text)
-                else holder.messageContent.text = message.text
-                // Retry re-runs the last prompt, so an older or restored error offers nothing.
-                val action = errorActionFor(message, retryable = message.id in retryableErrorIds)
-                holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
-                when (action) {
-                    ACTION_OPEN_SETTINGS -> {
-                        holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
-                        holder.btnRetry.setOnClickListener {
-                            onMessageAction(ACTION_OPEN_SETTINGS, message)
-                        }
-                        // Re-wired per bind: the same recycled button plays both roles, so the
-                        // tag has to follow the role it currently has.
-                        wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
-                    }
-                    ACTION_RETRY -> {
-                        holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
-                        holder.btnRetry.setOnClickListener {
-                            onMessageAction(ACTION_RETRY, message)
-                        }
-                        wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
-                    }
-                    // Drop the last bind's listeners so a hidden button holds no stale message.
-                    else -> {
-                        holder.btnRetry.setOnClickListener(null)
-                        holder.btnRetry.setOnLongClickListener(null)
-                    }
-                }
+                bindError(holder, message)
                 updateMessageMetadata(holder, message)
+            }
+        }
+    }
+
+    /** Shows a failed row: its text, and the one button [errorActionFor] gives it, if any. */
+    private fun bindError(holder: DefaultMessageViewHolder, message: ChatMessage) {
+        holder.loadingIndicator.visibility = View.GONE
+        holder.messageContent.visibility = View.VISIBLE
+        hideGeneratingDots(holder)
+        // An agent bubble can be a cut-off reply, whose prose and code still need rendering.
+        if (message.sender == Sender.AGENT) markwon.setMarkdown(holder.messageContent, message.text)
+        else holder.messageContent.text = message.text
+        // Retry re-runs the last prompt, so an older or restored error offers nothing.
+        val action = errorActionFor(message, retryable = message.id in retryableErrorIds)
+        holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
+        when (action) {
+            ACTION_OPEN_SETTINGS -> {
+                holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
+                holder.btnRetry.setOnClickListener {
+                    onMessageAction(ACTION_OPEN_SETTINGS, message)
+                }
+                // Re-wired per bind: the same recycled button plays both roles, so the
+                // tag has to follow the role it currently has.
+                wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
+            }
+            ACTION_RETRY -> {
+                holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
+                holder.btnRetry.setOnClickListener {
+                    onMessageAction(ACTION_RETRY, message)
+                }
+                wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
+            }
+            // Drop the last bind's listeners so a hidden button holds no stale message.
+            else -> {
+                holder.btnRetry.setOnClickListener(null)
+                holder.btnRetry.setOnLongClickListener(null)
             }
         }
     }

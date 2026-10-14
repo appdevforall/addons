@@ -1,6 +1,9 @@
 package com.itsaky.androidide.plugins.aicore.viewmodel
 
+import com.itsaky.androidide.plugins.services.LlmInferenceService.FailureKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -31,6 +34,21 @@ class RunFailureTest {
         val text = RunFailure.describe(IllegalArgumentException("Unknown ViewModel class"), FALLBACK)
 
         assertEquals(FALLBACK, text)
+    }
+
+    @Test
+    fun givenConfigurationFailure_whenAskedWhatFixesIt_thenSettings() {
+        assertTrue(RunFailure.isFixedInSettings(BackendFailure("Claude refused your API key.", FailureKind.CONFIGURATION)))
+    }
+
+    @Test
+    fun givenUntypedBackendFailure_whenAskedWhatFixesIt_thenNotSettings() {
+        assertFalse(RunFailure.isFixedInSettings(BackendFailure("Gemini returned an empty reply.")))
+    }
+
+    @Test
+    fun givenInternalException_whenAskedWhatFixesIt_thenNotSettings() {
+        assertFalse(RunFailure.isFixedInSettings(IllegalStateException()))
     }
 
     private companion object {

@@ -124,7 +124,7 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         }
 
         if (!backend.isAvailable()) {
-            callback.onError("Backend '$effectiveId' is not available")
+            callback.onError("Backend '$effectiveId' is not available", FailureKind.CONFIGURATION)
             return
         }
 
@@ -168,7 +168,7 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         }
 
         if (!backend.isAvailable()) {
-            callback.onError("Backend '$effectiveId' is not available")
+            callback.onError("Backend '$effectiveId' is not available", FailureKind.CONFIGURATION)
             return
         }
 

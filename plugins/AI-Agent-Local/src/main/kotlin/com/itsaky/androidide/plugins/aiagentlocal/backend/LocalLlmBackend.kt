@@ -797,7 +797,10 @@ class LocalLlmBackend(
 
         if (configuredPath.isNullOrBlank()) {
             return CompletableFuture.completedFuture(
-                LlmResponse.failure("No model configured. Please go to Settings and select a .gguf model file.")
+                LlmResponse.failure(
+                    "No model configured. Please go to Settings and select a .gguf model file.",
+                    FailureKind.CONFIGURATION
+                )
             )
         }
 
@@ -895,8 +898,12 @@ class LocalLlmBackend(
     private fun userFacingFailure(e: Exception): GenerationError {
         val described = errorMessages.describe(e)
         if (described.kind == FailureKind.CONTEXT_TOO_LONG) return described
-        return described.copy(message = (e as? UserActionableLlmException)?.message.orEmpty())
+        return GenerationError((e as? UserActionableLlmException)?.message.orEmpty(), failureKindOf(e))
     }
+
+    /** A [UserActionableLlmException] means the selected model is wrong, which only Settings fix. */
+    private fun failureKindOf(e: Exception): FailureKind =
+        if (e is UserActionableLlmException) FailureKind.CONFIGURATION else FailureKind.OTHER
 
     /**
      * Streams a generation over an already-formatted prompt, serialized against every other
@@ -913,7 +920,10 @@ class LocalLlmBackend(
         val configuredPath = prefs.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
 
         if (configuredPath.isNullOrBlank()) {
-            callback.onError("No model configured. Please go to Settings and select a .gguf model file.")
+            callback.onError(
+                "No model configured. Please go to Settings and select a .gguf model file.",
+                FailureKind.CONFIGURATION
+            )
             return
         }
 

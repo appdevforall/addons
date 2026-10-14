@@ -1175,11 +1175,11 @@ class ChatViewModel(
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
                 val failure = RunFailure.describe(e, str(R.string.agent_run_failed))
-                // A key cleared or unreadable mid-chat is fixed in settings, which Retry can't do.
+                // A key cleared or unreadable mid-chat: also a notice, dropped once settings fix it.
                 val isSetupError = e is BackendFailure && !backendStillAvailable(llmService)
                 setState(AgentState.Error(failure))
                 addSystemMessage(
-                    failure, MessageStatus.ERROR, isSetupError, isSettingsError = e is BackendSettingsException,
+                    failure, MessageStatus.ERROR, isSetupError, isSettingsError = RunFailure.isFixedInSettings(e),
                 )
                 // So the next send is stopped by the pre-flight, and the notice clears once fixed.
                 if (isSetupError) withContext(Dispatchers.Main) { checkBackendAvailability() }
