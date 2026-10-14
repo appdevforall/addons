@@ -196,6 +196,13 @@ class BboxTest {
         assertEquals(0.0, haversineKm(45.0, 90.0, 45.0, 90.0), 0.0001)
     }
 
+    @Test
+    fun `boxes with the same edges are equal and print their edges`() {
+        // The download log line prints the box; a non-data class printed Bbox@1b6d3586.
+        assertEquals(Bbox(1.0, 2.0, 3.0, 4.0), Bbox(1.0, 2.0, 3.0, 4.0))
+        assertEquals("Bbox(south=1.0, west=2.0, north=3.0, east=4.0)", Bbox(1.0, 2.0, 3.0, 4.0).toString())
+    }
+
     // isReasonableRegionSize tests removed 2026-05-26 — zoom auto-cap by cell
     // budget replaces the bbox-size gate; whole-world bboxes are now
     // downloadable at low zoom levels.
