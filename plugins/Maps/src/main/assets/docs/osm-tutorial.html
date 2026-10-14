@@ -186,6 +186,10 @@ support, and the <code>MapRegionActivity</code> substitutes
 <code>pmtiles://http://127.0.0.1:&lt;port&gt;/maps/tiles.pmtiles</code> into the
 style at runtime.</p>
 
+<p>The loopback server has no authentication, so any other app on the phone can
+read from its port while your app is running. That is fine for map tiles, which
+are public data; do not reuse it to serve anything private.</p>
+
 <p>This requires the PMTiles to be stored uncompressed in the APK &mdash;
 <code>androidResources { noCompress.add("pmtiles") }</code>, already set in
 <code>build.gradle.kts</code> &mdash; so the loopback server can seek into them.

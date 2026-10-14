@@ -26,10 +26,17 @@ import java.util.concurrent.Executors;
  * <p>Requires assets to be stored uncompressed in the APK
  * ({@code androidResources { noCompress.add("pmtiles") }}) so {@link
  * AssetManager#openFd} returns a real seekable fd.
+ *
+ * <p>The server has no authentication: any app on the device can connect to its port. Serve
+ * only data that is already public, like these map tiles.
  */
 public class PmtilesHttpServer {
     private static final String TAG = "PmtilesHttpServer";
     private static final int BUF = 64 * 1024;
+    /** A client that sends nothing for this long is dropped, so it cannot hold a thread. */
+    static final int READ_TIMEOUT_MS = 5_000;
+    /** MapLibre opens a handful of connections at once; further ones wait in the queue. */
+    private static final int MAX_CLIENTS = 8;
 
     private final AssetManager assets;
     private final String rootPrefix;
@@ -47,7 +54,7 @@ public class PmtilesHttpServer {
         socket = new ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"));
         port = socket.getLocalPort();
         running = true;
-        pool = Executors.newCachedThreadPool();
+        pool = Executors.newFixedThreadPool(MAX_CLIENTS);
         Thread accept = new Thread(() -> {
             while (running) {
                 try {
@@ -76,6 +83,7 @@ public class PmtilesHttpServer {
         try (Socket c = client;
              InputStream in = c.getInputStream();
              OutputStream out = c.getOutputStream()) {
+            c.setSoTimeout(READ_TIMEOUT_MS);
             BufferedReader r = new BufferedReader(new InputStreamReader(in));
             String reqLine = r.readLine();
             if (reqLine == null) return;
