@@ -53,6 +53,26 @@ class HttpRangeByteCacheCoverageTest {
   }
 
   @Test
+  fun callers_editing_their_arrays_do_not_change_the_cache() {
+    val stored = byteArrayOf(1, 2, 3)
+    HttpRangeByteCache.put("u", 0L, 3, stored)
+    stored[0] = 9
+    HttpRangeByteCache.get("u", 0L, 3)!![1] = 9
+    assertArrayEquals(byteArrayOf(1, 2, 3), HttpRangeByteCache.get("u", 0L, 3))
+  }
+
+  @Test
+  fun re_putting_an_existing_key_marks_it_recently_used() {
+    val oneMib = 1024 * 1024
+    for (i in 0 until 8) HttpRangeByteCache.put("u", i.toLong(), oneMib, ByteArray(oneMib))
+    // Entry 0 is the coldest; a repeat put must promote it so entry 1 is evicted instead.
+    HttpRangeByteCache.put("u", 0L, oneMib, ByteArray(oneMib))
+    HttpRangeByteCache.put("u", 8L, oneMib, ByteArray(oneMib))
+    assertEquals(oneMib, HttpRangeByteCache.get("u", 0L, oneMib)?.size)
+    assertNull(HttpRangeByteCache.get("u", 1L, oneMib))
+  }
+
+  @Test
   fun clear_drops_all_entries() {
     HttpRangeByteCache.put("u", 0L, 2, byteArrayOf(1, 2))
     HttpRangeByteCache.clear()

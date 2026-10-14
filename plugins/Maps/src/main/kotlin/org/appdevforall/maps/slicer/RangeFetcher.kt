@@ -69,16 +69,19 @@ internal object HttpRangeByteCache {
     // throws out the truly-cold entries.
     private val entries = object : LinkedHashMap<String, ByteArray>(64, 0.75f, true) {}
 
+    /** A copy of the cached bytes, so a caller that edits its array cannot change the cache. */
     @Synchronized
     fun get(url: String, offset: Long, length: Int): ByteArray? {
-        return entries["$url|$offset|$length"]
+        return entries["$url|$offset|$length"]?.copyOf()
     }
 
+    /** Stores a copy of [bytes]. Re-putting an existing key keeps the old value but marks it recently used. */
     @Synchronized
     fun put(url: String, offset: Long, length: Int, bytes: ByteArray) {
         val key = "$url|$offset|$length"
-        if (entries.containsKey(key)) return
-        entries[key] = bytes
+        // A map get, unlike containsKey, moves the entry to the most-recently-used end.
+        if (entries[key] != null) return
+        entries[key] = bytes.copyOf()
         totalBytes += bytes.size.toLong()
         while (totalBytes > MAX_BYTES && entries.isNotEmpty()) {
             val it = entries.entries.iterator()
