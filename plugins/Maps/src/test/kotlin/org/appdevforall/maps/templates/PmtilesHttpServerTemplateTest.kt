@@ -12,6 +12,7 @@ import java.net.Socket
 import java.net.URLClassLoader
 import java.nio.file.Files
 import javax.tools.ToolProvider
+import org.appdevforall.maps.testing.ShortAssetManager
 import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -108,6 +109,25 @@ class PmtilesHttpServerTemplateTest {
                 assertTrue("handler still blocked on a silent client", !worker.isAlive)
                 silent.soTimeout = 1_000
                 assertEquals("the server closes the connection", -1, silent.getInputStream().read())
+            }
+        }
+    }
+
+    @Test
+    fun `a range the stream cannot reach answers 500, not a 206 header over the wrong bytes`() {
+        // The asset claims 1000 bytes but holds 10, and skip() returns 0, so skipFully fails.
+        val data = File(outDir, "short.pmtiles").apply { writeBytes(ByteArray(10)) }
+        val server = serverClass.getDeclaredConstructor(android.content.res.AssetManager::class.java, String::class.java)
+            .newInstance(ShortAssetManager.create(data, claimedLength = 1000), "maps")
+        val handle = serverClass.getDeclaredMethod("handle", Socket::class.java).apply { isAccessible = true }
+        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { listener ->
+            Socket(listener.inetAddress, listener.localPort).use { client ->
+                val accepted = listener.accept()
+                client.getOutputStream().write("GET /maps/tiles.pmtiles HTTP/1.1\r\nRange: bytes=500-\r\n\r\n".toByteArray())
+                invokeOn(handle, server, accepted)
+                client.soTimeout = 2_000
+                val statusLine = client.getInputStream().bufferedReader().readLine()
+                assertEquals("HTTP/1.1 500 Internal Server Error", statusLine)
             }
         }
     }
