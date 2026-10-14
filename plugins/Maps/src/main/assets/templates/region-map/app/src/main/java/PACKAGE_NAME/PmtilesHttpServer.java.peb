@@ -33,7 +33,7 @@ import java.util.concurrent.Executors;
 public class PmtilesHttpServer {
     private static final String TAG = "PmtilesHttpServer";
     private static final int BUF = 64 * 1024;
-    /** A client that sends nothing for this long is dropped, so it cannot hold a thread. */
+    /** Bounds each read, not the whole request: a client that sends nothing for this long is dropped. */
     static final int READ_TIMEOUT_MS = 5_000;
     /** MapLibre opens a handful of connections at once; further ones wait in the queue. */
     private static final int MAX_CLIENTS = 8;
