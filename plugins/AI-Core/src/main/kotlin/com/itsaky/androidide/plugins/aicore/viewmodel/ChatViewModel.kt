@@ -1681,8 +1681,7 @@ class ChatViewModel(
                 }
 
                 override fun onComplete(response: LlmInferenceService.LlmResponse) {
-                    // Null text means a failed response, which arrives through onError instead; text
-                    // on an unsuccessful one is a reply the backend cut off, shown with its Retry.
+                    // Null text means a failed response, which arrives through onError instead.
                     val written = response.text.orEmpty()
                     val calls = synchronized(nativeCalls) { nativeCalls.toList() }
                     val text = withNativeCalls(written, calls)
@@ -1740,14 +1739,13 @@ class ChatViewModel(
                     }
                     // An unreadable call usually parses on a second try, so its bubble carries Retry.
                     val unparsed = toolCalls.isEmpty() && ToolCallExtractor.diagnoseUnparsedReply(text) != null
-                    val failed = unparsed || !response.success
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val finalMsg = ChatMessage(
                             id = agentMessageId,
                             text = displayText,
                             sender = Sender.AGENT,
-                            status = if (failed) MessageStatus.ERROR else MessageStatus.COMPLETED,
+                            status = if (unparsed) MessageStatus.ERROR else MessageStatus.COMPLETED,
                             durationMs = durationMs,
                             // Only when it differs, so a turn is not stored twice over.
                             historyText = reply.historyText.takeIf { it != displayText }

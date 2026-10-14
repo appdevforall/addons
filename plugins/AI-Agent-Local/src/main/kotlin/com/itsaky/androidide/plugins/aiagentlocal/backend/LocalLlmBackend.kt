@@ -71,6 +71,28 @@ class LocalLlmBackend(
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
 
+        /**
+         * [FailureKind.CONFIGURATION] when only picking another model fixes [e]; a load that failed
+         * for memory or a busy run loop stays [FailureKind.OTHER], since freeing it and retrying works.
+         */
+        internal fun failureKindOf(e: Exception): FailureKind = when (e) {
+            is IncompatibleModelException -> FailureKind.CONFIGURATION
+            is ModelLoadException -> when (e.diagnosis) {
+                ModelLoadDiagnostics.Diagnosis.FileMissing,
+                ModelLoadDiagnostics.Diagnosis.SourceUnavailable,
+                ModelLoadDiagnostics.Diagnosis.SourceNotSeekable,
+                ModelLoadDiagnostics.Diagnosis.SourceNotReopenable,
+                ModelLoadDiagnostics.Diagnosis.FileEmpty,
+                ModelLoadDiagnostics.Diagnosis.NotGguf,
+                ModelLoadDiagnostics.Diagnosis.UnsupportedOrCorrupt -> FailureKind.CONFIGURATION
+                is ModelLoadDiagnostics.Diagnosis.LowMemory,
+                ModelLoadDiagnostics.Diagnosis.ModelBusy,
+                ModelLoadDiagnostics.Diagnosis.InitializationFailed,
+                null -> FailureKind.OTHER
+            }
+            else -> FailureKind.OTHER
+        }
+
         /** What the agent is told when it asks for a search; it can still read a page with fetch_url. */
         private const val WEB_SEARCH_UNSUPPORTED =
             "Web search is not available with the on-device model. Use fetch_url to read a page instead."
@@ -900,10 +922,6 @@ class LocalLlmBackend(
         if (described.kind == FailureKind.CONTEXT_TOO_LONG) return described
         return GenerationError((e as? UserActionableLlmException)?.message.orEmpty(), failureKindOf(e))
     }
-
-    /** A [UserActionableLlmException] means the selected model is wrong, which only Settings fix. */
-    private fun failureKindOf(e: Exception): FailureKind =
-        if (e is UserActionableLlmException) FailureKind.CONFIGURATION else FailureKind.OTHER
 
     /**
      * Streams a generation over an already-formatted prompt, serialized against every other

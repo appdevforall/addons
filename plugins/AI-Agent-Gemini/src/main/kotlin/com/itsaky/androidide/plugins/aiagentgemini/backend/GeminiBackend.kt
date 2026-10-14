@@ -410,13 +410,10 @@ class GeminiBackend(
     override fun canSearchWeb(): Boolean = true
 
     override fun isAvailable(): Boolean {
-        // Available once a (decryptable) API key is configured that Google has not refused since.
+        // Not gated on a recorded refusal: an unavailable backend is never called, so none could clear it.
         val apiKey = readGeminiApiKey()
-        val refused = credentialFailures.read()
-        context.logger.debug(
-            "GeminiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()} refused=$refused"
-        )
-        return !apiKey.isNullOrBlank() && refused == null
+        context.logger.debug("GeminiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()}")
+        return !apiKey.isNullOrBlank()
     }
 
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
@@ -590,11 +587,9 @@ class GeminiBackend(
                             finalText
                         }
                         val tokenCount = reply.split("\\s+".toRegex()).size
-                        val elapsed = System.currentTimeMillis() - startTime
-                        // Unsuccessful with text kept: ai-core shows the prose and offers Retry on it.
+                        // A success: the note says how to get the rest, and the agent loop carries on.
                         callback.onComplete(
-                            if (cutOff) LlmResponse(false, reply, cutOffNote(), tokenCount, elapsed)
-                            else LlmResponse.success(reply, tokenCount, elapsed)
+                            LlmResponse.success(reply, tokenCount, System.currentTimeMillis() - startTime)
                         )
                     }
                 }
@@ -1246,7 +1241,7 @@ class GeminiBackend(
         userMessage(classifyFailure(e, keyStamp))
 
     /**
-     * What [e] says went wrong, recording a credential refusal for the settings pane and [isAvailable].
+     * What [e] says went wrong, recording a credential refusal for the settings pane.
      *
      * @param keyStamp see [formatErrorMessage]
      */

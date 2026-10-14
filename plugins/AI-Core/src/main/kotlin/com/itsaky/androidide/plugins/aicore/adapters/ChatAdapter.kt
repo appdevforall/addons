@@ -120,6 +120,8 @@ class ChatAdapter(
         /**
          * The button error row [message] offers, or null for none. A setup notice or a run refused
          * for its settings is fixed there (ADFA-6345); a tool failure gets none unless the user denied the call.
+         *
+         * @param retryable whether [message] is one of the last run's errors, the only ones Retry re-runs.
          */
         internal fun errorActionFor(message: ChatMessage, retryable: Boolean): String? = when {
             message.isSetupError || message.isSettingsError -> ACTION_OPEN_SETTINGS
@@ -327,7 +329,7 @@ class ChatAdapter(
         holder.loadingIndicator.visibility = View.GONE
         holder.messageContent.visibility = View.VISIBLE
         hideGeneratingDots(holder)
-        // An agent bubble can be a cut-off reply, whose prose and code still need rendering.
+        // An agent bubble is a reply that failed to parse, whose prose and code still need rendering.
         if (message.sender == Sender.AGENT) markwon.setMarkdown(holder.messageContent, message.text)
         else holder.messageContent.text = message.text
         // Retry re-runs the last prompt, so an older or restored error offers nothing.

@@ -687,6 +687,22 @@ class LocalLlmBackendTest {
         return sets
     }
 
+    @Test
+    fun givenAWrongModel_whenClassified_thenSettingsFixIt() {
+        assertEquals(FailureKind.CONFIGURATION, LocalLlmBackend.failureKindOf(IncompatibleModelException("embedding")))
+        assertEquals(
+            FailureKind.CONFIGURATION,
+            LocalLlmBackend.failureKindOf(ModelLoadException("corrupt", Diagnosis.UnsupportedOrCorrupt)),
+        )
+    }
+
+    @Test
+    fun givenATransientLoadFailure_whenClassified_thenRetryFixesIt() {
+        listOf(Diagnosis.LowMemory(2L, 1L), Diagnosis.ModelBusy, Diagnosis.InitializationFailed, null).forEach {
+            assertEquals(FailureKind.OTHER, LocalLlmBackend.failureKindOf(ModelLoadException("load", it)))
+        }
+    }
+
     private fun handleFor(file: File, descriptor: Closeable? = null) =
         OpenModelFile(file.absolutePath, file.length(), descriptor)
 
