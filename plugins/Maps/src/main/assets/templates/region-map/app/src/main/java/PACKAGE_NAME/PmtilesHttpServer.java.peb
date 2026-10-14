@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.util.Log;
 
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -124,25 +125,27 @@ public class PmtilesHttpServer {
                 }
                 long sliceLen = rangeEnd - rangeStart + 1;
                 boolean partial = (rangeStart != 0) || (rangeEnd != totalLen - 1);
-                StringBuilder hdr = new StringBuilder(partial
-                    ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n");
-                hdr.append("Content-Type: application/octet-stream\r\n");
-                hdr.append("Accept-Ranges: bytes\r\n");
-                hdr.append("Content-Length: ").append(sliceLen).append("\r\n");
-                if (partial) {
-                    hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
-                       .append(rangeEnd).append('/').append(totalLen).append("\r\n");
-                }
-                hdr.append("Connection: close\r\n\r\n");
-                out.write(hdr.toString().getBytes("US-ASCII"));
 
                 try (FileInputStream fis = afd.createInputStream()) {
-                    long skipped = 0;
-                    while (skipped < rangeStart) {
-                        long s = fis.skip(rangeStart - skipped);
-                        if (s <= 0) break;
-                        skipped += s;
+                    // Position the stream before any header goes out, so a failure can still
+                    // answer 500 instead of sending the wrong bytes under a 206 header.
+                    try {
+                        skipFully(fis, rangeStart);
+                    } catch (IOException e) {
+                        writeStatus(out, 500, "Internal Server Error"); return;
                     }
+                    StringBuilder hdr = new StringBuilder(partial
+                        ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n");
+                    hdr.append("Content-Type: application/octet-stream\r\n");
+                    hdr.append("Accept-Ranges: bytes\r\n");
+                    hdr.append("Content-Length: ").append(sliceLen).append("\r\n");
+                    if (partial) {
+                        hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
+                           .append(rangeEnd).append('/').append(totalLen).append("\r\n");
+                    }
+                    hdr.append("Connection: close\r\n\r\n");
+                    out.write(hdr.toString().getBytes("US-ASCII"));
+
                     byte[] buf = new byte[BUF];
                     long remaining = sliceLen;
                     while (remaining > 0) {
@@ -159,6 +162,24 @@ public class PmtilesHttpServer {
             }
         } catch (Exception e) {
             Log.w(TAG, "handle: " + e);
+        }
+    }
+
+    /**
+     * Skips exactly {@code n} bytes of {@code in}. {@link InputStream#skip} may return 0 before
+     * the end of the stream, so a one-byte read tells the two apart; the end throws.
+     */
+    static void skipFully(InputStream in, long n) throws IOException {
+        long remaining = n;
+        while (remaining > 0) {
+            long skipped = in.skip(remaining);
+            if (skipped > 0) {
+                remaining -= skipped;
+            } else if (in.read() >= 0) {
+                remaining--;
+            } else {
+                throw new EOFException("stream ended with " + remaining + " bytes left to skip");
+            }
         }
     }
 

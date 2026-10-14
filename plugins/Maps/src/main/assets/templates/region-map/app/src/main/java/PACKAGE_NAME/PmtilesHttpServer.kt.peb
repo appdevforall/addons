@@ -3,6 +3,7 @@ package ${{PACKAGE_NAME}}
 import android.content.res.AssetManager
 import android.util.Log
 import java.io.BufferedReader
+import java.io.EOFException
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStream
@@ -115,26 +116,28 @@ class PmtilesHttpServer(
                     }
                     val sliceLen = rangeEnd - rangeStart + 1
                     val partial = rangeStart != 0L || rangeEnd != totalLen - 1
-                    val hdr = StringBuilder(
-                        if (partial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
-                    )
-                    hdr.append("Content-Type: application/octet-stream\r\n")
-                    hdr.append("Accept-Ranges: bytes\r\n")
-                    hdr.append("Content-Length: ").append(sliceLen).append("\r\n")
-                    if (partial) {
-                        hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
-                            .append(rangeEnd).append('/').append(totalLen).append("\r\n")
-                    }
-                    hdr.append("Connection: close\r\n\r\n")
-                    out.write(hdr.toString().toByteArray(Charsets.US_ASCII))
 
                     afd.createInputStream().use { fis ->
-                        var skipped = 0L
-                        while (skipped < rangeStart) {
-                            val sk = fis.skip(rangeStart - skipped)
-                            if (sk <= 0) break
-                            skipped += sk
+                        // Position the stream before any header goes out, so a failure can still
+                        // answer 500 instead of sending the wrong bytes under a 206 header.
+                        try {
+                            skipFully(fis, rangeStart)
+                        } catch (e: IOException) {
+                            writeStatus(out, 500, "Internal Server Error"); return
                         }
+                        val hdr = StringBuilder(
+                            if (partial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
+                        )
+                        hdr.append("Content-Type: application/octet-stream\r\n")
+                        hdr.append("Accept-Ranges: bytes\r\n")
+                        hdr.append("Content-Length: ").append(sliceLen).append("\r\n")
+                        if (partial) {
+                            hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
+                                .append(rangeEnd).append('/').append(totalLen).append("\r\n")
+                        }
+                        hdr.append("Connection: close\r\n\r\n")
+                        out.write(hdr.toString().toByteArray(Charsets.US_ASCII))
+
                         val buf = ByteArray(BUF)
                         var remaining = sliceLen
                         while (remaining > 0) {
@@ -164,5 +167,21 @@ class PmtilesHttpServer(
     private companion object {
         const val TAG = "PmtilesHttpServer"
         const val BUF = 64 * 1024
+
+        /**
+         * Skips exactly [n] bytes of [input]. `InputStream.skip` may return 0 before the end of
+         * the stream, so a one-byte read tells the two apart; the end throws.
+         */
+        fun skipFully(input: java.io.InputStream, n: Long) {
+            var remaining = n
+            while (remaining > 0) {
+                val skipped = input.skip(remaining)
+                when {
+                    skipped > 0 -> remaining -= skipped
+                    input.read() >= 0 -> remaining--
+                    else -> throw EOFException("stream ended with $remaining bytes left to skip")
+                }
+            }
+        }
     }
 }
