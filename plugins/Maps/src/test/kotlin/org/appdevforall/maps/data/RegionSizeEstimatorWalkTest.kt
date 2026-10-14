@@ -93,4 +93,34 @@ internal class RegionSizeEstimatorWalkTest {
         assertEquals(1, logger.warnings.size)
         assertTrue(logger.warnings.single().startsWith("Slicer estimate failed ("))
     }
+
+    @Test
+    fun `a newer uncached estimate supersedes the pending one`() {
+        val estimator = RegionSizeEstimator(scope, OkHttpClient(), states::add)
+        val europe = Bbox(south = 35.0, west = -10.0, north = 60.0, east = 30.0)
+
+        estimator.estimate(archiveUrl, world, 0, 1)
+        estimator.estimate(archiveUrl, europe, 0, 0)
+        awaitStates { it.lastOrNull() is RegionSizeEstimator.State.Done }
+        Thread.sleep(500)
+
+        // Only the second request may report; the first was cancelled during its debounce.
+        val done = states.filterIsInstance<RegionSizeEstimator.State.Done>().single()
+        assertEquals(1, done.tiles.size)
+        assertEquals(null, SliceEstimateCache.get(archiveUrl, world, 0, 1))
+    }
+
+    @Test
+    fun `cancel stops a pending estimate and is a no-op before any estimate`() {
+        val estimator = RegionSizeEstimator(scope, OkHttpClient(), states::add)
+        estimator.cancel()
+        assertTrue(states.isEmpty())
+
+        estimator.estimate(archiveUrl, world, 0, 1)
+        estimator.cancel()
+        // Past the 300 ms debounce plus the walk time a live estimate would need.
+        Thread.sleep(1_000)
+
+        assertEquals(listOf<RegionSizeEstimator.State>(RegionSizeEstimator.State.Calculating), states.toList())
+    }
 }
