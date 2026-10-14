@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.QuickBuildAvailability
 import com.itsaky.androidide.plugins.services.QuickBuildResult
 import com.itsaky.androidide.plugins.services.QuickBuildUnavailableReason
@@ -47,7 +48,7 @@ class QuickBuildReportTest {
 
     @Test
     fun givenARestart_whenReported_thenItSaysRestartedAndThatStateWasReset() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Reloaded(durationMillis = 12_060, restarted = true))
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Reloaded(durationMillis = 12_060, restarted = true), MAX_CHARS)
 
         assertTrue(result.success)
         assertEquals("Quick Build updated the app: restarted in 12.1s", result.message)
@@ -56,7 +57,7 @@ class QuickBuildReportTest {
 
     @Test
     fun givenNothingChanged_whenReported_thenItSucceedsAsUpToDate() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.UpToDate)
+        val result = QuickBuildReport.resultFor(QuickBuildResult.UpToDate, MAX_CHARS)
 
         assertTrue(result.success)
         assertTrue(result.message.contains("nothing to update"))
@@ -64,7 +65,7 @@ class QuickBuildReportTest {
 
     @Test
     fun givenTheAppIsNotRunning_whenReported_thenItFailsAndSaysHowToLaunch() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.AppNotRunning("The app is not running."))
+        val result = QuickBuildReport.resultFor(QuickBuildResult.AppNotRunning("The app is not running."), MAX_CHARS)
 
         assertFalse(result.success)
         assertTrue(result.message.contains("not running"))
@@ -77,7 +78,7 @@ class QuickBuildReportTest {
         val reason = "The change did not compile:\nMainActivity.kt:12:5: Unresolved reference: foo"
         val output = "> Task :app:compileDebugKotlin\ne: MainActivity.kt:12:5 Unresolved reference: foo"
 
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed(reason, output))
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed(reason, output), MAX_CHARS)
 
         assertFalse(result.success)
         assertEquals("Quick Build failed: The change did not compile:", result.message)
@@ -86,17 +87,30 @@ class QuickBuildReportTest {
     }
 
     @Test
+    fun givenAFailureWithAnOverflowingLog_whenReported_thenTheReasonAndTheSummaryFitTheBudget() {
+        val reason = "The change did not compile:\nMainActivity.kt:12:5: Unresolved reference: foo"
+        val output = "e: MainActivity.kt:12:5 Unresolved reference: foo\n" +
+            "> Task :app:step\n".repeat(2000) + "BUILD FAILED in 9s"
+
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed(reason, output), MAX_CHARS)
+
+        assertTrue(result.error_details!!.length <= MAX_CHARS)
+        assertTrue(result.error_details!!.startsWith(reason))
+        assertTrue(result.error_details!!.endsWith("BUILD FAILED in 9s"))
+    }
+
+    @Test
     fun givenAFailureReasonOpeningWithBlankLines_whenReported_thenTheHeaderIsTheFirstLineWithText() {
         val reason = "\n  \nThe change did not compile:\ne: MainActivity.kt:12:5 Unresolved reference"
 
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed(reason, null))
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed(reason, null), MAX_CHARS)
 
         assertEquals("Quick Build failed: The change did not compile:", result.message)
     }
 
     @Test
     fun givenAFailureWithoutOutput_whenReported_thenItPointsToReadBuildOutput() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed("Quick Build could not start.", null))
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Failed("Quick Build could not start.", null), MAX_CHARS)
 
         assertFalse(result.success)
         assertTrue(result.error_details!!.contains("read_build_output"))
@@ -104,7 +118,7 @@ class QuickBuildReportTest {
 
     @Test
     fun givenARefusal_whenReported_thenItSaysNoBuildRanAndWhy() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Refused("a Quick Build is already running"))
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Refused("a Quick Build is already running"), MAX_CHARS)
 
         assertFalse(result.success)
         assertEquals("Quick Build did not start: a Quick Build is already running", result.message)
@@ -113,7 +127,7 @@ class QuickBuildReportTest {
 
     @Test
     fun givenTheUserDeclinedTheReplace_whenReported_thenTheAgentIsToldNotToRetryUnasked() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Declined)
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Declined, MAX_CHARS)
 
         assertFalse(result.success)
         assertTrue(result.message.contains("declined"))
@@ -122,9 +136,13 @@ class QuickBuildReportTest {
 
     @Test
     fun givenACancellation_whenReported_thenItSaysCancelled() {
-        val result = QuickBuildReport.resultFor(QuickBuildResult.Cancelled)
+        val result = QuickBuildReport.resultFor(QuickBuildResult.Cancelled, MAX_CHARS)
 
         assertFalse(result.success)
         assertEquals("Quick Build was cancelled", result.message)
+    }
+
+    private companion object {
+        val MAX_CHARS = ToolOutputBudget.DEFAULT.dataChars()
     }
 }

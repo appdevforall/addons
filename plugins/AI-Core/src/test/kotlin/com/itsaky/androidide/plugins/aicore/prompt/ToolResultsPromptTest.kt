@@ -5,10 +5,10 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedWith
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
-import com.itsaky.androidide.plugins.aicore.tool.handlers.BuildOutputWindowCalculator
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadTerminalCommandHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.RunShellCommandHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.TerminalOutput
+import com.itsaky.androidide.plugins.aicore.tool.handlers.StopTerminalCommandHandler
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -81,14 +81,12 @@ class ToolResultsPromptTest {
     }
 
     @Test
-    fun givenAFullBuildOutputWindow_whenRenderingABuildTool_thenTheGradleSummaryIsKept() {
-        val window = "e: first error\n" + "x".repeat(BuildOutputWindowCalculator.MAX_OUTPUT_CHARS) + "\nBUILD FAILED"
-        for (tool in listOf("quick_build", "run_gradle_task", "read_build_output")) {
-            val turn = render(listOf(ToolCall(tool, emptyMap())), listOf(ToolResult.failure("failed", window)))
+    fun givenALongCrlfResult_whenRendering_thenTheCutDropsTheCarriageReturnWithItsLine() {
+        val turn = ToolResultsPrompt.render(
+            shippedConfig, "respond", 14, openFile, listOf(ToolResult.success("line1\r\nline2\r\nline3")),
+        )
 
-            assertTrue(tool, turn.contains("BUILD FAILED"))
-            assertFalse(tool, turn.contains("[truncated"))
-        }
+        assertTrue(turn, turn.contains("[open_file] line1\r\nline2\n…[truncated"))
     }
 
     @Test
@@ -144,7 +142,7 @@ class ToolResultsPromptTest {
         calls: List<ToolCall>,
         results: List<ToolResult>,
         config: AgentPromptConfig = shippedConfig,
-    ): String = ToolResultsPrompt.render(config, "respond", ToolResultsPrompt.DEFAULT_CHAR_LIMIT, calls, results)
+    ): String = ToolResultsPrompt.render(config, "respond", ToolOutputBudget.DEFAULT_CHARS, calls, results)
 
     @Test
     fun givenTheShippedConfig_whenRenderingTheUnfinishedTurn_thenItNamesTheTerminalTool() {
@@ -165,7 +163,7 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenASearchReportPastTheDefaultCap_whenRendering_thenItsSourcesAreNotCut() {
-        val report = "x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT) + "\n\nSources:\n- https://ktor.io/docs"
+        val report = "x".repeat(ToolOutputBudget.DEFAULT_CHARS) + "\n\nSources:\n- https://ktor.io/docs"
 
         val turn = render(listOf(ToolCall("web_search", emptyMap())), listOf(ToolResult.success("Searched", report)))
 
@@ -174,7 +172,7 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenAFetchedPagePastTheDefaultCap_whenRendering_thenItIsNotCut() {
-        val page = "x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT) + "END"
+        val page = "x".repeat(ToolOutputBudget.DEFAULT_CHARS) + "END"
 
         val turn = render(listOf(ToolCall("fetch_url", emptyMap())), listOf(ToolResult.success("Fetched", page)))
 
@@ -183,15 +181,17 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenAProjectResultPastTheDefaultCap_whenRendering_thenItIsStillCut() {
-        val turn = render(openFile, listOf(ToolResult.success("x".repeat(ToolResultsPrompt.DEFAULT_CHAR_LIMIT + 10))))
+        val turn = render(openFile, listOf(ToolResult.success("x".repeat(ToolOutputBudget.DEFAULT_CHARS + 10))))
 
         assertTrue(turn.contains("[truncated"))
     }
 
     @Test
     fun givenAStillRunningCommandWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
-        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "listening on 3000"
-        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "listening on 3000"
+        val result = RunShellCommandHandler.resultFor(
+            TerminalCommandResult.Running("cmd-1", "AI Core 1", output), ToolOutputBudget.DEFAULT.dataChars()
+        )
 
         val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
@@ -200,8 +200,8 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenANonZeroExitWithFullOutput_whenRendering_thenTheErrorAtTheEndIsNotCut() {
-        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "error: no such file"
-        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Completed(1, output))
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "error: no such file"
+        val result = RunShellCommandHandler.resultFor(TerminalCommandResult.Completed(1, output), ToolOutputBudget.DEFAULT.dataChars())
 
         val turn = render(listOf(ToolCall(RunShellCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
@@ -211,11 +211,21 @@ class ToolResultsPromptTest {
 
     @Test
     fun givenACommandReadWithFullOutput_whenRendering_thenItsLatestOutputIsNotCut() {
-        val output = "x".repeat(TerminalOutput.MAX_CHARS * 2) + "GET / 200"
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "GET / 200"
         val result = ReadTerminalCommandHandler(mockk(relaxed = true)).resultFor("cmd-1", TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
 
         val turn = render(listOf(ToolCall(ReadTerminalCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
 
         assertTrue(turn.contains("GET / 200\n</tool_response>"))
+    }
+
+    @Test
+    fun givenAStopThatLeftTheCommandRunning_whenRendering_thenItsLatestOutputIsNotCut() {
+        val output = "x".repeat(ToolOutputBudget.DEFAULT_CHARS * 2) + "still pinging"
+        val result = StopTerminalCommandHandler(mockk(relaxed = true)).resultFor("cmd-1", TerminalCommandResult.Running("cmd-1", "AI Core 1", output))
+
+        val turn = render(listOf(ToolCall(StopTerminalCommandHandler.TOOL_NAME, emptyMap())), listOf(result))
+
+        assertTrue(turn.contains("still pinging\n</tool_response>"))
     }
 }

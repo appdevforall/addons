@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.IdeTerminalService
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
 
@@ -13,7 +14,8 @@ import com.itsaky.androidide.plugins.services.TerminalCommandResult
 class StopTerminalCommandHandler(
     pluginContext: PluginContext,
     private val startedCommands: StartedCommands = StartedCommands(),
-) : TerminalCommandHandler(pluginContext, TOOL_NAME) {
+    budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
+) : TerminalCommandHandler(pluginContext, TOOL_NAME, budget) {
 
     // Asked every time: unasked, Gemini stopped a ping the user had just started.
     override val requiresApproval = true
@@ -36,16 +38,18 @@ class StopTerminalCommandHandler(
     override suspend fun callHost(terminal: IdeTerminalService, commandId: String) =
         terminal.stopCommand(commandId)
 
-    override fun running(commandId: String, running: TerminalCommandResult.Running) = ToolResult.failure(
-        "Command \"$commandId\" is still running; it did not stop on Ctrl-C",
-        "Tell the user to stop it in the Terminal session \"${running.sessionName}\". Its latest output:\n" +
-            TerminalOutput.tailOf(running.output)
-    )
+    override fun running(commandId: String, running: TerminalCommandResult.Running): ToolResult {
+        val advice = "Tell the user to stop it in the Terminal session \"${running.sessionName}\". Its latest output:\n"
+        return ToolResult.failure(
+            "Command \"$commandId\" is still running; it did not stop on Ctrl-C",
+            advice + TerminalOutput.tailOf(running.output, budget.dataChars() - advice.length)
+        )
+    }
 
     // Any exit code succeeds, since Ctrl-C makes most exit non-zero; one that exited before is left alone.
     override fun completed(commandId: String, completed: TerminalCommandResult.Completed) = ToolResult.success(
         message = "Command \"$commandId\" is no longer running: it ${TerminalOutput.exitOf(completed.exitCode)}",
-        data = TerminalOutput.tailOf(completed.output)
+        data = TerminalOutput.tailOf(completed.output, budget.dataChars())
     )
 
     companion object {

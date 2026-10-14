@@ -43,6 +43,13 @@ object ToolSchema {
     fun boolean(description: String? = null): Map<String, Any> = property("boolean", description)
 
     /**
+     * A whole-number argument. A model may still send it as a string; see [parseToolInt].
+     * @param description what it means, as the model reads it; null for a built-in tool.
+     * @return the property schema.
+     */
+    fun integer(description: String? = null): Map<String, Any> = property("integer", description)
+
+    /**
      * An argument holding an object whose keys are not known ahead of time.
      *
      * A backend whose provider cannot declare one (Gemini rejects an object with no properties)

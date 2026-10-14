@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.SHELL_STAGE
@@ -14,10 +15,12 @@ import com.itsaky.androidide.plugins.services.TerminalCommandResult
  * A tool acting on one command [RunShellCommandHandler] left running, by the id it reported: the
  * argument, the host call, tracing and the unknown-id result. Subclasses say what to call and report.
  * Keyed by command, not session: the host reuses an idle session for the next command.
+ * Subclasses size the output they return to [budget].
  */
 abstract class TerminalCommandHandler(
     pluginContext: PluginContext,
     final override val toolName: String,
+    protected val budget: ToolOutputBudget,
 ) : ToolHandler {
 
     final override val parametersSchema = ToolSchema.objectOf(

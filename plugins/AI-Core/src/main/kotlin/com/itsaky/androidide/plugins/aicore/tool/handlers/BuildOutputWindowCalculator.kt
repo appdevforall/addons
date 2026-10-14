@@ -5,9 +5,6 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
  * back: read_build_output, run_gradle_task and quick_build.
  */
 internal object BuildOutputWindowCalculator {
-    /** Maximum characters of build log handed to the model. */
-    const val MAX_OUTPUT_CHARS = 8000
-
     // The host strips line timing prefixes; tolerated here so the window is right either way.
     private val LINE_PREFIX = Regex("""^(?:\[\d{2}:\d{2}:\d{2}\.\d{3}] )?(?:Δ\d+ms\s+)?""")
 
@@ -29,14 +26,16 @@ internal object BuildOutputWindowCalculator {
      * Selects the slice of [output] the model needs. A plain tail is the wrong window for a
      * failed build — the tail is the summary and boilerplate, while the compiler errors sit
      * hundreds of lines earlier — so the window starts at the first error line when there is one.
+     * @param maxChars the most the window may hold, its truncation marker included.
      */
-    fun windowFor(output: String): OutputWindow {
+    fun windowFor(output: String, maxChars: Int): OutputWindow {
         val errorOffset = firstErrorOffset(output)
         val body = if (errorOffset == null) output else output.substring(errorOffset)
-        val overflows = body.length > MAX_OUTPUT_CHARS
+        val droppedHead = (errorOffset ?: 0) > 0
+        val overflows = body.length > if (droppedHead) maxChars - MARKER_LINE else maxChars
         // A cascade of hundreds of errors still ends at the summary, so overflow re-tails.
-        val text = if (overflows) body.takeLast(MAX_OUTPUT_CHARS) else body
-        val dropped = overflows || (errorOffset ?: 0) > 0
+        val text = if (overflows) tailOf(body, (maxChars - MARKER_LINE).coerceAtLeast(0)) else body
+        val dropped = overflows || droppedHead
         return OutputWindow(
             text = if (dropped) "$TRUNCATION_MARKER\n$text" else text,
             anchoredOnError = errorOffset != null && !overflows,
@@ -44,8 +43,17 @@ internal object BuildOutputWindowCalculator {
     }
 
     /** The [windowFor] text of [output], or null when the host gave no output to read. */
-    fun windowOrNull(output: String?): String? =
-        output?.takeIf { it.isNotBlank() }?.let { windowFor(it).text }
+    fun windowOrNull(output: String?, maxChars: Int): String? =
+        output?.takeIf { it.isNotBlank() }?.let { windowFor(it, maxChars).text }
+
+    private const val MARKER_LINE = TRUNCATION_MARKER.length + 1
+
+    /** The last [room] characters of [text], starting at a line when one fits. */
+    private fun tailOf(text: String, room: Int): String {
+        val tail = text.takeLast(room)
+        val lineStart = tail.indexOf('\n')
+        return if (lineStart in 0 until tail.lastIndex) tail.substring(lineStart + 1) else tail
+    }
 
     /** Character offset of the first line that looks like a compiler or Gradle failure. */
     private fun firstErrorOffset(output: String): Int? {

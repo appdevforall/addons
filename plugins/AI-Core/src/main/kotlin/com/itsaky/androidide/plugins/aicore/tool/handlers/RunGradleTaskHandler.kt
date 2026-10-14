@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
@@ -13,10 +14,12 @@ import com.itsaky.androidide.plugins.services.IdeBuildService
 /**
  * Handler for running any Gradle task (`test`, `lint`, `clean`, `:app:testDebugUnitTest`) with
  * Gradle arguments, on the IDE's own tooling server. Its output reaches the Build Output pane, and
- * the slice worth reading comes back with the result, so a test run reports its failures at once.
+ * the slice worth reading comes back with the result, sized to [budget], so a test run reports its
+ * failures at once.
  */
 class RunGradleTaskHandler(
     pluginContext: PluginContext,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
     override val toolName = TOOL_NAME
 
@@ -74,7 +77,7 @@ class RunGradleTaskHandler(
             }
 
             AgentTrace.stage(BUILD_STAGE, "$toolName outcome=$outcome waitedMs=$waitedMs")
-            resultFor(label, outcome, buildService.getBuildOutput())
+            resultFor(label, outcome, buildService.getBuildOutput(), budget.dataChars())
         }
     }
 
@@ -93,11 +96,16 @@ class RunGradleTaskHandler(
         /**
          * The tool result for [outcome], carrying the build output window so a failed test or
          * compile error reaches the model without a second call.
+         * @param maxChars the most build output the result may carry.
          */
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
-        internal fun resultFor(label: String, outcome: GradleTaskResult, output: String?): ToolResult {
-            val log = BuildOutputWindowCalculator.windowOrNull(output)
+        internal fun resultFor(label: String, outcome: GradleTaskResult, output: String?, maxChars: Int): ToolResult {
+            val log = output?.takeIf { it.isNotBlank() }?.let {
+                // Room for the up-to-date note, so its window is the same whatever the outcome.
+                val room = (maxChars - UP_TO_DATE_NOTE.length - 2).coerceAtLeast(0)
+                BuildOutputWindowCalculator.windowFor(it, room).text
+            }
             return when (outcome) {
                 GradleTaskResult.Success -> if (nothingRan(output)) {
                     ToolResult.success(

@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import com.itsaky.androidide.plugins.services.IdeBuildService
@@ -13,9 +14,11 @@ import com.itsaky.androidide.plugins.services.QuickBuildState
 /**
  * Handler for starting Quick Build, which updates the running app in place. The host runs it as a
  * tap on the toolbar button, so the toolbar, Build Output and the replace-app prompt behave as usual.
+ * A failure's build output comes back sized to [budget].
  */
 class QuickBuildHandler(
     private val pluginContext: PluginContext,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
     override val toolName = TOOL_NAME
 
@@ -56,7 +59,7 @@ class QuickBuildHandler(
         }
 
         AgentTrace.stage(BUILD_STAGE, "$toolName outcome=$outcome waitedMs=$waitedMs")
-        QuickBuildReport.resultFor(outcome)
+        QuickBuildReport.resultFor(outcome, budget.dataChars())
     }
 
     /** Why Quick Build cannot start now, or null when it can. */

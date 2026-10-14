@@ -4,14 +4,16 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import com.itsaky.androidide.plugins.services.IdeBuildService
 
 /**
- * Handler for reading the current build output.
+ * Handler for reading the current build output, windowed to fit [budget].
  */
 class ReadBuildOutputHandler(
-    pluginContext: PluginContext
+    pluginContext: PluginContext,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
     override val toolName = TOOL_NAME
     override val requiresApproval = false
@@ -31,7 +33,7 @@ class ReadBuildOutputHandler(
                     data = "(No recent build output)"
                 )
             } else {
-                val window = BuildOutputWindowCalculator.windowFor(output)
+                val window = BuildOutputWindowCalculator.windowFor(output, budget.dataChars())
                 AgentTrace.detail(
                     BUILD_STAGE,
                     "$toolName chars=${window.text.length} " +

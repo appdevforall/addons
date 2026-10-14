@@ -13,9 +13,12 @@ terminal_tool:
 # Keyed by tool name. A tool from another plugin brings its own description and is not listed.
 built_in_tools:
   read_file:
-    description: Read the contents of a file
+    description: Read the contents of a file, a page at a time; follow its "Next:" hint to read on
     arguments:
       file_path: Project-relative path of the file to read.
+      start_line: First line to read, counting from 1. Defaults to 1.
+      end_line: Last line to read. Defaults to the end of the file.
+      start_column: Column on start_line to start from, for a line too long for one page. Defaults to 1.
   list_files:
     description: List files and directories in a given path
     arguments:

@@ -202,4 +202,14 @@ class RunGradleTaskHandlerTest {
 
         verify(exactly = 0) { buildService.cancelBuild() }
     }
+
+    @Test
+    fun givenABudgetSmallerThanTheUpToDateNote_whenBuildingTheResult_thenItDoesNotThrow() {
+        val output = (1..50).joinToString("\n") { "> Task :app:task$it UP-TO-DATE" }
+
+        val result = RunGradleTaskHandler.resultFor("test", GradleTaskResult.Success, output, maxChars = 10)
+
+        assertTrue(result.success)
+        assertTrue(result.message.contains("up to date"))
+    }
 }

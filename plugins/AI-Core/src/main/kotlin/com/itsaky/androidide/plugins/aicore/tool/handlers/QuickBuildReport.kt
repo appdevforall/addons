@@ -29,10 +29,11 @@ internal object QuickBuildReport {
     /**
      * The result for [outcome], carrying the build output window on a failure so the compiler
      * errors reach the model without a second call.
+     * @param maxChars the most the result's data may hold, the host's reason included.
      */
     // The else is for a result a newer host adds; without it that result throws at runtime.
     @Suppress("REDUNDANT_ELSE_IN_WHEN")
-    fun resultFor(outcome: QuickBuildResult): ToolResult = when (outcome) {
+    fun resultFor(outcome: QuickBuildResult, maxChars: Int): ToolResult = when (outcome) {
         is QuickBuildResult.Reloaded -> {
             val how = if (outcome.restarted) "restarted" else "reloaded"
             ToolResult.success(
@@ -50,10 +51,13 @@ internal object QuickBuildReport {
             "${outcome.message}\n\n$APP_NOT_RUNNING_NOTE"
         )
         // The reason holds the host's own summary, the first compile errors included.
-        is QuickBuildResult.Failed -> ToolResult.failure(
-            "Quick Build failed: ${headlineOf(outcome.reason)}",
-            "${outcome.reason}\n\n${BuildOutputWindowCalculator.windowOrNull(outcome.output) ?: NO_OUTPUT_NOTE}"
-        )
+        is QuickBuildResult.Failed -> {
+            val room = (maxChars - outcome.reason.length - 2).coerceAtLeast(0)
+            ToolResult.failure(
+                "Quick Build failed: ${headlineOf(outcome.reason)}",
+                "${outcome.reason}\n\n${BuildOutputWindowCalculator.windowOrNull(outcome.output, room) ?: NO_OUTPUT_NOTE}"
+            )
+        }
         is QuickBuildResult.Refused -> ToolResult.failure(
             "Quick Build did not start: ${outcome.reason}",
             REFUSED_NOTE

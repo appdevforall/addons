@@ -5,16 +5,18 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
  * final state show up. Shared by the shell tools, so a run and a later read look the same.
  */
 internal object TerminalOutput {
-    /** Maximum characters of output handed to the model; the end is kept. */
-    const val MAX_CHARS = 8000
-
     private const val NO_OUTPUT = "(No output)"
 
-    /** The last [MAX_CHARS] of [output], marked with [TRUNCATION_MARKER] when earlier output was cut. */
-    fun tailOf(output: String): String = when {
+    private const val MARKER_LINE = TRUNCATION_MARKER.length + 1
+
+    /**
+     * The end of [output], marked with [TRUNCATION_MARKER] when earlier output was cut.
+     * @param maxChars the most the slice may hold, its marker included.
+     */
+    fun tailOf(output: String, maxChars: Int): String = when {
         output.isBlank() -> NO_OUTPUT
-        output.length <= MAX_CHARS -> output
-        else -> "$TRUNCATION_MARKER\n${output.takeLast(MAX_CHARS)}"
+        output.length <= maxChars -> output
+        else -> "$TRUNCATION_MARKER\n${output.takeLast((maxChars - MARKER_LINE).coerceAtLeast(0))}"
     }
 
     /** How a command with [exitCode] ended, as a predicate; the host reports -1 when it could not tell. */

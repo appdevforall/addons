@@ -34,10 +34,10 @@ class AgentLoopTest {
         maxIterations: Int = AgentLoop.DEFAULT_MAX_ITERATIONS,
         maxConsecutiveRepeats: Int = AgentLoop.DEFAULT_MAX_CONSECUTIVE_REPEATS,
         terminalTool: String? = null,
-        toolOutputCharLimit: Int = ToolResultsPrompt.DEFAULT_CHAR_LIMIT,
+        toolOutputCharLimit: Int = ToolOutputBudget.DEFAULT_CHARS,
         unfinishedTurn: (suspend () -> String)? = null,
     ) = AgentLoop(
-        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond", toolOutputCharLimit),
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond") { toolOutputCharLimit },
         maxIterations = maxIterations,
         maxConsecutiveRepeats = maxConsecutiveRepeats,
         terminalTool = terminalTool,
@@ -929,9 +929,9 @@ class AgentLoopTest {
     }
 
     @Test
-    fun givenALooselyNamedShellCall_whenItsResultIsFormatted_thenTheShellToolsLargerCapApplies() = runTest {
-        val model = ScriptedModel(listOf(toolCall("Run_Shell_Command"), "Done."))
-        val history = mutableListOf(ChatMessage(Role.USER, "run the check"))
+    fun givenALooselyNamedWebSearch_whenItsResultIsFormatted_thenTheWebToolsLargerCapApplies() = runTest {
+        val model = ScriptedModel(listOf(toolCall("Web_Search"), "Done."))
+        val history = mutableListOf(ChatMessage(Role.USER, "search the docs"))
         val executed = mutableListOf<String>()
 
         agentLoop().run(
@@ -939,16 +939,16 @@ class AgentLoopTest {
             generate = model::generate,
             executeTools = { calls ->
                 executed += calls.map { it.name }
-                calls.map { ToolResult.success("Command exited with code 1", "x".repeat(5000) + "THE ERROR") }
+                calls.map { ToolResult.success("Searched", "x".repeat(5000) + "THE SOURCES") }
             },
-            canonicalName = { name -> if (name.equals("run_shell_command", true)) "run_shell_command" else name },
+            canonicalName = { name -> if (name.equals("web_search", true)) "web_search" else name },
         )
 
-        // Under the emitted name the default 4000-character cap kept the start and cut the error.
-        assertEquals(listOf("run_shell_command"), executed)
+        // Under the emitted name the default 4000-character cap kept the start and cut the sources.
+        assertEquals(listOf("web_search"), executed)
         val results = history.last { it.role == Role.USER }.content
-        assertTrue(results.contains("[run_shell_command]"))
-        assertTrue(results.contains("THE ERROR"))
+        assertTrue(results.contains("[web_search]"))
+        assertTrue(results.contains("THE SOURCES"))
     }
 
     private companion object {
