@@ -124,6 +124,8 @@ tasks.matching {
 }
 
 tasks.withType<Test>().configureEach {
+    // Template tests read these files by path, so declare them or a template edit stays UP-TO-DATE.
+    inputs.dir("src/main/assets/templates").withPropertyName("templates")
     System.getProperty("runOnlineSlicerTests")?.let {
         systemProperty("runOnlineSlicerTests", it)
     }
