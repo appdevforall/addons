@@ -28,6 +28,12 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
+
+        // Code on the Go ships for these two ABIs only; MapLibre's x86 and x86_64 libraries
+        // would add about 21 MB that no host can load.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     buildTypes {
