@@ -57,7 +57,7 @@ internal class CompactionUseCase(
     /**
      * @param backendId the backend the run is against.
      * @param systemPrompt the run's system prompt.
-     * @param toolDefinitions the tools every request of the run carries.
+     * @param toolDefinitions the tools sent natively beside the system prompt; empty when the prompt lists them.
      * @param history the turns before the new message.
      * @param pendingUserTurn the new message with its attached files.
      * @param replyTokens the run's reply cap; see [HistoryCompactor.inputBudgetTokens].

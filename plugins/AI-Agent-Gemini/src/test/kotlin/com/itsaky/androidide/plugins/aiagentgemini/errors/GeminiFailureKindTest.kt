@@ -23,12 +23,20 @@ class GeminiFailureKindTest {
     }
 
     @Test
-    fun givenAnyOtherFailure_whenMapped_thenKindIsOther() {
-        val others = listOf(
+    fun givenAFailureFixedInSettings_whenMapped_thenKindIsConfiguration() {
+        val settings = listOf(
             GeminiFailure.ModelUnavailable("gemini-2.5-flash"),
-            GeminiFailure.QuotaExceeded,
             GeminiFailure.KeyRefused,
             GeminiFailure.KeyInvalid,
+        )
+
+        settings.forEach { failure -> assertEquals(failure.toString(), FailureKind.CONFIGURATION, failure.failureKind) }
+    }
+
+    @Test
+    fun givenAnyOtherFailure_whenMapped_thenKindIsOther() {
+        val others = listOf(
+            GeminiFailure.QuotaExceeded,
             GeminiFailure.RequestRejected("too long"),
             GeminiFailure.ServiceUnavailable(503),
             GeminiFailure.Unexpected(418, null),

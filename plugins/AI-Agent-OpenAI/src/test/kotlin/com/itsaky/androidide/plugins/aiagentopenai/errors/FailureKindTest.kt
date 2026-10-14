@@ -14,14 +14,21 @@ class FailureKindTest {
     }
 
     @Test
-    fun givenAnyOtherFailure_whenMapped_thenTheKindIsOther() {
-        val others = listOf(
+    fun givenAFailureFixedInSettings_whenMapped_thenTheKindIsConfiguration() {
+        val settings = listOf(
             OpenAiFailure.ModelUnavailable("gpt-5"),
-            OpenAiFailure.QuotaExceeded,
             OpenAiFailure.BillingRequired,
             OpenAiFailure.KeyRefused,
             OpenAiFailure.KeyMissing,
             OpenAiFailure.KeyForbidden,
+        )
+        settings.forEach { assertEquals(it.toString(), FailureKind.CONFIGURATION, it.failureKind) }
+    }
+
+    @Test
+    fun givenAnyOtherFailure_whenMapped_thenTheKindIsOther() {
+        val others = listOf(
+            OpenAiFailure.QuotaExceeded,
             OpenAiFailure.RequestRejected("bad"),
             OpenAiFailure.ServiceUnavailable(503),
             OpenAiFailure.Unexpected(418, null),

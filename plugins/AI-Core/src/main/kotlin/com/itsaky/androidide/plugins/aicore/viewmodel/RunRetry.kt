@@ -18,7 +18,7 @@ internal object RunRetry {
         val start = lastRunPromptId?.let { id -> messages.indexOfFirst { it.id == id } } ?: return emptySet()
         if (start < 0) return emptySet()
         return messages.drop(start + 1)
-            .filter { it.status == MessageStatus.ERROR && !it.isSetupError }
+            .filter { it.status == MessageStatus.ERROR && !it.isSetupError && !it.isSettingsError }
             .mapTo(mutableSetOf()) { it.id }
     }
 }

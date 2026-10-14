@@ -68,15 +68,25 @@ internal object HistoryCompactor {
     }
 
     /**
-     * Servers such as vLLM reject a request whose input plus its reply cap passes the window, and on
-     * device the reply fills the same context, so the cap is reserved first, up to half the budget.
+     * Servers such as vLLM reject a request whose input plus its reply cap passes the window, so a
+     * window under twice the cap sends a smaller cap rather than one no input can fit beside.
      *
      * @param budgetTokens see [budgetTokens].
-     * @param replyTokens the reply cap the request is sent with.
+     * @param capTokens the backend's own reply cap.
+     * @return the reply cap the request is sent with: [capTokens], at most half the budget.
+     */
+    fun replyTokens(budgetTokens: Int, capTokens: Int): Int = minOf(capTokens, budgetTokens / 2)
+
+    /**
+     * The reply cap is reserved first: servers count it against the window, and on device the
+     * reply fills the same context.
+     *
+     * @param budgetTokens see [budgetTokens].
+     * @param replyTokens the reply cap the request is sent with; see [replyTokens].
      * @return the tokens a request's input may use.
      */
     fun inputBudgetTokens(budgetTokens: Int, replyTokens: Int): Int =
-        budgetTokens - minOf(replyTokens, budgetTokens / 2)
+        budgetTokens - replyTokens(budgetTokens, replyTokens)
 
     /**
      * @param backendId the backend the run is against.

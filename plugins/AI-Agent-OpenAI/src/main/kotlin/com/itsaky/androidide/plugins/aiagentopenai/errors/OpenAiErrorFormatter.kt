@@ -158,17 +158,17 @@ internal val OpenAiFailure.isCredentialProblem: Boolean
 
 /**
  * The kind AI Core is told alongside this failure's wording, so it can shorten an overflowing
- * conversation without matching text. Listed exhaustively so a failure added later is classified.
+ * conversation or send the user to settings without matching text. Listed exhaustively so a failure added later is classified.
  */
 internal val OpenAiFailure.failureKind: FailureKind
     get() = when (this) {
         OpenAiFailure.ContextTooLong -> FailureKind.CONTEXT_TOO_LONG
         is OpenAiFailure.ModelUnavailable,
-        OpenAiFailure.QuotaExceeded,
         OpenAiFailure.BillingRequired,
         OpenAiFailure.KeyRefused,
         OpenAiFailure.KeyMissing,
-        OpenAiFailure.KeyForbidden,
+        OpenAiFailure.KeyForbidden -> FailureKind.CONFIGURATION
+        OpenAiFailure.QuotaExceeded,
         is OpenAiFailure.RequestRejected,
         is OpenAiFailure.ServiceUnavailable,
         is OpenAiFailure.Unexpected,

@@ -63,6 +63,16 @@ class HistoryCompactorTest {
     }
 
     @Test
+    fun givenAWindowUnderTwiceTheCap_whenSizingTheReply_thenTheSentCapIsHalfTheWindow() {
+        // A 4k llama-server window: input and reply together still fit, so compaction can cure it.
+        assertEquals(2_048, HistoryCompactor.replyTokens(budgetTokens = 4_096, capTokens = 4_096))
+        assertEquals(4_096, HistoryCompactor.replyTokens(budgetTokens = 200_000, capTokens = 4_096))
+        val budget = 4_096
+        val reply = HistoryCompactor.replyTokens(budget, capTokens = 16_384)
+        assertEquals(budget, HistoryCompactor.inputBudgetTokens(budget, reply) + reply)
+    }
+
+    @Test
     fun givenABudget_whenSizingTheRoomForHistory_thenFixedPartsAndThePromptComeOffTheTrigger() {
         val room = HistoryCompactor.historyRoomChars(fixedChars = 1_000, pendingUserTurn = "x".repeat(200), inputTokens = 1_000)
 

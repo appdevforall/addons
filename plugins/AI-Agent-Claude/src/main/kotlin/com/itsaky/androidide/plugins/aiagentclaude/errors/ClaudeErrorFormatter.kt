@@ -159,12 +159,18 @@ internal val ClaudeFailure.isCredentialProblem: Boolean
     get() = CredentialFailure.of(this) != null
 
 /**
- * The kind AI Core is told alongside the sentence, so it compacts the history only after a real
- * overflow rather than by matching the wording.
+ * The kind AI Core is told alongside the sentence, so it compacts only after a real overflow and
+ * sends the user to settings for a credential, billing or model failure, without matching wording.
  */
 internal val ClaudeFailure.failureKind: FailureKind
     get() = when (this) {
         ClaudeFailure.ContextTooLong -> FailureKind.CONTEXT_TOO_LONG
+        is ClaudeFailure.ModelUnavailable,
+        ClaudeFailure.BillingRequired,
+        ClaudeFailure.KeyRefused,
+        ClaudeFailure.KeyMissing,
+        ClaudeFailure.KeyForbidden,
+        ClaudeFailure.KeyNeedsWorkspace -> FailureKind.CONFIGURATION
         else -> FailureKind.OTHER
     }
 

@@ -23,15 +23,24 @@ class ClaudeFailureKindTest {
     }
 
     @Test
-    fun givenAnyOtherFailure_whenMapped_thenKindIsOther() {
-        val others = listOf(
+    fun givenAFailureFixedInSettings_whenMapped_thenKindIsConfiguration() {
+        val settings = listOf(
             ClaudeFailure.ModelUnavailable("claude-opus-5-5"),
-            ClaudeFailure.QuotaExceeded,
             ClaudeFailure.BillingRequired,
             ClaudeFailure.KeyRefused,
             ClaudeFailure.KeyMissing,
             ClaudeFailure.KeyForbidden,
             ClaudeFailure.KeyNeedsWorkspace,
+        )
+
+        settings.forEach { failure -> assertEquals(failure.toString(), FailureKind.CONFIGURATION, failure.failureKind) }
+    }
+
+    @Test
+    fun givenAnyOtherFailure_whenMapped_thenKindIsOther() {
+        val others = listOf(
+            // A rate limit passes on its own, so Retry is the cure, not settings.
+            ClaudeFailure.QuotaExceeded,
             // A 413 is the request's bytes, not its tokens: compacting the history is not the cure.
             ClaudeFailure.RequestTooLarge,
             ClaudeFailure.RequestRejected("bad field"),

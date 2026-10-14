@@ -10,14 +10,19 @@ import org.junit.Test
 /** Which button an error row offers, by sender, denial and setup (ADFA-6359, ADFA-6345). */
 class ChatAdapterErrorActionTest {
 
-    private fun errorRow(sender: Sender, isDenial: Boolean = false, isSetupError: Boolean = false) =
-        ChatMessage(
-            text = "failed",
-            sender = sender,
-            status = MessageStatus.ERROR,
-            isDenial = isDenial,
-            isSetupError = isSetupError
-        )
+    private fun errorRow(
+        sender: Sender,
+        isDenial: Boolean = false,
+        isSetupError: Boolean = false,
+        isSettingsError: Boolean = false,
+    ) = ChatMessage(
+        text = "failed",
+        sender = sender,
+        status = MessageStatus.ERROR,
+        isDenial = isDenial,
+        isSetupError = isSetupError,
+        isSettingsError = isSettingsError
+    )
 
     @Test
     fun givenToolErrorRow_whenChoosingAction_thenNoRetry() {
@@ -43,6 +48,13 @@ class ChatAdapterErrorActionTest {
     @Test
     fun givenSetupErrorRow_whenChoosingAction_thenOpenSettings() {
         val row = errorRow(Sender.SYSTEM, isSetupError = true)
+        assertEquals(ChatAdapter.ACTION_OPEN_SETTINGS, ChatAdapter.errorActionFor(row, retryable = false))
+    }
+
+    @Test
+    fun givenRunRefusedForItsSettings_whenChoosingAction_thenOpenSettingsEvenInTheLastRun() {
+        val row = errorRow(Sender.SYSTEM, isSettingsError = true)
+        assertEquals(ChatAdapter.ACTION_OPEN_SETTINGS, ChatAdapter.errorActionFor(row, retryable = true))
         assertEquals(ChatAdapter.ACTION_OPEN_SETTINGS, ChatAdapter.errorActionFor(row, retryable = false))
     }
 

@@ -774,9 +774,11 @@ class ChatViewModel(
         0
     }
 
-    /** How many tokens a reply may use on the current backend. */
-    private fun replyTokenCap(): Int =
-        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS
+    /** How many tokens a reply may use on the current backend; at most half its window. */
+    private fun replyTokenCap(): Int = HistoryCompactor.replyTokens(
+        compaction.budgetTokens(currentBackendId),
+        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS,
+    )
 
     /**
      * The advice for a reply that meant to call a tool and produced nothing runnable.
@@ -1158,7 +1160,9 @@ class ChatViewModel(
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
                 setState(AgentState.Error(str(R.string.state_error, e.message)))
-                addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
+                addSystemMessage(
+                    str(R.string.state_error, e.message), MessageStatus.ERROR, isSettingsError = e is BackendSettingsException,
+                )
             } finally {
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.value = false
@@ -1180,7 +1184,7 @@ class ChatViewModel(
      *
      * @param llmService the inference service the run uses.
      * @param config the run's config, whose system prompt every request carries.
-     * @param toolDefinitions the tools every request carries.
+     * @param toolDefinitions the tools the run offers.
      * @param pendingUserTurn the new message with its attached files.
      * @param firstMessageId the new prompt's message, the first one a summary would not cover.
      * @param epoch the run's epoch; a Stop or a newer message makes the result stale.
@@ -1197,8 +1201,10 @@ class ChatViewModel(
         forced: Boolean,
     ): List<LlmInferenceService.ChatMessage> {
         val current = _history.value
+        // A prompt-calling backend gets the tools inside the system prompt, already counted there.
+        val sentTools = toolDefinitions.takeIf { backendPrompts.callsToolsNatively() }.orEmpty()
         val estimate = compaction.estimateIfOverBudget(
-            currentBackendId, config.systemPrompt, toolDefinitions, current, pendingUserTurn, config.maxTokens, forced,
+            currentBackendId, config.systemPrompt, sentTools, current, pendingUserTurn, config.maxTokens, forced,
         ) ?: return current
         AgentTrace.stage(
             "COMPACT",
@@ -1743,6 +1749,7 @@ class ChatViewModel(
                     }
                     val failure = when (kind) {
                         LlmInferenceService.FailureKind.CONTEXT_TOO_LONG -> ContextOverflowException(error)
+                        LlmInferenceService.FailureKind.CONFIGURATION -> BackendSettingsException(error)
                         else -> RuntimeException(error)
                     }
                     deferred.completeExceptionally(failure)
@@ -1957,13 +1964,15 @@ class ChatViewModel(
      * Appends a SYSTEM message to the chat (on the main thread).
      * @param text the message text.
      * @param status the message status.
+     * @param isSettingsError see [ChatMessage.isSettingsError].
      */
-    private suspend fun addSystemMessage(text: String, status: MessageStatus) {
+    private suspend fun addSystemMessage(text: String, status: MessageStatus, isSettingsError: Boolean = false) {
         val message = ChatMessage(
             id = UUID.randomUUID().toString(),
             text = text,
             sender = Sender.SYSTEM,
-            status = status
+            status = status,
+            isSettingsError = isSettingsError
         )
         withContext(Dispatchers.Main) {
             _messages.value = _messages.value + message
@@ -2268,7 +2277,7 @@ class ChatViewModel(
      * @param compaction the session's summary; used only when [messages] holds its first message.
      * @param maxChars the most characters the restored turns may hold together.
      * @return the summary turn, if used, then the eligible messages after it that fit both budgets,
-     *   oldest first; the newest one is always kept, truncated when it alone exceeds the budget.
+     *   oldest first; the newest one is kept, truncated, unless the summary leaves no room.
      */
     private fun rebuildHistoryFrom(
         messages: List<ChatMessage>,
@@ -2279,9 +2288,11 @@ class ChatViewModel(
         if (messages.isEmpty()) return emptyList()
         // Not on screen means rewound or switched past it, so the summary covers another chat.
         val start = compaction?.let { c -> messages.indexOfFirst { it.id == c.firstMessageId } } ?: -1
-        val summary = compaction?.takeIf { start >= 0 }?.let {
+        // Counted against the budget like any turn; one that alone passes it would overflow the cut.
+        val summary = compaction?.takeIf { start >= 0 && it.summary.length <= maxChars }?.let {
             LlmInferenceService.ChatMessage(LlmInferenceService.ChatMessage.Role.USER, it.summary)
         }
+        val turnChars = maxChars - summary?.content.orEmpty().length
         val eligible = messages.drop(start.coerceAtLeast(0)).filter {
             // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
             (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
@@ -2299,13 +2310,15 @@ class ChatViewModel(
             // What the model wrote, not the bubble: a turn whose tool call failed renders as
             // "the action failed" in the IDE's language, a sentence the model never produced.
             var text = message.historyText ?: message.text
+            // No room means no turns: a turn cut to nothing is sent empty, which Claude refuses.
+            if (turnChars <= 0) break
             // The newest eligible turn is never dropped — breaking on it would restore nothing at
             // all — but it is truncated, since nothing upstream bounds what a user can paste.
             if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
-                    chars + text.length > maxChars)
+                    chars + text.length > turnChars)
             ) break
-            if (text.length > maxChars) {
-                text = text.takeLast(maxChars)
+            if (text.length > turnChars) {
+                text = text.takeLast(turnChars)
             }
             chars += text.length
             val role = if (message.sender == Sender.USER) {

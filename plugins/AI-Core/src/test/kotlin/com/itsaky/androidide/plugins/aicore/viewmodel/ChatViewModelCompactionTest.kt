@@ -255,6 +255,18 @@ class ChatViewModelCompactionTest {
     }
 
     @Test
+    fun givenAMessageThatFillsTheWindow_whenTheHistoryIsCut_thenNoEmptyTurnIsSent() {
+        val (viewModel, _) = newViewModelWithBackend(summary = null, backendId = AiBackend.LOCAL_ID) { callback ->
+            callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+        }
+        send(viewModel, "first")
+
+        send(viewModel, LARGE_PROMPT)
+
+        assertEquals(emptyList<LlmInferenceService.ChatMessage>(), sentHistories.last())
+    }
+
+    @Test
     fun givenABackendReportingALargeWindow_whenSendingTheSameHistory_thenNothingIsSummarized() {
         val (viewModel, service) = newViewModelWithBackend(summary = "unused", windowTokens = 200_000) { callback ->
             callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
@@ -283,6 +295,20 @@ class ChatViewModelCompactionTest {
 
         send(viewModel, "second")
 
+        assertEquals(emptySet<String>(), viewModel.retryableErrorIds.value)
+    }
+
+    @Test
+    fun givenARunRefusedForItsSettings_whenItFails_thenItsErrorOffersSettingsNotRetry() {
+        val (viewModel, _) = newViewModelWithBackend(summary = null) { callback ->
+            callback.onError("key refused", FailureKind.CONFIGURATION)
+        }
+
+        send(viewModel, "first")
+
+        val error = viewModel.messages.value.last { it.status == MessageStatus.ERROR }
+        assertTrue(error.isSettingsError)
+        assertFalse(error.isSetupError)
         assertEquals(emptySet<String>(), viewModel.retryableErrorIds.value)
     }
 

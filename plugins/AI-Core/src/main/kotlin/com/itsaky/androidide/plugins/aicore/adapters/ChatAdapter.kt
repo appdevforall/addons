@@ -118,11 +118,11 @@ class ChatAdapter(
         private const val DISABLED_ALPHA = 0.38f
 
         /**
-         * The button error row [message] offers, or null for none. Only a setup notice is fixed in
-         * settings (ADFA-6345); a tool failure gets none unless the user denied the call.
+         * The button error row [message] offers, or null for none. A setup notice or a run refused
+         * for its settings is fixed there (ADFA-6345); a tool failure gets none unless the user denied the call.
          */
         internal fun errorActionFor(message: ChatMessage, retryable: Boolean): String? = when {
-            message.isSetupError -> ACTION_OPEN_SETTINGS
+            message.isSetupError || message.isSettingsError -> ACTION_OPEN_SETTINGS
             !retryable -> null
             message.sender == Sender.TOOL -> ACTION_RETRY.takeIf { message.isDenial }
             else -> ACTION_RETRY
