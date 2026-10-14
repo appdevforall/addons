@@ -16,7 +16,7 @@ jacoco {
 }
 
 pluginBuilder {
-    pluginName = "maps-plugin"
+    pluginName = "maps"
 }
 
 android {
@@ -80,7 +80,7 @@ kotlin {
 
 dependencies {
     // plugin-api jar is the canonical plugin contract; IDE provides at runtime.
-    compileOnly(files("../libs/plugin-api.jar"))
+    compileOnly(files("../../libs/plugin-api.jar"))
 
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.10.0")
@@ -108,7 +108,7 @@ dependencies {
     // plugin-api is compileOnly for the main set (host-provided at runtime). Unit
     // tests run on a plain JVM with no host, so they need it on the test classpath
     // to compile + run the host-facing classes (MapsPlugin) and the test fakes.
-    testImplementation(files("../libs/plugin-api.jar"))
+    testImplementation(files("../../libs/plugin-api.jar"))
 }
 
 tasks.wrapper {

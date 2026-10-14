@@ -1,0 +1,16 @@
+{
+  "summary": "Builds offline map apps from OpenStreetMap regions.",
+  "description": "Download an OpenStreetMap region from an Internet-in-a-Box server and bundle it into an app made from the Offline OSM Map template. The app shows the map with no internet connection.",
+  "tags": [
+    "maps",
+    "openstreetmap",
+    "offline",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
