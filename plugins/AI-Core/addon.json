@@ -1,0 +1,16 @@
+{
+  "summary": "An AI Agent that reads, searches and edits your project. Required by every AI addon, and needs one AI backend addon.",
+  "description": "Adds an Agent chat tab that can read, search and edit the open project, asking for your approval before it changes anything. It also routes requests from other AI addons, such as Code Suggestions, Speech to Text and Vector Search, to a model. AI Core runs no model itself: install at least one backend, such as AI Agent Local, Gemini, OpenAI or Claude. Prompts and any file contents the Agent sends go to the backend you select: they stay on the device with AI Agent Local, and go to that provider's service with a cloud backend.",
+  "tags": [
+    "ai",
+    "agent",
+    "chat",
+    "core"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
