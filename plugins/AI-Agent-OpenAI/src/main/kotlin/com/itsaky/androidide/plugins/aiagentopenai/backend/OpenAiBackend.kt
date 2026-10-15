@@ -14,6 +14,7 @@ import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailure
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailureMessages
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiHttpException
+import com.itsaky.androidide.plugins.aiagentopenai.errors.failureKind
 import com.itsaky.androidide.plugins.aiagentopenai.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
@@ -22,6 +23,7 @@ import com.itsaky.androidide.plugins.aiagentopenai.prompt.config.OpenAiPromptCon
 import com.itsaky.androidide.plugins.aiagentopenai.security.ApiKeyCache
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlPolicy
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlResult
+import com.itsaky.androidide.plugins.aiagentopenai.settings.ContextWindowSetting
 import com.itsaky.androidide.plugins.aiagentopenai.settings.ServerPresets
 import com.itsaky.androidide.plugins.services.CapabilityStatus
 import com.itsaky.androidide.plugins.services.LlmInferenceService
@@ -73,7 +75,8 @@ private data class ServerModel(val baseUrl: String, val model: String)
  * [ApiKeyCache]'s, and the wording of a failure is [OpenAiFailureMessages]'.
  *
  * @param promptConfig the loaded prompt config, or null while it loads; must return without blocking
- * @param onStatusChanged told when [getStatus] changes, to report it through `notifyBackendChanged`.
+ * @param onStatusChanged told when [getStatus] changes, to report it through `notifyBackendChanged`;
+ *   a change of [getContextWindowTokens] is announced by the settings it is read from instead.
  */
 class OpenAiBackend(
     private val context: PluginContext,
@@ -81,7 +84,7 @@ class OpenAiBackend(
     onStatusChanged: () -> Unit = {},
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
     EmbeddingModelSelectable, WebSearchBackend, StatusReportingBackend,
-    ActiveModelReportingBackend {
+    ActiveModelReportingBackend, ContextWindowReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -113,6 +116,9 @@ class OpenAiBackend(
      * only readable in a transcript the user has already navigated away from.
      */
     private val credentialFailures = CredentialFailureLog(::openAiPrefs)
+
+    /** What the configured server's model listing said each model's context window is. */
+    private val listedWindows = ListedContextWindows(::openAiPrefs)
 
     @Volatile
     private var currentJob: Job? = null
@@ -323,6 +329,29 @@ class OpenAiBackend(
     }
 
     /**
+     * The window of the model requests go to; see [ContextWindow.resolve] for the order of sources.
+     * Reads settings already in memory, never the server.
+     */
+    override fun getContextWindowTokens(): Int {
+        val baseUrl = getBaseUrl()
+        val model = getModelName()
+        return ContextWindow.resolve(
+            userTokens = userContextWindow(baseUrl),
+            listedTokens = listedWindows.windowFor(baseUrl, model),
+            baseUrl = baseUrl,
+            model = model,
+        )
+    }
+
+    /** The window the user entered for [baseUrl], or null when it is blank or was for another server. */
+    private fun userContextWindow(baseUrl: String): Int? {
+        val prefs = openAiPrefs() ?: return null
+        if (prefs.getString(OpenAiPreferences.KEY_CONTEXT_WINDOW_URL, null) != baseUrl) return null
+        val stored = prefs.getInt(OpenAiPreferences.KEY_CONTEXT_WINDOW, 0)
+        return ContextWindowSetting.storedOrNull(stored)
+    }
+
+    /**
      * Which server the tag should name beside the model: the preset's name, or the host of a URL
      * no preset offers. Null for OpenAI's own API, which [getName] already names.
      */
@@ -393,7 +422,9 @@ class OpenAiBackend(
     }.getOrNull()
 
     private fun probe(baseUrl: String): HealthReading = try {
-        probeHttp.get(baseUrl + MODELS_PATH, readApiKeyOrBlank())
+        val body = probeHttp.get(baseUrl + MODELS_PATH, readApiKeyOrBlank())
+        // The listing is already here, so the windows it reports cost no request of their own.
+        runCatching { ModelCatalog.parse(body) }.getOrNull()?.let { recordWindows(baseUrl, it) }
         HealthReading.available(baseUrl)
     } catch (e: OpenAiHttpException) {
         HealthReading.ofHttpStatus(baseUrl, e.statusCode)
@@ -486,7 +517,7 @@ class OpenAiBackend(
 
                 val text = if (OpenAiWebSearch.isRequested(config)) {
                     if (!BaseUrlPolicy.isOpenAiApi(getBaseUrl())) {
-                        future.complete(LlmResponse.failure(webSearchUnsupported()))
+                        future.complete(LlmResponse.failure(webSearchUnsupported(), FailureKind.OTHER))
                         return@launch
                     }
                     requestWebSearch(prompt, config)
@@ -495,7 +526,7 @@ class OpenAiBackend(
                 }
 
                 if (text.isBlank()) {
-                    future.complete(LlmResponse.failure(failureMessages.of(OpenAiFailure.Failed(null))))
+                    future.complete(failureResponse(OpenAiFailure.Failed(null)))
                 } else {
                     val tokenCount = text.split("\\s+".toRegex()).size  // Approximate token count
                     context.logger.info("OpenAiBackend: Generated ${text.length} chars, ~$tokenCount tokens")
@@ -506,7 +537,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("OpenAiBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failureResponse(classifyFailure(e, keyStamp)))
             }
         }
         currentJob = job
@@ -546,7 +577,7 @@ class OpenAiBackend(
                 val text = requestText(messages, config)
 
                 if (text.isBlank()) {
-                    future.complete(LlmResponse.failure(failureMessages.of(OpenAiFailure.Failed(null))))
+                    future.complete(failureResponse(OpenAiFailure.Failed(null)))
                 } else {
                     val tokenCount = text.split("\\s+".toRegex()).size
                     context.logger.info("OpenAiBackend: Generated ${text.length} chars with history, ~$tokenCount tokens")
@@ -557,7 +588,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("OpenAiBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failureResponse(classifyFailure(e, keyStamp)))
             }
         }
         currentJob = job
@@ -628,6 +659,8 @@ class OpenAiBackend(
         override fun onToolCall(request: ToolCallRequest) = Unit
         override fun onComplete(response: LlmResponse) = this@asToolCallback.onComplete(response)
         override fun onError(error: String) = this@asToolCallback.onError(error)
+        override fun onError(error: String, kind: FailureKind) =
+            this@asToolCallback.onError(error, kind)
     }
 
     /**
@@ -712,7 +745,7 @@ class OpenAiBackend(
                             "droppedCalls=${outcome.droppedCalls}, " +
                             "finishReason=${outcome.finishReason})"
                     )
-                    callback.onError(failureMessages.of(emptyReplyFailure(outcome)))
+                    callback.fail(emptyReplyFailure(outcome))
                 } else {
                     val tokenCount = finalText.split("\\s+".toRegex()).size
                     context.logger.info("OpenAiBackend: Streamed ${finalText.length} chars in $chunkCount chunks, ~$tokenCount tokens")
@@ -724,7 +757,7 @@ class OpenAiBackend(
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
                 context.logger.error("OpenAiBackend: Error in streaming", e)
-                callback.onError(formatErrorMessage(e, keyStamp))
+                callback.fail(classifyFailure(e, keyStamp))
             }
         }
     }
@@ -1099,16 +1132,15 @@ class OpenAiBackend(
     }
 
     /** Fetch and split `GET {baseUrl}/models`. Runs on the caller's (IO) coroutine. */
-    private fun fetchAvailableModels(apiKey: String, baseUrl: String): ModelCatalog {
-        val body = http.get(baseUrl + MODELS_PATH, apiKey)
-        val data = JSONObject(body).optJSONArray("data") ?: return ModelCatalog.EMPTY
-        val ids = (0 until data.length()).mapNotNull { index ->
-            data.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }
-        }
-        return ModelCatalog(
-            chat = ModelCatalogFilter.chatModels(ids),
-            embedding = ModelCatalogFilter.embeddingModels(ids),
-        )
+    private fun fetchAvailableModels(apiKey: String, baseUrl: String): ModelCatalog =
+        ModelCatalog.parse(http.get(baseUrl + MODELS_PATH, apiKey)).also { recordWindows(baseUrl, it) }
+
+    /**
+     * Keeps the windows [catalog] reported, but only for the saved server: a connection test of a
+     * URL not yet saved must not replace what the saved one listed.
+     */
+    private fun recordWindows(baseUrl: String, catalog: ModelCatalog) {
+        if (baseUrl == getBaseUrl()) listedWindows.record(baseUrl, catalog.contextWindows)
     }
 
     /** Cancel any in-flight generation (user pressed Stop). */
@@ -1152,20 +1184,34 @@ class OpenAiBackend(
      * @param keyStamp when the key this request read was saved, so a refusal landing after a later
      *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
-        val baseUrl = getBaseUrl()
+    private fun formatErrorMessage(e: Exception, keyStamp: Long): String =
+        failureMessages.of(classifyFailure(e, keyStamp))
+
+    /**
+     * Decide what [e] was, recording a credential refusal for the settings pane on the way.
+     *
+     * @param keyStamp as for [formatErrorMessage]
+     */
+    private fun classifyFailure(e: Exception, keyStamp: Long): OpenAiFailure {
         val failure = OpenAiErrorFormatter.classify(
             error = e,
             modelName = getModelName(),
             hasApiKey = readApiKeyOrBlank().isNotBlank(),
-            isOpenAiHost = BaseUrlPolicy.requiresApiKey(baseUrl),
+            isOpenAiHost = BaseUrlPolicy.requiresApiKey(getBaseUrl()),
         )
-        val message = failureMessages.of(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
         if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
-        return message
+        return failure
     }
+
+    /** [failure] as a failed response, worded for the user and typed for AI Core. */
+    private fun failureResponse(failure: OpenAiFailure): LlmResponse =
+        LlmResponse.failure(failureMessages.of(failure), failure.failureKind)
+
+    /** Reports [failure] to this stream, worded for the user and typed for AI Core. */
+    private fun ToolStreamCallback.fail(failure: OpenAiFailure) =
+        onError(failureMessages.of(failure), failure.failureKind)
 }
 
 /**

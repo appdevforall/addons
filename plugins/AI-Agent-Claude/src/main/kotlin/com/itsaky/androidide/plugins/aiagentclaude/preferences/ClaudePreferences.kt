@@ -40,8 +40,9 @@ internal object ClaudePreferences {
     const val KEY_REMEMBERED_MODELS = "claude_remembered_models"
 
     /**
-     * What the same listing said each model accepts — output cap, adaptive thinking, effort — so
-     * a request asks only for what its model takes. Encoded by `ClaudeModelCatalog`.
+     * What the same listing said each model accepts — context window, output cap, adaptive
+     * thinking, effort — so a request asks only for what its model takes. Encoded by
+     * `ClaudeModelCatalog`.
      */
     const val KEY_MODEL_CAPABILITIES = "claude_model_capabilities"
 

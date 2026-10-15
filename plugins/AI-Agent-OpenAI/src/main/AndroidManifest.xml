@@ -43,13 +43,12 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
-             this backend reports getActiveModelName() and notifyBackendChanged() (ADFA-6278), and
-             implements EmbeddingModelSelectable for Vector Search's settings screen (ADFA-6303).
-             Do not lower it. -->
+        <!-- 26.42: the first release whose plugin-api carries ContextWindowReportingBackend and
+             FailureKind (ADFA-6345); 26.41 brought the capability-tag contract (ADFA-6278) and
+             EmbeddingModelSelectable (ADFA-6303). Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.41" />
+            android:value="26.42" />
 
         <meta-data
             android:name="plugin.max_ide_version"

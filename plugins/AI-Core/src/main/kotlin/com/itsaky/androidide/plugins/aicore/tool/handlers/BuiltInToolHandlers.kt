@@ -42,6 +42,7 @@ object BuiltInToolHandlers {
         GradleSyncHandler(context),
     ) + (if (hostHasGradleTaskApi()) listOf(RunGradleTaskHandler(context, budget)) else emptyList()) +
         (if (hostHasTaskListApi()) listOf(ListGradleTasksHandler(context, budget)) else emptyList()) +
+        (if (hostHasQuickBuildApi()) listOf(QuickBuildHandler(context, budget)) else emptyList()) +
         (if (hostHasTerminalService(context)) StartedCommands().let { started ->
             listOf(
                 RunShellCommandHandler(context, started, budget),
@@ -68,6 +69,10 @@ object BuiltInToolHandlers {
     // Same reason: a host from before IdeBuildService.getTasks lacks the class, and the call would throw.
     private fun hostHasTaskListApi(): Boolean =
         runCatching { Class.forName("com.itsaky.androidide.plugins.services.GradleTaskInfo") }.isSuccess
+
+    // Same reason: a host from before ADFA-6493 lacks IdeBuildService.startQuickBuild, and the call would throw.
+    private fun hostHasQuickBuildApi(): Boolean =
+        runCatching { Class.forName("com.itsaky.androidide.plugins.services.QuickBuildResult") }.isSuccess
 
     // Same reason for the string; a host can also ship the class (ADFA-6385) without registering it.
     private fun hostHasTerminalService(context: PluginContext): Boolean =

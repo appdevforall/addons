@@ -28,6 +28,8 @@ import java.util.UUID
  * @property selectedBranches for a message that has several versions following it, the id of the
  *   one last on screen, so switching back returns there; the chat's start is keyed by
  *   ChatBranches.ROOT. Null alongside [otherBranches].
+ * @property compaction the summary that stands in for this chat's earlier messages once it outgrew
+ *   the model's context, so a restore rebuilds from it; null until then, and for older sessions.
  */
 data class ChatSession(
     val id: String = UUID.randomUUID().toString(),
@@ -37,7 +39,8 @@ data class ChatSession(
     val name: String? = null,
     val generatedTitle: String? = null,
     val otherBranches: List<ChatMessage>? = null,
-    val selectedBranches: Map<String, String>? = null
+    val selectedBranches: Map<String, String>? = null,
+    val compaction: HistoryCompaction? = null
 ) {
     /**
      * What names this chat in the session list: the [name] the user gave it, otherwise the
@@ -82,6 +85,15 @@ data class ChatSession(
                 .withZone(ZoneId.systemDefault())
     }
 }
+
+/**
+ * A summary of a chat's earlier messages, which the model is given in their place.
+ *
+ * @property summary the turn sent in place of those messages: the summary under its heading.
+ * @property firstMessageId the first message the summary does not cover: the prompt that was sent
+ *   on top of it. A transcript without this message (rewound or switched past it) ignores it.
+ */
+data class HistoryCompaction(val summary: String, val firstMessageId: String)
 
 /**
  * The order the chat history is shown and navigated in: newest first.

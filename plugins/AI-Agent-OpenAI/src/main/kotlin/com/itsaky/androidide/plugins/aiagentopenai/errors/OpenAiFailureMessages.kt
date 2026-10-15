@@ -44,6 +44,9 @@ internal class OpenAiFailureMessages(
             OpenAiFailure.KeyForbidden ->
                 resources.getString(CredentialFailure.KeyForbidden.messageRes)
 
+            OpenAiFailure.ContextTooLong ->
+                resources.getString(R.string.openai_error_context_too_long)
+
             is OpenAiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.openai_error_request_rejected_reason, it)
             } ?: resources.getString(R.string.openai_error_request_rejected)

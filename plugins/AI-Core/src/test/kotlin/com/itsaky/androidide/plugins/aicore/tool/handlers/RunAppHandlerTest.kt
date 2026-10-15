@@ -164,6 +164,17 @@ class RunAppHandlerTest {
     }
 
     @Test
+    fun givenARunningBuild_whenTheAgentIsStopped_thenTheBuildIsCancelled() = runTest {
+        every { buildService.runApp(any()) } just Runs
+
+        val job = launch { handler.execute(emptyMap()) }
+        runCurrent()
+        job.cancelAndJoin()
+
+        verify(exactly = 1) { buildService.cancelBuild() }
+    }
+
+    @Test
     fun givenTheToolDescription_whenReadByTheModel_thenItSaysTheInstallNeedsTheUser() {
         // The host completes the callback when the installer takes the APK, before the system
         // install prompt is answered. Without this caveat the model reports the app as running.

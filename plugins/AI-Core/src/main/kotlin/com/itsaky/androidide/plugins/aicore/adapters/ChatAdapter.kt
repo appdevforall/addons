@@ -82,6 +82,17 @@ class ChatAdapter(
             notifyUserRowsChanged { it == previous || it == value }
         }
 
+    /** The error rows that offer Retry, from ChatViewModel.retryableErrorIds; the last run's only. */
+    internal var retryableErrorIds: Set<String> = emptySet()
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            currentList.forEachIndexed { position, message ->
+                if ((message.id in previous) != (message.id in value)) notifyItemChanged(position)
+            }
+        }
+
     /** Rebinds the actions of the user rows [changed] picks; a payload keeps their text as it is. */
     private inline fun notifyUserRowsChanged(changed: (messageId: String) -> Boolean) {
         currentList.forEachIndexed { position, message ->
@@ -107,12 +118,13 @@ class ChatAdapter(
         private const val DISABLED_ALPHA = 0.38f
 
         /**
-         * The button error row [message] offers, or null for none. A tool failure gets none, since
-         * the run carries on past it, unless the user denied the call: Retry asks for it again.
+         * The button error row [message] offers, or null for none. A setup notice or a run refused
+         * for its settings is fixed there (ADFA-6345); a tool failure gets none unless the user denied the call.
          */
-        internal fun errorActionFor(message: ChatMessage): String? = when (message.sender) {
-            Sender.SYSTEM -> ACTION_OPEN_SETTINGS
-            Sender.TOOL -> ACTION_RETRY.takeIf { message.isDenial }
+        internal fun errorActionFor(message: ChatMessage, retryable: Boolean): String? = when {
+            message.isSetupError || message.isSettingsError -> ACTION_OPEN_SETTINGS
+            !retryable -> null
+            message.sender == Sender.TOOL -> ACTION_RETRY.takeIf { message.isDenial }
             else -> ACTION_RETRY
         }
     }
@@ -312,7 +324,8 @@ class ChatAdapter(
                 holder.messageContent.visibility = View.VISIBLE
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
-                val action = errorActionFor(message)
+                // Retry re-runs the last prompt, so an older or restored error offers nothing.
+                val action = errorActionFor(message, retryable = message.id in retryableErrorIds)
                 holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
                 when (action) {
                     ACTION_OPEN_SETTINGS -> {

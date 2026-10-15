@@ -24,6 +24,7 @@ class BuiltInHandlerApprovalTest {
             "run_app",
             "gradle_sync",
             "run_gradle_task",
+            "quick_build",
             "run_shell_command",
             "stop_terminal_command",
             "generate_from_template",
