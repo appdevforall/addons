@@ -71,6 +71,28 @@ class LocalLlmBackend(
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
 
+        /**
+         * [FailureKind.CONFIGURATION] when only picking another model fixes [e]; a load that failed
+         * for memory or a busy run loop stays [FailureKind.OTHER], since freeing it and retrying works.
+         */
+        internal fun failureKindOf(e: Exception): FailureKind = when (e) {
+            is IncompatibleModelException -> FailureKind.CONFIGURATION
+            is ModelLoadException -> when (e.diagnosis) {
+                ModelLoadDiagnostics.Diagnosis.FileMissing,
+                ModelLoadDiagnostics.Diagnosis.SourceUnavailable,
+                ModelLoadDiagnostics.Diagnosis.SourceNotSeekable,
+                ModelLoadDiagnostics.Diagnosis.SourceNotReopenable,
+                ModelLoadDiagnostics.Diagnosis.FileEmpty,
+                ModelLoadDiagnostics.Diagnosis.NotGguf,
+                ModelLoadDiagnostics.Diagnosis.UnsupportedOrCorrupt -> FailureKind.CONFIGURATION
+                is ModelLoadDiagnostics.Diagnosis.LowMemory,
+                ModelLoadDiagnostics.Diagnosis.ModelBusy,
+                ModelLoadDiagnostics.Diagnosis.InitializationFailed,
+                null -> FailureKind.OTHER
+            }
+            else -> FailureKind.OTHER
+        }
+
         /** What the agent is told when it asks for a search; it can still read a page with fetch_url. */
         private const val WEB_SEARCH_UNSUPPORTED =
             "Web search is not available with the on-device model. Use fetch_url to read a page instead."
@@ -797,7 +819,10 @@ class LocalLlmBackend(
 
         if (configuredPath.isNullOrBlank()) {
             return CompletableFuture.completedFuture(
-                LlmResponse.failure("No model configured. Please go to Settings and select a .gguf model file.")
+                LlmResponse.failure(
+                    "No model configured. Please go to Settings and select a .gguf model file.",
+                    FailureKind.CONFIGURATION
+                )
             )
         }
 
@@ -854,7 +879,7 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                val (message, kind) = errorMessages.describe(e)
+                val (message, kind) = userFacingFailure(e)
                 future.complete(LlmResponse.failure(message, kind))
             }
         }
@@ -889,6 +914,16 @@ class LocalLlmBackend(
     }
 
     /**
+     * What a failed generation tells the user: an overflow's own sentence, a [UserActionableLlmException]'s
+     * advice, else blank, which ai-core shows as its generic failure. The exception only reaches the log.
+     */
+    private fun userFacingFailure(e: Exception): GenerationError {
+        val described = errorMessages.describe(e)
+        if (described.kind == FailureKind.CONTEXT_TOO_LONG) return described
+        return GenerationError((e as? UserActionableLlmException)?.message.orEmpty(), failureKindOf(e))
+    }
+
+    /**
      * Streams a generation over an already-formatted prompt, serialized against every other
      * generation on the shared native context.
      *
@@ -903,7 +938,10 @@ class LocalLlmBackend(
         val configuredPath = prefs.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
 
         if (configuredPath.isNullOrBlank()) {
-            callback.onError("No model configured. Please go to Settings and select a .gguf model file.")
+            callback.onError(
+                "No model configured. Please go to Settings and select a .gguf model file.",
+                FailureKind.CONFIGURATION
+            )
             return
         }
 
@@ -957,7 +995,7 @@ class LocalLlmBackend(
                 if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
-                val (message, kind) = errorMessages.describe(e)
+                val (message, kind) = userFacingFailure(e)
                 callback.onError(message, kind)
             }
         }

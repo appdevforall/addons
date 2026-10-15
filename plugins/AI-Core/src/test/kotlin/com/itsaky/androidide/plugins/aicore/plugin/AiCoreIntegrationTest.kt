@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.plugin
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
+import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -30,6 +31,7 @@ class AiCoreIntegrationTest {
         val mockLogger = mockk<PluginLogger>(relaxed = true)
         context = mockk(relaxed = true) {
             every { logger } returns mockLogger
+            every { androidContext.getString(R.string.error_backend_not_ready, any()) } returns NOT_READY
         }
         plugin = AiCorePlugin()
     }
@@ -81,7 +83,8 @@ class AiCoreIntegrationTest {
 
         assertFalse("Response should fail (backend unavailable)", response.success)
         assertNotNull("Error message should be present", response.error)
-        assertTrue("Error should mention availability", response.error!!.contains("not available"))
+        assertEquals("Error should be the localized sentence", NOT_READY, response.error)
+        assertEquals("Only settings fix it", FailureKind.CONFIGURATION, response.failureKind)
 
         // Step 7: Deactivate plugin
         val deactivateSuccess = plugin.deactivate()
@@ -92,5 +95,9 @@ class AiCoreIntegrationTest {
             "LlmInferenceService should be unregistered",
             SharedServices.get(LlmInferenceService::class.java)
         )
+    }
+
+    private companion object {
+        const val NOT_READY = "local is not ready, so nothing was sent."
     }
 }
