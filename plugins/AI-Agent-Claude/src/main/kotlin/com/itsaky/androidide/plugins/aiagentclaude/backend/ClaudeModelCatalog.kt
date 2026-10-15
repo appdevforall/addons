@@ -6,8 +6,8 @@ import org.json.JSONObject
  * Reads `GET /v1/models`, and stores what it says about each model.
  *
  * Every model the endpoint lists can chat, so unlike an OpenAI-compatible catalog there is nothing
- * to filter out. Each entry also carries the model's output cap and a capability tree, which is
- * what decides the optional request fields ([ClaudeModelTraits]). Pure, so the parse is
+ * to filter out. Each entry also carries the model's context window, output cap and a capability
+ * tree, which is what decides the optional request fields ([ClaudeModelTraits]). Pure, so the parse is
  * unit-testable from a captured body.
  */
 object ClaudeModelCatalog {
@@ -52,6 +52,7 @@ object ClaudeModelCatalog {
                 ?.optJSONObject("adaptive")
                 ?.supported(),
             effort = caps?.optJSONObject("effort")?.supported(),
+            maxInputTokens = model.optInt("max_input_tokens", 0).takeIf { it > 0 },
         )
     }
 
@@ -63,20 +64,25 @@ object ClaudeModelCatalog {
     private const val FIELD = "\t"
 
     /**
-     * Flattens [catalog] for storage, one `id<TAB>maxTokens<TAB>adaptive<TAB>effort` line per
-     * model, with an empty field for an unknown value. Newline-delimited rather than JSON, like
-     * the remembered model list, so a read can never throw.
+     * Flattens [catalog] for storage, one `id<TAB>maxTokens<TAB>adaptive<TAB>effort<TAB>maxInput`
+     * line per model, with an empty field for an unknown value. Newline-delimited rather than JSON,
+     * like the remembered model list, so a read can never throw.
      *
      * @return the encoded form, or null when there is nothing to remember
      */
     fun encodeCapabilities(catalog: List<Entry>): String? = catalog
         .takeIf { it.isNotEmpty() }
         ?.joinToString("\n") { (id, c) ->
-            listOf(id, c.maxTokens?.toString().orEmpty(), c.adaptiveThinking.flag(), c.effort.flag())
-                .joinToString(FIELD)
+            listOf(
+                id,
+                c.maxTokens?.toString().orEmpty(),
+                c.adaptiveThinking.flag(),
+                c.effort.flag(),
+                c.maxInputTokens?.toString().orEmpty(),
+            ).joinToString(FIELD)
         }
 
-    /** Restores what [encodeCapabilities] wrote; a malformed line is skipped. */
+    /** Restores what [encodeCapabilities] wrote; a malformed line is skipped, a missing field unknown. */
     fun decodeCapabilities(stored: String?): Map<String, ModelCapabilities> {
         if (stored.isNullOrBlank()) return emptyMap()
         val result = LinkedHashMap<String, ModelCapabilities>()
@@ -87,6 +93,7 @@ object ClaudeModelCatalog {
                 maxTokens = fields.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 },
                 adaptiveThinking = fields.getOrNull(2).parseFlag(),
                 effort = fields.getOrNull(3).parseFlag(),
+                maxInputTokens = fields.getOrNull(4)?.toIntOrNull()?.takeIf { it > 0 },
             )
         }
         return result

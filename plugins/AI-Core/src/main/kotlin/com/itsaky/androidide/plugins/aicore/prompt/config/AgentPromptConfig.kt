@@ -22,6 +22,7 @@ import com.itsaky.androidide.plugins.ai.prompt.PromptText
  * @property builtInTools what each of ai-core's own tools is for.
  * @property webSearch what a backend is told when the agent asks it to search the web.
  * @property answerReview what a backend is told when it checks an answer holding code.
+ * @property compaction what a backend is told when it summarizes a chat near its context limit.
  * @property layout where each text goes.
  */
 data class AgentPromptConfig(
@@ -39,6 +40,7 @@ data class AgentPromptConfig(
     val builtInTools: BuiltInTools,
     val webSearch: WebSearchText,
     val answerReview: AnswerReviewText,
+    val compaction: CompactionText,
     val layout: Layout,
 ) {
 
@@ -135,8 +137,11 @@ data class AgentPromptConfig(
         val timedOut: PromptText,
     )
 
-    /** @property heading what introduces the attached files. */
-    data class ContextFilesText(val heading: PromptText)
+    /**
+     * @property heading what introduces the attached files.
+     * @property truncated a file cut to the size limit, around the start and end it keeps.
+     */
+    data class ContextFilesText(val heading: PromptText, val truncated: PromptText)
 
     /** @property instruction the system prompt of a chat-title request. */
     data class ChatTitleText(val instruction: PromptText)
@@ -149,6 +154,17 @@ data class AgentPromptConfig(
      * @property noEvidence what the review is shown in place of the evidence when no tool ran.
      */
     data class AnswerReviewText(val instruction: PromptText, val noEvidence: PromptText)
+
+    /**
+     * @property instruction the system prompt of a compaction request.
+     * @property request the user turn that asks for the summary, after the conversation.
+     * @property summaryHeading what opens the turn that stands in for the summarized conversation.
+     */
+    data class CompactionText(
+        val instruction: PromptText,
+        val request: PromptText,
+        val summaryHeading: PromptText,
+    )
 
     /**
      * @property systemPrompt the whole prompt, for a backend that supplies none of its own.

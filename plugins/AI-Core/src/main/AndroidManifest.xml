@@ -39,13 +39,13 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.41: the first release whose plugin-api carries the capability-tag contract;
-             this plugin implements the ToolSourceRegistry and LlmInferenceService listeners, groups and
-             status from ADFA-6278, and its chat reads them for the capability tags.
+        <!-- 26.42: the first release whose plugin-api carries ContextWindowReportingBackend and
+             FailureKind, which size and trigger chat compaction (ADFA-6345). 26.41 brought the
+             capability-tag contract from ADFA-6278 that the chat's capability tags read.
              Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.41" />
+            android:value="26.42" />
 
         <meta-data
             android:name="plugin.max_ide_version"

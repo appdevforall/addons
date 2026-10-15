@@ -65,8 +65,8 @@ built_in_tools:
     # Success is weaker than "the app is running": the user still has to accept the system install
     # prompt, and without saying so the model reports the launch.
     description: >-
-      Build the app and install it on this device. The user has to confirm a system install
-      prompt, so success means the install started, not that the app is on screen
+      Do a normal full build of the app and install it on this device. The user has to confirm a
+      system install prompt, so success means the install started, not that the app is on screen
   gradle_sync:
     description: Sync the Gradle project (reload dependencies and rebuild cache)
   run_gradle_task:
@@ -95,6 +95,15 @@ built_in_tools:
       filter: >-
         Text to search task paths, groups and descriptions for, e.g. ":app", "test" or "lint".
         Omit to list the tasks that have a group or a description.
+  quick_build:
+    # Without the trigger phrases models fall back to run_app, which reinstalls and replaces the
+    # Quick Build app; the repeat sentence is the one run_gradle_task needed for Gemini.
+    description: >-
+      Start Quick Build, which updates the running app in place without a reinstall, and get back
+      whether the app was reloaded, the build failed and why, or why Quick Build could not start.
+      Use it, not run_app, when the user says "Quick Build", "try it live" or "update the app".
+      A result from an earlier message is out of date: whenever the user asks again, call this
+      tool again instead of repeating that result
   run_shell_command:
     # Without the second sentence models hand the user a script to run themselves (ADFA-6339);
     # without the third, Gemini ran "ls -la" when asked for "ls". The host runs each call in a

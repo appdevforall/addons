@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentgemini.errors
 
 import androidx.annotation.StringRes
 import com.itsaky.androidide.plugins.aiagentgemini.R
+import com.itsaky.androidide.plugins.services.LlmInferenceService.FailureKind
 import org.json.JSONObject
 import java.io.IOException
 
@@ -39,6 +40,9 @@ sealed interface GeminiFailure {
 
     /** The credential is malformed or wrong (HTTP 400 whose message names the API key). */
     data object KeyInvalid : GeminiFailure
+
+    /** The conversation has more input tokens than the model accepts; retrying cannot fix it. */
+    data object ContextTooLong : GeminiFailure
 
     /** HTTP 400 about the request rather than the credential. */
     data class RequestRejected(val reason: String?) : GeminiFailure
@@ -94,6 +98,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             GeminiFailure.KeyInvalid -> KeyInvalid
             is GeminiFailure.ModelUnavailable,
             GeminiFailure.QuotaExceeded,
+            GeminiFailure.ContextTooLong,
             is GeminiFailure.RequestRejected,
             is GeminiFailure.ServiceUnavailable,
             is GeminiFailure.Unexpected,
@@ -111,6 +116,19 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
 /** Whether this failure is about the credential rather than the request, the model or the network. */
 internal val GeminiFailure.isCredentialProblem: Boolean
     get() = CredentialFailure.of(this) != null
+
+/**
+ * The kind AI Core is told alongside the sentence, so it compacts only after a real overflow and
+ * sends the user to settings for a credential, billing or model failure, without matching wording.
+ */
+internal val GeminiFailure.failureKind: FailureKind
+    get() = when (this) {
+        GeminiFailure.ContextTooLong -> FailureKind.CONTEXT_TOO_LONG
+        is GeminiFailure.ModelUnavailable,
+        GeminiFailure.KeyRefused,
+        GeminiFailure.KeyInvalid -> FailureKind.CONFIGURATION
+        else -> FailureKind.OTHER
+    }
 
 /**
  * Classifies a Gemini failure so it can be reported as one translated sentence.
@@ -175,6 +193,8 @@ object GeminiErrorFormatter {
 
             status == 400 && parsed.mentionsApiKey() -> GeminiFailure.KeyInvalid
 
+            status == 400 && parsed.mentionsTokenLimit() -> GeminiFailure.ContextTooLong
+
             status == 400 -> GeminiFailure.RequestRejected(safeReason(parsed, error))
 
             status != null && status in 500..599 -> GeminiFailure.ServiceUnavailable(status)
@@ -191,6 +211,17 @@ object GeminiErrorFormatter {
     /** True when Google's wording points at the credential rather than the request shape. */
     private fun GeminiApiError.mentionsApiKey(): Boolean =
         apiMessage?.contains("api key", ignoreCase = true) == true
+
+    /**
+     * True when Google says the input has more tokens than the model allows. The status alone is
+     * too broad: `INVALID_ARGUMENT` covers every bad request.
+     */
+    private fun GeminiApiError.mentionsTokenLimit(): Boolean {
+        if (apiStatus != null && apiStatus != "INVALID_ARGUMENT") return false
+        val message = apiMessage?.lowercase() ?: return false
+        return message.contains("input token count") ||
+            message.contains("exceeds the maximum number of tokens")
+    }
 
     /**
      * Google's own explanation, but only when it is short and safe to show.

@@ -211,7 +211,7 @@ class ReadBuildOutputHandlerTest {
 
     @Test
     fun givenAnOverflowingLog_whenWindowed_thenItStartsAtAWholeLine() {
-        val window = ReadBuildOutputHandler.windowFor(noise(2000), 500)
+        val window = BuildOutputWindowCalculator.windowFor(noise(2000), 500)
 
         assertTrue(window.text.startsWith("...[truncated]...\n> Task :app:step"))
     }

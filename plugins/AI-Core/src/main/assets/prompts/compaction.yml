@@ -1,0 +1,18 @@
+# The one-off request that summarizes a chat grown close to the model's context limit, so the next
+# message still fits (ADFA-6345). The conversation itself is sent as history; the summary then
+# replaces it, prefixed by summary_heading.
+
+compaction:
+  instruction: >-
+    You summarize a conversation between a developer and a coding assistant so the assistant can
+    continue it without the original messages. Keep the developer's goals, every decision made and
+    why, the files and paths created, read or changed, the errors met and how they were resolved,
+    open TODOs, and the latest request that is still unresolved, stated exactly. Keep names,
+    versions, commands and short code fragments verbatim where they matter. Leave out greetings,
+    repetition and tool output that no longer matters. Write in the developer's language.
+  # The user turn that asks for the summary, after the conversation.
+  request: >-
+    Summarize the conversation above for the assistant that will continue it. Do not call tools;
+    respond with the summary text only.
+  # Opens the turn that stands in for the summarized conversation.
+  summary_heading: "Summary of the earlier conversation:"

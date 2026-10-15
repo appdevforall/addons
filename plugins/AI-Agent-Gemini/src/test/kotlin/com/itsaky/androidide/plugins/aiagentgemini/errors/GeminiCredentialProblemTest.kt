@@ -25,6 +25,7 @@ class GeminiCredentialProblemTest {
         val others = listOf(
             GeminiFailure.ModelUnavailable("gemini-2.5-flash"),
             GeminiFailure.QuotaExceeded,
+            GeminiFailure.ContextTooLong,
             GeminiFailure.RequestRejected("too long"),
             GeminiFailure.RequestRejected(null),
             GeminiFailure.ServiceUnavailable(503),

@@ -65,6 +65,12 @@ object PromptVariables {
     /** The part of a result kept under the size limit; inside `agent_loop.truncated`. */
     const val KEPT = "KEPT"
 
+    /** The start of an attached file cut to the size limit, verbatim; inside `context_files.truncated`. */
+    const val HEAD = "HEAD"
+
+    /** The end of an attached file cut to the size limit, verbatim; inside `context_files.truncated`. */
+    const val TAIL = "TAIL"
+
     /** How many characters were cut from a result; inside `agent_loop.truncated`. */
     const val COUNT = "COUNT"
 

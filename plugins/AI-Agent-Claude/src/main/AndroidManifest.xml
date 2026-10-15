@@ -44,7 +44,7 @@
              The prompt loader and pane helpers it uses are no newer. Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.41" />
+            android:value="26.42" />
 
         <meta-data
             android:name="plugin.max_ide_version"

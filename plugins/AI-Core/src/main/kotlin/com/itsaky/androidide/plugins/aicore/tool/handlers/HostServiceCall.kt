@@ -43,7 +43,8 @@ internal class HostServiceCall<S : Any>(
         )
     }
 
-    private fun unavailable(): ToolResult {
+    /** The result for a host without the service, for a caller that looked it up itself. */
+    fun unavailable(): ToolResult {
         AgentTrace.refusal(traceStage, "$toolName rejected", "${service.simpleName} not available")
         return ToolResult.failure(
             "$serviceLabel service not available",

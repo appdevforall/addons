@@ -49,4 +49,22 @@ class RememberedModelsTest {
     fun givenAnIdWithSurroundingWhitespace_whenDecoded_thenItIsTrimmed() {
         assertEquals(listOf("gpt-4o", "gpt-5"), RememberedModels.decode(" gpt-4o \n gpt-5 "))
     }
+
+    @Test
+    fun givenWindows_whenRoundTripped_thenEachModelKeepsItsWindow() {
+        val windows = mapOf("openai/gpt-4o" to 128_000, "qwen2.5-coder" to 4_096)
+        assertEquals(windows, RememberedModels.decodeWindows(RememberedModels.encodeWindows(windows)))
+    }
+
+    @Test
+    fun givenUnusableWindows_whenEncoded_thenTheyAreDropped() {
+        val encoded = RememberedModels.encodeWindows(mapOf("a" to 0, " " to 4_096, "b" to 8_192))
+        assertEquals(mapOf("b" to 8_192), RememberedModels.decodeWindows(encoded))
+        assertNull(RememberedModels.encodeWindows(mapOf("a" to -1)))
+    }
+
+    @Test
+    fun givenAGarbledLine_whenWindowsAreDecoded_thenOnlyThatLineIsSkipped() {
+        assertEquals(mapOf("b" to 8_192), RememberedModels.decodeWindows("a\tlots\nb\t8192\nc"))
+    }
 }

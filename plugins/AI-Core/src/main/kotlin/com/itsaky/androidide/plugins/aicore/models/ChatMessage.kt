@@ -58,6 +58,12 @@ data class ChatMessage(
      */
     val isSetupError: Boolean = false,
     /**
+     * Whether this run error is fixed in the backend's settings (a refused key, billing, a model the
+     * account lacks), so it offers Open settings, not Retry. Unlike [isSetupError] it is never dropped,
+     * since the backend answers as ready all along. False for every message stored before this existed.
+     */
+    val isSettingsError: Boolean = false,
+    /**
      * Whether this tool error row reports a call the user denied, the one tool failure that offers
      * Retry. False for every message stored before this field existed.
      */

@@ -102,6 +102,67 @@ class ChatViewModelHistoryRestoreTest {
     }
 
     @Test
+    fun givenACompactedSession_whenRestoring_thenTheSummaryStandsInForTheMessagesBeforeIt() {
+        seed(
+            session(
+                "s1",
+                message("m1", "add a login screen", "USER"),
+                message("m2", "LoginActivity.kt created", "AGENT"),
+                message("m3", "now add a logout button", "USER"),
+                message("m4", "added to the toolbar", "AGENT"),
+                compaction = "Summary: a login screen exists" to "m3",
+            )
+        )
+
+        val history = restoredViewModel().history.value
+
+        assertEquals(
+            listOf("Summary: a login screen exists", "now add a logout button", "added to the toolbar"),
+            history.map { it.content },
+        )
+        assertEquals(listOf(Role.USER, Role.USER, Role.ASSISTANT), history.map { it.role })
+    }
+
+    @Test
+    fun givenACompactedSession_whenRestoring_thenTheScreenKeepsEveryMessageWhileTheModelGetsTheSummary() {
+        // The summary replaces old turns for the model only; the user still sees the whole chat.
+        seed(
+            session(
+                "s1",
+                message("m1", "add a login screen", "USER"),
+                message("m2", "LoginActivity.kt created", "AGENT"),
+                message("m3", "now add a logout button", "USER"),
+                message("m4", "added to the toolbar", "AGENT"),
+                compaction = "Summary: a login screen exists" to "m3",
+            )
+        )
+
+        val viewModel = restoredViewModel()
+
+        assertEquals(listOf("m1", "m2", "m3", "m4"), viewModel.messages.value.map { it.id })
+        assertEquals(
+            listOf("Summary: a login screen exists", "now add a logout button", "added to the toolbar"),
+            viewModel.history.value.map { it.content },
+        )
+    }
+
+    @Test
+    fun givenACompactionWhoseFirstMessageIsGone_whenRestoring_thenTheSummaryIsIgnored() {
+        seed(
+            session(
+                "s1",
+                message("m1", "add a login screen", "USER"),
+                message("m2", "LoginActivity.kt created", "AGENT"),
+                compaction = "Summary: another branch" to "m9",
+            )
+        )
+
+        val history = restoredViewModel().history.value
+
+        assertEquals(listOf("add a login screen", "LoginActivity.kt created"), history.map { it.content })
+    }
+
+    @Test
     fun givenSystemAndToolMessages_whenRestoring_thenTheyAreExcludedFromHistory() {
         seed(
             session(
@@ -400,9 +461,13 @@ class ChatViewModelHistoryRestoreTest {
         id: String,
         vararg messages: String,
         projectKey: String? = TEST_PROJECT_KEY,
+        compaction: Pair<String, String>? = null,
     ): String {
         val stamp = projectKey?.let { """"projectKey":"$it",""" } ?: ""
-        return """{"id":"$id","createdAt":1000,$stamp""" +
+        val summary = compaction?.let { (text, first) ->
+            """"compaction":{"summary":"$text","firstMessageId":"$first"},"""
+        } ?: ""
+        return """{"id":"$id","createdAt":1000,$stamp$summary""" +
             """"messages":[${messages.joinToString(",")}]}"""
     }
 

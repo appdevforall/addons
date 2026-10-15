@@ -17,6 +17,7 @@ import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
 import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
+import com.itsaky.androidide.plugins.aicore.models.HistoryCompaction
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.newestFirst
 import com.itsaky.androidide.plugins.aicore.models.Sender
@@ -257,6 +258,15 @@ class ChatViewModel(
         logWarn(message, error)
     }
 
+    /** Summarizes the history before a run that would outgrow the backend's context. */
+    private val compaction = CompactionUseCase(
+        config = sharedPromptConfig,
+        contextWindow = ::reportedContextWindow,
+        logWarn = { message, error -> logWarn(message, error) },
+        // Set, so a Stop while summarizing cancels the backend call and not only this coroutine.
+        summarizing = { modelTurnInFlight = it },
+    )
+
     /** This plugin's own handlers, fixed for the ViewModel's life; the contributed ones are not. */
     private val builtInHandlers: List<ToolHandler>
 
@@ -372,8 +382,16 @@ class ChatViewModel(
      * The user message the last run posted, so [editPrompt] knows [historySizeBeforeLastRun]
      * describes that prompt and not an earlier one; null when the retry point is forgotten.
      */
+    private val lastRunUserMessageId = MutableStateFlow<String?>(null)
+
+    /** Whether the last run overflowed the context window; the next send or Retry compacts first. */
     @Volatile
-    private var lastRunUserMessageId: String? = null
+    private var lastRunOverflowed = false
+
+    /** The error rows that offer Retry: the last run's, while its retry point is known; see [RunRetry]. */
+    internal val retryableErrorIds: StateFlow<Set<String>> =
+        combine(_messages, lastRunUserMessageId, RunRetry::retryableErrorIds)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     /** The tool awaiting approval, straight from [approvalManager] — no polling in between. */
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = approvalManager.currentApprovalRequest
@@ -750,9 +768,20 @@ class ChatViewModel(
         null
     }
 
-    /** How many tokens a reply may use on the current backend. */
-    private fun replyTokenCap(): Int =
-        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS
+    /** The window [backendId] reports, in tokens; 0 when it reports none or the call fails. */
+    private fun reportedContextWindow(backendId: String): Int = try {
+        (getLlmService()?.getBackend(backendId) as? LlmInferenceService.ContextWindowReportingBackend)
+            ?.contextWindowTokens ?: 0
+    } catch (e: Throwable) {
+        logWarn("backend '$backendId' supplied no context window", e)
+        0
+    }
+
+    /** How many tokens a reply may use on the current backend; at most half its window. */
+    private fun replyTokenCap(): Int = HistoryCompactor.replyTokens(
+        compaction.budgetTokens(currentBackendId),
+        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS,
+    )
 
     /**
      * The advice for a reply that meant to call a tool and produced nothing runnable.
@@ -924,7 +953,8 @@ class ChatViewModel(
         val llmService = passPreflight(userMessage) ?: return false
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) return false
-        launchRun(llmService, userMessage, contextFiles)
+        // An overflow's turns are still in the history, and the estimate that let it through missed.
+        launchRun(llmService, userMessage, contextFiles, forceCompaction = lastRunOverflowed)
         return true
     }
 
@@ -967,8 +997,14 @@ class ChatViewModel(
      * @param llmService the service [passPreflight] returned.
      * @param userMessage the prompt to send.
      * @param runFiles the attachments, read by the caller before anything it changed could move them.
+     * @param forceCompaction compact the history first whatever its estimate; see [fitHistory].
      */
-    private fun launchRun(llmService: LlmInferenceService, userMessage: String, runFiles: List<File>) {
+    private fun launchRun(
+        llmService: LlmInferenceService,
+        userMessage: String,
+        runFiles: List<File>,
+        forceCompaction: Boolean = false,
+    ) {
         AgentTrace.beginRun(currentBackendId, userMessage, runFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
@@ -989,8 +1025,9 @@ class ChatViewModel(
         )
         // Where a Retry has to rewind to; read here, on Main, while no run can be appending.
         lastRunPrompt = userMessage
-        lastRunUserMessageId = userChatMessage.id
+        lastRunUserMessageId.value = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
+        lastRunOverflowed = false
         // Read once: prompt, grammar and executor must all describe the same tool set.
         val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
@@ -1030,9 +1067,17 @@ class ChatViewModel(
 
                 val messageWithContext = buildString {
                     append(userMessage)
-                    append(contextFilesPrompt.render(runFiles))
+                    append(
+                        contextFilesPrompt.render(
+                            runFiles,
+                            compaction.maxFileChars(currentBackendId),
+                            compaction.maxAttachmentChars(currentBackendId),
+                        )
+                    )
                 }
-                val history = _history.value.toMutableList()
+                val history = fitHistory(
+                    llmService, config, toolDefinitions, messageWithContext, userChatMessage.id, epoch, forceCompaction,
+                ).toMutableList()
                 history.add(
                     LlmInferenceService.ChatMessage(
                         LlmInferenceService.ChatMessage.Role.USER,
@@ -1046,6 +1091,8 @@ class ChatViewModel(
                 }
                 requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }
                 var firstTurn = true
+                // Whether the run's turns are dropped; only a Stop, so a failure keeps the tool calls that ran.
+                var rollBack = true
 
                 try {
                     // Which protocol is live for this run. `native=false` against a backend that
@@ -1081,15 +1128,26 @@ class ChatViewModel(
                         // Only a prose turn that showed an answer has one a recap could repeat.
                         events = AgentRunReporter(runNotices) { askedToFinishAfterProse = proseTurnShowedAnswer },
                     )
+                    rollBack = false
                     if (loopResult.completed && generationEpoch.get() == epoch) {
                         runCodeReply?.let { draft -> reviewAnswer(llmService, userMessage, draft, history, epoch) }
                     }
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
+                } catch (e: Exception) {
+                    // Kept on an overflow too: the next run compacts them, so the edits made are not repeated.
+                    rollBack = e is CancellationException
+                    throw e
                 } finally {
                     // On Main, so a Stop, clear or chat switch can't bump the epoch between check and write.
                     withContext(NonCancellable + Dispatchers.Main) {
                         // Persist history only if this run wasn't superseded (epoch bumped).
-                        if (generationEpoch.get() == epoch) _history.value = history.toList()
+                        if (generationEpoch.get() == epoch) {
+                            _history.value = if (rollBack) {
+                                _history.value.take(historySizeBeforeLastRun)
+                            } else {
+                                history.toList()
+                            }
+                        }
                     }
                     stopStateTimer()
                 }
@@ -1101,10 +1159,13 @@ class ChatViewModel(
                 throw ce
             } catch (e: Exception) {
                 logError("sendMessage failed", e)
+                lastRunOverflowed = e is ContextOverflowException
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
                 setState(AgentState.Error(str(R.string.state_error, e.message)))
-                addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
+                addSystemMessage(
+                    str(R.string.state_error, e.message), MessageStatus.ERROR, isSettingsError = e is BackendSettingsException,
+                )
             } finally {
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.value = false
@@ -1117,6 +1178,82 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Summarizes the history when this run's request would pass [HistoryCompactor.TRIGGER_RATIO]
+     * of the backend's budget, or on a Retry after an overflow, and publishes what replaces it; on
+     * device, or when the summary fails, the history is cut to fit instead. Called at run start only.
+     *
+     * @param llmService the inference service the run uses.
+     * @param config the run's config, whose system prompt every request carries.
+     * @param toolDefinitions the tools the run offers.
+     * @param pendingUserTurn the new message with its attached files.
+     * @param firstMessageId the new prompt's message, the first one a summary would not cover.
+     * @param epoch the run's epoch; a Stop or a newer message makes the result stale.
+     * @param forced a Retry after a context overflow, which the estimate missed.
+     * @return the history to send the new message on top of.
+     */
+    private suspend fun fitHistory(
+        llmService: LlmInferenceService,
+        config: LlmInferenceService.LlmConfig,
+        toolDefinitions: List<LlmInferenceService.ToolDefinition>,
+        pendingUserTurn: String,
+        firstMessageId: String,
+        epoch: Int,
+        forced: Boolean,
+    ): List<LlmInferenceService.ChatMessage> {
+        val current = _history.value
+        // A prompt-calling backend gets the tools inside the system prompt, already counted there.
+        val sentTools = toolDefinitions.takeIf { backendPrompts.callsToolsNatively() }.orEmpty()
+        val estimate = compaction.estimateIfOverBudget(
+            currentBackendId, config.systemPrompt, sentTools, current, pendingUserTurn, config.maxTokens, forced,
+        ) ?: return current
+        AgentTrace.stage(
+            "COMPACT",
+            "estimate=${estimate.tokens} budget=${estimate.budgetTokens} turns=${current.size} forced=$forced",
+        )
+        val summarizes = HistoryCompactor.summarizes(currentBackendId)
+        val outcome = if (summarizes) {
+            withContext(Dispatchers.Main) { setState(AgentState.Processing(str(R.string.msg_compacting))) }
+            compaction.compact(llmService, currentBackendId, current, replyTokenCap())
+        } else {
+            HistoryCompactor.Outcome.Failed
+        }
+        val compacted = withContext(Dispatchers.Main) {
+            if (generationEpoch.get() != epoch) throw CancellationException("stopped")
+            val session = currentSessionOrNull()
+            val replacement = when (outcome) {
+                is HistoryCompactor.Outcome.Summarized -> {
+                    val saved = HistoryCompaction(outcome.turn.content, firstMessageId)
+                    _sessions.value = _sessions.value.map {
+                        if (it.id == session?.id) it.copy(compaction = saved) else it
+                    }
+                    // Now, not at run end: a process death mid-run would otherwise lose the summary.
+                    persistState()
+                    listOf(outcome.turn)
+                }
+                else -> rebuildHistoryFrom(
+                    _messages.value.takeWhile { it.id != firstMessageId },
+                    session?.compaction,
+                    minOf(MAX_RESTORED_HISTORY_CHARS, estimate.historyRoomChars),
+                )
+            }
+            _history.value = replacement
+            // The rollback point of this run is now the compacted history, not the one it replaced.
+            historySizeBeforeLastRun = replacement.size
+            replacement
+        }
+        val summarized = outcome is HistoryCompactor.Outcome.Summarized
+        AgentTrace.stage("COMPACT", "summarized=$summarized turnsKept=${compacted.size}")
+        val notice = when {
+            summarized -> R.string.chat_compacted
+            summarizes -> R.string.chat_compaction_failed
+            else -> R.string.chat_compaction_trimmed
+        }
+        addSystemMessage(str(notice), MessageStatus.SENT)
+        withContext(Dispatchers.Main) { setState(AgentState.Processing(str(R.string.msg_generating))) }
+        return compacted
     }
 
     /**
@@ -1316,9 +1453,9 @@ class ChatViewModel(
     }
 
     /**
-     * Re-runs the last prompt, dropping the failed run's turns from [history] first: a denied tool
-     * leaves "FAILED: User denied permission" there, and retrying behind it had the model answer
-     * from that line rather than ask for the tool again, so the dialog never reappeared.
+     * Re-runs the last prompt, dropping the failed run's turns from [history] first (an overflow's
+     * are summarized instead): a denied tool leaves "FAILED: User denied permission" there, and the
+     * model answered from that line rather than ask for the tool again, so the dialog never reappeared.
      */
     fun retryLastRun() {
         val prompt = lastRunPrompt
@@ -1331,7 +1468,8 @@ class ChatViewModel(
             logDebug("retryLastRun: a run is already in flight")
             return
         }
-        _history.value = _history.value.take(historySizeBeforeLastRun)
+        // After an overflow the run's turns stay for the forced summary, which records what it changed.
+        if (!lastRunOverflowed) _history.value = _history.value.take(historySizeBeforeLastRun)
         sendMessage(prompt)
     }
 
@@ -1420,7 +1558,7 @@ class ChatViewModel(
      */
     private fun adoptBranch(session: ChatSession, stage: String, detail: String) {
         _sessions.value = _sessions.value.map { if (it.id == session.id) session else it }
-        showTranscript(session.messages)
+        showTranscript(session.messages, session.compaction)
         traceHistoryCut(stage, detail)
         persistState()
     }
@@ -1450,10 +1588,10 @@ class ChatViewModel(
         _messages.value = kept
         replaceCurrentSessionMessages(kept)
         // The live history carries the tool turns a rebuild cannot; use it when it is this prompt's.
-        _history.value = if (messageId == lastRunUserMessageId) {
+        _history.value = if (messageId == lastRunUserMessageId.value) {
             _history.value.take(historySizeBeforeLastRun)
         } else {
-            rebuildHistoryFrom(kept)
+            rebuildHistoryFrom(kept, currentSessionOrNull()?.compaction)
         }
         forgetRetryPoint()
         // A title written from the discarded first exchange would name a conversation that is gone.
@@ -1601,7 +1739,9 @@ class ChatViewModel(
                     deferred.complete(reply)
                 }
 
-                override fun onError(error: String) {
+                override fun onError(error: String) = onError(error, LlmInferenceService.FailureKind.OTHER)
+
+                override fun onError(error: String, kind: LlmInferenceService.FailureKind) {
                     if (isStale()) {
                         deferred.completeExceptionally(CancellationException("stopped"))
                         return
@@ -1610,7 +1750,12 @@ class ChatViewModel(
                         // Drop the empty/partial bubble; the error surfaces as a SYSTEM message.
                         removeMessageFromSession(agentMessageId)
                     }
-                    deferred.completeExceptionally(RuntimeException(error))
+                    val failure = when (kind) {
+                        LlmInferenceService.FailureKind.CONTEXT_TOO_LONG -> ContextOverflowException(error)
+                        LlmInferenceService.FailureKind.CONFIGURATION -> BackendSettingsException(error)
+                        else -> RuntimeException(error)
+                    }
+                    deferred.completeExceptionally(failure)
                 }
             }
 
@@ -1650,6 +1795,9 @@ class ChatViewModel(
                         streamCallback.onComplete(response)
 
                     override fun onError(error: String) = streamCallback.onError(error)
+
+                    override fun onError(error: String, kind: LlmInferenceService.FailureKind) =
+                        streamCallback.onError(error, kind)
                 }
             )
         } catch (e: Exception) {
@@ -1819,13 +1967,15 @@ class ChatViewModel(
      * Appends a SYSTEM message to the chat (on the main thread).
      * @param text the message text.
      * @param status the message status.
+     * @param isSettingsError see [ChatMessage.isSettingsError].
      */
-    private suspend fun addSystemMessage(text: String, status: MessageStatus) {
+    private suspend fun addSystemMessage(text: String, status: MessageStatus, isSettingsError: Boolean = false) {
         val message = ChatMessage(
             id = UUID.randomUUID().toString(),
             text = text,
             sender = Sender.SYSTEM,
-            status = status
+            status = status,
+            isSettingsError = isSettingsError
         )
         withContext(Dispatchers.Main) {
             _messages.value = _messages.value + message
@@ -1873,7 +2023,11 @@ class ChatViewModel(
         // Its other versions go too: a cleared chat has no prompt left for them to belong to.
         _currentSessionId.value?.let { sessionId ->
             _sessions.value = _sessions.value.map {
-                if (it.id == sessionId) it.copy(otherBranches = null, selectedBranches = null) else it
+                if (it.id == sessionId) {
+                    it.copy(otherBranches = null, selectedBranches = null, compaction = null)
+                } else {
+                    it
+                }
             }
         }
         // The title described the conversation just cleared; the next first reply writes a new one.
@@ -1957,7 +2111,7 @@ class ChatViewModel(
      */
     private fun adoptSession(session: ChatSession) {
         _currentSessionId.value = session.id
-        showTranscript(session.messages)
+        showTranscript(session.messages, session.compaction)
         // Also dropped here: the readiness edge may have fired while another chat was current.
         if (_backendStatus.value.isAvailable) clearBackendSetupNotices()
         persistState()
@@ -1968,10 +2122,10 @@ class ChatViewModel(
      * move together: set side by side at each call site, ADFA-5584 (screen restored, model handed
      * an empty history) was fixed in one of them and not the others.
      */
-    private fun showTranscript(messages: List<ChatMessage>) {
+    private fun showTranscript(messages: List<ChatMessage>, compaction: HistoryCompaction?) {
         // Immutable snapshot, so a later mutation cannot reach collectors behind the StateFlow.
         _messages.value = messages.toList()
-        _history.value = rebuildHistoryFrom(messages)
+        _history.value = rebuildHistoryFrom(messages, compaction)
         // The rewind point names a run this transcript does not have, and would truncate it.
         forgetRetryPoint()
     }
@@ -2112,8 +2266,9 @@ class ChatViewModel(
      */
     private fun forgetRetryPoint() {
         lastRunPrompt = null
-        lastRunUserMessageId = null
+        lastRunUserMessageId.value = null
         historySizeBeforeLastRun = 0
+        lastRunOverflowed = false
     }
 
     /**
@@ -2122,15 +2277,26 @@ class ChatViewModel(
      * saved messages, so they are not reconstructed here.
      *
      * @param messages the session's transcript, oldest first.
-     * @return the eligible messages that fit both budgets, oldest first; the newest one is
-     *   always kept, truncated to the character budget when it alone exceeds it.
+     * @param compaction the session's summary; used only when [messages] holds its first message.
+     * @param maxChars the most characters the restored turns may hold together.
+     * @return the summary turn, if used, then the eligible messages after it that fit both budgets,
+     *   oldest first; the newest one is kept, truncated, unless the summary leaves no room.
      */
     private fun rebuildHistoryFrom(
-        messages: List<ChatMessage>
+        messages: List<ChatMessage>,
+        compaction: HistoryCompaction?,
+        maxChars: Int = MAX_RESTORED_HISTORY_CHARS,
     ): List<LlmInferenceService.ChatMessage> {
         // A new chat restores nothing; without this every one of them traces an empty restore.
         if (messages.isEmpty()) return emptyList()
-        val eligible = messages.filter {
+        // Not on screen means rewound or switched past it, so the summary covers another chat.
+        val start = compaction?.let { c -> messages.indexOfFirst { it.id == c.firstMessageId } } ?: -1
+        // Counted against the budget like any turn; one that alone passes it would overflow the cut.
+        val summary = compaction?.takeIf { start >= 0 && it.summary.length <= maxChars }?.let {
+            LlmInferenceService.ChatMessage(LlmInferenceService.ChatMessage.Role.USER, it.summary)
+        }
+        val turnChars = maxChars - summary?.content.orEmpty().length
+        val eligible = messages.drop(start.coerceAtLeast(0)).filter {
             // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
             (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
                 // Only a finished agent turn carries a duration: null is a bubble process death
@@ -2147,13 +2313,15 @@ class ChatViewModel(
             // What the model wrote, not the bubble: a turn whose tool call failed renders as
             // "the action failed" in the IDE's language, a sentence the model never produced.
             var text = message.historyText ?: message.text
+            // No room means no turns: a turn cut to nothing is sent empty, which Claude refuses.
+            if (turnChars <= 0) break
             // The newest eligible turn is never dropped — breaking on it would restore nothing at
             // all — but it is truncated, since nothing upstream bounds what a user can paste.
             if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
-                    chars + text.length > MAX_RESTORED_HISTORY_CHARS)
+                    chars + text.length > turnChars)
             ) break
-            if (text.length > MAX_RESTORED_HISTORY_CHARS) {
-                text = text.takeLast(MAX_RESTORED_HISTORY_CHARS)
+            if (text.length > turnChars) {
+                text = text.takeLast(turnChars)
             }
             chars += text.length
             val role = if (message.sender == Sender.USER) {
@@ -2168,9 +2336,9 @@ class ChatViewModel(
         AgentTrace.detail(
             "RESTORE",
             "retained=${kept.size} discarded=${messages.size - eligible.size} " +
-                "capped=${eligible.size - kept.size}"
+                "capped=${eligible.size - kept.size} summary=${summary != null}"
         )
-        return kept.toList()
+        return listOfNotNull(summary) + kept
     }
 
     /**

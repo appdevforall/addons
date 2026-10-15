@@ -242,6 +242,50 @@
         android:text="@string/hint_openai_model_help"
         android:textAppearance="@style/Plugin.Text.Small" />
 
+    <!-- Context window. Optional: blank is automatic. Saved on Done and on focus loss, like the
+         model, and kept for the server it was entered for. -->
+
+    <TextView
+        android:id="@+id/openai_context_window_label"
+        style="@style/Plugin.SectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:text="@string/label_openai_context_window" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/openai_context_window_box"
+        style="@style/PluginTextInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/hint_openai_context_window">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/openai_context_window_input"
+            style="@style/PluginTextInputEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:imeOptions="actionDone"
+            android:inputType="number"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/openai_context_window_help_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:text="@string/hint_openai_context_window_help"
+        android:textAppearance="@style/Plugin.Text.Small" />
+
+    <TextView
+        android:id="@+id/openai_context_window_status_text"
+        style="@style/Plugin.StatusLine"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_sm"
+        android:visibility="gone" />
+
     <!-- Connection test, which is also what fills the model dropdown: both are GET /v1/models. -->
 
     <com.google.android.material.button.MaterialButton

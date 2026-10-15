@@ -3,3 +3,9 @@
 
 context_files:
   heading: CONTEXT FILES
+  # A file cut to the size limit, sent on every later turn too (ADFA-6345). HEAD and TAIL are its
+  # start and end, verbatim; COUNT is how many characters were left out between them.
+  truncated: |-
+    {{HEAD}}
+    …[truncated {{COUNT}} chars; call read_file on this file for the part left out]
+    {{TAIL}}
