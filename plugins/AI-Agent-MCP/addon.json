@@ -1,0 +1,15 @@
+{
+  "summary": "Give the Agent tools from Model Context Protocol (MCP) servers. Requires the AI Core addon and an AI backend.",
+  "description": "Connects to MCP servers you configure and adds the tools they offer to the AI Core Agent, next to its own. Each tool starts switched off until you enable it. When the Agent calls a tool, the arguments it chose, which can include your code, are sent to the MCP server that offers that tool. This addon adds tools, not a model, so you still need an AI backend.",
+  "tags": [
+    "ai",
+    "agent",
+    "mcp"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

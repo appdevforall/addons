@@ -1,8 +1,9 @@
 # AI Code Suggestions plugin for Code on the Go
 
-**Requires the AI Core addon.** This plugin holds no model of its own. It asks
-AI Core for every completion, so install AI Core first and select a model in
-**AI Assistant → AI Settings**. Without it, this plugin shows no completions.
+**Requires the AI Core addon and an AI backend.** This plugin holds no model of
+its own. It asks AI Core for every completion, so install AI Core and a backend
+and choose it in **Preferences → Configuration → Agent**. Without them, this
+plugin shows no completions.
 
 Inline **ghost-text** code completions. As you type, the plugin debounces, asks
 an LLM for a completion at the cursor, and shows it as dimmed inline text via
@@ -23,7 +24,7 @@ an LLM for a completion at the cursor, and shows it as dimmed inline text via
                │ SharedServices (runtime) → LlmInferenceService
                ▼
 ┌─────────────────────────────┐
-│  ai-core                    │  ← LLM inference (local llama.cpp / Gemini)
+│  ai-core                    │  ← routes to the selected backend plugin
 └─────────────────────────────┘
 ```
 
@@ -42,9 +43,10 @@ content-change listener and renders ghost text. Reading the configured
 backend/model and any network access happen inside **`ai-core`**'s process,
 which declares those permissions.
 
-The surrounding file content and cursor context are sent to the configured
-backend to generate a completion — on-device for **Local**, or to Google over
-HTTPS for **Gemini**. Choose the backend accordingly for sensitive code.
+The code before the cursor (at most 500 characters) is sent to the configured
+backend to generate a completion: on-device for **AI Agent Local**, or over
+HTTPS to Google, Anthropic or your OpenAI-compatible server for **Gemini**,
+**Claude** or **OpenAI**. Choose the backend accordingly for sensitive code.
 
 ## Building
 
@@ -64,7 +66,7 @@ The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 1. Build and install **`ai-core` first** (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/ai-code-suggestions.cgp` via
    Code on the Go's Plugin Manager, and restart the IDE.
-3. Configure a model in **AI Assistant → AI Settings**.
+3. Install an AI backend and choose it in **Preferences → Configuration → Agent**.
 
 ## Key classes
 
