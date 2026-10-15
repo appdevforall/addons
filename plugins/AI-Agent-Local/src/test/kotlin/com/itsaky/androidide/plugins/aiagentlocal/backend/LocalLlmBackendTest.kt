@@ -83,6 +83,9 @@ class LocalLlmBackendTest {
         /** Whether the last load asked for a quantized KV cache, so that choice is observable. */
         var lastQuantizeKv = false
 
+        /** Runs inside each load, so a test can look at the backend while the weights load. */
+        var duringLoad: () -> Unit = {}
+
         override suspend fun load(
             nativePath: String,
             contextTokens: Int,
@@ -92,13 +95,23 @@ class LocalLlmBackendTest {
             loadCount++
             lastContextTokens = contextTokens
             lastQuantizeKv = quantizeKv
+            duringLoad()
         }
 
         override suspend fun unload() {
             unloadCount++
         }
 
-        override suspend fun contextSize() = lastContextTokens
+        /** What native creation allocated, when it differs from the request; null mirrors the request. */
+        var createdContextTokens: Int? = null
+
+        /** Makes reading the created context size fail, as a native error would. */
+        var contextSizeFails = false
+
+        override suspend fun contextSize(): Int {
+            check(!contextSizeFails) { "context size unreadable" }
+            return createdContextTokens ?: lastContextTokens
+        }
     }
 
     /** Captures the delete callback so a test can fire it the way the platform would. */
@@ -552,6 +565,98 @@ class LocalLlmBackendTest {
             Thread.sleep(10)
         }
         assertEquals("the deleted model must be unloaded", 1, engine.unloadCount)
+    }
+
+    @Test
+    fun givenNoModelLoaded_whenAskedForTheContextWindow_thenItIsZero() {
+        val backend = backendWith(FakeModelSource(emptyMap()), FakeEngine())
+
+        assertEquals(0, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenANativeContextSmallerThanRequested_whenLoaded_thenTheCreatedSizeIsReported() {
+        // The f16 fallback or the trained-context clamp shrink n_ctx; compaction must size to that.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine().apply { createdContextTokens = 1024 }
+        val backend = backendWith(source, engine)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(1024, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenAnUnreadableCreatedSize_whenLoaded_thenTheRequestedSizeIsReported() {
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine().apply { contextSizeFails = true }
+        val backend = backendWith(source, engine)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertTrue("the request is a usable fallback", engine.lastContextTokens > 0)
+        assertEquals(engine.lastContextTokens, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenAResidentModelWhoseFileWasDeleted_whenEvicted_thenTheContextWindowIsZero() {
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val backend = backendWith(source, FakeEngine())
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals(0, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenAModelLoading_whenAskedForTheContextWindow_thenTheSizeItWasGivenIsReported() {
+        // A send queued behind the warm-up is sized while the weights load, not at the floor.
+        configureModelPath(CONTENT_URI)
+        val engine = FakeEngine()
+        val backend = backendWith(FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel()))), engine)
+        var windowDuringLoad = 0
+        engine.duringLoad = { windowDuringLoad = backend.getContextWindowTokens() }
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(engine.lastContextTokens, windowDuringLoad)
+    }
+
+    @Test
+    fun givenTheConfiguredModelWasEvicted_whenAskedForTheContextWindow_thenItsLastSizeIsReported() {
+        // The send that reloads it is sized before the load, so it must not fall to the floor.
+        configureModelPath(CONTENT_URI)
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine().apply { createdContextTokens = 2048 }
+        val backend = backendWith(source, engine)
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals(2048, backend.getContextWindowTokens())
+    }
+
+    @Test
+    fun givenAnotherModelSelectedAfterAnEviction_whenAskedForTheContextWindow_thenItIsZero() {
+        // The old model's size says nothing about the new one's.
+        configureModelPath(CONTENT_URI)
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val backend = backendWith(source, FakeEngine())
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+
+        configureModelPath(OTHER_CONTENT_URI)
+
+        assertEquals(0, backend.getContextWindowTokens())
     }
 
     /** A minimal GGUF that passes the ADFA-4388 embedding guard, so loads reach the engine. */

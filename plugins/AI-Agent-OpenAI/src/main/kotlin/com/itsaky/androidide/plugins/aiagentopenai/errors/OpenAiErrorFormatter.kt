@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.errors
 
 import androidx.annotation.StringRes
 import com.itsaky.androidide.plugins.aiagentopenai.R
+import com.itsaky.androidide.plugins.services.LlmInferenceService.FailureKind
 import org.json.JSONObject
 import java.io.IOException
 
@@ -47,6 +48,9 @@ sealed interface OpenAiFailure {
 
     /** The key is valid but not allowed to use this model or endpoint (HTTP 403). */
     data object KeyForbidden : OpenAiFailure
+
+    /** The conversation has more tokens than the model's context window; retrying cannot fix it. */
+    data object ContextTooLong : OpenAiFailure
 
     /** HTTP 400 about the request rather than the credential. */
     data class RequestRejected(val reason: String?) : OpenAiFailure
@@ -130,6 +134,7 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
             is OpenAiFailure.ModelUnavailable,
             OpenAiFailure.QuotaExceeded,
             OpenAiFailure.BillingRequired,
+            OpenAiFailure.ContextTooLong,
             is OpenAiFailure.RequestRejected,
             is OpenAiFailure.ServiceUnavailable,
             is OpenAiFailure.Unexpected,
@@ -150,6 +155,31 @@ internal enum class CredentialFailure(val tag: String, @get:StringRes val messag
 /** Whether this failure is about the credential rather than the request, the model or the network. */
 internal val OpenAiFailure.isCredentialProblem: Boolean
     get() = CredentialFailure.of(this) != null
+
+/**
+ * The kind AI Core is told alongside this failure's wording, so it can shorten an overflowing
+ * conversation or send the user to settings without matching text. Listed exhaustively so a failure added later is classified.
+ */
+internal val OpenAiFailure.failureKind: FailureKind
+    get() = when (this) {
+        OpenAiFailure.ContextTooLong -> FailureKind.CONTEXT_TOO_LONG
+        is OpenAiFailure.ModelUnavailable,
+        OpenAiFailure.BillingRequired,
+        OpenAiFailure.KeyRefused,
+        OpenAiFailure.KeyMissing,
+        OpenAiFailure.KeyForbidden -> FailureKind.CONFIGURATION
+        OpenAiFailure.QuotaExceeded,
+        is OpenAiFailure.RequestRejected,
+        is OpenAiFailure.ServiceUnavailable,
+        is OpenAiFailure.Unexpected,
+        OpenAiFailure.ServerNotRunning,
+        OpenAiFailure.Unreachable,
+        is OpenAiFailure.TimedOut,
+        is OpenAiFailure.EmptyReply,
+        OpenAiFailure.ReasoningOnly,
+        OpenAiFailure.TruncatedBeforeReply,
+        is OpenAiFailure.Failed -> FailureKind.OTHER
+    }
 
 /**
  * Classifies an OpenAI-compatible failure so it can be reported as one translated sentence.
@@ -225,6 +255,9 @@ object OpenAiErrorFormatter {
 
             status == 403 -> OpenAiFailure.KeyForbidden
 
+            // Any status: some gateways answer an overflow with 413 or 422 rather than 400.
+            parsed.mentionsContextOverflow(error.message) -> OpenAiFailure.ContextTooLong
+
             status == 400 -> OpenAiFailure.RequestRejected(safeReason(parsed, error))
 
             status != null && status in 500..599 -> OpenAiFailure.ServiceUnavailable(status)
@@ -241,6 +274,30 @@ object OpenAiErrorFormatter {
             else -> OpenAiFailure.Failed(safeReason(parsed, error))
         }
     }
+
+    /**
+     * True when the server says the prompt does not fit the model's context window. OpenAI sends
+     * the code, llama-server the type; anything else passes the provider's own wording through.
+     *
+     * @param rawMessage read instead when no JSON body parsed, as for an error sent mid-stream
+     */
+    private fun OpenAiApiError.mentionsContextOverflow(rawMessage: String?): Boolean {
+        if (apiCode == "context_length_exceeded" || apiType == "exceed_context_size_error") return true
+        val wording = apiMessage ?: rawMessage.orEmpty()
+        val text = "${apiCode.orEmpty()} ${apiType.orEmpty()} $wording".lowercase()
+        return CONTEXT_OVERFLOW_PHRASES.any { text.contains(it) }
+    }
+
+    /** Wording that only a context overflow uses, across OpenAI-compatible servers. */
+    private val CONTEXT_OVERFLOW_PHRASES = listOf(
+        "context_length_exceeded",
+        "maximum context length",
+        "context length",
+        "context window",
+        "exceeds the available context",
+        "too many tokens",
+        "prompt is too long",
+    )
 
     /** True when a 429 is about money rather than request rate. */
     private fun OpenAiApiError.mentionsBilling(): Boolean {

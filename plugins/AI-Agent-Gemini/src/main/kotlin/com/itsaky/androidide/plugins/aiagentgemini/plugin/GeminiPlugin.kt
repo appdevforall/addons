@@ -52,12 +52,13 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_gemini_get_free_key"
 
         /**
-         * The settings that change what [GeminiBackend.isAvailable], its model name or its
-         * embedding model answers; the last is set from Vector Search, which re-reads on notice.
+         * The settings that change what [GeminiBackend.isAvailable], its model name, context window
+         * or embedding model answers; the last is set from Vector Search, which re-reads on notice.
          */
         private val WATCHED_KEYS = setOf(
             GeminiPreferences.KEY_API_KEY,
             GeminiPreferences.KEY_MODEL,
+            GeminiPreferences.KEY_MODEL_CONTEXT_WINDOWS,
             GeminiPreferences.KEY_EMBEDDING_MODEL,
         )
 

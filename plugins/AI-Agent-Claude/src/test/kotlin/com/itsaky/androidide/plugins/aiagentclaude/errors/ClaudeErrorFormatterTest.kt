@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentclaude.errors
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.IOException
@@ -84,6 +85,21 @@ class ClaudeErrorFormatterTest {
     @Test
     fun givenA413_whenClassified_thenTheRequestIsTooLarge() {
         assertEquals(ClaudeFailure.RequestTooLarge, classify(http(413, "request_too_large", "too big")))
+    }
+
+    @Test
+    fun givenPromptTooLong400_whenClassify_thenContextTooLong() {
+        // The real body from ADFA-6345: retrying cannot fix it, so it must not read as a bad request.
+        val error = ClaudeHttpException(
+            400,
+            """{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 1357094 tokens > 1000000 maximum"}}""",
+        )
+        assertEquals(ClaudeFailure.ContextTooLong, classify(error))
+    }
+
+    @Test
+    fun givenContextTooLong_whenCheckedForCredentials_thenItIsNotACredentialProblem() {
+        assertFalse(ClaudeFailure.ContextTooLong.isCredentialProblem)
     }
 
     @Test
