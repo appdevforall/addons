@@ -1,0 +1,16 @@
+{
+  "summary": "Run AI models on your device, with no internet connection. Requires the AI Core addon and a 64-bit ARM device.",
+  "description": "Runs GGUF models on the device with llama.cpp and serves them to the AI Core Agent and the other AI addons. It asks for no network permission, so your prompts and code never leave the device.",
+  "tags": [
+    "ai",
+    "agent",
+    "offline",
+    "local"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
