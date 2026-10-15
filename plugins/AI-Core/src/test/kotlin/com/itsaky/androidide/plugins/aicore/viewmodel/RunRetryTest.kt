@@ -14,9 +14,12 @@ class RunRetryTest {
     private val setupError = ChatMessage(
         id = "s", text = "no key", sender = Sender.SYSTEM, status = MessageStatus.ERROR, isSetupError = true,
     )
+    private val settingsError = ChatMessage(
+        id = "k", text = "key refused", sender = Sender.SYSTEM, status = MessageStatus.ERROR, isSettingsError = true,
+    )
     private val runError = ChatMessage(id = "e2", text = "down", sender = Sender.SYSTEM, status = MessageStatus.ERROR)
     private val messages = listOf(
-        ChatMessage(id = "p1", text = "first", sender = Sender.USER), olderError, prompt, setupError, runError,
+        ChatMessage(id = "p1", text = "first", sender = Sender.USER), olderError, prompt, setupError, settingsError, runError,
     )
 
     @Test

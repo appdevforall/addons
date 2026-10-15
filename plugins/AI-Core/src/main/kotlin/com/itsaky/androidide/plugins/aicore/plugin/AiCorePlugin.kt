@@ -127,7 +127,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
     override fun activate(): Boolean {
         // The router is published before anything else here: backend plugins load in parallel with
         // this one and register against it as soon as they see this plugin activate.
-        val router = LlmInferenceServiceImpl(context.logger)
+        val router = LlmInferenceServiceImpl(context.logger, context.androidContext)
         llmService = router
         SharedServices.register(LlmInferenceService::class.java, router)
         context.logger.info("AI Core Plugin: registered LlmInferenceService in SharedServices")
@@ -659,10 +659,11 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             tag = TOOLTIP_TAG_MESSAGE_RETRY,
             summary = "Run your last request again after a failed reply or a step you declined.",
             detail = """
-                <p>Appears on a step that failed — a dropped network request, a
-                model that wasn't loaded, a turn you stopped, or a tool call you
-                declined. A tool that errors on its own offers none: the agent
-                carries on past it.</p>
+                <p>Appears on a step of your last prompt that failed — a dropped
+                network request, an empty or garbled reply from the model, a model
+                that wasn't loaded, a turn you stopped, or a tool call you declined.
+                A tool that errors on its own offers none: the agent carries on past
+                it.</p>
                 <p><b>Retry</b> re-sends your last prompt with the same attached
                 context files, from the conversation as it stood before that
                 attempt: the failed turn is dropped rather than left for the model
