@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeLog
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpClient
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedactor
 import java.net.HttpURLConnection
 import org.json.JSONArray
 import org.json.JSONObject
@@ -82,7 +83,7 @@ class McpSessionLifecycleTest {
         ): Response {
             val method = body.optString("method")
             requests += Request(method, sessionId)
-            exchangeListener.onExchange(exchangeFor(url, body))
+            exchangeListener.onExchange(exchangeFor(url, body), McpRedactor(emptyList(), emptyList()))
             if (method == expiringMethod && expiriesLeft > 0) {
                 expiriesLeft--
                 throw McpHttpException(HttpURLConnection.HTTP_NOT_FOUND, "session expired")
@@ -229,5 +230,21 @@ class McpSessionLifecycleTest {
         session.listTools()
 
         assertEquals(2, log.snapshot().size)
+    }
+
+    @Test
+    fun givenARecordingOnOneThread_whenAnotherThreadCallsMeanwhile_thenOnlyTheRecordingThreadIsHeard() {
+        val http = FakeHttpClient(McpSession.PREFERRED_PROTOCOL_VERSION, sessionId = SESSION)
+        val session = sessionOn(http)
+        val log = McpExchangeLog()
+
+        session.recording(log) {
+            session.initialize()
+            // The fake answers no tools/call, so the call fails; only its request matters here.
+            Thread { runCatching { session.callTool(TOOL, emptyMap()) } }.apply { start() }.join()
+        }
+
+        assertEquals(2, log.snapshot().size)
+        assertTrue(log.snapshot().none { it.requestBody.text.contains("tools/call") })
     }
 }

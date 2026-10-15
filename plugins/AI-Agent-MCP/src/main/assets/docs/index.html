@@ -103,9 +103,13 @@
   <h2>Troubleshooting</h2>
   <p>When <b>Connect</b> fails, tap <b>Show details</b> under the message to see
   every request it sent and everything the server answered: status line,
-  headers and body. The token and extra header values are hidden — only their
-  scheme (such as <code>Bearer</code>) and length remain — so the transcript is
-  safe to <b>Copy</b> into a bug report. A <code>WWW-Authenticate</code> header
+  headers and body. The token, extra header values, cookies and the
+  <code>Mcp-Session-Id</code> are hidden — only their scheme (such as
+  <code>Bearer</code>) and length remain — and so are the URL's
+  <code>user:password@</code> part and its query values. A key the server puts
+  in the URL <i>path</i> cannot be told apart from the path, so check the
+  first line before you <b>Copy</b> the transcript into a bug report. A
+  <code>WWW-Authenticate</code> header
   on a 401 usually says what the server expected instead.</p>
   <ul>
     <li><b>"has no MCP endpoint at that URL"</b> — the path is wrong; try adding

@@ -288,7 +288,9 @@ class McpSettingsViewModel(
                     // The cached tools: a failed reconnect must not blank out the switches.
                     ConnectResult(
                         message = McpErrorFormatter.format(context, server.name, e),
-                        log = McpTranscript.log(exchanges.snapshot(), e, McpTranscriptStrings(context)),
+                        log = McpTranscript.log(
+                            exchanges.snapshot(), e, McpTranscriptStrings(context), exchanges::redact,
+                        ),
                         tools = McpToolCatalog.tools(server.id),
                     )
                 }

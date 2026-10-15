@@ -45,14 +45,14 @@ internal class McpExchangeTrace(
      */
     fun toExchange(failure: Throwable?): McpExchange = McpExchange(
         method = method,
-        url = url,
+        url = redactor.url(url),
         requestHeaders = headers.map { (name, value) -> redactor.requestHeader(name, value) } +
             redactor.requestHeader("Content-Length", contentLength.toString()),
-        requestBody = McpExchange.Body.capped(payload),
+        requestBody = McpExchange.Body.capped(redactor.scrub(payload)),
         status = status,
         responseHeaders = responseHeaders,
         responseBody = responseBody,
         // The status line and body already say what an HTTP error was.
-        failure = failure?.takeUnless { it is McpHttpException }?.let { redactor.scrub(it.describe()) },
+        failure = failure?.takeUnless { it is McpHttpException }?.let { redactor.message(it.describe()) },
     )
 }

@@ -72,4 +72,59 @@ class McpRedactorTest {
         assertEquals(McpExchange.Body.MAX_CHARS, body.text.length)
         assertEquals(5, body.omitted)
     }
+
+    @Test
+    fun givenAServerEchoingTheTokenJsonEscaped_whenScrubbed_thenTheEscapedCopyIsMasked() {
+        val scrubbed = redactor("ab/cd+ef==").scrub("""{"echo":"ab\/cd\u002Bef=="}""")
+
+        assertEquals("""{"echo":"${McpRedactor.MASK}"}""", scrubbed)
+    }
+
+    @Test
+    fun givenAServerEchoingTheTokenUrlEncoded_whenScrubbed_thenTheEncodedCopyIsMasked() {
+        val scrubbed = redactor("ab/cd+ef==").scrub("next=ab%2Fcd%2bef%3D%3D")
+
+        assertEquals("next=${McpRedactor.MASK}", scrubbed)
+    }
+
+    @Test
+    fun givenServerIssuedCredentials_whenShownAsResponseHeaders_thenTheyAreHidden() {
+        val cookie = redactor().responseHeader("Set-Cookie", "session=abc123; Path=/")
+        val session = redactor().responseHeader("Mcp-Session-Id", "3f2a9c")
+
+        assertEquals(McpExchange.Value.Hidden(null, 22), cookie.value)
+        assertEquals(McpExchange.Value.Hidden(null, 6), session.value)
+    }
+
+    @Test
+    fun givenASessionIdSent_whenShownAsARequestHeader_thenItIsHidden() {
+        val header = redactor().requestHeader("Mcp-Session-Id", "3f2a9c")
+
+        assertEquals(McpExchange.Value.Hidden(null, 6), header.value)
+    }
+
+    @Test
+    fun givenAUrlWithUserinfoAndAQueryKey_whenShown_thenBothAreMaskedAndThePathKept() {
+        val url = "https://user:pa55word@mcp.example.test/v1/mcp?api_key=k-123456&v=&debug#top"
+
+        val shown = McpRedactor.forRequest(url, emptyList(), emptyList()).url(url)
+
+        val mask = McpRedactor.MASK
+        assertEquals("https://$mask@mcp.example.test/v1/mcp?api_key=$mask&v=&debug#top", shown)
+    }
+
+    @Test
+    fun givenAQueryKeyEchoedInABody_whenScrubbed_thenItIsMasked() {
+        val url = "https://mcp.example.test/mcp?api_key=k-123456"
+        val redactor = McpRedactor.forRequest(url, emptyList(), emptyList())
+
+        assertEquals("bad key ${McpRedactor.MASK}", redactor.scrub("bad key k-123456"))
+    }
+
+    @Test
+    fun givenAnErrorNamingTheUrl_whenShownAsAMessage_thenItsQueryIsMasked() {
+        val message = redactor().message("https://mcp.example.test/mcp?t=abc redirected off its origin")
+
+        assertEquals("https://mcp.example.test/mcp?t=${McpRedactor.MASK} redirected off its origin", message)
+    }
 }

@@ -40,7 +40,7 @@ class McpTranscriptTest {
 
     @Test
     fun givenARefusedToken_whenRendered_thenBothDirectionsAppearInWireOrder() {
-        val text = McpTranscript.render(listOf(exchange()), McpHttpException(401, ""), labels)
+        val text = McpTranscript.render(listOf(exchange()), McpHttpException(401, ""), labels, { it })
 
         val expected = """
             > POST https://mcp.example.test/v2/mcp
@@ -61,7 +61,7 @@ class McpTranscriptTest {
         val error = SocketTimeoutException("timeout")
         val failed = exchange(status = null, responseBody = null, failure = "java.net.SocketTimeoutException: timeout")
 
-        val text = McpTranscript.render(listOf(failed), error, labels)
+        val text = McpTranscript.render(listOf(failed), error, labels, { it })
 
         assertTrue(text.endsWith("* java.net.SocketTimeoutException: timeout"))
         assertEquals(1, Regex("""^\* """, RegexOption.MULTILINE).findAll(text).count())
@@ -73,14 +73,14 @@ class McpTranscriptTest {
         val ok = exchange(status = "HTTP/1.1 200 OK", responseBody = McpExchange.Body("<html>"))
         val error = IOException("The server's reply to 'initialize' was not JSON-RPC")
 
-        val text = McpTranscript.render(listOf(ok), error, labels)
+        val text = McpTranscript.render(listOf(ok), error, labels, { it })
 
         assertTrue(text.endsWith("\n\n* java.io.IOException: The server's reply to 'initialize' was not JSON-RPC"))
     }
 
     @Test
     fun givenAFailureBeforeTheNetwork_whenRendered_thenItSaysNothingWasSent() {
-        val text = McpTranscript.render(emptyList(), IOException("no token"), labels)
+        val text = McpTranscript.render(emptyList(), IOException("no token"), labels, { it })
 
         assertEquals("<nothing sent>\n\n* java.io.IOException: no token", text)
     }
@@ -89,24 +89,35 @@ class McpTranscriptTest {
     fun givenACappedBody_whenRendered_thenTheOmittedCountIsNoted() {
         val capped = exchange(responseBody = McpExchange.Body("abc", omitted = 12))
 
-        val text = McpTranscript.render(listOf(capped), McpHttpException(401, ""), labels)
+        val text = McpTranscript.render(listOf(capped), McpHttpException(401, ""), labels, { it })
 
         assertTrue(text.endsWith("< abc\n< <12 more>"))
     }
 
     @Test
     fun givenAnHttpRefusal_whenLogged_thenNoSeparateErrorLineRepeatsTheStatus() {
-        val log = McpTranscript.log(listOf(exchange()), McpHttpException(401, ""), labels)
+        val log = McpTranscript.log(listOf(exchange()), McpHttpException(401, ""), labels, { it })
 
         assertEquals(null, log.unexplained)
-        assertEquals(McpTranscript.render(listOf(exchange()), McpHttpException(401, ""), labels), log.text)
+        assertEquals(McpTranscript.render(listOf(exchange()), McpHttpException(401, ""), labels, { it }), log.text)
     }
 
     @Test
     fun givenAFailureNoExchangeExplains_whenLogged_thenItGetsItsOwnLine() {
         val error = IOException("stream closed")
-        val log = McpTranscript.log(listOf(exchange(status = "HTTP/1.1 200 OK")), error, labels)
+        val log = McpTranscript.log(listOf(exchange(status = "HTTP/1.1 200 OK")), error, labels, { it })
 
         assertEquals("java.io.IOException: stream closed", log.unexplained)
+    }
+
+    @Test
+    fun givenAProtocolErrorEchoingTheKey_whenLogged_thenItsOwnLineIsRedactedToo() {
+        val error = IOException("invalid api key sk-live-123456")
+        val redact = { text: String -> text.replace("sk-live-123456", "<masked>") }
+
+        val log = McpTranscript.log(listOf(exchange(status = "HTTP/1.1 200 OK")), error, labels, redact)
+
+        assertEquals("java.io.IOException: invalid api key <masked>", log.unexplained)
+        assertTrue(log.text.endsWith("* java.io.IOException: invalid api key <masked>"))
     }
 }

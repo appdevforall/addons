@@ -85,7 +85,8 @@ open class McpHttpClient(
         // Both are advertised because the server picks, and offering one earns 406 from some.
         val headers = headersFor(token, userHeaders, sessionId, protocolVersion) +
             listOf("Content-Type" to "application/json", "Accept" to "application/json, $CONTENT_TYPE_SSE")
-        val redactor = McpRedactor(listOf(token) + userHeaders.values, userHeaders.keys)
+        val redactor =
+            McpRedactor.forRequest(url, listOfNotNull(token, sessionId) + userHeaders.values, userHeaders.keys)
         val credential = McpCredential.of(token, userHeaders)
         var target = url
         var hops = 0
@@ -140,7 +141,7 @@ open class McpHttpClient(
                 throw e
             } finally {
                 if (!reusable) conn.disconnect()
-                runCatching { exchangeListener.onExchange(trace.toExchange(failure)) }
+                runCatching { exchangeListener.onExchange(trace.toExchange(failure), redactor) }
             }
 
             if (++hops > MAX_REDIRECTS) {

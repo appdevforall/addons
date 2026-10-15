@@ -36,12 +36,18 @@ object McpTranscript {
      * @param exchanges every exchange the attempt made, oldest first.
      * @param error what the attempt failed with.
      * @param labels the translated pieces.
+     * @param redact masks credentials in the error's line, which the exchanges never saw.
      * @return the attempt, structured and as text.
      */
-    fun log(exchanges: List<McpExchange>, error: Throwable, labels: Labels): Log = Log(
+    fun log(
+        exchanges: List<McpExchange>,
+        error: Throwable,
+        labels: Labels,
+        redact: (String) -> String,
+    ): Log = Log(
         exchanges = exchanges,
-        unexplained = error.describe().takeIf { isUnexplained(exchanges, error) },
-        text = render(exchanges, error, labels),
+        unexplained = redact(error.describe()).takeIf { isUnexplained(exchanges, error) },
+        text = render(exchanges, error, labels, redact),
     )
 
     /**
@@ -49,13 +55,19 @@ object McpTranscript {
      * @param exchanges every exchange the attempt made, oldest first.
      * @param error what the attempt failed with.
      * @param labels the translated pieces.
+     * @param redact masks credentials in the error's line, which the exchanges never saw.
      * @return the text to show and to copy.
      */
-    fun render(exchanges: List<McpExchange>, error: Throwable, labels: Labels): String {
+    fun render(
+        exchanges: List<McpExchange>,
+        error: Throwable,
+        labels: Labels,
+        redact: (String) -> String,
+    ): String {
         val blocks = buildList {
             if (exchanges.isEmpty()) add(labels.nothingSent)
             exchanges.forEach { add(render(it, labels)) }
-            if (isUnexplained(exchanges, error)) add("* ${error.describe()}")
+            if (isUnexplained(exchanges, error)) add("* ${redact(error.describe())}")
         }
         return blocks.joinToString("\n\n")
     }

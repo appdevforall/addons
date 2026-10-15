@@ -8,7 +8,6 @@ import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpClient
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONObject
@@ -71,8 +70,8 @@ class McpSession(
     /** The connection a call is currently using, so [cancel] can drop it mid-flight. */
     @Volatile private var liveConnection: HttpURLConnection? = null
 
-    /** Who is watching this session's exchanges; see [recording]. */
-    private val recorders = CopyOnWriteArrayList<McpExchangeListener>()
+    /** Who is watching the exchanges made on each thread; see [recording]. */
+    private val recorder = ThreadLocal<McpExchangeListener?>()
 
     /** What the server called itself in `initialize`, for the settings pane's verdict. */
     @Volatile var serverName: String? = null
@@ -170,19 +169,21 @@ class McpSession(
     }
 
     /**
-     * Runs [block], handing [listener] every HTTP exchange this session makes meanwhile — a call
-     * running at the same time on another thread included. Nothing is recorded outside a block.
+     * Runs [block], handing [listener] every HTTP exchange [block] makes on this thread. A tool
+     * call another thread makes meanwhile is not the caller's, and may carry project code.
      *
      * @param listener receives each exchange as it ends.
-     * @param block the work to watch.
+     * @param block the work to watch; blocking, so it stays on the calling thread.
      * @return what [block] returned.
      */
     fun <T> recording(listener: McpExchangeListener, block: () -> T): T {
-        recorders += listener
+        val outer = recorder.get()
+        recorder.set(listener)
         return try {
             block()
         } finally {
-            recorders -= listener
+            // Removed rather than set to null: the thread goes back to a pool and outlives this.
+            if (outer == null) recorder.remove() else recorder.set(outer)
         }
     }
 
@@ -290,7 +291,7 @@ class McpSession(
                 protocolVersion = negotiatedVersion,
                 extraHeaders = current.headers,
                 onConnected = { liveConnection = it },
-                exchangeListener = { exchange -> recorders.forEach { it.onExchange(exchange) } },
+                exchangeListener = recorder.get() ?: McpExchangeListener.NONE,
             )
         } finally {
             liveConnection = null
