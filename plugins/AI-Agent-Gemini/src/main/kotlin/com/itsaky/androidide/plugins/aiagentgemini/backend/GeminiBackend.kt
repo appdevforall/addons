@@ -9,6 +9,7 @@ import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
+import com.itsaky.androidide.plugins.aiagentgemini.errors.failureKind
 import com.itsaky.androidide.plugins.aiagentgemini.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
@@ -61,7 +62,8 @@ class GeminiBackend(
     private val context: PluginContext,
     private val promptConfig: () -> GeminiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingModelSelectable, WebSearchBackend, ActiveModelReportingBackend {
+    EmbeddingModelSelectable, WebSearchBackend, ActiveModelReportingBackend,
+    ContextWindowReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -364,6 +366,15 @@ class GeminiBackend(
     override fun getActiveModelName(): String = getModelName()
 
     /**
+     * The active model's input limit, as the last catalog listed it, or the documented default.
+     * Read from preferences, so no request is made; the plugin watches the stored limits.
+     */
+    override fun getContextWindowTokens(): Int {
+        val stored = agentPrefs()?.getString(GeminiPreferences.KEY_MODEL_CONTEXT_WINDOWS, null)
+        return GeminiContextWindow.resolve(getModelName(), GeminiContextWindow.decode(stored))
+    }
+
+    /**
      * Written for a large cloud model; see [GeminiSystemPrompt] for why the wording belongs here.
      * Null until the config is loaded or when it cannot render, which ai-core
      * answers with its default prompt; never blocks, since the caller's thread is ai-core's.
@@ -441,7 +452,7 @@ class GeminiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failedResponse(classifyFailure(e, keyStamp)))
             }
         }
         currentJob = job
@@ -605,10 +616,10 @@ class GeminiBackend(
                     // that ran out of room would throw away the prose it did produce.
                     toolCallCount == 0 && finalText.isBlank() &&
                         finishReason == FINISH_REASON_MAX_TOKENS ->
-                        callback.onError(userMessage(GeminiFailure.ReplyTruncated))
+                        callback.fail(GeminiFailure.ReplyTruncated)
 
                     toolCallCount == 0 && finalText.isBlank() ->
-                        callback.onError(userMessage(GeminiFailure.NoReply(finishReason)))
+                        callback.fail(GeminiFailure.NoReply(finishReason))
 
                     else -> {
                         // Prose the cap cut off mid-sentence otherwise reads as a finished answer.
@@ -631,7 +642,7 @@ class GeminiBackend(
             } catch (e: Exception) {
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
-                callback.onError(formatErrorMessage(e, keyStamp))
+                callback.fail(classifyFailure(e, keyStamp))
             }
         }
     }
@@ -672,7 +683,7 @@ class GeminiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failedResponse(classifyFailure(e, keyStamp)))
             }
         }
         currentJob = job
@@ -745,11 +756,22 @@ class GeminiBackend(
      */
     private fun describeCatalog(apiKey: String): ModelCatalog {
         val catalog = fetchAvailableModels(apiKey)
+        rememberContextWindows(catalog.contextWindows)
         context.logger.info(
             "GeminiBackend: ${catalog.chat.size} models support $METHOD_GENERATE_CONTENT and " +
                 "${catalog.embedding.size} support $METHOD_EMBED_CONTENT"
         )
         return catalog
+    }
+
+    /**
+     * Stores each chat model's limit where [getContextWindowTokens] reads it. Per model, not per
+     * key, so a candidate key's listing is as good as the saved one's; writing the same limits
+     * again notifies nobody.
+     */
+    private fun rememberContextWindows(windows: Map<String, Int>) {
+        val encoded = GeminiContextWindow.encode(windows) ?: return
+        agentPrefs()?.edit()?.putString(GeminiPreferences.KEY_MODEL_CONTEXT_WINDOWS, encoded)?.apply()
     }
 
     /**
@@ -761,6 +783,7 @@ class GeminiBackend(
     private fun fetchAvailableModels(apiKey: String): ModelCatalog {
         val chat = mutableListOf<String>()
         val embedding = mutableListOf<String>()
+        val windows = LinkedHashMap<String, Int>()
         withTrafficTag(NetworkTags.CATALOG) {
             var pageToken: String? = null
 
@@ -802,7 +825,11 @@ class GeminiBackend(
                         val declared = (0 until methods.length()).map { methods.optString(it) }
                         // By declared capability, not by name: the same question the chat picker
                         // asks, asked of the other method, so neither picker guesses.
-                        if (declared.contains(METHOD_GENERATE_CONTENT)) chat.add(name)
+                        if (declared.contains(METHOD_GENERATE_CONTENT)) {
+                            chat.add(name)
+                            model.optInt("inputTokenLimit", 0).takeIf { it > 0 }
+                                ?.let { windows[name] = it }
+                        }
                         if (declared.contains(METHOD_EMBED_CONTENT)) embedding.add(name)
                     }
                 }
@@ -810,7 +837,11 @@ class GeminiBackend(
             } while (pageToken != null)
         }
 
-        return ModelCatalog(chat = chat.distinct(), embedding = embedding.distinct())
+        return ModelCatalog(
+            chat = chat.distinct(),
+            embedding = embedding.distinct(),
+            contextWindows = windows,
+        )
     }
 
     /**
@@ -1072,6 +1103,8 @@ class GeminiBackend(
         override fun onToolCall(request: ToolCallRequest) = Unit
         override fun onComplete(response: LlmResponse) = this@asToolCallback.onComplete(response)
         override fun onError(error: String) = this@asToolCallback.onError(error)
+        override fun onError(error: String, kind: FailureKind) =
+            this@asToolCallback.onError(error, kind)
     }
 
     /**
@@ -1159,14 +1192,29 @@ class GeminiBackend(
      * @param keyStamp when the key this request read was saved, so a refusal landing after a later
      *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
+    private fun formatErrorMessage(e: Exception, keyStamp: Long): String =
+        userMessage(classifyFailure(e, keyStamp))
+
+    /**
+     * Decide what went wrong with a request that threw, recording it when it is about the key.
+     *
+     * @param keyStamp when the key this request read was saved; see [formatErrorMessage]
+     */
+    private fun classifyFailure(e: Exception, keyStamp: Long): GeminiFailure {
         val failure = GeminiErrorFormatter.classify(e, getModelName())
-        val message = userMessage(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
         if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
-        return message
+        return failure
     }
+
+    /** [failure] as a failed response: its sentence, and the kind AI Core acts on. */
+    private fun failedResponse(failure: GeminiFailure): LlmResponse =
+        LlmResponse.failure(userMessage(failure), failure.failureKind)
+
+    /** Reports [failure] on this stream: its sentence, and the kind AI Core acts on. */
+    private fun ToolStreamCallback.fail(failure: GeminiFailure) =
+        onError(userMessage(failure), failure.failureKind)
 
     /**
      * Resolve a [GeminiFailure] against the plugin's own resources.
@@ -1190,6 +1238,9 @@ class GeminiBackend(
 
             GeminiFailure.KeyInvalid ->
                 resources.getString(CredentialFailure.KeyInvalid.messageRes)
+
+            GeminiFailure.ContextTooLong ->
+                resources.getString(R.string.gemini_error_context_too_long)
 
             is GeminiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_request_rejected_reason, it)

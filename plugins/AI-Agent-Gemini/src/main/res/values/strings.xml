@@ -6,6 +6,7 @@
     <string name="gemini_error_key_refused">Google refused your Gemini API key. Re-enter it in AI Settings.</string>
     <string name="gemini_error_key_missing">No Gemini API key is saved. Enter one in AI Settings.</string>
     <string name="gemini_error_key_invalid">Your Gemini API key is not valid. Re-enter it in AI Settings.</string>
+    <string name="gemini_error_context_too_long">This conversation is longer than the model can read. Tap Retry to summarize the earlier messages and send it again.</string>
     <string name="gemini_error_request_rejected">Gemini rejected the request.</string>
     <string name="gemini_error_request_rejected_reason">Gemini rejected the request. %1$s</string>
     <string name="gemini_error_service_unavailable">Gemini is temporarily unavailable (HTTP %1$d). Try again in a moment.</string>

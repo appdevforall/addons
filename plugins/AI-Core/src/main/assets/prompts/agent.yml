@@ -24,4 +24,5 @@ include:
   - tool_descriptions.yml
   - web_search.yml
   - answer_review.yml
+  - compaction.yml
   - layout.yml

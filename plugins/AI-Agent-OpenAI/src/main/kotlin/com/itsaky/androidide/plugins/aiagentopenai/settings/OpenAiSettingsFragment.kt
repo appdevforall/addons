@@ -40,6 +40,7 @@ import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,6 +94,12 @@ class OpenAiSettingsFragment : Fragment() {
      * built, so the server section can call it whenever the URL changes.
      */
     private var onServerChanged: ((String) -> Unit)? = null
+
+    /**
+     * Re-reads the context window after a server is saved, since the value is kept per server. Set
+     * by the context-window section; captures views, so it is dropped in [onDestroyView].
+     */
+    private var onServerSaved: (() -> Unit)? = null
 
     /**
      * Set while this pane is on screen, so [onResume] can nudge the user towards **Save** after
@@ -150,6 +157,7 @@ class OpenAiSettingsFragment : Fragment() {
         setupApiKeyUi(view)
         setupServerUi(view)
         setupModelPicker(view)
+        setupContextWindow(view)
         setupConnectionTest(view)
         onServerChanged?.invoke(viewModel.getBaseUrl())
     }
@@ -175,6 +183,7 @@ class OpenAiSettingsFragment : Fragment() {
         // Drops the captured pane views along with the callbacks.
         onPaneResume = null
         onServerChanged = null
+        onServerSaved = null
         apiKeyReveal = null
         setSecureWindow(false)
         super.onDestroyView()
@@ -317,6 +326,7 @@ class OpenAiSettingsFragment : Fragment() {
                         getString(R.string.msg_server_saved, result.url),
                         R.drawable.ic_key_verified
                     )
+                    onServerSaved?.invoke()
                     if (result.cleartext && !result.loopback && !viewModel.isCleartextAcknowledged()) {
                         warnAboutCleartext()
                     }
@@ -850,6 +860,98 @@ class OpenAiSettingsFragment : Fragment() {
             )
         }
     }
+
+    // --- Context window ------------------------------------------------------------------------
+
+    /**
+     * The optional context-window field. Blank is automatic; a number is kept for the saved server
+     * and saved on IME Done and on focus loss, like the model, so there is no Save button.
+     */
+    private fun setupContextWindow(view: View) {
+        val box = view.findViewById<TextInputLayout>(R.id.openai_context_window_box)
+        val input = view.findViewById<EditText>(R.id.openai_context_window_input)
+        val label = view.findViewById<TextView>(R.id.openai_context_window_label)
+        val help = view.findViewById<TextView>(R.id.openai_context_window_help_text)
+        val statusText = view.findViewById<TextView>(R.id.openai_context_window_status_text)
+
+        // Not on the input: long-press there is the paste menu.
+        listOf<View>(box, label, help, statusText)
+            .forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_CONTEXT_WINDOW) }
+
+        // Read back from the saved settings on every view creation, so nothing to restore.
+        input.isSaveEnabled = false
+
+        /** Shows the window stored for the saved server, blank for automatic. */
+        fun showSaved() {
+            input.setText(viewModel.getContextWindow()?.toString().orEmpty())
+        }
+
+        /** Saves what is typed when it differs from what is stored, and says how it went. */
+        fun commit() {
+            val stored = viewModel.getContextWindow()
+            val unchanged = when (val typed = ContextWindowSetting.parse(input.text?.toString())) {
+                ContextWindowSetting.Automatic -> stored == null
+                is ContextWindowSetting.Tokens -> typed.count == stored
+                is ContextWindowSetting.Rejected -> false
+            }
+            if (unchanged) return
+            when (val result = viewModel.saveContextWindow(input.text?.toString().orEmpty())) {
+                ContextWindowSetting.Automatic -> {
+                    input.setText("")
+                    showStatus(statusText, getString(R.string.msg_context_window_automatic))
+                }
+
+                is ContextWindowSetting.Tokens -> {
+                    input.setText(result.count.toString())
+                    showStatus(
+                        statusText,
+                        getString(R.string.msg_context_window_saved, formatTokens(result.count)),
+                        R.drawable.ic_key_verified
+                    )
+                }
+
+                is ContextWindowSetting.Rejected -> showStatus(
+                    statusText,
+                    contextWindowRejection(result.reason),
+                    R.drawable.ic_key_rejected
+                )
+            }
+        }
+
+        showSaved()
+        input.setOnEditorActionListener { _, _, _ ->
+            commit()
+            false
+        }
+        input.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) commit()
+        }
+        onServerSaved = {
+            // The value belongs to the server it was entered for, so a new server starts automatic.
+            hideStatus(statusText)
+            showSaved()
+        }
+    }
+
+    /** Why a typed context window was refused, with the limit it broke. */
+    private fun contextWindowRejection(reason: ContextWindowSetting.Reason): String = when (reason) {
+        ContextWindowSetting.Reason.NOT_A_NUMBER ->
+            getString(R.string.msg_context_window_not_a_number)
+
+        ContextWindowSetting.Reason.TOO_SMALL -> getString(
+            R.string.msg_context_window_too_small,
+            formatTokens(ContextWindowSetting.MIN_TOKENS)
+        )
+
+        ContextWindowSetting.Reason.TOO_LARGE -> getString(
+            R.string.msg_context_window_too_large,
+            formatTokens(ContextWindowSetting.MAX_TOKENS)
+        )
+    }
+
+    /** [tokens] grouped for the user's locale, as in `128,000`. */
+    private fun formatTokens(tokens: Int): String =
+        NumberFormat.getIntegerInstance(Locale.getDefault()).format(tokens)
 
     // --- Connection test ----------------------------------------------------------------------
 

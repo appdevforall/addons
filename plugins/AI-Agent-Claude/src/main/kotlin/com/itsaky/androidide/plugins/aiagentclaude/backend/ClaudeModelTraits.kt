@@ -7,11 +7,13 @@ package com.itsaky.androidide.plugins.aiagentclaude.backend
  * @property maxTokens the model's output cap
  * @property adaptiveThinking whether `thinking: {type: "adaptive"}` is accepted
  * @property effort whether `output_config.effort` is accepted
+ * @property maxInputTokens the model's context window (`max_input_tokens`)
  */
 data class ModelCapabilities(
     val maxTokens: Int? = null,
     val adaptiveThinking: Boolean? = null,
     val effort: Boolean? = null,
+    val maxInputTokens: Int? = null,
 )
 
 /**
@@ -27,6 +29,9 @@ internal object ClaudeModelTraits {
 
     /** Ceiling on any request's output budget: the largest every 64K-or-larger model accepts. */
     const val MAX_OUTPUT_CEILING = 64_000
+
+    /** Smallest window of any current Claude model (Haiku 4.5, 200K), per Anthropic's model list. */
+    const val DEFAULT_CONTEXT_WINDOW = 200_000
 
     /**
      * Models that take `thinking: {type: "adaptive"}`. Opus 4.5, Sonnet 4.5 and Haiku 4.5 think
@@ -120,6 +125,13 @@ internal object ClaudeModelTraits {
             ?: MAX_OUTPUT_CEILING
         return cap.coerceIn(1, MAX_OUTPUT_CEILING)
     }
+
+    /**
+     * The tokens one request to [model] may hold: the catalog's `max_input_tokens` when it listed
+     * one, else [DEFAULT_CONTEXT_WINDOW], which no current model is smaller than.
+     */
+    fun contextWindow(model: String, known: ModelCapabilities? = null): Int =
+        known?.maxInputTokens ?: DEFAULT_CONTEXT_WINDOW
 
     /**
      * Whether [model] takes the server-side `fallbacks` parameter. Exact ids only: the parameter is

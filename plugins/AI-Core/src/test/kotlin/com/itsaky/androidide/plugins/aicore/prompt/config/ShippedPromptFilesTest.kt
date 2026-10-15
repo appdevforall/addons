@@ -25,7 +25,7 @@ class ShippedPromptFilesTest {
         runBlocking { PromptConfigLoader.load(source, AgentPromptConfigParser) }
 
         assertEquals(
-            listOf("agent.yml", "rules.yml", "tools.yml", "ide_context.yml", "agent_loop.yml", "context_files.yml", "chat_title.yml", "tool_descriptions.yml", "web_search.yml", "answer_review.yml", "layout.yml"),
+            listOf("agent.yml", "rules.yml", "tools.yml", "ide_context.yml", "agent_loop.yml", "context_files.yml", "chat_title.yml", "tool_descriptions.yml", "web_search.yml", "answer_review.yml", "compaction.yml", "layout.yml"),
             paths,
         )
     }

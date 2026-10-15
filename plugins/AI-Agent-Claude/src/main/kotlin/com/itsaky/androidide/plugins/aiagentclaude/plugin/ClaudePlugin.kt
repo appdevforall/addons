@@ -53,8 +53,15 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_TEST = "ai_claude_test_connection"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_claude_get_key"
 
-        /** The settings that change what [ClaudeBackend.isAvailable] or its model name answers. */
-        private val WATCHED_KEYS = setOf(ClaudePreferences.KEY_API_KEY, ClaudePreferences.KEY_MODEL)
+        /**
+         * The settings that change what [ClaudeBackend.isAvailable], its model name or its context
+         * window answers; a refreshed catalog can change the window of the model already chosen.
+         */
+        private val WATCHED_KEYS = setOf(
+            ClaudePreferences.KEY_API_KEY,
+            ClaudePreferences.KEY_MODEL,
+            ClaudePreferences.KEY_MODEL_CAPABILITIES,
+        )
 
         @Volatile
         private var pluginContext: PluginContext? = null
