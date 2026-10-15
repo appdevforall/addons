@@ -1,6 +1,6 @@
 {
-  "summary": "Inline code completions as you type. Requires the AI Core addon.",
-  "description": "Adds grey ghost text to the editor that completes the line you are writing. The suggestions come from the on-device model that the AI Core addon provides.",
+  "summary": "Inline code completions as you type. Requires the AI Core addon and an AI backend.",
+  "description": "Adds grey ghost text to the editor that completes the line you are writing. It runs no model itself: AI Core sends the code before the cursor to the AI backend you select, which runs on the device or sends it to that backend's cloud service.",
   "tags": [
     "ai",
     "completion",
