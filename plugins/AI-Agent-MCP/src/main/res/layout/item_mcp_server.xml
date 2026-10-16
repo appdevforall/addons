@@ -42,6 +42,16 @@
             android:textColor="@color/plugin_on_surface_variant"
             android:textSize="13sp" />
 
+        <!-- Shown for an http:// URL saved before Save refused one off this device. -->
+        <TextView
+            android:id="@+id/mcpServerUrlProblem"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/mcp_server_url_cleartext"
+            android:textColor="@color/plugin_error"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <com.google.android.material.switchmaterial.SwitchMaterial

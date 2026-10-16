@@ -26,7 +26,9 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpUrlPolicy
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.net.ServerUrlParseResult
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
 
@@ -156,6 +158,13 @@ class McpSettingsFragment : Fragment() {
                 server.enabledTools.size,
                 server.knownTools.size,
             )
+            // Save refuses these now, but a server saved before that is kept and flagged here.
+            row.findViewById<TextView>(R.id.mcpServerUrlProblem).visibility =
+                if (McpUrlPolicy.verdict(server.url) == McpUrlPolicy.Verdict.CleartextOffDevice) {
+                    View.VISIBLE
+                } else {
+                    View.GONE
+                }
 
             val enabled = row.findViewById<SwitchMaterial>(R.id.mcpServerEnabled)
             // Set before the listener, or restoring state counts as a user change.
@@ -318,7 +327,7 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val validation =
-                    validate(candidate, tokenField.text.toString(), credential, headers, headersState)
+                    validate(candidate, tokenField.text.toString(), headers, headersState)
                 if (validation != null) {
                     status.show(validation)
                     return@setOnClickListener
@@ -392,7 +401,7 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val problem =
-                    validate(candidate, tokenField.text.toString(), credential, headers, headersState)
+                    validate(candidate, tokenField.text.toString(), headers, headersState)
                 if (problem != null) {
                     status.show(problem)
                     return@setOnClickListener
@@ -612,56 +621,59 @@ class McpSettingsFragment : Fragment() {
      * stray line break, and the transport refuses to send one, so catching it on Save is the
      * difference between a marked field and a connection that fails for no visible reason.
      *
-     * A credential on a cleartext URL is refused outright. The token field's help promises the
-     * value is encrypted under the Android Keystore — true at rest, but `http://` hands it to
-     * anyone on the same Wi-Fi on the way out, and a phone IDE runs on shared Wi-Fi by definition.
-     * A local server with no credential is still allowed.
-     *
-     * A cleartext URL is also refused while [credential] is still [Credential.UNKNOWN]: the stored
-     * token is read on a background thread and the dialog opens before that answers, so treating
-     * "not yet known" as "nothing stored" is what allowed an `http://` URL to be saved over a
-     * token that was still there and still sent. `https://` needs no such wait.
+     * `http://` is accepted only for a server on this device ([McpUrlPolicy]), credentials or not:
+     * anywhere else the session and any token cross a network the user does not control, and a
+     * phone IDE runs on shared Wi-Fi by definition. Loopback traffic never leaves the device.
      *
      * @param server the candidate.
      * @param typedToken the current contents of the token field.
-     * @param credential what is known about a stored token or header, which an empty token field
-     *   keeps rather than clears.
      * @param headers the header rows as they currently stand.
      * @return the message to show, or null when it is usable.
      */
     private fun validate(
         server: McpServer,
         typedToken: String,
-        credential: Credential,
         headers: Map<String, String>,
         headersState: Headers,
     ): String? = when {
         server.name.isBlank() -> getString(R.string.mcp_name_required)
-        server.url.isBlank() -> getString(R.string.mcp_url_required)
-        !server.url.startsWith("http://") && !server.url.startsWith("https://") ->
-            getString(R.string.mcp_url_scheme_invalid)
-        !McpHeaders.isSendableToken(typedToken.trim()) -> getString(R.string.mcp_token_illegal)
-        // Saving a typed row would replace the whole stored set, so it is refused while the dialog
-        // cannot show what that set is — each state with the advice that actually helps it.
-        headers.isNotEmpty() && headersState == Headers.UNKNOWN ->
-            getString(R.string.mcp_credentials_loading)
-        headers.isNotEmpty() && headersState == Headers.UNAVAILABLE ->
-            getString(R.string.mcp_headers_unavailable_no_replace)
-        headers.isNotEmpty() && headersState == Headers.UNREADABLE ->
-            getString(R.string.mcp_headers_unreadable_no_replace)
-        server.url.startsWith("http://") && credential == Credential.UNKNOWN ->
-            getString(R.string.mcp_credentials_loading)
-        server.url.startsWith("http://") &&
-            (typedToken.isNotBlank() || credential == Credential.PRESENT || headers.isNotEmpty()) ->
-            getString(R.string.mcp_url_insecure_credentials)
-        else -> null
+        else -> urlProblem(server.url) ?: when {
+            !McpHeaders.isSendableToken(typedToken.trim()) -> getString(R.string.mcp_token_illegal)
+            // Saving a typed row would replace the whole stored set, so it is refused while the
+            // dialog cannot show what that set is — each state with the advice that actually helps.
+            headers.isNotEmpty() && headersState == Headers.UNKNOWN ->
+                getString(R.string.mcp_credentials_loading)
+            headers.isNotEmpty() && headersState == Headers.UNAVAILABLE ->
+                getString(R.string.mcp_headers_unavailable_no_replace)
+            headers.isNotEmpty() && headersState == Headers.UNREADABLE ->
+                getString(R.string.mcp_headers_unreadable_no_replace)
+            else -> null
+        }
+    }
+
+    /**
+     * Why [url] cannot be used, in the user's terms.
+     * @param url the endpoint, trimmed.
+     * @return the message to show, or null when [McpUrlPolicy] accepts it.
+     */
+    private fun urlProblem(url: String): String? = when (val verdict = McpUrlPolicy.verdict(url)) {
+        McpUrlPolicy.Verdict.Usable -> null
+        McpUrlPolicy.Verdict.CleartextOffDevice -> getString(R.string.mcp_url_cleartext_off_device)
+        is McpUrlPolicy.Verdict.Invalid -> when (verdict.reason) {
+            ServerUrlParseResult.Invalid.Reason.BLANK -> getString(R.string.mcp_url_required)
+            ServerUrlParseResult.Invalid.Reason.UNSUPPORTED_SCHEME ->
+                getString(R.string.mcp_url_scheme_invalid)
+            ServerUrlParseResult.Invalid.Reason.NO_HOST -> getString(R.string.mcp_url_no_host)
+            // Also the fallback for a reason added to the host after this plugin was built.
+            else -> getString(R.string.mcp_url_malformed)
+        }
     }
 
     /**
      * What the dialog knows about the credential stored for the server it is showing.
      *
      * Three states rather than a flag: reading it is a Keystore decrypt on a background thread, and
-     * the gap before the answer arrives is real enough for a user to edit the URL and hit Save in.
+     * until it answers the dialog cannot tell whether there is anything to clear.
      */
     private enum class Credential {
 
