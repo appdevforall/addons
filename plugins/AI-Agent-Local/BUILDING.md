@@ -115,8 +115,14 @@ adb push plugins/AI-Core/build/plugin/ai-core.cgp /sdcard/Download/
 
 ## Updating llama.cpp (regenerating the AAR)
 
-You only need this when your llama.cpp fork changes. It requires the NDK/CMake
-toolchain and the submodule; a normal build does not.
+You need this when your llama.cpp fork changes **or** when you edit
+`llama-impl/src/main/cpp/llama-android.cpp`. It requires the NDK/CMake toolchain
+and the submodule; a normal build does not.
+
+CI never compiles the `.cpp`, so an edit that is not rebuilt into the AAR would
+ship as a silent no-op. To catch that, CMake stamps the source's SHA-256 into
+`libllama-android.so`, and `PrebuiltAarAbiTest` fails until the committed AAR
+carries the hash of the committed `.cpp`.
 
 ```bash
 # Run from the ai-agent-local plugin dir. One command: inits the submodule, compiles
@@ -131,7 +137,7 @@ git -C subprojects/llama.cpp checkout <commit-or-branch>
 ```
 
 Then commit the refreshed `plugins/AI-Agent-Local/libs/v8/llama-v8-release.aar` and
-`plugins/AI-Agent-Local/libs/llama-api.jar`. The `:llama-impl` / `:llama-api` Gradle
+`plugins/AI-Agent-Local/libs/llama-api.jar` in the same commit as the `.cpp` change. The `:llama-impl` / `:llama-api` Gradle
 modules load only while the submodule is checked out, so they never affect a
 normal build.
 
@@ -261,6 +267,17 @@ rm -rf llama-impl/.cxx
 
 # Rebuild
 ../../gradlew :llama-impl:assembleV8Debug
+```
+
+### Device test: the native context fallback
+
+`NativeContextFallbackTest` (`src/androidTest`) loads a bundled 1.2 MB model
+whose head width q8_0 cannot divide, so the quantized cache is refused and
+`new_context` retries at f16. It needs a connected arm64 device and runs only
+when invoked; CI has no emulator.
+
+```bash
+../../gradlew connectedDebugAndroidTest
 ```
 
 ### Debugging with Logcat
