@@ -11,6 +11,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "$LOG_PREFIX.McpToolCatalog"
@@ -50,13 +51,17 @@ object McpToolCatalog {
      * which is how the agent's tag for this server learns it went down or came back.
      *
      * @param server the server to ask.
+     * @param exchangeListener receives each HTTP exchange the handshake and listing make.
      * @return its name and the tools it listed, empty for a server that offers no catalogue.
      * @throws java.io.IOException when the server cannot be reached or refuses the handshake.
      */
-    fun connect(server: McpServer): Listing {
+    fun connect(
+        server: McpServer,
+        exchangeListener: McpExchangeListener = McpExchangeListener.NONE,
+    ): Listing {
         McpServerHealth.connectingIfUnknown(server.id)
         val listing = try {
-            list(server)
+            list(server, exchangeListener)
         } catch (e: Throwable) {
             recordFailure(server, e)
             throw e
@@ -81,7 +86,7 @@ object McpToolCatalog {
         }
         if (!isConfigured(server.id)) return
         val context = McpPlugin.getContext()?.androidContext
-        val refused = failure == McpFailure.TokenRefused || failure == McpFailure.Forbidden
+        val refused = failure is McpFailure.TokenRefused || failure is McpFailure.Forbidden
         McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server.name, error), refused)
     }
 
@@ -89,17 +94,19 @@ object McpToolCatalog {
         McpServerStore.servers().any { it.id == serverId }
 
     /** The handshake-and-list itself; see [connect]. */
-    private fun list(server: McpServer): Listing {
+    private fun list(server: McpServer, exchangeListener: McpExchangeListener): Listing {
         // Kept, not just its tools: the name the handshake returned lands on the session.
         val session = McpConnections.session(server)
-        // Explicit, so a catalogue refused below is told apart from a refused connection.
-        session.initialize()
-        val tools = try {
-            session.listTools()
-        } catch (e: McpProtocolException) {
-            // No tools capability: some servers expose only prompts or resources, and still work.
-            if (e.code != JsonRpc.METHOD_NOT_FOUND) throw e
-            emptyList()
+        val tools = session.recording(exchangeListener) {
+            // Explicit, so a catalogue refused below is told apart from a refused connection.
+            session.initialize()
+            try {
+                session.listTools()
+            } catch (e: McpProtocolException) {
+                // No tools capability: some servers expose only prompts or resources, and still work.
+                if (e.code != JsonRpc.METHOD_NOT_FOUND) throw e
+                emptyList()
+            }
         }
         toolsByServer[server.id] = tools
         McpServerStore.setKnownTools(server.id, tools.map { it.name })

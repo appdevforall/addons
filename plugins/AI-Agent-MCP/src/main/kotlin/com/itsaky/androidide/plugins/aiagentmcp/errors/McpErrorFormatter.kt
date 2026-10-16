@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCredential
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
 import java.io.InterruptedIOException
@@ -26,11 +27,11 @@ sealed interface McpFailure {
     /** The request was malformed as far as the server is concerned (HTTP 400). */
     data object BadRequest : McpFailure
 
-    /** The token was refused or missing (HTTP 401). */
-    data object TokenRefused : McpFailure
+    /** The credential sent was refused or missing (HTTP 401). */
+    data class TokenRefused(val credential: McpCredential) : McpFailure
 
-    /** The token is valid but not allowed here (HTTP 403). */
-    data object Forbidden : McpFailure
+    /** The credential sent is valid but not allowed here (HTTP 403). */
+    data class Forbidden(val credential: McpCredential) : McpFailure
 
     /** Nothing MCP answers at that URL (HTTP 404). */
     data object NoEndpoint : McpFailure
@@ -78,9 +79,8 @@ sealed interface McpFailure {
 /**
  * Classifies an MCP failure so it can be reported as one translated sentence.
  *
- * The server's raw body never reaches the transcript: it can be a stack trace, an HTML error page
- * or a token echoed back, and all three are worse than useless on a phone screen. The body stays in
- * logcat, where it belongs.
+ * The server's raw body never reaches this sentence: it can be a stack trace or an HTML page. The
+ * settings pane shows it on request instead, credentials redacted, through [McpTranscript].
  */
 object McpErrorFormatter {
 
@@ -94,7 +94,7 @@ object McpErrorFormatter {
         is UnreadableSecretException -> McpFailure.SecretUnreadable
         is UnavailableSecretException -> McpFailure.SecretUnavailable
         is McpRedirectException -> McpFailure.RedirectRefused
-        is McpHttpException -> forStatus(error.statusCode)
+        is McpHttpException -> forStatus(error.statusCode, error.credential)
         is McpProtocolException -> McpFailure.Rejected(error.message.orEmpty())
         is UnknownHostException -> McpFailure.UnknownHost
         is SSLException -> McpFailure.TlsFailed
@@ -118,8 +118,8 @@ object McpErrorFormatter {
 
         return when (failure) {
             McpFailure.BadRequest -> context.getString(R.string.mcp_error_bad_request, serverName)
-            McpFailure.TokenRefused -> context.getString(R.string.mcp_error_token_refused, serverName)
-            McpFailure.Forbidden -> context.getString(R.string.mcp_error_forbidden, serverName)
+            is McpFailure.TokenRefused -> refused(context, serverName, failure.credential)
+            is McpFailure.Forbidden -> forbidden(context, serverName, failure.credential)
             McpFailure.NoEndpoint -> context.getString(R.string.mcp_error_no_endpoint, serverName)
             McpFailure.WrongTransport -> context.getString(R.string.mcp_error_wrong_transport, serverName)
             McpFailure.NoCommonFormat -> context.getString(R.string.mcp_error_no_common_format, serverName)
@@ -145,10 +145,29 @@ object McpErrorFormatter {
         }
     }
 
-    private fun forStatus(status: Int): McpFailure = when (status) {
+    /** A 401, naming the field that was sent: blaming the token misleads when a header replaced it. */
+    private fun refused(context: Context, serverName: String, credential: McpCredential): String =
+        when (credential) {
+            McpCredential.Token -> context.getString(R.string.mcp_error_token_refused, serverName)
+            is McpCredential.AuthorizationHeader ->
+                context.getString(R.string.mcp_error_header_refused, serverName, credential.name)
+            McpCredential.ExtraHeaders -> context.getString(R.string.mcp_error_headers_refused, serverName)
+            McpCredential.None -> context.getString(R.string.mcp_error_no_credentials, serverName)
+        }
+
+    private fun forbidden(context: Context, serverName: String, credential: McpCredential): String =
+        when (credential) {
+            McpCredential.Token -> context.getString(R.string.mcp_error_forbidden, serverName)
+            is McpCredential.AuthorizationHeader ->
+                context.getString(R.string.mcp_error_forbidden_header, serverName, credential.name)
+            McpCredential.ExtraHeaders -> context.getString(R.string.mcp_error_forbidden_headers, serverName)
+            McpCredential.None -> context.getString(R.string.mcp_error_forbidden_anonymous, serverName)
+        }
+
+    private fun forStatus(status: Int, credential: McpCredential): McpFailure = when (status) {
         400 -> McpFailure.BadRequest
-        401 -> McpFailure.TokenRefused
-        403 -> McpFailure.Forbidden
+        401 -> McpFailure.TokenRefused(credential)
+        403 -> McpFailure.Forbidden(credential)
         404 -> McpFailure.NoEndpoint
         405 -> McpFailure.WrongTransport
         406 -> McpFailure.NoCommonFormat

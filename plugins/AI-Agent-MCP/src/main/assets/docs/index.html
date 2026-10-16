@@ -101,14 +101,30 @@
   supported.</p>
 
   <h2>Troubleshooting</h2>
+  <p>When <b>Connect</b> fails, tap <b>Show details</b> under the message to see
+  every request it sent and everything the server answered: status line,
+  headers and body. The token, extra header values, cookies and the
+  <code>Mcp-Session-Id</code> are hidden — only their scheme (such as
+  <code>Bearer</code>) and length remain — and so are the URL's
+  <code>user:password@</code> part and its query values. A key the server puts
+  in the URL <i>path</i> cannot be told apart from the path, so check the
+  first line before you <b>Copy</b> the transcript into a bug report. A
+  <code>WWW-Authenticate</code> header
+  on a 401 usually says what the server expected instead.</p>
   <ul>
     <li><b>"has no MCP endpoint at that URL"</b> — the path is wrong; try adding
       <code>/mcp</code>.</li>
     <li><b>"does not accept this request"</b> — the server is probably not a
       Streamable HTTP MCP server.</li>
-    <li><b>"refused the token"</b> — re-enter it; the field shows
+    <li><b>"refused the access token"</b> — re-enter it; the field shows
       <i>Stored</i> rather than the value, so typing replaces it. If the server
       needs no token at all, use <b>Clear stored credential</b>.</li>
+    <li><b>"refused the Authorization extra header"</b> — an extra header
+      named <code>Authorization</code> is sent <i>instead of</i> the access
+      token. Its value needs the scheme in front: <code>Bearer &lt;token&gt;</code>,
+      or for an Atlassian API token <code>Basic</code> followed by the base64 of
+      <code>email:token</code>. In <b>Show details</b>, a hidden value with no
+      scheme in front of it means the scheme is missing.</li>
     <li><b>Tools do not appear in the Agent</b> — check the server is enabled, at
       least one tool is switched on, and AI Core is installed and active.</li>
     <li><b>Everything times out on mobile data</b> — some servers are slow to

@@ -11,8 +11,10 @@ import java.io.IOException
  *
  * @param statusCode the HTTP status the server answered with.
  * @param body the server's error body; never shown to the user unfiltered.
+ * @param credential what the request authenticated with, so a 401 or 403 names the right field.
  */
 class McpHttpException(
     val statusCode: Int,
     val body: String,
+    val credential: McpCredential = McpCredential.None,
 ) : IOException("MCP HTTP $statusCode: $body")

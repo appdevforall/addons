@@ -56,8 +56,14 @@
 
     <!-- Failures (see McpErrorFormatter); %1$s is always the server's name -->
     <string name="mcp_error_bad_request">%1$s rejected the request as malformed.</string>
-    <string name="mcp_error_token_refused">%1$s refused the token. Check it in MCP server settings.</string>
-    <string name="mcp_error_forbidden">%1$s refused access with this token.</string>
+    <string name="mcp_error_token_refused">%1$s refused the access token. Check it in MCP server settings.</string>
+    <string name="mcp_error_header_refused">%1$s refused the %2$s extra header, which is sent instead of the access token. Check its value, including the scheme in front such as Bearer or Basic.</string>
+    <string name="mcp_error_headers_refused">%1$s refused the request. No access token was sent; check the extra headers in MCP server settings.</string>
+    <string name="mcp_error_no_credentials">%1$s needs credentials, and none were sent. Add an access token or an extra header in MCP server settings.</string>
+    <string name="mcp_error_forbidden">%1$s refused access with this access token.</string>
+    <string name="mcp_error_forbidden_header">%1$s refused access with the %2$s extra header.</string>
+    <string name="mcp_error_forbidden_headers">%1$s refused access with these extra headers.</string>
+    <string name="mcp_error_forbidden_anonymous">%1$s refused access without credentials.</string>
     <string name="mcp_error_no_endpoint">%1$s has no MCP endpoint at that URL.</string>
     <string name="mcp_error_wrong_transport">%1$s does not accept this request. It may not speak Streamable HTTP MCP.</string>
     <string name="mcp_error_no_common_format">%1$s and this plugin could not agree on a response format.</string>
@@ -75,6 +81,21 @@
     <string name="mcp_error_failed">Could not reach %1$s.</string>
     <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>
+
+    <!-- What a failed Connect sent and received (see McpTranscript) -->
+    <string name="mcp_show_details">Show details</string>
+    <string name="mcp_transcript_title">Connection log</string>
+    <string name="mcp_transcript_copy">Copy</string>
+    <string name="mcp_transcript_copied">Copied</string>
+    <string name="mcp_transcript_close">Close</string>
+    <string name="mcp_transcript_hidden">‹%1$d characters hidden›</string>
+    <string name="mcp_transcript_omitted">… %1$d more characters not shown</string>
+    <string name="mcp_log_request">Request</string>
+    <string name="mcp_log_response">Response</string>
+    <string name="mcp_log_headers">Headers</string>
+    <string name="mcp_log_body">Body</string>
+    <string name="mcp_log_no_response">No response</string>
+    <string name="mcp_transcript_nothing_sent">Nothing was sent: the request failed before it reached the server.</string>
 
     <!-- Extra request headers -->
     <string name="mcp_headers_header">Extra headers</string>
