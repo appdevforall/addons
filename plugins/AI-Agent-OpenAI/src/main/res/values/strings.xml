@@ -22,6 +22,7 @@
     <string name="openai_error_key_refused">The server refused your API key. Re-enter it in Agent settings.</string>
     <string name="openai_error_key_missing">This server needs an API key. Add one in Agent settings.</string>
     <string name="openai_error_key_forbidden">Your API key is not allowed to use this model. Choose another model, or check the key\'s permissions.</string>
+    <string name="openai_error_context_too_long">This conversation is longer than the model can read. Tap Retry to summarize the earlier messages and send it again.</string>
     <string name="openai_error_request_rejected">The server rejected the request.</string>
     <string name="openai_error_request_rejected_reason">The server rejected the request. %1$s</string>
     <string name="openai_error_service_unavailable">The server is temporarily unavailable (HTTP %1$d). Try again in a moment.</string>
@@ -33,7 +34,7 @@
     <string name="openai_error_empty_reply">The server answered but sent no reply text. Check the model is fully loaded in your server, then try again — see the IDE log for what the server sent.</string>
     <string name="openai_error_reasoning_only">The model spent its whole reply on internal reasoning and never answered. Raise the response length limit in your server, or choose a model without a thinking mode.</string>
     <string name="openai_error_truncated">The reply was cut off before any text arrived — the response length limit is too low for this model. Raise it in your server settings.</string>
-    <string name="openai_error_tools_unsupported">%1$s does not support tool calling, so the AI can answer but cannot change your project. Point the server setting at one that does.</string>
+    <string name="openai_error_tools_unsupported">%1$s on %2$s refused the agent\'s tools, so the AI can answer but cannot use them. The model may not support tool calling, or the server may reject one tool\'s definition; the IDE log says which.</string>
     <string name="openai_error_failed">The request to the AI server failed.</string>
     <string name="openai_error_failed_reason">The request to the AI server failed. %1$s</string>
 
@@ -107,6 +108,16 @@
     <string name="hint_openai_model_live">Tap to pick from the models this server reported, or type another name.</string>
     <string name="msg_model_switched">This server doesn\'t offer your previous model. Switched to %1$s — pick another if you prefer.</string>
     <string name="loading">Checking…</string>
+
+    <!-- Settings pane: context window. Optional; blank is automatic. Kept per server. -->
+    <string name="label_openai_context_window">Context window (tokens)</string>
+    <string name="hint_openai_context_window">Automatic</string>
+    <string name="hint_openai_context_window_help">Leave blank to detect it. Local servers (Ollama, LM Studio, llama-server) often run with only a few thousand tokens. Enter the context size the server actually uses.</string>
+    <string name="msg_context_window_saved">Context window set to %1$s tokens for this server.</string>
+    <string name="msg_context_window_automatic">Context window set to automatic.</string>
+    <string name="msg_context_window_not_a_number">Enter a whole number of tokens, such as 8192, or leave it blank.</string>
+    <string name="msg_context_window_too_small">That is too small to hold a conversation. Enter at least %1$s tokens.</string>
+    <string name="msg_context_window_too_large">That is larger than any model\'s window. Enter at most %1$s tokens.</string>
 
     <!-- Settings pane: connection test, which also fills the model list -->
     <string name="btn_test_connection">Test Connection &amp; List Models</string>

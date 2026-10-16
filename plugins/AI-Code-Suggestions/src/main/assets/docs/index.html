@@ -38,8 +38,8 @@
 
   <p><b>AI Code Suggestions</b> offers inline <b>ghost-text</b> completions as you
   type. Inference is served by the companion <b>AI Core</b> plugin, so install
-  <b>AI Core first</b> and configure a model in <b>AI Assistant → AI
-  Settings</b>.</p>
+  <b>AI Core first</b>, with an AI backend chosen in <b>Preferences &rarr;
+  Configuration &rarr; Agent</b>.</p>
 
   <h2>How it works</h2>
   <ul>
@@ -57,16 +57,18 @@
 
   <h2>Privacy</h2>
   <div class="note">
-    To generate a completion, the surrounding file content and cursor context
-    are sent to the AI Core backend you selected. With a <b>Local</b> model this
-    stays on the device; with the <b>Gemini</b> backend it is sent to Google over
-    HTTPS. Choose the backend accordingly for sensitive code.
+    To generate a completion, the code before the cursor is sent to the AI Core
+    backend you selected. With <b>AI Agent Local</b> this stays on the device;
+    with the <b>Gemini</b>, <b>Claude</b> or <b>OpenAI</b> backend it is sent
+    over HTTPS to Google, Anthropic or your OpenAI-compatible server. Choose the
+    backend accordingly for sensitive code.
   </div>
 
   <h2>Troubleshooting</h2>
   <ul>
-    <li><b>No suggestions appear</b> — confirm AI Core is installed and a model
-      is configured in AI Assistant's settings, then restart the IDE.</li>
+    <li><b>No suggestions appear</b> — confirm AI Core and a backend are
+      installed and the backend is configured in <b>Preferences &rarr;
+      Configuration &rarr; Agent</b>, then restart the IDE.</li>
     <li><b>Suggestions feel slow</b> — the debounce plus model latency add a
       short delay after you stop typing; local models are bounded by device
       speed.</li>

@@ -8,10 +8,12 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
+import com.itsaky.androidide.plugins.aiagentmcp.errors.McpTranscript
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeLog
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -253,33 +255,48 @@ class McpSettingsViewModel(
     }
 
     /**
+     * What one Connect came to.
+     * @property message the sentence to show.
+     * @property log what went over the wire, for a failure; null on success.
+     * @property tools the tools now known.
+     */
+    data class ConnectResult(val message: String, val log: McpTranscript.Log?, val tools: List<McpTool>)
+
+    /**
      * Connects to a saved server: handshake, tool list, and the list cached for the agent. Reads
      * the URL and credentials from the store, so save the form first. A server that handshakes but
      * offers no tool catalogue is still reachable — some expose only prompts or resources.
      *
      * @param server the server to connect to, as stored.
-     * @param onResult receives the sentence to show and the tools now known.
+     * @param onResult receives the outcome, on the main thread.
      */
-    fun connect(server: McpServer, onResult: (String, List<McpTool>) -> Unit) {
+    fun connect(server: McpServer, onResult: (ConnectResult) -> Unit) {
         viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
+                val exchanges = McpExchangeLog()
                 try {
-                    val listing = McpToolCatalog.connect(server)
+                    val listing = McpToolCatalog.connect(server, exchanges)
                     val name = listing.serverName ?: server.name
                     val message = if (listing.tools.isEmpty()) {
                         string(R.string.mcp_status_connected_no_tools, name)
                     } else {
                         string(R.string.mcp_status_connected, name, listing.tools.size)
                     }
-                    message to listing.tools
+                    ConnectResult(message, null, listing.tools)
                 } catch (e: Exception) {
+                    val context = getContext()?.androidContext
                     // The cached tools: a failed reconnect must not blank out the switches.
-                    McpErrorFormatter.format(getContext()?.androidContext, server.name, e) to
-                        McpToolCatalog.tools(server.id)
+                    ConnectResult(
+                        message = McpErrorFormatter.format(context, server.name, e),
+                        log = McpTranscript.log(
+                            exchanges.snapshot(), e, McpTranscriptStrings(context), exchanges::redact,
+                        ),
+                        tools = McpToolCatalog.tools(server.id),
+                    )
                 }
             }
             reload()
-            onResult(outcome.first, outcome.second)
+            onResult(outcome)
         }
     }
 

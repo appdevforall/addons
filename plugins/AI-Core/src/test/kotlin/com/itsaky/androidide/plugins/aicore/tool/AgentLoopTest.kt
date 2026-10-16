@@ -34,10 +34,10 @@ class AgentLoopTest {
         maxIterations: Int = AgentLoop.DEFAULT_MAX_ITERATIONS,
         maxConsecutiveRepeats: Int = AgentLoop.DEFAULT_MAX_CONSECUTIVE_REPEATS,
         terminalTool: String? = null,
-        toolOutputCharLimit: Int = ToolResultsPrompt.DEFAULT_CHAR_LIMIT,
+        toolOutputCharLimit: Int = ToolOutputBudget.DEFAULT_CHARS,
         unfinishedTurn: (suspend () -> String)? = null,
     ) = AgentLoop(
-        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond", toolOutputCharLimit),
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond") { toolOutputCharLimit },
         maxIterations = maxIterations,
         maxConsecutiveRepeats = maxConsecutiveRepeats,
         terminalTool = terminalTool,
@@ -926,6 +926,29 @@ class AgentLoopTest {
 
         assertTrue(result.completed)
         assertEquals(1, result.turns)
+    }
+
+    @Test
+    fun givenALooselyNamedWebSearch_whenItsResultIsFormatted_thenTheWebToolsLargerCapApplies() = runTest {
+        val model = ScriptedModel(listOf(toolCall("Web_Search"), "Done."))
+        val history = mutableListOf(ChatMessage(Role.USER, "search the docs"))
+        val executed = mutableListOf<String>()
+
+        agentLoop().run(
+            history = history,
+            generate = model::generate,
+            executeTools = { calls ->
+                executed += calls.map { it.name }
+                calls.map { ToolResult.success("Searched", "x".repeat(5000) + "THE SOURCES") }
+            },
+            canonicalName = { name -> if (name.equals("web_search", true)) "web_search" else name },
+        )
+
+        // Under the emitted name the default 4000-character cap kept the start and cut the sources.
+        assertEquals(listOf("web_search"), executed)
+        val results = history.last { it.role == Role.USER }.content
+        assertTrue(results.contains("[web_search]"))
+        assertTrue(results.contains("THE SOURCES"))
     }
 
     private companion object {

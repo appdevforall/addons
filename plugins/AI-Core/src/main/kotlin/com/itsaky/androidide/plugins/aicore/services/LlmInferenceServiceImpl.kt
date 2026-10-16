@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aicore.services
 
+import android.content.Context
 import com.itsaky.androidide.plugins.PluginLogger
+import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.backends.BackendRegistry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
@@ -19,8 +21,12 @@ import java.util.concurrent.CopyOnWriteArraySet
  * type before calling.
  *
  * @param logger the owning plugin's log, or null in unit tests
+ * @param androidContext words a backend that cannot be asked for the chat; null in unit tests
  */
-class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInferenceService {
+class LlmInferenceServiceImpl(
+    private val logger: PluginLogger? = null,
+    private val androidContext: Context? = null,
+) : LlmInferenceService {
 
     private val backends = ConcurrentHashMap<String, LlmBackend>()
     @Volatile private var currentGeneration: CompletableFuture<LlmResponse>? = null
@@ -97,16 +103,25 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         return backend != null && backend.isAvailable()
     }
 
+    /** The chat's sentence for [backendId] having no registered backend; technical in unit tests. */
+    private fun notInstalled(backendId: String): String =
+        androidContext?.getString(R.string.capability_backend_not_installed) ?: "Backend '$backendId' not found"
+
+    /** The chat's sentence for [backend] reporting itself unavailable; technical in unit tests. */
+    private fun notReady(backend: LlmBackend): String =
+        androidContext?.getString(R.string.error_backend_not_ready, backend.getName())
+            ?: "Backend '${backend.getId()}' is not available"
+
     override fun generateCompletion(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
             ?: return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '$effectiveId' not found")
+                LlmResponse.failure(notInstalled(effectiveId), FailureKind.CONFIGURATION)
             )
 
         if (!backend.isAvailable()) {
             return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '$effectiveId' is not available")
+                LlmResponse.failure(notReady(backend), FailureKind.CONFIGURATION)
             )
         }
 
@@ -119,12 +134,12 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
         if (backend == null) {
-            callback.onError("Backend '$effectiveId' not found")
+            callback.onError(notInstalled(effectiveId), FailureKind.CONFIGURATION)
             return
         }
 
         if (!backend.isAvailable()) {
-            callback.onError("Backend '$effectiveId' is not available")
+            callback.onError(notReady(backend), FailureKind.CONFIGURATION)
             return
         }
 
@@ -139,12 +154,12 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
             ?: return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '$effectiveId' not found")
+                LlmResponse.failure(notInstalled(effectiveId), FailureKind.CONFIGURATION)
             )
 
         if (!backend.isAvailable()) {
             return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '$effectiveId' is not available")
+                LlmResponse.failure(notReady(backend), FailureKind.CONFIGURATION)
             )
         }
 
@@ -163,12 +178,12 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
         if (backend == null) {
-            callback.onError("Backend '$effectiveId' not found")
+            callback.onError(notInstalled(effectiveId), FailureKind.CONFIGURATION)
             return
         }
 
         if (!backend.isAvailable()) {
-            callback.onError("Backend '$effectiveId' is not available")
+            callback.onError(notReady(backend), FailureKind.CONFIGURATION)
             return
         }
 
@@ -194,6 +209,8 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         override fun onToken(token: String) = this@asStream.onToken(token)
         override fun onComplete(response: LlmResponse) = this@asStream.onComplete(response)
         override fun onError(error: String) = this@asStream.onError(error)
+        override fun onError(error: String, kind: LlmInferenceService.FailureKind) =
+            this@asStream.onError(error, kind)
     }
 
     /**

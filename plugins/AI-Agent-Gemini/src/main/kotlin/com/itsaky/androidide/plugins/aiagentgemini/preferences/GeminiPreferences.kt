@@ -32,6 +32,12 @@ internal object GeminiPreferences {
     const val KEY_EMBEDDING_MODEL = "gemini_embedding_model"
 
     /**
+     * Each chat model's `inputTokenLimit` from the last catalog, so the context window is answered
+     * without a request. Encoded by `GeminiContextWindow`; model metadata, not a setting.
+     */
+    const val KEY_MODEL_CONTEXT_WINDOWS = "gemini_model_context_windows"
+
+    /**
      * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a
      * setting, so deliberately outside [OWNED_KEYS]: there is nothing here worth carrying over from
      * a legacy store, and a stale reason would accuse a key the user has since replaced.

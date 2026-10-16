@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.ToolResultsPrompt
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.normalizeToolArgs
 import com.itsaky.androidide.plugins.services.GradleTaskInfo
 import com.itsaky.androidide.plugins.services.IdeBuildService
@@ -24,6 +25,7 @@ class ListGradleTasksHandlerTest {
 
     private lateinit var services: ServiceRegistry
     private lateinit var buildService: IdeBuildService
+    private lateinit var context: PluginContext
     private lateinit var handler: ListGradleTasksHandler
 
     private val greet = GradleTaskInfo(":greet", "greet", ":", "custom", "Prints a greeting")
@@ -35,7 +37,7 @@ class ListGradleTasksHandlerTest {
     fun setup() {
         buildService = mockk(relaxed = true)
         services = mockk()
-        val context = mockk<PluginContext>()
+        context = mockk()
         every { context.services } returns services
         every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeBuildService::class.java) } returns buildService
@@ -133,10 +135,10 @@ class ListGradleTasksHandlerTest {
         val many = (1..150).map { GradleTaskInfo(":app:task$it", "task$it", ":app", "build", "Does step $it of the build, at some length") }
         val handshake = GradleTaskInfo(":app:secretHandshake", "secretHandshake", ":app", null, "Prints a greeting")
 
-        val result = ListGradleTasksHandler.resultFor(many + handshake, "")
+        val result = ListGradleTasksHandler.resultFor(many + handshake, "", ToolOutputBudget.DEFAULT.dataChars())
         val data = result.data!!
 
-        assertTrue(promptBody(result).length <= ToolResultsPrompt.DEFAULT_CHAR_LIMIT)
+        assertTrue(promptBody(result).length <= ToolOutputBudget.DEFAULT_CHARS)
         assertTrue(data.contains("Descriptions left out"))
         assertTrue(data.contains("other:\n:app:secretHandshake"))
         assertTrue(data.contains(":app:task150\n"))
@@ -147,10 +149,10 @@ class ListGradleTasksHandlerTest {
     fun givenTooManyTasksEvenWithoutDescriptions_whenListing_thenTheListIsCutAtALineWithAHint() {
         val many = (1..1000).map { GradleTaskInfo(":feature:module:task$it", "task$it", ":feature:module", "build", null) }
 
-        val result = ListGradleTasksHandler.resultFor(many, "")
+        val result = ListGradleTasksHandler.resultFor(many, "", ToolOutputBudget.DEFAULT.dataChars())
         val data = result.data!!
 
-        assertTrue(promptBody(result).length <= ToolResultsPrompt.DEFAULT_CHAR_LIMIT)
+        assertTrue(promptBody(result).length <= ToolOutputBudget.DEFAULT_CHARS)
         assertTrue(data.contains("List cut short"))
         assertTrue(data.lines().filter { it.startsWith(":feature") }.all { it.matches(Regex(":feature:module:task\\d+")) })
     }
@@ -162,13 +164,35 @@ class ListGradleTasksHandlerTest {
         val handshake = GradleTaskInfo(":app:secretHandshake", "secretHandshake", ":app", null, "Prints a greeting")
         val hiddenTasks = (1..200).map { GradleTaskInfo(":app:internal$it", "internal$it", ":app", null, null) }
 
-        val result = ListGradleTasksHandler.resultFor(agp + handshake + hiddenTasks, "")
+        val result = ListGradleTasksHandler.resultFor(agp + handshake + hiddenTasks, "", ToolOutputBudget.DEFAULT.dataChars())
 
-        assertTrue(promptBody(result).length <= ToolResultsPrompt.DEFAULT_CHAR_LIMIT)
+        assertTrue(promptBody(result).length <= ToolOutputBudget.DEFAULT_CHARS)
         assertTrue(result.data!!.contains(":app:secretHandshake"))
         assertTrue(result.data!!.contains("200 tasks with no group or description"))
     }
 
     // What ToolResultsPrompt hands the model for a successful result, before its own cut.
     private fun promptBody(result: ToolResult): String = result.message + "\n" + result.data
+
+    @Test
+    fun givenAnInjectedBudget_whenListing_thenTheListingFitsIt() = runTest {
+        val many = (1..100).map { GradleTaskInfo(":app:task$it", "task$it", ":app", "build", null) }
+        every { buildService.getTasks() } returns many
+        val budget = ToolOutputBudget { 600 }
+        val small = ListGradleTasksHandler(context, budget)
+
+        val result = small.execute(emptyMap())
+
+        assertTrue(promptBody(result).length <= budget.dataChars())
+        assertTrue(result.data!!.contains("List cut short"))
+    }
+
+    @Test
+    fun givenABudgetTooSmallForTheCutHint_whenListing_thenItDoesNotThrow() {
+        val many = (1..100).map { GradleTaskInfo(":app:task$it", "task$it", ":app", "build", null) }
+
+        val result = ListGradleTasksHandler.resultFor(many, "", maxChars = 20)
+
+        assertTrue(result.success)
+    }
 }

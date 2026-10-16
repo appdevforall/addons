@@ -59,6 +59,24 @@ internal object OpenAiPreferences {
      */
     const val KEY_EMBEDDING_MODEL_URL = "openai_embedding_model_url"
 
+    /** Context window the user entered, in tokens. Absent means automatic. */
+    const val KEY_CONTEXT_WINDOW = "openai_context_window"
+
+    /**
+     * The base URL [KEY_CONTEXT_WINDOW] was entered for, so a window sized for one server's
+     * allocation is never applied to another's; switching servers falls back to automatic.
+     */
+    const val KEY_CONTEXT_WINDOW_URL = "openai_context_window_url"
+
+    /**
+     * The context windows the last model listing reported, per model. Written by the backend from
+     * a listing it already fetched; encoded by `RememberedModels`.
+     */
+    const val KEY_LISTED_CONTEXT_WINDOWS = "openai_listed_context_windows"
+
+    /** The base URL [KEY_LISTED_CONTEXT_WINDOWS] was listed by, for the reason of [KEY_MODEL_URL]. */
+    const val KEY_LISTED_CONTEXT_WINDOWS_URL = "openai_listed_context_windows_url"
+
     /** Set once the user has been warned about a cleartext URL, so the warning shows once. */
     const val KEY_CLEARTEXT_ACKNOWLEDGED = "openai_cleartext_acknowledged"
 

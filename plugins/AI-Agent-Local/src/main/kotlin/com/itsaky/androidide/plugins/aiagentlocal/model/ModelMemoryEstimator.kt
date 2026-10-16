@@ -56,9 +56,10 @@ object ModelMemoryEstimator {
      * the policy granted the very thing that trips the warning, and moves the "needs X to run"
      * figure between two selections of the same model (ADFA-5187).
      *
-     * Priced at [KvCacheType.F16] and not at the type the load will pick: f16 is the dearer of the
-     * two and the type the native fallback drops to, so this stays an upper bound over both
-     * outcomes — including the refused-quantized-cache path the warning exists for (ADFA-5188).
+     * Always priced at [KvCacheType.F16], never at the type the load will pick: f16 is the dearer of
+     * the two and the type the native fallback drops to, so at this fixed context the figure is an
+     * upper bound over both cache types — including the refused-quantized-cache path the warning
+     * exists for (ADFA-5188). It bounds the cache type only, not a load granted a larger context.
      *
      * @param fileSizeBytes the model file's size, or null when it is unknown
      * @param header the model's metadata, or null when it could not be read

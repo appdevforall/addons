@@ -1,6 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
-import com.itsaky.androidide.plugins.aicore.tool.handlers.LogWindowCalculator.MAX_OUTPUT_CHARS
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.LogEntry
 import com.itsaky.androidide.plugins.services.LogLevel
 import org.junit.Assert.assertEquals
@@ -15,6 +15,8 @@ import org.junit.Test
 class LogWindowCalculatorTest {
 
     private val marker = "...[truncated]..."
+
+    private val calculator = LogWindowCalculator(MAX_OUTPUT_CHARS)
 
     private fun info(lines: Int, label: String = "step"): List<LogEntry> =
         (1..lines).map { LogEntry(LogLevel.INFO, "I MyApp: $label$it") }
@@ -33,7 +35,7 @@ class LogWindowCalculatorTest {
     fun givenAHostTruncatedCrashFollowedByALongLog_whenWindowed_thenBothMarkersFitTheBudget() {
         val entries = info(10) + crash + info(2000, label = "after")
 
-        val text = LogWindowCalculator.windowFor(entries, hostTruncated = true).text
+        val text = calculator.windowFor(entries, hostTruncated = true).text
 
         assertTrue("budget exceeded: ${text.length}", text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.startsWith("$marker\n${crash.text}"))
@@ -46,7 +48,7 @@ class LogWindowCalculatorTest {
     fun givenALongLogWithNoError_whenWindowed_thenTheNewestWholeLinesFitTheBudget() {
         val entries = info(2000)
 
-        val text = LogWindowCalculator.windowFor(entries, hostTruncated = false).text
+        val text = calculator.windowFor(entries, hostTruncated = false).text
 
         assertTrue("budget exceeded: ${text.length}", text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.startsWith("$marker\n"))
@@ -61,7 +63,7 @@ class LogWindowCalculatorTest {
         val whole = entries.joinToString("\n") { it.text }
         assertEquals(MAX_OUTPUT_CHARS, whole.length)
 
-        val text = LogWindowCalculator.windowFor(entries, hostTruncated = false).text
+        val text = calculator.windowFor(entries, hostTruncated = false).text
 
         assertEquals(whole, text)
     }
@@ -72,7 +74,7 @@ class LogWindowCalculatorTest {
         val half = (MAX_OUTPUT_CHARS - "\n$marker\n".length) / 2
         val line = "E AndroidRuntime: FATAL EXCEPTION: " + "a".repeat(half - 36) + "😀" + "b".repeat(MAX_OUTPUT_CHARS)
 
-        val text = LogWindowCalculator.windowFor(listOf(LogEntry(LogLevel.ERROR, line)), false).text
+        val text = calculator.windowFor(listOf(LogEntry(LogLevel.ERROR, line)), false).text
 
         assertTrue(text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.startsWith("E AndroidRuntime: FATAL EXCEPTION"))
@@ -84,7 +86,7 @@ class LogWindowCalculatorTest {
         val room = MAX_OUTPUT_CHARS - "$marker\n".length
         val line = "a".repeat(100) + "😀" + "b".repeat(room - 1)
 
-        val text = LogWindowCalculator.windowFor(listOf(LogEntry(LogLevel.INFO, line)), false).text
+        val text = calculator.windowFor(listOf(LogEntry(LogLevel.INFO, line)), false).text
 
         assertTrue(text.length <= MAX_OUTPUT_CHARS)
         assertTrue(text.endsWith("b"))
@@ -96,7 +98,7 @@ class LogWindowCalculatorTest {
         val older = LogEntry(LogLevel.ERROR, "E AndroidRuntime: FATAL EXCEPTION: old")
         val newer = LogEntry(LogLevel.ERROR, "E AndroidRuntime: FATAL EXCEPTION: new")
 
-        val text = LogWindowCalculator.windowFor(listOf(older) + info(2000) + newer, false).text
+        val text = calculator.windowFor(listOf(older) + info(2000) + newer, false).text
 
         assertTrue(text.startsWith("$marker\n${newer.text}"))
     }
@@ -106,7 +108,7 @@ class LogWindowCalculatorTest {
         val older = LogEntry(LogLevel.ERROR, "E Plugin: old")
         val newest = listOf(LogEntry(LogLevel.ERROR, "E Plugin: new"), LogEntry(LogLevel.ERROR, "E Plugin: at frame"))
 
-        val text = LogWindowCalculator.windowFor(listOf(older) + info(2000) + newest, false).text
+        val text = calculator.windowFor(listOf(older) + info(2000) + newest, false).text
 
         assertEquals("$marker\nE Plugin: new\nE Plugin: at frame", text)
     }
@@ -116,7 +118,7 @@ class LogWindowCalculatorTest {
         val earlier = LogEntry(LogLevel.ERROR, "E Glide: load failed")
         val lowercase = LogEntry(null, "fatal signal 11 (SIGSEGV), code 1")
 
-        val window = LogWindowCalculator.windowFor(listOf(earlier) + info(2000) + lowercase, false)
+        val window = calculator.windowFor(listOf(earlier) + info(2000) + lowercase, false)
 
         assertTrue(window.anchoredOnError)
         assertTrue(window.text.startsWith("$marker\n${lowercase.text}"))
@@ -126,7 +128,7 @@ class LogWindowCalculatorTest {
     fun givenAnOlderCrashAndANewerErrorRun_whenWindowed_thenItAnchorsOnTheErrorRun() {
         val newer = LogEntry(LogLevel.ERROR, "E Plugin: new")
 
-        val text = LogWindowCalculator.windowFor(listOf(crash) + info(2000) + newer, false).text
+        val text = calculator.windowFor(listOf(crash) + info(2000) + newer, false).text
 
         assertEquals("$marker\n${newer.text}", text)
     }
@@ -135,7 +137,7 @@ class LogWindowCalculatorTest {
     fun givenACrashThenALaterErrorThatBothFit_whenWindowed_thenItAnchorsOnTheCrash() {
         val later = LogEntry(LogLevel.ERROR, "E FrameEvents: updateAcquireFence")
 
-        val text = LogWindowCalculator.windowFor(info(2000) + crash + info(3) + later, false).text
+        val text = calculator.windowFor(info(2000) + crash + info(3) + later, false).text
 
         assertTrue(text.startsWith("$marker\n${crash.text}"))
         assertTrue(text.endsWith(later.text))
@@ -145,7 +147,7 @@ class LogWindowCalculatorTest {
     fun givenAReadThatFits_whenWindowed_thenItIsReturnedWholeAndUnanchored() {
         val entries = info(3) + LogEntry(LogLevel.ERROR, "E MyApp: failed")
 
-        val window = LogWindowCalculator.windowFor(entries, hostTruncated = false)
+        val window = calculator.windowFor(entries, hostTruncated = false)
 
         assertEquals(entries.joinToString("\n") { it.text }, window.text)
         assertFalse(window.anchoredOnError)
@@ -155,10 +157,15 @@ class LogWindowCalculatorTest {
     fun givenOnlyErrorLines_whenWindowed_thenTheNewestAreKept() {
         val entries = (1..2000).map { LogEntry(LogLevel.ERROR, "E MyApp: error$it") }
 
-        val text = LogWindowCalculator.windowFor(entries, hostTruncated = false).text
+        val text = calculator.windowFor(entries, hostTruncated = false).text
 
         assertTrue(text.startsWith("$marker\n"))
         assertTrue(text.endsWith("E MyApp: error2000"))
         assertWholeLines(text, entries)
+    }
+
+    private companion object {
+        /** The default budget's data room, which the expectations above were measured against. */
+        const val MAX_OUTPUT_CHARS = ToolOutputBudget.DEFAULT_CHARS - ToolOutputBudget.MESSAGE_ROOM
     }
 }

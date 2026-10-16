@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpClient
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import java.io.IOException
@@ -68,6 +69,9 @@ class McpSession(
 
     /** The connection a call is currently using, so [cancel] can drop it mid-flight. */
     @Volatile private var liveConnection: HttpURLConnection? = null
+
+    /** Who is watching the exchanges made on each thread; see [recording]. */
+    private val recorder = ThreadLocal<McpExchangeListener?>()
 
     /** What the server called itself in `initialize`, for the settings pane's verdict. */
     @Volatile var serverName: String? = null
@@ -161,6 +165,25 @@ class McpSession(
             McpCallResult(false, text, text.takeIf { it.isNotBlank() } ?: "The tool reported an error.")
         } else {
             McpCallResult(true, text)
+        }
+    }
+
+    /**
+     * Runs [block], handing [listener] every HTTP exchange [block] makes on this thread. A tool
+     * call another thread makes meanwhile is not the caller's, and may carry project code.
+     *
+     * @param listener receives each exchange as it ends.
+     * @param block the work to watch; blocking, so it stays on the calling thread.
+     * @return what [block] returned.
+     */
+    fun <T> recording(listener: McpExchangeListener, block: () -> T): T {
+        val outer = recorder.get()
+        recorder.set(listener)
+        return try {
+            block()
+        } finally {
+            // Removed rather than set to null: the thread goes back to a pool and outlives this.
+            if (outer == null) recorder.remove() else recorder.set(outer)
         }
     }
 
@@ -268,6 +291,7 @@ class McpSession(
                 protocolVersion = negotiatedVersion,
                 extraHeaders = current.headers,
                 onConnected = { liveConnection = it },
+                exchangeListener = recorder.get() ?: McpExchangeListener.NONE,
             )
         } finally {
             liveConnection = null

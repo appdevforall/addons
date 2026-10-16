@@ -4,30 +4,28 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
+import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import com.itsaky.androidide.plugins.services.GradleTaskResult
 import com.itsaky.androidide.plugins.services.IdeBuildService
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Handler for running any Gradle task (`test`, `lint`, `clean`, `:app:testDebugUnitTest`) with
  * Gradle arguments, on the IDE's own tooling server. Its output reaches the Build Output pane, and
- * the slice worth reading comes back with the result, so a test run reports its failures at once.
+ * the slice worth reading comes back with the result, sized to [budget], so a test run reports its
+ * failures at once.
  */
 class RunGradleTaskHandler(
-    private val pluginContext: PluginContext,
+    pluginContext: PluginContext,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
-    override val toolName = "run_gradle_task"
+    override val toolName = TOOL_NAME
+
+    private val buildCall = HostServiceCall(
+        pluginContext, toolName, IdeBuildService::class.java, BUILD_STAGE, "Build",
+    )
 
     // Starts a real build, like run_app and gradle_sync, and the arguments are the model's choice.
     override val requiresApproval = true
@@ -58,92 +56,34 @@ class RunGradleTaskHandler(
         if (invocation.tasks.isEmpty()) return NO_TASKS
         val label = invocation.tasks.joinToString(" ")
 
-        return try {
-            val buildService = pluginContext.services.get(IdeBuildService::class.java)
-            if (buildService == null) {
-                AgentTrace.refusal("BUILD", "$toolName rejected", "IdeBuildService not available")
-                return ToolResult.failure(
-                    "Build service not available",
-                    "The IDE build service is not available."
-                )
-            }
-
-            AgentTrace.stage("BUILD", "$toolName tasks=$label args=${invocation.arguments}")
+        return buildCall.run { buildService ->
+            AgentTrace.stage(BUILD_STAGE, "$toolName tasks=$label args=${invocation.arguments}")
             val startMs = System.currentTimeMillis()
             val future = buildService.executeTasks(invocation.tasks, invocation.arguments)
-            val outcome = try {
-                withTimeoutOrNull(BUILD_TIMEOUT_MS) {
-                    coroutineScope {
-                        val heartbeat = launch { logProgressUntilCancelled(startMs) }
-                        try {
-                            awaitResult(future)
-                        } finally {
-                            heartbeat.cancel()
-                        }
-                    }
-                }
-            } catch (ce: CancellationException) {
-                // Stop pressed while the build runs: the agent started it, so the agent ends it.
-                if (!future.isDone) {
-                    AgentTrace.stage("BUILD", "$toolName stopped; cancelling the build")
-                    buildService.cancelBuild()
-                }
-                throw ce
-            }
+            val outcome = awaitBuild(toolName, future) { buildService.cancelBuild() }
             val waitedMs = System.currentTimeMillis() - startMs
 
             if (outcome == null) {
                 AgentTrace.refusal(
-                    "BUILD",
+                    BUILD_STAGE,
                     "$toolName timed out waitedMs=$waitedMs",
                     "no result within ${BUILD_TIMEOUT_MS / 1000}s; the build may still be running"
                 )
-                return ToolResult.failure(
+                return@run ToolResult.failure(
                     "Gradle task still running",
                     "$label did not finish within 10 minutes and may still be running. " +
                         "Call read_build_output to see how far it got."
                 )
             }
 
-            AgentTrace.stage("BUILD", "$toolName outcome=$outcome waitedMs=$waitedMs")
-            resultFor(label, outcome, buildService.getBuildOutput())
-        } catch (ce: CancellationException) {
-            // An Exception on the JVM, so the catch below would report Stop as a task failure.
-            throw ce
-        } catch (e: Exception) {
-            AgentTrace.refusal("BUILD", "$toolName failed", e.toString())
-            pluginContext.logger.error("$toolName failed", e)
-            ToolResult.failure(
-                "Error: ${e.javaClass.simpleName}",
-                "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"
-            )
+            AgentTrace.stage(BUILD_STAGE, "$toolName outcome=$outcome waitedMs=$waitedMs")
+            resultFor(label, outcome, buildService.getBuildOutput(), budget.dataChars())
         }
     }
-
-    /** Logs one line every [BUILD_PROGRESS_LOG_INTERVAL_MS] while the wait lasts. */
-    private suspend fun logProgressUntilCancelled(startMs: Long) {
-        while (true) {
-            delay(BUILD_PROGRESS_LOG_INTERVAL_MS)
-            val seconds = (System.currentTimeMillis() - startMs) / 1000
-            AgentTrace.detail("BUILD", "$toolName still waiting elapsed=${seconds}s")
-        }
-    }
-
-    /**
-     * Suspends until [future] completes. Unlike `CompletableFuture.await`, a cancelled wait leaves
-     * the future alone, so the caller can still tell whether the build was running when it stopped.
-     */
-    private suspend fun awaitResult(future: CompletableFuture<GradleTaskResult>): GradleTaskResult =
-        suspendCancellableCoroutine { continuation ->
-            future.whenComplete { result, error ->
-                if (!continuation.isActive) return@whenComplete
-                // A dependent stage wraps the host's exception; the model should read the original.
-                val cause = (error as? CompletionException)?.cause ?: error
-                if (cause != null) continuation.resumeWithException(cause) else continuation.resume(result)
-            }
-        }
 
     companion object {
+        const val TOOL_NAME = "run_gradle_task"
+
         private val NO_TASKS = ToolResult.failure(
             "tasks is required",
             "Name the Gradle task to run, e.g. tasks=\"test\" or tasks=\":app:testDebugUnitTest\"."
@@ -156,11 +96,16 @@ class RunGradleTaskHandler(
         /**
          * The tool result for [outcome], carrying the build output window so a failed test or
          * compile error reaches the model without a second call.
+         * @param maxChars the most build output the result may carry.
          */
         // The else is for a result a newer host adds; without it that result throws at runtime.
         @Suppress("REDUNDANT_ELSE_IN_WHEN")
-        internal fun resultFor(label: String, outcome: GradleTaskResult, output: String?): ToolResult {
-            val log = output?.takeIf { it.isNotBlank() }?.let { ReadBuildOutputHandler.windowFor(it).text }
+        internal fun resultFor(label: String, outcome: GradleTaskResult, output: String?, maxChars: Int): ToolResult {
+            val log = output?.takeIf { it.isNotBlank() }?.let {
+                // Room for the up-to-date note, so its window is the same whatever the outcome.
+                val room = (maxChars - UP_TO_DATE_NOTE.length - 2).coerceAtLeast(0)
+                BuildOutputWindowCalculator.windowFor(it, room).text
+            }
             return when (outcome) {
                 GradleTaskResult.Success -> if (nothingRan(output)) {
                     ToolResult.success(

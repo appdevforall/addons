@@ -51,3 +51,14 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         common
         android
         log)
+
+# Stamps the wrapper's own source hash into the .so, so PrebuiltAarAbiTest can fail when the
+# committed AAR was built from an older llama-android.cpp. CRs are dropped so a Windows checkout
+# hashes the same as the test does; editing the .cpp re-runs this configure step.
+set(LLAMA_ANDROID_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/llama-android.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${LLAMA_ANDROID_SOURCE}")
+file(READ "${LLAMA_ANDROID_SOURCE}" LLAMA_ANDROID_SOURCE_TEXT)
+string(REPLACE "\r" "" LLAMA_ANDROID_SOURCE_TEXT "${LLAMA_ANDROID_SOURCE_TEXT}")
+string(SHA256 LLAMA_ANDROID_SOURCE_SHA256 "${LLAMA_ANDROID_SOURCE_TEXT}")
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+        LLAMA_ANDROID_SOURCE_SHA256="${LLAMA_ANDROID_SOURCE_SHA256}")

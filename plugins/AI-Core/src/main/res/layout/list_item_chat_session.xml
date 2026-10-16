@@ -50,15 +50,34 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <!-- One line: a title is the user's whole first message, which is often a paragraph. -->
-        <TextView
-            android:id="@+id/session_title"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="?attr/textAppearanceBodyLarge"
-            android:textColor="@color/plugin_on_surface" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- Beside the title while the backend is naming the chat; ChatSessionAdapter shows it. -->
+            <ProgressBar
+                android:id="@+id/session_title_progress"
+                android:contentDescription="@string/session_title_generating"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="@dimen/chat_title_progress_size"
+                android:layout_height="@dimen/chat_title_progress_size"
+                android:layout_marginEnd="@dimen/chat_title_progress_spacing"
+                android:indeterminateTint="@color/plugin_on_surface_variant"
+                android:visibility="gone" />
+
+            <!-- One line: a title is the user's whole first message, which is often a paragraph. -->
+            <TextView
+                android:id="@+id/session_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="@color/plugin_on_surface" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/session_subtitle"

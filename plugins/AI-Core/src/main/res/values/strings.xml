@@ -40,7 +40,8 @@
 
     <!-- Chat history: the per-project session list (see ChatSidebarController) -->
     <string name="session_untitled">New chat</string>
-    <string name="session_title_generating">Naming chat…</string>
+    <!-- Read out for the title spinner; the title beside it says "New chat" meanwhile. -->
+    <string name="session_title_generating">Naming chat</string>
     <string name="session_rename">Rename</string>
     <string name="session_delete">Delete</string>
     <string name="session_export">Export</string>
@@ -109,6 +110,7 @@
     <string name="msg_version_stop_first">Stop the agent before switching versions</string>
     <string name="msg_generating">Generating…</string>
     <string name="msg_reviewing">Checking the answer…</string>
+    <string name="msg_compacting">Summarizing earlier messages…</string>
 
     <!-- Message Actions -->
     <string name="action_copy_text">Copy Text</string>
@@ -133,6 +135,11 @@
     <string name="approval_title">Approve %s?</string>
     <string name="approval_message">The AI wants to execute:</string>
     <string name="approval_args">Arguments:</string>
+    <string name="approval_command">Command:</string>
+    <string name="approval_working_directory">Runs in: %1$s</string>
+    <string name="approval_command_to_stop">Command to stop:</string>
+    <string name="approval_terminal_session">In Terminal session: %1$s</string>
+    <string name="approval_unknown_command">Command id %1$s. Its text is not known: this chat did not start it.</string>
     <string name="approval_approve_once">Approve Once</string>
     <string name="approval_approve_session">Approve for Session</string>
     <string name="approval_deny">Deny</string>
@@ -213,9 +220,13 @@
     <string name="agent_max_steps_reached">Reached the %1$d-step limit. Ask me to continue if the task isn\'t finished.</string>
     <string name="agent_repeated_calls">Stopped: the model kept requesting the same action. Try rephrasing your request.</string>
     <string name="agent_no_progress">Stopped: the model kept redoing actions it had already taken instead of making progress. Try rephrasing your request, or asking for a smaller step.</string>
+    <string name="chat_compacted">Earlier messages were summarized to stay within the model\'s limit.</string>
+    <string name="chat_compaction_failed">Earlier messages could not be summarized, so only the most recent ones were kept to stay within the model\'s limit.</string>
+    <string name="chat_compaction_trimmed">Only the most recent messages were kept to stay within the on-device model\'s limit.</string>
     <string name="agent_action_failed">I couldn\'t complete that, the last action failed. See the details above.</string>
-    <string name="agent_reply_truncated">The model ran out of room mid-action, so nothing was changed. Ask for a smaller step \u2014 one file, or one method at a time.</string>
-    <string name="agent_reply_malformed">The model\'s reply wasn\'t a readable action, so nothing was changed. Try rephrasing, or pick a larger model in AI Settings.</string>
+    <string name="agent_reply_truncated">The model ran out of room before it finished, so nothing was changed. Tap Retry, or ask for a smaller step \u2014 one file, or one method at a time.</string>
+    <string name="agent_reply_malformed">The model\'s reply came out garbled, so nothing was changed. Tap Retry \u2014 it usually works the second time. If it keeps happening, rephrase the request or pick a larger model in AI Settings.</string>
+    <string name="agent_run_failed">Something went wrong while talking to the model. Tap Retry to try again.</string>
     <string name="agent_no_response">(No response. Try rephrasing, or pick a larger model in AI Settings — very small models struggle with tool use.)</string>
     <string name="generating_response">Generating response…</string>
 
@@ -246,7 +257,6 @@
     <string name="backend_selected_missing_short">Backend not installed</string>
     <string name="backend_no_settings">%1$s has no settings to configure.</string>
     <string name="backend_pane_unavailable">This backend\'s settings are unavailable. It may have been uninstalled or disabled.</string>
-    <string name="state_error">Error: %s</string>
 
     <!-- Capability tags under the chat input: what the agent is connected to (ADFA-6279). -->
     <string name="capability_backend_model">%1$s \u00b7 %2$s</string>

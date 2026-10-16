@@ -4,20 +4,28 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
+import com.itsaky.androidide.plugins.aicore.tool.handlers.HostServiceCall.Companion.BUILD_STAGE
 import com.itsaky.androidide.plugins.services.GradleTaskInfo
 import com.itsaky.androidide.plugins.services.IdeBuildService
-import kotlinx.coroutines.CancellationException
 
 /**
  * Handler for listing the project's Gradle tasks with their group and description, from the IDE's
- * last sync, so the agent picks a task that exists before it calls run_gradle_task.
+ * last sync, so the agent picks a task that exists before it calls run_gradle_task. The listing
+ * is sized to [budget].
  */
 class ListGradleTasksHandler(
-    private val pluginContext: PluginContext,
+    pluginContext: PluginContext,
+    private val budget: ToolOutputBudget = ToolOutputBudget.DEFAULT,
 ) : ToolHandler {
     override val toolName = "list_gradle_tasks"
     override val requiresApproval = false
+
+    private val buildCall = HostServiceCall(
+        pluginContext, toolName, IdeBuildService::class.java, BUILD_STAGE, "Build",
+        failureMessage = { "Error listing Gradle tasks" },
+    )
 
     override val parametersSchema = ToolSchema.objectOf(
         "filter" to ToolSchema.string(),
@@ -32,35 +40,14 @@ class ListGradleTasksHandler(
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val filter = (args["filter"] as? String)?.trim().orEmpty()
-        return try {
-            val buildService = pluginContext.services.get(IdeBuildService::class.java)
-            if (buildService == null) {
-                AgentTrace.refusal("BUILD", "$toolName rejected", "IdeBuildService not available")
-                return ToolResult.failure(
-                    "Build service not available",
-                    "The IDE build service is not available."
-                )
-            }
+        return buildCall.run { buildService ->
             val tasks = buildService.getTasks()
-            AgentTrace.detail("BUILD", "$toolName filter='$filter' hostTasks=${tasks.size}")
-            resultFor(tasks, filter)
-        } catch (ce: CancellationException) {
-            // An Exception on the JVM, so the catch below would report Stop as a listing failure.
-            throw ce
-        } catch (e: Exception) {
-            AgentTrace.refusal("BUILD", "$toolName failed", e.toString())
-            pluginContext.logger.error("$toolName failed", e)
-            ToolResult.failure(
-                "Error listing Gradle tasks",
-                "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"
-            )
+            AgentTrace.detail(BUILD_STAGE, "$toolName filter='$filter' hostTasks=${tasks.size}")
+            resultFor(tasks, filter, budget.dataChars())
         }
     }
 
     companion object {
-        /** Maximum characters of the whole result, message included: the prompt cuts a longer one. */
-        internal const val MAX_LIST_CHARS = LogWindowCalculator.MAX_OUTPUT_CHARS
-
         private const val NOT_SYNCED =
             "The IDE has no task list: the project is not open or has not synced. Call gradle_sync " +
                 "and then list the tasks again."
@@ -75,8 +62,9 @@ class ListGradleTasksHandler(
         /**
          * The listing for [tasks]. Without [filter] it shows grouped tasks and described ones, so a
          * user's ungrouped task shows; a filter searches every task by path, group and description.
+         * @param maxChars the most the whole result may carry, message included.
          */
-        internal fun resultFor(tasks: List<GradleTaskInfo>, filter: String): ToolResult {
+        internal fun resultFor(tasks: List<GradleTaskInfo>, filter: String, maxChars: Int): ToolResult {
             if (tasks.isEmpty()) return ToolResult.failure("No Gradle tasks", NOT_SYNCED)
 
             val shown = if (filter.isEmpty()) {
@@ -107,7 +95,7 @@ class ListGradleTasksHandler(
                 "${shown.size} Gradle tasks matching \"$filter\""
             }
             // The prompt sends the message, a newline and the data, so the listing gets what is left.
-            val room = MAX_LIST_CHARS - message.length - 1 - note.length
+            val room = maxChars - message.length - 1 - note.length
 
             // Descriptions go before tasks do: a cut drops the last groups, the user's own among them.
             val full = render(shown, withDescriptions = true)
@@ -117,7 +105,7 @@ class ListGradleTasksHandler(
                 render(shown, withDescriptions = false) + NO_DESCRIPTIONS
             }
             val text = if (listing.length > room) {
-                listing.take(room - CUT_SHORT.length).substringBeforeLast('\n') + CUT_SHORT
+                listing.take((room - CUT_SHORT.length).coerceAtLeast(0)).substringBeforeLast('\n') + CUT_SHORT
             } else {
                 listing
             }

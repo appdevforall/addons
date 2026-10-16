@@ -9,6 +9,7 @@ import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
+import com.itsaky.androidide.plugins.aiagentgemini.errors.failureKind
 import com.itsaky.androidide.plugins.aiagentgemini.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
@@ -61,7 +62,8 @@ class GeminiBackend(
     private val context: PluginContext,
     private val promptConfig: () -> GeminiPromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    EmbeddingModelSelectable, WebSearchBackend, ActiveModelReportingBackend {
+    EmbeddingModelSelectable, WebSearchBackend, ActiveModelReportingBackend,
+    ContextWindowReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -126,6 +128,9 @@ class GeminiBackend(
 
         /** `finishReason` of an ordinary end of reply. */
         private const val FINISH_REASON_STOP = "STOP"
+
+        /** Resends, each with its own nudge, after an empty `STOP` reply before the user sees an error. */
+        private val EMPTY_REPLY_AUTO_RETRIES = EmptyReplyNudge.LINES.size
     }
 
     /** This plugin's own settings, written by its settings pane and read here at request time. */
@@ -364,6 +369,15 @@ class GeminiBackend(
     override fun getActiveModelName(): String = getModelName()
 
     /**
+     * The active model's input limit, as the last catalog listed it, or the documented default.
+     * Read from preferences, so no request is made; the plugin watches the stored limits.
+     */
+    override fun getContextWindowTokens(): Int {
+        val stored = agentPrefs()?.getString(GeminiPreferences.KEY_MODEL_CONTEXT_WINDOWS, null)
+        return GeminiContextWindow.resolve(getModelName(), GeminiContextWindow.decode(stored))
+    }
+
+    /**
      * Written for a large cloud model; see [GeminiSystemPrompt] for why the wording belongs here.
      * Null until the config is loaded or when it cannot render, which ai-core
      * answers with its default prompt; never blocks, since the caller's thread is ai-core's.
@@ -396,7 +410,7 @@ class GeminiBackend(
     override fun canSearchWeb(): Boolean = true
 
     override fun isAvailable(): Boolean {
-        // Available once a (decryptable) API key is configured.
+        // Not gated on a recorded refusal: an unavailable backend is never called, so none could clear it.
         val apiKey = readGeminiApiKey()
         context.logger.debug("GeminiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()}")
         return !apiKey.isNullOrBlank()
@@ -410,7 +424,7 @@ class GeminiBackend(
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
-                        future.complete(LlmResponse.failure("Gemini API key not configured"))
+                        future.complete(LlmResponse.failure(missingKeyMessage(), FailureKind.CONFIGURATION))
                         return@launch
                     }
 
@@ -430,7 +444,7 @@ class GeminiBackend(
                 }
 
                 if (text.isBlank()) {
-                    future.complete(LlmResponse.failure("Empty response from Gemini API"))
+                    future.complete(LlmResponse.failure(userMessage(GeminiFailure.NoReply(null))))
                 } else {
                     val tokenCount = text.split("\\s+".toRegex()).size  // Approximate token count
                     context.logger.info("GeminiBackend: Generated ${text.length} chars, ~$tokenCount tokens")
@@ -441,7 +455,7 @@ class GeminiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failedResponse(classifyFailure(e, keyStamp)))
             }
         }
         currentJob = job
@@ -526,93 +540,45 @@ class GeminiBackend(
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
-                        callback.onError("Gemini API key not configured")
+                        callback.onError(missingKeyMessage(), FailureKind.CONFIGURATION)
                         return@launch
                     }
 
                 val startTime = System.currentTimeMillis()
-                val body = buildRequestJson(contents, config, tools)
-                // `declared` counts what reached the body, not what was asked for: a schema
-                // [buildRequestJson] had to drop falls back to text calls without saying so here.
-                Log.i(
-                    TAG,
-                    "REQUEST | model=${getModelName()} turns=${contents.length()} " +
-                        "sys=${body.has("systemInstruction")} " +
-                        "tools=${tools.size} declared=${declaredToolCount(body)} " +
-                        tools.joinToString(",") { it.name }
-                )
-
-                val fullText = StringBuilder()
-                var chunkCount = 0
-                var toolCallCount = 0
-                // Last chunk's reason wins: only the final one carries why generation stopped.
-                var finishReason: String? = null
-                // Read outside the tagged block: `coroutineContext` is only reachable from suspend code.
-                val requestJob = coroutineContext[Job]
-                withTrafficTag(NetworkTags.INFERENCE) {
-                    val conn = openConnection(getModelName(), METHOD_STREAM_GENERATE_CONTENT, sse = true, apiKey = apiKey)
-                    val cancelHandle = requestJob?.invokeOnCompletion { cause ->
-                        if (cause != null) conn.disconnect()
-                    }
-                    try {
-                        writeBody(conn, body)
-                        checkResponse(conn)
-                        // SSE: each chunk arrives as a `data: {json}` line; parse text as it streams.
-                        conn.inputStream.bufferedReader().useLines { lines ->
-                            for (line in lines) {
-                                ensureActive()
-                                if (!line.startsWith("data:")) continue
-                                val payload = line.substringAfter("data:").trim()
-                                if (payload.isEmpty() || payload == "[DONE]") continue
-                                // A malformed/non-JSON chunk must not abort the whole stream; skip it.
-                                val chunk = runCatching { GeminiToolProtocol.parseChunk(JSONObject(payload)) }.getOrElse {
-                                    Log.w(TAG, "CHUNK | skipped malformed SSE chunk: ${it.message}")
-                                    GeminiToolProtocol.StreamChunk.EMPTY
-                                }
-                                chunk.finishReason?.let { finishReason = it }
-                                if (chunk.text.isNotEmpty()) {
-                                    chunkCount++
-                                    fullText.append(chunk.text)
-                                    callback.onToken(chunk.text)
-                                }
-                                for (call in chunk.calls) {
-                                    toolCallCount++
-                                    Log.i(
-                                        TAG,
-                                        "FUNCTION_CALL | tool=${call.name} " +
-                                            "args=${call.args.orEmpty().keys.joinToString(",")}"
-                                    )
-                                    callback.onToolCall(call)
-                                }
-                            }
-                        }
-                    } finally {
-                        cancelHandle?.dispose()
-                        conn.disconnect()
-                    }
+                var empties = 0
+                var outcome: StreamOutcome
+                while (true) {
+                    val body = buildRequestJson(EmptyReplyNudge.nudged(contents, empties), config, tools)
+                    // `declared` counts what reached the body, not what was asked for: a schema
+                    // [buildRequestJson] had to drop falls back to text calls without saying so here.
+                    Log.i(
+                        TAG,
+                        "REQUEST | model=${getModelName()} turns=${contents.length()} " +
+                            "sys=${body.has("systemInstruction")} " +
+                            "tools=${tools.size} declared=${declaredToolCount(body)} " +
+                            tools.joinToString(",") { it.name }
+                    )
+                    outcome = streamOnce(body, apiKey, callback)
+                    if (!outcome.isEmptyStop || empties++ == EMPTY_REPLY_AUTO_RETRIES) break
                 }
 
-                val finalText = fullText.toString()
-                Log.i(
-                    TAG,
-                    "STREAM | chars=${finalText.length} chunks=$chunkCount calls=$toolCallCount " +
-                        "finish=$finishReason"
-                )
+                val finalText = outcome.text
+                val finishReason = outcome.finishReason
                 when {
                     // Truncation is why a request to write a whole file came back unusable, and it
                     // reads as an empty reply unless the reason is reported. Only when the cap left
                     // nothing behind: onError deletes the bubble, so reporting it for a long answer
                     // that ran out of room would throw away the prose it did produce.
-                    toolCallCount == 0 && finalText.isBlank() &&
+                    outcome.toolCallCount == 0 && finalText.isBlank() &&
                         finishReason == FINISH_REASON_MAX_TOKENS ->
-                        callback.onError(userMessage(GeminiFailure.ReplyTruncated))
+                        callback.fail(GeminiFailure.ReplyTruncated)
 
-                    toolCallCount == 0 && finalText.isBlank() ->
-                        callback.onError(userMessage(GeminiFailure.NoReply(finishReason)))
+                    outcome.toolCallCount == 0 && finalText.isBlank() ->
+                        callback.fail(GeminiFailure.NoReply(finishReason))
 
                     else -> {
                         // Prose the cap cut off mid-sentence otherwise reads as a finished answer.
-                        val cutOff = toolCallCount == 0 && finishReason == FINISH_REASON_MAX_TOKENS
+                        val cutOff = outcome.toolCallCount == 0 && finishReason == FINISH_REASON_MAX_TOKENS
                         val reply = if (cutOff) {
                             val note = "\n\n" + cutOffNote()
                             callback.onToken(note)
@@ -621,6 +587,7 @@ class GeminiBackend(
                             finalText
                         }
                         val tokenCount = reply.split("\\s+".toRegex()).size
+                        // A success: the note says how to get the rest, and the agent loop carries on.
                         callback.onComplete(
                             LlmResponse.success(reply, tokenCount, System.currentTimeMillis() - startTime)
                         )
@@ -631,9 +598,98 @@ class GeminiBackend(
             } catch (e: Exception) {
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
-                callback.onError(formatErrorMessage(e, keyStamp))
+                val failure = classifyFailure(e, keyStamp)
+                // Nothing classified it, so its message is ours, not Gemini's; blank shows ai-core's generic line.
+                callback.onError(if (failure is GeminiFailure.Failed) "" else userMessage(failure), failure.failureKind)
             }
         }
+    }
+
+    /** What one streamed attempt produced; tool calls and any non-blank text already reached the callback. */
+    private data class StreamOutcome(
+        val text: String,
+        val toolCallCount: Int,
+        val finishReason: String?,
+    ) {
+        /** Gemini ended its turn having said nothing, which a resend with a nudge usually fixes. */
+        val isEmptyStop: Boolean
+            get() = toolCallCount == 0 && text.isBlank() &&
+                (finishReason == null || finishReason == FINISH_REASON_STOP)
+    }
+
+    /**
+     * Streams [body] once, passing tokens and tool calls to [callback] as they arrive.
+     *
+     * Text is held back while it is still blank, so an attempt that ends as an empty `STOP` and is
+     * resent leaves nothing behind in the bubble.
+     *
+     * @return what the stream produced, for the caller to complete, fail or retry on
+     */
+    private suspend fun streamOnce(
+        body: JSONObject,
+        apiKey: String,
+        callback: ToolStreamCallback,
+    ): StreamOutcome {
+        val fullText = StringBuilder()
+        var chunkCount = 0
+        var toolCallCount = 0
+        // Last chunk's reason wins: only the final one carries why generation stopped.
+        var finishReason: String? = null
+        // Read outside the tagged block: `coroutineContext` is only reachable from suspend code.
+        val requestJob = coroutineContext[Job]
+        withTrafficTag(NetworkTags.INFERENCE) {
+            val conn = openConnection(getModelName(), METHOD_STREAM_GENERATE_CONTENT, sse = true, apiKey = apiKey)
+            val cancelHandle = requestJob?.invokeOnCompletion { cause ->
+                if (cause != null) conn.disconnect()
+            }
+            try {
+                writeBody(conn, body)
+                checkResponse(conn)
+                // SSE: each chunk arrives as a `data: {json}` line; parse text as it streams.
+                conn.inputStream.bufferedReader().useLines { lines ->
+                    for (line in lines) {
+                        requestJob?.ensureActive()
+                        if (!line.startsWith("data:")) continue
+                        val payload = line.substringAfter("data:").trim()
+                        if (payload.isEmpty() || payload == "[DONE]") continue
+                        // A malformed/non-JSON chunk must not abort the whole stream; skip it.
+                        val chunk = runCatching { GeminiToolProtocol.parseChunk(JSONObject(payload)) }.getOrElse {
+                            Log.w(TAG, "CHUNK | skipped malformed SSE chunk: ${it.message}")
+                            GeminiToolProtocol.StreamChunk.EMPTY
+                        }
+                        chunk.finishReason?.let { finishReason = it }
+                        if (chunk.text.isNotEmpty()) {
+                            chunkCount++
+                            val heldBack = fullText.isBlank()
+                            fullText.append(chunk.text)
+                            when {
+                                fullText.isBlank() -> Unit
+                                heldBack -> callback.onToken(fullText.toString())
+                                else -> callback.onToken(chunk.text)
+                            }
+                        }
+                        for (call in chunk.calls) {
+                            toolCallCount++
+                            Log.i(
+                                TAG,
+                                "FUNCTION_CALL | tool=${call.name} " +
+                                    "args=${call.args.orEmpty().keys.joinToString(",")}"
+                            )
+                            callback.onToolCall(call)
+                        }
+                    }
+                }
+            } finally {
+                cancelHandle?.dispose()
+                conn.disconnect()
+            }
+        }
+        Log.i(
+            TAG,
+            "STREAM | chars=${fullText.length} chunks=$chunkCount calls=$toolCallCount " +
+                "finish=$finishReason"
+        )
+        return StreamOutcome(fullText.toString(), toolCallCount, finishReason)
     }
 
     override fun generateWithHistory(
@@ -650,7 +706,7 @@ class GeminiBackend(
             try {
                 val apiKey = readGeminiApiKey()
                     ?: run {
-                        future.complete(LlmResponse.failure("Gemini API key not configured"))
+                        future.complete(LlmResponse.failure(missingKeyMessage(), FailureKind.CONFIGURATION))
                         return@launch
                     }
 
@@ -661,7 +717,7 @@ class GeminiBackend(
                 val text = requestText(getModelName(), apiKey, buildRequestJson(contents, config))
 
                 if (text.isBlank()) {
-                    future.complete(LlmResponse.failure("Empty response from Gemini API"))
+                    future.complete(LlmResponse.failure(userMessage(GeminiFailure.NoReply(null))))
                 } else {
                     val tokenCount = text.split("\\s+".toRegex()).size
                     context.logger.info("GeminiBackend: Generated ${text.length} chars with history, ~$tokenCount tokens")
@@ -672,7 +728,7 @@ class GeminiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failedResponse(classifyFailure(e, keyStamp)))
             }
         }
         currentJob = job
@@ -745,11 +801,22 @@ class GeminiBackend(
      */
     private fun describeCatalog(apiKey: String): ModelCatalog {
         val catalog = fetchAvailableModels(apiKey)
+        rememberContextWindows(catalog.contextWindows)
         context.logger.info(
             "GeminiBackend: ${catalog.chat.size} models support $METHOD_GENERATE_CONTENT and " +
                 "${catalog.embedding.size} support $METHOD_EMBED_CONTENT"
         )
         return catalog
+    }
+
+    /**
+     * Stores each chat model's limit where [getContextWindowTokens] reads it. Per model, not per
+     * key, so a candidate key's listing is as good as the saved one's; writing the same limits
+     * again notifies nobody.
+     */
+    private fun rememberContextWindows(windows: Map<String, Int>) {
+        val encoded = GeminiContextWindow.encode(windows) ?: return
+        agentPrefs()?.edit()?.putString(GeminiPreferences.KEY_MODEL_CONTEXT_WINDOWS, encoded)?.apply()
     }
 
     /**
@@ -761,6 +828,7 @@ class GeminiBackend(
     private fun fetchAvailableModels(apiKey: String): ModelCatalog {
         val chat = mutableListOf<String>()
         val embedding = mutableListOf<String>()
+        val windows = LinkedHashMap<String, Int>()
         withTrafficTag(NetworkTags.CATALOG) {
             var pageToken: String? = null
 
@@ -802,7 +870,11 @@ class GeminiBackend(
                         val declared = (0 until methods.length()).map { methods.optString(it) }
                         // By declared capability, not by name: the same question the chat picker
                         // asks, asked of the other method, so neither picker guesses.
-                        if (declared.contains(METHOD_GENERATE_CONTENT)) chat.add(name)
+                        if (declared.contains(METHOD_GENERATE_CONTENT)) {
+                            chat.add(name)
+                            model.optInt("inputTokenLimit", 0).takeIf { it > 0 }
+                                ?.let { windows[name] = it }
+                        }
                         if (declared.contains(METHOD_EMBED_CONTENT)) embedding.add(name)
                     }
                 }
@@ -810,7 +882,11 @@ class GeminiBackend(
             } while (pageToken != null)
         }
 
-        return ModelCatalog(chat = chat.distinct(), embedding = embedding.distinct())
+        return ModelCatalog(
+            chat = chat.distinct(),
+            embedding = embedding.distinct(),
+            contextWindows = windows,
+        )
     }
 
     /**
@@ -1072,6 +1148,8 @@ class GeminiBackend(
         override fun onToolCall(request: ToolCallRequest) = Unit
         override fun onComplete(response: LlmResponse) = this@asToolCallback.onComplete(response)
         override fun onError(error: String) = this@asToolCallback.onError(error)
+        override fun onError(error: String, kind: FailureKind) =
+            this@asToolCallback.onError(error, kind)
     }
 
     /**
@@ -1159,14 +1237,29 @@ class GeminiBackend(
      * @param keyStamp when the key this request read was saved, so a refusal landing after a later
      *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
+    private fun formatErrorMessage(e: Exception, keyStamp: Long): String =
+        userMessage(classifyFailure(e, keyStamp))
+
+    /**
+     * What [e] says went wrong, recording a credential refusal for the settings pane.
+     *
+     * @param keyStamp see [formatErrorMessage]
+     */
+    private fun classifyFailure(e: Exception, keyStamp: Long): GeminiFailure {
         val failure = GeminiErrorFormatter.classify(e, getModelName())
-        val message = userMessage(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
         if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
-        return message
+        return failure
     }
+
+    /** [failure] as a failed response: its sentence, and the kind AI Core acts on. */
+    private fun failedResponse(failure: GeminiFailure): LlmResponse =
+        LlmResponse.failure(userMessage(failure), failure.failureKind)
+
+    /** Reports [failure] on this stream: its sentence, and the kind AI Core acts on. */
+    private fun ToolStreamCallback.fail(failure: GeminiFailure) =
+        onError(userMessage(failure), failure.failureKind)
 
     /**
      * Resolve a [GeminiFailure] against the plugin's own resources.
@@ -1190,6 +1283,9 @@ class GeminiBackend(
 
             GeminiFailure.KeyInvalid ->
                 resources.getString(CredentialFailure.KeyInvalid.messageRes)
+
+            GeminiFailure.ContextTooLong ->
+                resources.getString(R.string.gemini_error_context_too_long)
 
             is GeminiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_request_rejected_reason, it)

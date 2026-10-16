@@ -103,6 +103,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_SERVER_ROW = "mcp_server_row"
         const val TOOLTIP_TAG_SERVER_ENABLED = "mcp_server_enabled"
         const val TOOLTIP_TAG_CONNECT = "mcp_connect"
+        const val TOOLTIP_TAG_SHOW_DETAILS = "mcp_show_details"
         const val TOOLTIP_TAG_TOOL_TOGGLE = "mcp_tool_toggle"
         const val TOOLTIP_TAG_SERVER_NAME = "mcp_server_name"
         const val TOOLTIP_TAG_SERVER_URL = "mcp_server_url"
@@ -479,6 +480,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>A server that offers only the older stdio transport cannot be
                 used from a phone at all, and one that offers the deprecated
                 HTTP+SSE transport is not supported here.</p>
+                <p>Use <code>https://</code>. Plain <code>http://</code> is
+                accepted only for a server on this device —
+                <code>localhost</code>, <code>127.0.0.1</code> or
+                <code>[::1]</code>, such as one started in the Terminal — whose
+                traffic never leaves the phone. Anywhere else, the home network
+                included, Save refuses it.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
@@ -493,9 +500,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>It is encrypted with a key held in the Android Keystore, so a
                 copy of the settings file is useless on another device. Leave it
                 empty for a server that needs no token.</p>
-                <p>A token needs an <code>https://</code> endpoint: encryption at
-                rest buys nothing for a credential sent in the clear over shared
-                Wi-Fi, so this plugin refuses that combination on Save.</p>
+                <p>It is never sent in the clear over a network: a server off
+                this device needs an <code>https://</code> URL, and only a
+                server on this device may use <code>http://</code>.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
@@ -607,6 +614,24 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>The Agent reads this list from memory, so connecting again is
                 also what makes a newly added tool visible to a chat that is
                 already open.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SHOW_DETAILS,
+            summary = "See exactly what was sent to the server and what it answered.",
+            detail = """
+                <p>Appears under a Connect that failed. It lists every request
+                the attempt made — method, URL, headers and body — and the
+                server's status line, headers and body for each, in the order
+                they happened.</p>
+                <p>The token and the values of your extra headers are hidden,
+                keeping only the scheme in front (such as <code>Bearer</code>)
+                and their length, and are masked wherever the server echoes
+                them back. <b>Copy</b> puts the whole transcript on the
+                clipboard, ready to paste into a bug report.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)

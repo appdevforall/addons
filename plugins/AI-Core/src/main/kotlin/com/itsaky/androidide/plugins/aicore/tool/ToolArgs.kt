@@ -16,6 +16,40 @@ fun parseToolBoolean(value: Any?): Boolean = when (value) {
     else -> value.toString().trim().lowercase() in TRUE_WORDS
 }
 
+/** A whole-number argument as a model sends it; see [parseToolInt]. */
+sealed interface ToolInt {
+    /** The call left the argument out. */
+    data object Absent : ToolInt
+
+    /** The argument holds [value]. */
+    data class Present(val value: Int) : ToolInt
+
+    /** The argument is there but is not a whole number; [raw] is what the model sent. */
+    data class Invalid(val raw: String) : ToolInt
+}
+
+/**
+ * Reads a whole number out of a tool-call argument: a JSON number, or the string a model emits
+ * when the tool-call grammar has no integer type (`"96"`, `"96.0"`). A blank string counts as absent.
+ * @param value the raw argument value, or null when absent.
+ * @return the number, or why there is none.
+ */
+fun parseToolInt(value: Any?): ToolInt = when (value) {
+    null -> ToolInt.Absent
+    is Int -> ToolInt.Present(value)
+    // A JSON decoder may hand 96 over as 96.0.
+    is Number -> value.toDouble().wholeIntOrNull()?.let(ToolInt::Present) ?: ToolInt.Invalid(value.toString())
+    else -> value.toString().trim().let { text ->
+        if (text.isEmpty()) ToolInt.Absent else text.wholeIntOrNull()?.let(ToolInt::Present) ?: ToolInt.Invalid(text)
+    }
+}
+
+// The reading a JSON number gets; BigDecimal, unlike toDouble, rejects "96f" and hex.
+private fun String.wholeIntOrNull(): Int? = toIntOrNull() ?: toBigDecimalOrNull()?.toDouble()?.wholeIntOrNull()
+
+private fun Double.wholeIntOrNull(): Int? =
+    takeIf { it % 1.0 == 0.0 && it in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble() }?.toInt()
+
 /**
  * Argument keys as the handlers declare them: the `path` → `file_path` near-miss small models
  * produce, then [ToolHandler.argAliases]; a canonical key the model did supply always wins.
@@ -40,14 +74,14 @@ fun normalizeToolArgs(handler: ToolHandler, args: Map<String, Any?>): Map<String
 }
 
 /**
- * The project paths a call names, as the tool will see them: normalized keys first, then
+ * The project paths a call reads or writes, as the tool will see them: normalized keys first, then
  * [ToolHandler.pathDefaults] for a path the call left the handler to fill in.
  * @param args the call's raw arguments.
  * @return the paths named, trimmed, without the blanks.
  */
 fun ToolHandler.pathsIn(args: Map<String, Any?>): Set<String> {
     val normalized = normalizeToolArgs(this, args)
-    return pathArgs.mapNotNullTo(mutableSetOf()) { key ->
+    return trackedPathArgs.mapNotNullTo(mutableSetOf()) { key ->
         (normalized[key]?.toString() ?: pathDefaults[key])?.trim()?.takeIf { it.isNotEmpty() }
     }
 }

@@ -15,8 +15,8 @@ android {
         applicationId = "com.itsaky.androidide.plugins.aicore"
         minSdk = 33
         targetSdk = 36
-        versionCode = 7
-        versionName = "3.3.0"
+        versionCode = 9
+        versionName = "3.5.0"
     }
 
     buildFeatures {

@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.Answ
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.ApprovalText
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.BuiltInTools
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.ChatTitleText
+import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.CompactionText
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.ContextFilesText
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.IdeContextText
 import com.itsaky.androidide.plugins.aicore.prompt.config.AgentPromptConfig.Layout
@@ -84,7 +85,7 @@ object AgentPromptConfigParser : PromptConfigParser<AgentPromptConfig> {
                         timedOut = text("timed_out"),
                     )
                 },
-                contextFiles = obj("context_files").read { ContextFilesText(text("heading")) },
+                contextFiles = obj("context_files").read { ContextFilesText(text("heading"), text("truncated")) },
                 chatTitle = obj("chat_title").read { ChatTitleText(text("instruction")) },
                 terminalTool = obj("terminal_tool").read { toolText() },
                 builtInTools = BuiltInTools(
@@ -94,6 +95,9 @@ object AgentPromptConfigParser : PromptConfigParser<AgentPromptConfig> {
                 webSearch = obj("web_search").read { WebSearchText(text("instruction")) },
                 answerReview = obj("answer_review").read {
                     AnswerReviewText(text("instruction"), text("no_evidence"))
+                },
+                compaction = obj("compaction").read {
+                    CompactionText(text("instruction"), text("request"), text("summary_heading"))
                 },
                 layout = obj("layout").read {
                     Layout(

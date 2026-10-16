@@ -11,6 +11,7 @@
     <string name="mcp_empty">No servers yet. Add one to give the Agent remote tools.</string>
     <string name="mcp_add_server">Add server</string>
     <string name="mcp_server_tools_summary">%1$d of %2$d tools enabled</string>
+    <string name="mcp_server_url_cleartext">Not connecting: this http:// URL is not on this device. Tap to change it to https://.</string>
     <string name="mcp_cd_server_enabled">Use this server</string>
 
     <!-- Add/edit dialog -->
@@ -42,7 +43,9 @@
     <string name="mcp_name_required">Give the server a name — it also prefixes its tool names.</string>
     <string name="mcp_url_required">Enter the server\'s endpoint URL.</string>
     <string name="mcp_url_scheme_invalid">The URL must start with https:// or http://.</string>
-    <string name="mcp_url_insecure_credentials">A token or extra header cannot be sent to an http:// URL — it would travel in the clear, readable by anyone on the same network. Use https://, or remove the credential.</string>
+    <string name="mcp_url_malformed">That is not a valid URL. Check it for typos, e.g. https://example.com/mcp.</string>
+    <string name="mcp_url_no_host">The URL has no server address after the scheme.</string>
+    <string name="mcp_url_cleartext_off_device">A server that is not on this device needs an encrypted https:// URL — over http:// anyone on the same network could read the traffic. http:// is allowed only for localhost or 127.0.0.1.</string>
     <string name="mcp_clear_credential">Clear stored credential</string>
     <string name="mcp_credential_cleared">The stored token and headers for this server have been removed.</string>
     <string name="mcp_credentials_loading">Still reading this server\'s stored credentials — try again in a moment.</string>
@@ -56,8 +59,14 @@
 
     <!-- Failures (see McpErrorFormatter); %1$s is always the server's name -->
     <string name="mcp_error_bad_request">%1$s rejected the request as malformed.</string>
-    <string name="mcp_error_token_refused">%1$s refused the token. Check it in MCP server settings.</string>
-    <string name="mcp_error_forbidden">%1$s refused access with this token.</string>
+    <string name="mcp_error_token_refused">%1$s refused the access token. Check it in MCP server settings.</string>
+    <string name="mcp_error_header_refused">%1$s refused the %2$s extra header, which is sent instead of the access token. Check its value, including the scheme in front such as Bearer or Basic.</string>
+    <string name="mcp_error_headers_refused">%1$s refused the request. No access token was sent; check the extra headers in MCP server settings.</string>
+    <string name="mcp_error_no_credentials">%1$s needs credentials, and none were sent. Add an access token or an extra header in MCP server settings.</string>
+    <string name="mcp_error_forbidden">%1$s refused access with this access token.</string>
+    <string name="mcp_error_forbidden_header">%1$s refused access with the %2$s extra header.</string>
+    <string name="mcp_error_forbidden_headers">%1$s refused access with these extra headers.</string>
+    <string name="mcp_error_forbidden_anonymous">%1$s refused access without credentials.</string>
     <string name="mcp_error_no_endpoint">%1$s has no MCP endpoint at that URL.</string>
     <string name="mcp_error_wrong_transport">%1$s does not accept this request. It may not speak Streamable HTTP MCP.</string>
     <string name="mcp_error_no_common_format">%1$s and this plugin could not agree on a response format.</string>
@@ -69,12 +78,28 @@
     <string name="mcp_error_tls">The secure connection to %1$s failed. Check that the URL is https.</string>
     <string name="mcp_error_timeout">%1$s did not answer in time. It may be slow or offline.</string>
     <string name="mcp_error_cancelled">The call to %1$s was cancelled.</string>
+    <string name="mcp_error_cleartext">%1$s uses an http:// URL but is not on this device, so it was not contacted. Change its URL to https:// in MCP server settings.</string>
     <string name="mcp_error_redirect_refused">%1$s redirected the request to another address, so it was not sent — it carries your token. Check the endpoint URL.</string>
     <string name="mcp_error_secret_unreadable">%1$s\'s saved token can no longer be read on this device. Open MCP server settings and enter it again.</string>
     <string name="mcp_error_secret_unavailable">%1$s\'s saved credentials could not be read just now. They are still stored — try again in a moment.</string>
     <string name="mcp_error_failed">Could not reach %1$s.</string>
     <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>
+
+    <!-- What a failed Connect sent and received (see McpTranscript) -->
+    <string name="mcp_show_details">Show details</string>
+    <string name="mcp_transcript_title">Connection log</string>
+    <string name="mcp_transcript_copy">Copy</string>
+    <string name="mcp_transcript_copied">Copied</string>
+    <string name="mcp_transcript_close">Close</string>
+    <string name="mcp_transcript_hidden">‹%1$d characters hidden›</string>
+    <string name="mcp_transcript_omitted">… %1$d more characters not shown</string>
+    <string name="mcp_log_request">Request</string>
+    <string name="mcp_log_response">Response</string>
+    <string name="mcp_log_headers">Headers</string>
+    <string name="mcp_log_body">Body</string>
+    <string name="mcp_log_no_response">No response</string>
+    <string name="mcp_transcript_nothing_sent">Nothing was sent: the request failed before it reached the server.</string>
 
     <!-- Extra request headers -->
     <string name="mcp_headers_header">Extra headers</string>

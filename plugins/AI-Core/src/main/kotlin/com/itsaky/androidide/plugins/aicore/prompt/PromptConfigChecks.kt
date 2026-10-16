@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.web.BackendWebSearch
 import com.itsaky.androidide.plugins.aicore.viewmodel.AnswerReview
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatTitle
+import com.itsaky.androidide.plugins.aicore.viewmodel.HistoryCompactor
 
 /**
  * Every render-time check activation runs on a freshly loaded config, in one list so a test covers
@@ -23,5 +24,5 @@ object PromptConfigChecks {
         SystemPromptRenderer.problems(config) + ToolResultsPrompt.problems(config) +
             ApprovalPrompt.problems(config) + ContextFilesPrompt.problems(config) + ChatTitle.problems(config) +
             ToolDescriptions.problems(config, builtIns) + BackendWebSearch.problems(config) +
-            AnswerReview.problems(config)
+            AnswerReview.problems(config) + HistoryCompactor.problems(config)
 }

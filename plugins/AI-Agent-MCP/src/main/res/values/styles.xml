@@ -33,4 +33,20 @@
         <item name="colorOnErrorContainer">@color/plugin_on_error_container</item>
     </style>
 
+    <!--
+      Material 3 text button, for a supporting action such as Show details. Framework attributes
+      only: the host's Material classes drop this plugin's app: ones, so McpButtons sets the rest.
+    -->
+    <style name="McpButton.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.00714</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/plugin_primary</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:minWidth">48dp</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+    </style>
+
 </resources>

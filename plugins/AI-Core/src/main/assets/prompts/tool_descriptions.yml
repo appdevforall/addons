@@ -13,9 +13,12 @@ terminal_tool:
 # Keyed by tool name. A tool from another plugin brings its own description and is not listed.
 built_in_tools:
   read_file:
-    description: Read the contents of a file
+    description: Read the contents of a file, a page at a time; follow its "Next:" hint to read on
     arguments:
       file_path: Project-relative path of the file to read.
+      start_line: First line to read, counting from 1. Defaults to 1.
+      end_line: Last line to read. Defaults to the end of the file.
+      start_column: Column on start_line to start from, for a line too long for one page. Defaults to 1.
   list_files:
     description: List files and directories in a given path
     arguments:
@@ -24,7 +27,7 @@ built_in_tools:
     description: Search for files by name or content in the project
     arguments:
       query: Text to search for; a file name unless searching contents.
-      project_dir: Project-relative directory to search under. Defaults to the whole project.
+      project_dir: Project-relative directory to search under, or a single file to search inside. Defaults to the whole project.
       search_in_contents: Search inside files instead of matching their names.
   open_file:
     description: Open a file in the IDE editor
@@ -62,8 +65,8 @@ built_in_tools:
     # Success is weaker than "the app is running": the user still has to accept the system install
     # prompt, and without saying so the model reports the launch.
     description: >-
-      Build the app and install it on this device. The user has to confirm a system install
-      prompt, so success means the install started, not that the app is on screen
+      Do a normal full build of the app and install it on this device. The user has to confirm a
+      system install prompt, so success means the install started, not that the app is on screen
   gradle_sync:
     description: Sync the Gradle project (reload dependencies and rebuild cache)
   run_gradle_task:
@@ -92,6 +95,48 @@ built_in_tools:
       filter: >-
         Text to search task paths, groups and descriptions for, e.g. ":app", "test" or "lint".
         Omit to list the tasks that have a group or a description.
+  quick_build:
+    # Without the trigger phrases models fall back to run_app, which reinstalls and replaces the
+    # Quick Build app; the repeat sentence is the one run_gradle_task needed for Gemini.
+    description: >-
+      Start Quick Build, which updates the running app in place without a reinstall, and get back
+      whether the app was reloaded, the build failed and why, or why Quick Build could not start.
+      Use it, not run_app, when the user says "Quick Build", "try it live" or "update the app".
+      A result from an earlier message is out of date: whenever the user asks again, call this
+      tool again instead of repeating that result
+  run_shell_command:
+    # Without the second sentence models hand the user a script to run themselves (ADFA-6339);
+    # without the third, Gemini ran "ls -la" when asked for "ls". The host runs each call in a
+    # fresh bash, so a lone "cd" or "export" is lost before the next call.
+    description: >-
+      Run a shell command or script with bash in the IDE's Terminal and get back its exit code and
+      output. Use it instead of asking the user to run a command. When the user gives the command,
+      run it exactly as written, adding no flags or options they did not ask for. Each call starts
+      a new shell, so cd and export do not carry over to the next call: use working_directory, or
+      chain in one call, e.g. "cd app && ls src". A non-zero exit code can be the answer, e.g.
+      grep exits 1 when nothing matches. A command still running after 30 seconds, such as a
+      server or one waiting for input, is left running and its output so far comes back. For a
+      Gradle task use run_gradle_task, not ./gradlew
+    arguments:
+      command: >-
+        The command or script to run with bash, e.g. "ls -la app/src" or several lines of script.
+      working_directory: >-
+        Project-relative directory to run in; it must be inside the project. Omit to run at the
+        project root.
+  read_terminal_command:
+    description: >-
+      Check on a command run_shell_command left running, such as a server: whether it still runs,
+      its exit code once it stopped, and its latest output
+    arguments:
+      command_id: The command id the run_shell_command result reported.
+  stop_terminal_command:
+    # Its second sentence: Gemini stopped a ping it had just started, to finish the request.
+    description: >-
+      Stop a command run_shell_command left running, such as a server or ping, with Ctrl-C. Use it
+      only when the user asks to stop, kill or cancel that command, never to finish a request that
+      started it
+    arguments:
+      command_id: The command id the run_shell_command result reported.
   generate_from_template:
     description: Generate files from Pebble templates with variable substitution
     arguments:

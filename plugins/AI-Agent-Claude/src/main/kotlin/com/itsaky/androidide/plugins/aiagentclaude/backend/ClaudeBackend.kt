@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeFailureMessages
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeHttpException
 import com.itsaky.androidide.plugins.aiagentclaude.errors.ClaudeStreamStalledException
 import com.itsaky.androidide.plugins.aiagentclaude.errors.CredentialFailureLog
+import com.itsaky.androidide.plugins.aiagentclaude.errors.failureKind
 import com.itsaky.androidide.plugins.aiagentclaude.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentclaude.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentclaude.preferences.ClaudePreferences
@@ -61,7 +62,7 @@ class ClaudeBackend(
     private val context: PluginContext,
     private val promptConfig: () -> ClaudePromptConfig?,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend,
-    ActiveModelReportingBackend {
+    ActiveModelReportingBackend, ContextWindowReportingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -166,6 +167,15 @@ class ClaudeBackend(
     override fun getActiveModelName(): String = getModelName()
 
     /**
+     * The active model's input window, as the last catalog listed it, or a conservative default.
+     * Read from preferences, so no request is made; the plugin watches the stored catalog.
+     */
+    override fun getContextWindowTokens(): Int {
+        val model = getModelName()
+        return ClaudeModelTraits.contextWindow(model, knownCapabilities(model))
+    }
+
+    /**
      * Written for a large cloud model; see [ClaudeSystemPrompt] for why the wording belongs here.
      * Null until the config is loaded or when it cannot render, which ai-core
      * answers with its default prompt; never blocks, since the caller's thread is ai-core's.
@@ -241,10 +251,10 @@ class ClaudeBackend(
 
                 when {
                     reply.stopReason == "refusal" ->
-                        future.complete(LlmResponse.failure(failureMessages.of(ClaudeFailure.Refused)))
+                        future.complete(failedResponse(ClaudeFailure.Refused))
 
                     reply.text.isBlank() ->
-                        future.complete(LlmResponse.failure(failureMessages.of(reply.emptyFailure())))
+                        future.complete(failedResponse(reply.emptyFailure()))
 
                     else -> {
                         val tokenCount = reply.text.split("\\s+".toRegex()).size  // Approximate
@@ -259,7 +269,7 @@ class ClaudeBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("ClaudeBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
+                future.complete(failedResponse(classifyFailure(e, keyStamp)))
             }
         }
         future.cancelJobOnCancel(job)
@@ -326,6 +336,8 @@ class ClaudeBackend(
         override fun onToolCall(request: ToolCallRequest) = Unit
         override fun onComplete(response: LlmResponse) = this@asToolCallback.onComplete(response)
         override fun onError(error: String) = this@asToolCallback.onError(error)
+        override fun onError(error: String, kind: FailureKind) =
+            this@asToolCallback.onError(error, kind)
     }
 
     /**
@@ -390,7 +402,7 @@ class ClaudeBackend(
                 when (result) {
                     TurnAssembler.Result.Refused -> {
                         context.logger.warn("ClaudeBackend: the model declined this request")
-                        callback.onError(failureMessages.of(ClaudeFailure.Refused))
+                        callback.fail(ClaudeFailure.Refused)
                     }
 
                     is TurnAssembler.Result.Empty -> {
@@ -399,7 +411,7 @@ class ClaudeBackend(
                                 "(skipped=${turn.skippedLines}, thinkingBlocks=${turn.thinkingBlocks}, " +
                                 "droppedCalls=${turn.droppedCalls}, stopReason=${turn.stopReason})"
                         )
-                        callback.onError(failureMessages.of(result.failure))
+                        callback.fail(result.failure)
                     }
 
                     is TurnAssembler.Result.Reply -> {
@@ -427,7 +439,7 @@ class ClaudeBackend(
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
                 context.logger.error("ClaudeBackend: Error in streaming", e)
-                callback.onError(formatErrorMessage(e, keyStamp))
+                callback.fail(classifyFailure(e, keyStamp))
             }
         }
         stream.job = job
@@ -664,26 +676,33 @@ class ClaudeBackend(
     }
 
     /**
-     * Turn a failure into one user-facing sentence.
+     * Decide what went wrong with a request that threw, recording it when it is about the key.
      *
-     * [ClaudeErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
-     * raw HTTP error body stays on the logged exception and must never reach the transcript.
+     * [ClaudeErrorFormatter] decides *what* went wrong; [failureMessages] words it. The raw HTTP
+     * error body stays on the logged exception and must never reach the transcript.
      *
      * @param keyStamp when the key this request read was saved, so a refusal landing after a later
      *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
+    private fun classifyFailure(e: Exception, keyStamp: Long): ClaudeFailure {
         val failure = ClaudeErrorFormatter.classify(
             error = e,
             modelName = getModelName(),
             hasApiKey = readApiKeyOrBlank().isNotBlank(),
         )
-        val message = failureMessages.of(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
         if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
-        return message
+        return failure
     }
+
+    /** [failure] as a failed response: its sentence, and the kind AI Core acts on. */
+    private fun failedResponse(failure: ClaudeFailure): LlmResponse =
+        LlmResponse.failure(failureMessages.of(failure), failure.failureKind)
+
+    /** Reports [failure] on this stream: its sentence, and the kind AI Core acts on. */
+    private fun ToolStreamCallback.fail(failure: ClaudeFailure) =
+        onError(failureMessages.of(failure), failure.failureKind)
 }
 
 /**

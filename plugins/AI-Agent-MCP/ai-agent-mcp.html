@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Agent MCP Plugin</title>
+<title>AI Agent MCP</title>
 <style>
   body {
     background: #ffffff;
@@ -37,10 +37,10 @@
 </style>
 </head>
 <body>
-  <h1>AI Agent MCP Plugin</h1>
+  <h1>AI Agent MCP</h1>
 
   <h2>Executive overview</h2>
-  <p><b>AI Agent MCP</b> connects CodeOnTheGo's <b>Agent</b> to <b>Model Context
+  <p><b>AI Agent MCP</b> connects Code on the Go's <b>Agent</b> to <b>Model Context
   Protocol</b> servers. A server you configure advertises tools — search a
   documentation index, open a ticket, query an internal API — and those tools
   appear in the Agent's tool list beside its built-in ones, so the assistant can
@@ -73,9 +73,9 @@
     <li><b>Approval on every call</b> — a remote tool always asks, showing the
       arguments it would send, and can never be granted "always allow".</li>
     <li><b>Encrypted tokens</b> — bearer tokens are encrypted with an Android
-      Keystore key and sent only to the server they belong to: refused on a
-      cleartext <code>http://</code> URL, and never replayed to another host by
-      an automatically followed redirect.</li>
+      Keystore key and sent only to the server they belong to: never over
+      cleartext <code>http://</code> except to a server on the device itself, and
+      never replayed to another host by an automatically followed redirect.</li>
     <li><b>Legible failures</b> — an unreachable server, a refused token or a URL
       that is not an MCP endpoint each produce one plain sentence, never a raw
       error body in the chat transcript.</li>

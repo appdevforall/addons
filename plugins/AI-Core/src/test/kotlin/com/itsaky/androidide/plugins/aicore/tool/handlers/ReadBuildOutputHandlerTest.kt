@@ -2,6 +2,10 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ServiceRegistry
+import com.itsaky.androidide.plugins.aicore.prompt.ToolResultsPrompt
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
+import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import io.mockk.every
 import io.mockk.mockk
@@ -13,8 +17,8 @@ import org.junit.Test
 
 /**
  * Unit tests for [ReadBuildOutputHandler] — the tool that hands the agent the build log.
- * Covers the 8000-character budget and the error-anchored window that replaced a plain tail,
- * which lost the compiler errors behind Gradle's closing summary.
+ * Covers the window fitting the loop's per-result budget and the error-anchored window that
+ * replaced a plain tail, which lost the compiler errors behind Gradle's closing summary.
  */
 class ReadBuildOutputHandlerTest {
 
@@ -84,7 +88,7 @@ class ReadBuildOutputHandlerTest {
     @Test
     fun givenOutputLongerThanTheLimit_whenReading_thenItIsCappedAtTheLimit() = runTest {
         val output = noise(2000)
-        assertTrue("fixture must exceed the budget", output.length > ReadBuildOutputHandler.MAX_OUTPUT_CHARS)
+        assertTrue("fixture must exceed the budget", output.length > ToolOutputBudget.DEFAULT.dataChars())
         every { buildService.getBuildOutput() } returns output
 
         val result = handler.execute(emptyMap())
@@ -178,10 +182,38 @@ class ReadBuildOutputHandlerTest {
         val data = result.data.orEmpty()
         assertTrue(data.endsWith("BUILD FAILED in 12s"))
         assertTrue(data.startsWith("...[truncated]..."))
-        assertTrue(
-            "budget exceeded: ${data.length}",
-            data.length <= ReadBuildOutputHandler.MAX_OUTPUT_CHARS + "...[truncated]...\n".length,
+        assertTrue("budget exceeded: ${data.length}", data.length <= ToolOutputBudget.DEFAULT.dataChars())
+    }
+
+    @Test
+    fun givenAnOverflowingLog_whenFedBackThroughTheLoop_thenTheSummarySurvivesUncut() = runTest {
+        every { buildService.getBuildOutput() } returns noise(2000) + "\nBUILD SUCCESSFUL in 41s"
+
+        val turn = ToolResultsPrompt.render(
+            shippedConfig, "respond", ToolOutputBudget.DEFAULT_CHARS,
+            listOf(ToolCall("read_build_output", emptyMap())), listOf(handler.execute(emptyMap())),
         )
+
+        assertTrue(turn.contains("BUILD SUCCESSFUL in 41s\n</tool_response>"))
+        assertFalse("the loop's own cut fired", turn.contains("…[truncated"))
+    }
+
+    @Test
+    fun givenASmallerBudget_whenReading_thenTheWindowShrinksToIt() = runTest {
+        every { buildService.getBuildOutput() } returns noise(2000) + "\nBUILD SUCCESSFUL in 41s"
+        val budget = ToolOutputBudget { 1000 }
+
+        val result = ReadBuildOutputHandler(context, budget).execute(emptyMap())
+
+        assertTrue(result.data!!.length <= budget.dataChars())
+        assertTrue(result.data!!.endsWith("BUILD SUCCESSFUL in 41s"))
+    }
+
+    @Test
+    fun givenAnOverflowingLog_whenWindowed_thenItStartsAtAWholeLine() {
+        val window = BuildOutputWindowCalculator.windowFor(noise(2000), 500)
+
+        assertTrue(window.text.startsWith("...[truncated]...\n> Task :app:step"))
     }
 
     @Test

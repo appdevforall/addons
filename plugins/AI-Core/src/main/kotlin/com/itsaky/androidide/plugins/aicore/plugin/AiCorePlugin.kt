@@ -76,6 +76,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_APPROVAL_DECLINE = "agent_approval_decline"
         const val TOOLTIP_TAG_APPROVAL_CORRECTION_INPUT = "agent_approval_correction_input"
         const val TOOLTIP_TAG_APPROVAL_RUN_NOW = "agent_approval_run_now"
+        /** Run Now under a shell command, which is shown uncut and is never granted for the session. */
+        const val TOOLTIP_TAG_APPROVAL_RUN_COMMAND = "agent_approval_run_command"
         const val TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW = "agent_approval_always_allow"
 
         // Tags for the controls rendered inside chat messages (see ChatAdapter).
@@ -125,7 +127,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
     override fun activate(): Boolean {
         // The router is published before anything else here: backend plugins load in parallel with
         // this one and register against it as soon as they see this plugin activate.
-        val router = LlmInferenceServiceImpl(context.logger)
+        val router = LlmInferenceServiceImpl(context.logger, context.androidContext)
         llmService = router
         SharedServices.register(LlmInferenceService::class.java, router)
         context.logger.info("AI Core Plugin: registered LlmInferenceService in SharedServices")
@@ -312,12 +314,13 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_CHAT_TITLE,
-            summary = "The chat you are in — titled automatically after its first reply until you rename it.",
+            summary = "The chat you are in — titled automatically from its first message until you rename it.",
             detail = """
                 <p>The header names the conversation on screen, so switching
                 chats from the sidebar says which one you landed in.</p>
-                <p>After the first reply in a new chat, the AI backend writes a
-                short title for it; "Naming chat…" shows while it does.
+                <p>When you send the first message in a new chat, the AI backend
+                writes a short title for it before replying; a spinner shows
+                beside "New chat" while it does.
                 <b>Rename</b> on its row in the sidebar gives it a name of your
                 own, and emptying that name goes back to the automatic title.</p>
             """.trimIndent(),
@@ -613,7 +616,25 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 shortened for readability, so a long path or snippet may be cut —
                 the full value is what actually runs.</p>
                 <p>You'll be asked again the next time this tool is used, unless
-                you choose <b>Always Allow</b>.</p>
+                you choose <b>Always Allow</b> where the dialog offers it.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_RUN_COMMAND,
+            summary = "Run this shell command once, exactly as shown above.",
+            detail = """
+                <p>Runs the command in a Terminal session, in the project folder
+                unless a working directory is named above it. The command is shown
+                in full, never shortened: what you read is what runs. Invisible or
+                control characters are shown as <code>&lt;U+XXXX&gt;</code> codes, and
+                a long run of blank lines as a count such as <code>[200 blank lines]</code>,
+                so neither can hide part of it.</p>
+                <p>A shell command can change or delete any file in your project,
+                so read it before you tap. You'll be asked again for every command;
+                there is no <b>Always Allow</b> for the shell.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -638,9 +659,11 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             tag = TOOLTIP_TAG_MESSAGE_RETRY,
             summary = "Run your last request again after a failed reply or a step you declined.",
             detail = """
-                <p>Appears on a step that failed — a dropped network request, a
-                model that wasn't loaded, a tool that errored, a turn you stopped,
-                or a tool call you declined.</p>
+                <p>Appears on a step of your last prompt that failed — a dropped
+                network request, an empty or garbled reply from the model, a model
+                that wasn't loaded, a turn you stopped, or a tool call you declined.
+                A tool that errors on its own offers none: the agent carries on past
+                it.</p>
                 <p><b>Retry</b> re-sends your last prompt with the same attached
                 context files, from the conversation as it stood before that
                 attempt: the failed turn is dropped rather than left for the model

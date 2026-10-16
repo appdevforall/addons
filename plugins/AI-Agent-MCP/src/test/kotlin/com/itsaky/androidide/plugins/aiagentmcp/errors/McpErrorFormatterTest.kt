@@ -3,6 +3,8 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCleartextException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCredential
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
 import java.io.IOException
@@ -47,10 +49,27 @@ class McpErrorFormatterTest {
     }
 
     @Test
-    fun givenAnUnauthorizedStatus_whenClassified_thenItPointsAtTheToken() {
-        val failure = McpErrorFormatter.classify(McpHttpException(401, "{}"))
+    fun givenARefusedCleartextUrl_whenClassified_thenItPointsAtTheUrlRatherThanTheNetwork() {
+        // Nothing was sent: the fix is switching the saved URL to https://, not checking Wi-Fi.
+        val failure = McpErrorFormatter.classify(McpCleartextException("off device"))
 
-        assertEquals(McpFailure.TokenRefused, failure)
+        assertEquals(McpFailure.CleartextRefused, failure)
+    }
+
+    @Test
+    fun givenAnUnauthorizedStatus_whenClassified_thenItCarriesTheCredentialSent() {
+        val failure = McpErrorFormatter.classify(McpHttpException(401, "{}", McpCredential.Token))
+
+        assertEquals(McpFailure.TokenRefused(McpCredential.Token), failure)
+    }
+
+    @Test
+    fun givenAForbiddenStatusFromAHeader_whenClassified_thenTheHeaderIsBlamedNotTheToken() {
+        // ADFA-6409: an Authorization extra header replaced the token, yet the token was blamed.
+        val header = McpCredential.AuthorizationHeader("Authorization")
+        val failure = McpErrorFormatter.classify(McpHttpException(403, "", header))
+
+        assertEquals(McpFailure.Forbidden(header), failure)
     }
 
     @Test

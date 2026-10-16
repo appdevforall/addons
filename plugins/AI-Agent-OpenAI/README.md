@@ -40,8 +40,13 @@ cd plugins/AI-Agent-OpenAI
 ## Configuration
 
 Everything is configured in **AI Core → Agent settings**, on the pane this plugin
-contributes: server URL (with presets), API key, model, and one **Test Connection
-& List Models** button. Nothing outside this plugin handles the key.
+contributes: server URL (with presets), API key, model, an optional context window, and
+one **Test Connection & List Models** button. Nothing outside this plugin handles the key.
+
+The context window AI Core budgets a conversation against (`getContextWindowTokens()`) is,
+in order: the value the user entered for this server, the length the server's `/models`
+listing reported for the model (OpenRouter, LM Studio), OpenAI's published figure on
+OpenAI's own API, or 0 for unknown. See `backend/ContextWindow.kt`.
 
 The pane adapts to the chosen server as it is picked, via
 `BaseUrlPolicy.keyRequirement()`: `REQUIRED` for OpenAI's own host, `EXPECTED` for

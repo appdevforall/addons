@@ -119,6 +119,24 @@ class GeminiErrorFormatterTest {
     }
 
     @Test
+    fun givenGeminiOverflowBody_whenClassify_thenContextTooLong() {
+        val cause = IOException(
+            """Gemini HTTP 400: {"error":{"code":400,"status":"INVALID_ARGUMENT","message":"The input token count (1200000) exceeds the maximum number of tokens allowed (1048576)."}}"""
+        )
+
+        assertEquals(GeminiFailure.ContextTooLong, classify(cause))
+    }
+
+    @Test
+    fun givenAnOverflowMessageNamingTheApiKey_whenClassify_thenTheKeyErrorWins() {
+        val cause = IOException(
+            """Gemini HTTP 400: {"error":{"status":"INVALID_ARGUMENT","message":"API key not valid; input token count unknown."}}"""
+        )
+
+        assertEquals(GeminiFailure.KeyInvalid, classify(cause))
+    }
+
+    @Test
     fun givenAnOverlongApiReason_whenClassified_thenTheReasonIsDroppedInsteadOfShown() {
         val cause = IOException("""Gemini HTTP 400: {"error":{"message":"${"x".repeat(500)}"}}""")
 

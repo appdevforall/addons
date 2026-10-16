@@ -200,6 +200,8 @@ class AgentLoop(
      * @param pathsOf the project paths a call names; the progress guard counts an earlier look at
      *   one a later call rewrote as a new action again rather than as a repeat.
      * @param changesPaths whether a call rewrites what it names.
+     * @param canonicalName the registered name a call's tool resolves to, e.g. `Run_Shell_Command` to
+     *   `run_shell_command`; the name itself when none does. Everything keyed by tool name reads it.
      * @param requiredTool a tool the run must call before it may finish, e.g. a web search before a
      *   code review; asked for once through [requiredToolTurn]. Null requires nothing.
      * @param events UI/state callbacks.
@@ -211,6 +213,7 @@ class AgentLoop(
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
         pathsOf: (ToolCall) -> Set<String> = { emptySet() },
         changesPaths: (ToolCall) -> Boolean = { false },
+        canonicalName: (String) -> String = { it },
         requiredTool: String? = null,
         events: Events = object : Events {},
     ): Result {
@@ -270,9 +273,10 @@ class AgentLoop(
             }
 
             // Terminal tool alone ends the loop; if co-emitted with real tools, run those first.
-            val realCalls = terminalTool?.let { tt ->
+            // Renamed once here: the progress guard and the result caps look tools up by exact name.
+            val realCalls = (terminalTool?.let { tt ->
                 calls.filterNot { isTerminalToolName(it.name, tt) }
-            } ?: calls
+            } ?: calls).map { it.copy(name = canonicalName(it.name)) }
             // Only the terminal tool: an answer, which a run owing its required tool may not give yet.
             if (realCalls.isEmpty() && requiredPending) {
                 requiredPending = false

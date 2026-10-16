@@ -11,6 +11,8 @@ kotlin {
 android {
 	namespace = "android.llama.cpp"
 	compileSdk = 36
+	// Pinned so a rebuild doesn't silently swap clang/libomp when AGP's default NDK moves.
+	ndkVersion = "27.0.12077973"
 
 	defaultConfig {
 		minSdk = 33

@@ -82,6 +82,17 @@ class ChatAdapter(
             notifyUserRowsChanged { it == previous || it == value }
         }
 
+    /** The error rows that offer Retry, from ChatViewModel.retryableErrorIds; the last run's only. */
+    internal var retryableErrorIds: Set<String> = emptySet()
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            currentList.forEachIndexed { position, message ->
+                if ((message.id in previous) != (message.id in value)) notifyItemChanged(position)
+            }
+        }
+
     /** Rebinds the actions of the user rows [changed] picks; a payload keeps their text as it is. */
     private inline fun notifyUserRowsChanged(changed: (messageId: String) -> Boolean) {
         currentList.forEachIndexed { position, message ->
@@ -105,6 +116,19 @@ class ChatAdapter(
 
         /** A version arrow with nowhere to go, or held back while the agent works. */
         private const val DISABLED_ALPHA = 0.38f
+
+        /**
+         * The button error row [message] offers, or null for none. A setup notice or a run refused
+         * for its settings is fixed there (ADFA-6345); a tool failure gets none unless the user denied the call.
+         *
+         * @param retryable whether [message] is one of the last run's errors, the only ones Retry re-runs.
+         */
+        internal fun errorActionFor(message: ChatMessage, retryable: Boolean): String? = when {
+            message.isSetupError || message.isSettingsError -> ACTION_OPEN_SETTINGS
+            !retryable -> null
+            message.sender == Sender.TOOL -> ACTION_RETRY.takeIf { message.isDenial }
+            else -> ACTION_RETRY
+        }
     }
 
     sealed class MessageViewHolder(view: View) : RecyclerView.ViewHolder(view)
@@ -241,12 +265,8 @@ class ChatAdapter(
                         hideGeneratingDots(holder)
                         markwon.setMarkdown(holder.messageContent, payload.text)
                     }
-                    MessageStatus.ERROR -> {
-                        holder.loadingIndicator.visibility = View.GONE
-                        holder.messageContent.visibility = View.VISIBLE
-                        hideGeneratingDots(holder)
-                        holder.messageContent.text = payload.text
-                    }
+                    // A live reply turns ERROR in place, so this, not the full bind, is what shows it.
+                    MessageStatus.ERROR -> bindError(holder, message)
                 }
                 updateMessageActions(holder, message)
             } else if (payload is TextUpdatePayload && holder is SystemMessageViewHolder) {
@@ -298,27 +318,44 @@ class ChatAdapter(
                 updateMessageMetadata(holder, message)
             }
             MessageStatus.ERROR -> {
-                holder.loadingIndicator.visibility = View.GONE
-                holder.messageContent.visibility = View.VISIBLE
-                holder.btnRetry.visibility = View.VISIBLE
-                hideGeneratingDots(holder)
-                holder.messageContent.text = message.text
-                if (message.sender == Sender.SYSTEM) {
-                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
-                    holder.btnRetry.setOnClickListener {
-                        onMessageAction(ACTION_OPEN_SETTINGS, message)
-                    }
-                    // Re-wired per bind: the same recycled button plays both roles, so the
-                    // tag has to follow the role it currently has.
-                    wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
-                } else {
-                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
-                    holder.btnRetry.setOnClickListener {
-                        onMessageAction(ACTION_RETRY, message)
-                    }
-                    wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
-                }
+                bindError(holder, message)
                 updateMessageMetadata(holder, message)
+            }
+        }
+    }
+
+    /** Shows a failed row: its text, and the one button [errorActionFor] gives it, if any. */
+    private fun bindError(holder: DefaultMessageViewHolder, message: ChatMessage) {
+        holder.loadingIndicator.visibility = View.GONE
+        holder.messageContent.visibility = View.VISIBLE
+        hideGeneratingDots(holder)
+        // An agent bubble is a reply that failed to parse, whose prose and code still need rendering.
+        if (message.sender == Sender.AGENT) markwon.setMarkdown(holder.messageContent, message.text)
+        else holder.messageContent.text = message.text
+        // Retry re-runs the last prompt, so an older or restored error offers nothing.
+        val action = errorActionFor(message, retryable = message.id in retryableErrorIds)
+        holder.btnRetry.visibility = if (action == null) View.GONE else View.VISIBLE
+        when (action) {
+            ACTION_OPEN_SETTINGS -> {
+                holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
+                holder.btnRetry.setOnClickListener {
+                    onMessageAction(ACTION_OPEN_SETTINGS, message)
+                }
+                // Re-wired per bind: the same recycled button plays both roles, so the
+                // tag has to follow the role it currently has.
+                wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
+            }
+            ACTION_RETRY -> {
+                holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
+                holder.btnRetry.setOnClickListener {
+                    onMessageAction(ACTION_RETRY, message)
+                }
+                wireTooltip(holder.btnRetry, AiCorePlugin.TOOLTIP_TAG_MESSAGE_RETRY)
+            }
+            // Drop the last bind's listeners so a hidden button holds no stale message.
+            else -> {
+                holder.btnRetry.setOnClickListener(null)
+                holder.btnRetry.setOnLongClickListener(null)
             }
         }
     }

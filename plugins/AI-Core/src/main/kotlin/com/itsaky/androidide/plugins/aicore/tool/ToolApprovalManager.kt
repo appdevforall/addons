@@ -103,7 +103,9 @@ class ToolApprovalManager(
                 displayName = handler.displayName,
                 sourceLabel = handler.sourceLabel,
                 args = args,
-                description = describe(handler)
+                description = describe(handler),
+                preview = handler.approvalPreview,
+                allowsSessionApproval = !isNeverSessionApproved(toolName, handler),
             )
 
             val deferred = CompletableDeferred<ApprovalDecision>()
@@ -160,7 +162,8 @@ class ToolApprovalManager(
             Log.d(TAG, "Approval denied for $toolName")
             ApprovalResponse(
                 approved = false,
-                denialMessage = ApprovalPrompt.denied(config.config(), toolName)
+                denialMessage = ApprovalPrompt.denied(config.config(), toolName),
+                deniedByUser = true
             )
         }
         null -> {
@@ -214,10 +217,12 @@ class ToolApprovalManager(
 
 /**
  * Result of an approval request.
+ * @property deniedByUser the user chose Deny; not set for a correction or a timeout.
  */
 data class ApprovalResponse(
     val approved: Boolean,
-    val denialMessage: String? = null
+    val denialMessage: String? = null,
+    val deniedByUser: Boolean = false
 )
 
 /**
@@ -234,7 +239,9 @@ data class ApprovalRequest(
     val args: Map<String, Any?>,
     val description: String,
     val displayName: String = toolName,
-    val sourceLabel: String? = null
+    val sourceLabel: String? = null,
+    val preview: ApprovalPreview = ApprovalPreview.ARGS,
+    val allowsSessionApproval: Boolean = true,
 )
 
 /**

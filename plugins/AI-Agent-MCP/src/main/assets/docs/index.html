@@ -36,7 +36,7 @@
 <body>
   <h1>AI Agent MCP — Remote Tools for the Agent</h1>
 
-  <p><b>AI Agent MCP</b> connects CodeOnTheGo's Agent to
+  <p><b>AI Agent MCP</b> connects Code on the Go's Agent to
   <b>Model Context Protocol</b> servers. A server you configure advertises tools —
   search a documentation index, open a ticket, query an internal API — and the
   Agent can call them the same way it calls its built-in tools.</p>
@@ -56,10 +56,13 @@
     <li>Add an <b>access token</b> if the server needs one. It is encrypted with a
       key held in the Android Keystore, and sent only to that server, as an
       <code>Authorization: Bearer</code> header.</li>
-    <li>A token or an extra header requires an <b>https://</b> URL. Encryption at
-      rest does nothing for a credential put on the wire in the clear, and a phone
-      IDE runs on shared Wi-Fi by definition. A plain <code>http://</code> server
-      with no credential is still allowed.</li>
+    <li>The URL must be <b>https://</b> unless the server runs on this device.
+      Plain <code>http://</code> is accepted only for <code>localhost</code>,
+      <code>127.0.0.1</code> or <code>[::1]</code>, such as a server started in the
+      Terminal, with or without a token; that traffic never leaves the phone.
+      Anywhere else, your home network included, it would cross Wi-Fi in the clear,
+      so Save refuses it. A server saved earlier with such a URL stays in the list,
+      marked, and does not connect until you change it to <b>https://</b>.</li>
     <li><b>Clear stored credential</b> appears once something is stored. The token
       field never shows what it holds and leaving it empty keeps it, so this is the
       way back to a server that needs no credential at all — after pasting the
@@ -101,14 +104,30 @@
   supported.</p>
 
   <h2>Troubleshooting</h2>
+  <p>When <b>Connect</b> fails, tap <b>Show details</b> under the message to see
+  every request it sent and everything the server answered: status line,
+  headers and body. The token, extra header values, cookies and the
+  <code>Mcp-Session-Id</code> are hidden — only their scheme (such as
+  <code>Bearer</code>) and length remain — and so are the URL's
+  <code>user:password@</code> part and its query values. A key the server puts
+  in the URL <i>path</i> cannot be told apart from the path, so check the
+  first line before you <b>Copy</b> the transcript into a bug report. A
+  <code>WWW-Authenticate</code> header
+  on a 401 usually says what the server expected instead.</p>
   <ul>
     <li><b>"has no MCP endpoint at that URL"</b> — the path is wrong; try adding
       <code>/mcp</code>.</li>
     <li><b>"does not accept this request"</b> — the server is probably not a
       Streamable HTTP MCP server.</li>
-    <li><b>"refused the token"</b> — re-enter it; the field shows
+    <li><b>"refused the access token"</b> — re-enter it; the field shows
       <i>Stored</i> rather than the value, so typing replaces it. If the server
       needs no token at all, use <b>Clear stored credential</b>.</li>
+    <li><b>"refused the Authorization extra header"</b> — an extra header
+      named <code>Authorization</code> is sent <i>instead of</i> the access
+      token. Its value needs the scheme in front: <code>Bearer &lt;token&gt;</code>,
+      or for an Atlassian API token <code>Basic</code> followed by the base64 of
+      <code>email:token</code>. In <b>Show details</b>, a hidden value with no
+      scheme in front of it means the scheme is missing.</li>
     <li><b>Tools do not appear in the Agent</b> — check the server is enabled, at
       least one tool is switched on, and AI Core is installed and active.</li>
     <li><b>Everything times out on mobile data</b> — some servers are slow to

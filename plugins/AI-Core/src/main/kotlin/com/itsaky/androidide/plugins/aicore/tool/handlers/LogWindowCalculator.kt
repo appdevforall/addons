@@ -1,19 +1,14 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
-import com.itsaky.androidide.plugins.aicore.prompt.ToolResultsPrompt
 import com.itsaky.androidide.plugins.services.LogEntry
 import com.itsaky.androidide.plugins.services.LogLevel
 
 /**
- * Selects the slice of a log the model needs, in whole lines and within [MAX_OUTPUT_CHARS]
- * including the truncation markers. Only the kept lines are ever joined into a string.
+ * Selects the slice of a log the model needs, in whole lines and within [maxChars] including the
+ * truncation markers. Only the kept lines are ever joined into a string.
+ * @param maxChars the most log handed to the model: the per-result budget, less room for the message.
  */
-internal object LogWindowCalculator {
-    /** Maximum characters of log handed to the model: the per-result cap, less room for the message. */
-    const val MAX_OUTPUT_CHARS = ToolResultsPrompt.DEFAULT_CHAR_LIMIT - 100
-
-    /** Markers of an app crash; the anchor prefers these over a later error when the crash fits. */
-    private val CRASH_MARKERS = listOf("FATAL EXCEPTION", "Fatal signal")
+internal class LogWindowCalculator(private val maxChars: Int) {
 
     /**
      * A read that fits is returned whole. Logs span runs, so otherwise the window starts at the newest
@@ -21,9 +16,9 @@ internal object LogWindowCalculator {
      * newest run of error lines. With neither, or a log of nothing but errors, it keeps the newest lines.
      */
     fun windowFor(entries: List<LogEntry>, hostTruncated: Boolean): OutputWindow {
-        if (!hostTruncated && fits(entries, MAX_OUTPUT_CHARS)) return OutputWindow(joined(entries), false)
+        if (!hostTruncated && fits(entries, maxChars)) return OutputWindow(joined(entries), false)
         val crash = entries.indexOfLast { isCrashLine(it) }.takeIf { it >= 0 }
-        val markedRoom = MAX_OUTPUT_CHARS - TRUNCATION_MARKER.length - 1
+        val markedRoom = maxChars - TRUNCATION_MARKER.length - 1
         val anchor = crash?.takeIf { fits(entries.subList(it, entries.size), markedRoom) }
             ?: listOfNotNull(crash, newestErrorRunStart(entries)).maxOrNull()
         val text = if (anchor != null) {
@@ -37,7 +32,7 @@ internal object LogWindowCalculator {
     /** [entries] whole if they fit, else their head and their newest lines, half the room each. */
     private fun fromAnchor(entries: List<LogEntry>, droppedBefore: Boolean): String {
         val prefix = if (droppedBefore) "$TRUNCATION_MARKER\n" else ""
-        val room = MAX_OUTPUT_CHARS - prefix.length
+        val room = maxChars - prefix.length
         if (fits(entries, room)) return prefix + joined(entries)
 
         val separator = "\n$TRUNCATION_MARKER\n"
@@ -48,7 +43,7 @@ internal object LogWindowCalculator {
     /** The newest lines of [entries] that fit, marking what was dropped before them. */
     private fun tail(entries: List<LogEntry>): String {
         val prefix = "$TRUNCATION_MARKER\n"
-        return prefix + tailBody(entries, MAX_OUTPUT_CHARS - prefix.length)
+        return prefix + tailBody(entries, maxChars - prefix.length)
     }
 
     /** The oldest whole lines of [entries] that fit in [room], else the start of the first. */
@@ -107,4 +102,9 @@ internal object LogWindowCalculator {
 
     private fun isCrashLine(entry: LogEntry): Boolean =
         CRASH_MARKERS.any { entry.text.contains(it, ignoreCase = true) }
+
+    private companion object {
+        /** Markers of an app crash; the anchor prefers these over a later error when the crash fits. */
+        val CRASH_MARKERS = listOf("FATAL EXCEPTION", "Fatal signal")
+    }
 }

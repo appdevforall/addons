@@ -17,6 +17,7 @@ import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
 import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
+import com.itsaky.androidide.plugins.aicore.models.HistoryCompaction
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.newestFirst
 import com.itsaky.androidide.plugins.aicore.models.Sender
@@ -42,6 +43,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
@@ -216,7 +218,9 @@ class ChatViewModel(
     private val approvalManager = ToolApprovalManager(sharedPromptConfig) { handler ->
         ToolDescriptions.describe(sharedPromptConfig.config(), RESPOND_TOOL, handler)
     }
-    private val toolResultsPrompt = ToolResultsPrompt(sharedPromptConfig, RESPOND_TOOL)
+    /** One cap for the loop's cut and the handlers that fit under it; see [ToolOutputBudget]. */
+    private val toolOutputBudget = ToolOutputBudget.DEFAULT
+    private val toolResultsPrompt = ToolResultsPrompt(sharedPromptConfig, RESPOND_TOOL, toolOutputBudget)
     private val agentLoop = AgentLoop(
         formatToolResults = toolResultsPrompt,
         terminalTool = RESPOND_TOOL,
@@ -254,6 +258,15 @@ class ChatViewModel(
         logWarn(message, error)
     }
 
+    /** Summarizes the history before a run that would outgrow the backend's context. */
+    private val compaction = CompactionUseCase(
+        config = sharedPromptConfig,
+        contextWindow = ::reportedContextWindow,
+        logWarn = { message, error -> logWarn(message, error) },
+        // Set, so a Stop while summarizing cancels the backend call and not only this coroutine.
+        summarizing = { modelTurnInFlight = it },
+    )
+
     /** This plugin's own handlers, fixed for the ViewModel's life; the contributed ones are not. */
     private val builtInHandlers: List<ToolHandler>
 
@@ -272,7 +285,7 @@ class ChatViewModel(
     private var generationJob: Job? = null
 
     /**
-     * The in-flight chat title request. The next run waits for it before generating: backends keep
+     * The in-flight chat title request. A run waits for it before generating: backends keep
      * per-request state process-wide (Gemini's current job, the local model's token cap).
      */
     @Volatile
@@ -288,7 +301,7 @@ class ChatViewModel(
     @Volatile
     private var modelTurnInFlight = false
 
-    /** Sessions asked for a title this process; a failing backend is not re-asked every run. */
+    /** Sessions whose title failed this process, so an edited first prompt does not wait again. */
     private val titleRequested = mutableSetOf<String>()
 
     /**
@@ -316,6 +329,14 @@ class ChatViewModel(
     /** Whether the current run's most recent tool batch failed; reset per run. */
     @Volatile
     private var lastToolFailedThisRun = false
+
+    /** Whether the next turn answers a request to finish after a prose answer; read once. */
+    @Volatile
+    private var askedToFinishAfterProse = false
+
+    /** Whether the latest prose turn left answer text on screen, not only thinking or a fallback. */
+    @Volatile
+    private var proseTurnShowedAnswer = false
 
     /**
      * The transcript row this run rewrites in place as each tool starts, closed as a one-line
@@ -361,8 +382,16 @@ class ChatViewModel(
      * The user message the last run posted, so [editPrompt] knows [historySizeBeforeLastRun]
      * describes that prompt and not an earlier one; null when the retry point is forgotten.
      */
+    private val lastRunUserMessageId = MutableStateFlow<String?>(null)
+
+    /** Whether the last run overflowed the context window; the next send or Retry compacts first. */
     @Volatile
-    private var lastRunUserMessageId: String? = null
+    private var lastRunOverflowed = false
+
+    /** The error rows that offer Retry: the last run's, while its retry point is known; see [RunRetry]. */
+    internal val retryableErrorIds: StateFlow<Set<String>> =
+        combine(_messages, lastRunUserMessageId, RunRetry::retryableErrorIds)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     /** The tool awaiting approval, straight from [approvalManager] — no polling in between. */
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = approvalManager.currentApprovalRequest
@@ -450,7 +479,7 @@ class ChatViewModel(
     fun isStorageInitialized(): Boolean = ::storageManager.isInitialized
 
     init {
-        builtInHandlers = getContext()?.let { BuiltInToolHandlers.create(it, webSearch::search) }.orEmpty()
+        builtInHandlers = getContext()?.let { BuiltInToolHandlers.create(it, webSearch::search, toolOutputBudget) }.orEmpty()
         agentTools = buildAgentTools()
         ToolSourceStore.shared.addChangeListener(toolSourcesChanged)
     }
@@ -739,9 +768,32 @@ class ChatViewModel(
         null
     }
 
-    /** How many tokens a reply may use on the current backend. */
-    private fun replyTokenCap(): Int =
-        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS
+    /**
+     * Whether the current backend still says it is configured, asked after it failed a run. Blocking.
+     *
+     * @return false when it is gone or reports itself unavailable; true when it cannot be asked
+     */
+    private fun backendStillAvailable(llmService: LlmInferenceService): Boolean = try {
+        llmService.getBackend(currentBackendId)?.isAvailable == true
+    } catch (e: Throwable) {
+        logWarn("backend '$currentBackendId' could not report availability", e)
+        true
+    }
+
+    /** The window [backendId] reports, in tokens; 0 when it reports none or the call fails. */
+    private fun reportedContextWindow(backendId: String): Int = try {
+        (getLlmService()?.getBackend(backendId) as? LlmInferenceService.ContextWindowReportingBackend)
+            ?.contextWindowTokens ?: 0
+    } catch (e: Throwable) {
+        logWarn("backend '$backendId' supplied no context window", e)
+        0
+    }
+
+    /** How many tokens a reply may use on the current backend; at most half its window. */
+    private fun replyTokenCap(): Int = HistoryCompactor.replyTokens(
+        compaction.budgetTokens(currentBackendId),
+        if (currentBackendId == AiBackend.GEMINI_ID) GEMINI_MAX_TOKENS else DEFAULT_MAX_TOKENS,
+    )
 
     /**
      * The advice for a reply that meant to call a tool and produced nothing runnable.
@@ -759,8 +811,8 @@ class ChatViewModel(
      * leaves [AgentState.Idle] to the loop.
      *
      * A successful call is reported only on the run's single activity line, which this rewrites as
-     * each call starts. A failure keeps its own message: it is the one thing here a user has to act
-     * on, and it carries the Retry button.
+     * each call starts. A failure keeps its own message so the user sees it, but no Retry button:
+     * the model is told and carries on, and a Retry would rewind the whole run.
      *
      * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
@@ -804,7 +856,8 @@ class ChatViewModel(
                     id = UUID.randomUUID().toString(),
                     text = "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}",
                     sender = Sender.TOOL,
-                    status = MessageStatus.ERROR
+                    status = MessageStatus.ERROR,
+                    isDenial = result.denied,
                 )
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)
@@ -912,7 +965,8 @@ class ChatViewModel(
         val llmService = passPreflight(userMessage) ?: return false
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) return false
-        launchRun(llmService, userMessage, contextFiles)
+        // An overflow's turns are still in the history, and the estimate that let it through missed.
+        launchRun(llmService, userMessage, contextFiles, forceCompaction = lastRunOverflowed)
         return true
     }
 
@@ -955,11 +1009,19 @@ class ChatViewModel(
      * @param llmService the service [passPreflight] returned.
      * @param userMessage the prompt to send.
      * @param runFiles the attachments, read by the caller before anything it changed could move them.
+     * @param forceCompaction compact the history first whatever its estimate; see [fitHistory].
      */
-    private fun launchRun(llmService: LlmInferenceService, userMessage: String, runFiles: List<File>) {
+    private fun launchRun(
+        llmService: LlmInferenceService,
+        userMessage: String,
+        runFiles: List<File>,
+        forceCompaction: Boolean = false,
+    ) {
         AgentTrace.beginRun(currentBackendId, userMessage, runFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
+        askedToFinishAfterProse = false
+        proseTurnShowedAnswer = false
         activityMessageId = null
         runToolNames.clear()
         runToolLog.clear()
@@ -975,15 +1037,14 @@ class ChatViewModel(
         )
         // Where a Retry has to rewind to; read here, on Main, while no run can be appending.
         lastRunPrompt = userMessage
-        lastRunUserMessageId = userChatMessage.id
+        lastRunUserMessageId.value = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
+        lastRunOverflowed = false
         // Read once: prompt, grammar and executor must all describe the same tool set.
         val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
-        // The session this run may title; read before the message lands, so the header never
-        // shows it as the title first.
-        val titleSessionId = currentSessionOrNull()?.takeIf { needsTitle(it) }?.id
-        titleSessionId?.let { id -> _titlePending.value = _titlePending.value + id }
+        // Asked before the message lands, so the header never shows the raw prompt as the title.
+        requestTitleIfUntitled(llmService, userMessage)
         // Posted now, not from the run: a Stop before the run's first dispatch left a fork with no
         // prompt at its fork point, and so no arrows to reach the version it had put aside.
         _messages.value = _messages.value + userChatMessage
@@ -992,10 +1053,8 @@ class ChatViewModel(
         // ATOMIC: a Stop before the first dispatch skipped the block, finally too, so isGenerating
         // stayed set and every later send was refused; now the cancel lands at the first suspension.
         generationJob = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.ATOMIC) {
-            // Whether a title request took over settling this run's title placeholder.
-            var titleRequestStarted = false
             try {
-                // Queued behind a title still being written; the prompt shows as generating meanwhile.
+                // The title is written first; the prompt shows as generating meanwhile.
                 awaitTitleRequest()
 
                 // One list for both halves of the protocol: the prompt describes it and a
@@ -1020,9 +1079,17 @@ class ChatViewModel(
 
                 val messageWithContext = buildString {
                     append(userMessage)
-                    append(contextFilesPrompt.render(runFiles))
+                    append(
+                        contextFilesPrompt.render(
+                            runFiles,
+                            compaction.maxFileChars(currentBackendId),
+                            compaction.maxAttachmentChars(currentBackendId),
+                        )
+                    )
                 }
-                val history = _history.value.toMutableList()
+                val history = fitHistory(
+                    llmService, config, toolDefinitions, messageWithContext, userChatMessage.id, epoch, forceCompaction,
+                ).toMutableList()
                 history.add(
                     LlmInferenceService.ChatMessage(
                         LlmInferenceService.ChatMessage.Role.USER,
@@ -1036,6 +1103,8 @@ class ChatViewModel(
                 }
                 requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }
                 var firstTurn = true
+                // Whether the run's turns are dropped; only a Stop, so a failure keeps the tool calls that ran.
+                var rollBack = true
 
                 try {
                     // Which protocol is live for this run. `native=false` against a backend that
@@ -1066,23 +1135,31 @@ class ChatViewModel(
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
+                        canonicalName = { name -> tools.router.getHandler(name)?.toolName ?: name },
                         requiredTool = requiredTool,
-                        events = AgentRunReporter(runNotices),
+                        // Only a prose turn that showed an answer has one a recap could repeat.
+                        events = AgentRunReporter(runNotices) { askedToFinishAfterProse = proseTurnShowedAnswer },
                     )
+                    rollBack = false
                     if (loopResult.completed && generationEpoch.get() == epoch) {
                         runCodeReply?.let { draft -> reviewAnswer(llmService, userMessage, draft, history, epoch) }
                     }
                     AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
-                    if (loopResult.completed && generationEpoch.get() == epoch) {
-                        titleRequestStarted = withContext(Dispatchers.Main) {
-                            requestTitleIfUntitled(llmService)
-                        }
-                    }
+                } catch (e: Exception) {
+                    // Kept on an overflow too: the next run compacts them, so the edits made are not repeated.
+                    rollBack = e is CancellationException
+                    throw e
                 } finally {
                     // On Main, so a Stop, clear or chat switch can't bump the epoch between check and write.
                     withContext(NonCancellable + Dispatchers.Main) {
                         // Persist history only if this run wasn't superseded (epoch bumped).
-                        if (generationEpoch.get() == epoch) _history.value = history.toList()
+                        if (generationEpoch.get() == epoch) {
+                            _history.value = if (rollBack) {
+                                _history.value.take(historySizeBeforeLastRun)
+                            } else {
+                                history.toList()
+                            }
+                        }
                     }
                     stopStateTimer()
                 }
@@ -1094,10 +1171,18 @@ class ChatViewModel(
                 throw ce
             } catch (e: Exception) {
                 logError("sendMessage failed", e)
+                lastRunOverflowed = e is ContextOverflowException
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
-                setState(AgentState.Error(str(R.string.state_error, e.message)))
-                addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
+                val failure = RunFailure.describe(e, str(R.string.agent_run_failed))
+                // A key cleared or unreadable mid-chat: also a notice, dropped once settings fix it.
+                val isSetupError = e is BackendFailure && !backendStillAvailable(llmService)
+                setState(AgentState.Error(failure))
+                addSystemMessage(
+                    failure, MessageStatus.ERROR, isSetupError, isSettingsError = RunFailure.isFixedInSettings(e),
+                )
+                // So the next send is stopped by the pre-flight, and the notice clears once fixed.
+                if (isSetupError) withContext(Dispatchers.Main) { checkBackendAvailability() }
             } finally {
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.value = false
@@ -1107,11 +1192,85 @@ class ChatViewModel(
                 withContext(NonCancellable + Dispatchers.Main) {
                     finishActivity()
                     persistState()
-                    // No title is coming for a run that failed or stopped; the header shows the prompt.
-                    if (!titleRequestStarted) titleSessionId?.let(::settleTitle)
                 }
             }
         }
+    }
+
+    /**
+     * Summarizes the history when this run's request would pass [HistoryCompactor.TRIGGER_RATIO]
+     * of the backend's budget, or on a Retry after an overflow, and publishes what replaces it; on
+     * device, or when the summary fails, the history is cut to fit instead. Called at run start only.
+     *
+     * @param llmService the inference service the run uses.
+     * @param config the run's config, whose system prompt every request carries.
+     * @param toolDefinitions the tools the run offers.
+     * @param pendingUserTurn the new message with its attached files.
+     * @param firstMessageId the new prompt's message, the first one a summary would not cover.
+     * @param epoch the run's epoch; a Stop or a newer message makes the result stale.
+     * @param forced a Retry after a context overflow, which the estimate missed.
+     * @return the history to send the new message on top of.
+     */
+    private suspend fun fitHistory(
+        llmService: LlmInferenceService,
+        config: LlmInferenceService.LlmConfig,
+        toolDefinitions: List<LlmInferenceService.ToolDefinition>,
+        pendingUserTurn: String,
+        firstMessageId: String,
+        epoch: Int,
+        forced: Boolean,
+    ): List<LlmInferenceService.ChatMessage> {
+        val current = _history.value
+        // A prompt-calling backend gets the tools inside the system prompt, already counted there.
+        val sentTools = toolDefinitions.takeIf { backendPrompts.callsToolsNatively() }.orEmpty()
+        val estimate = compaction.estimateIfOverBudget(
+            currentBackendId, config.systemPrompt, sentTools, current, pendingUserTurn, config.maxTokens, forced,
+        ) ?: return current
+        AgentTrace.stage(
+            "COMPACT",
+            "estimate=${estimate.tokens} budget=${estimate.budgetTokens} turns=${current.size} forced=$forced",
+        )
+        val summarizes = HistoryCompactor.summarizes(currentBackendId)
+        val outcome = if (summarizes) {
+            withContext(Dispatchers.Main) { setState(AgentState.Processing(str(R.string.msg_compacting))) }
+            compaction.compact(llmService, currentBackendId, current, replyTokenCap())
+        } else {
+            HistoryCompactor.Outcome.Failed
+        }
+        val compacted = withContext(Dispatchers.Main) {
+            if (generationEpoch.get() != epoch) throw CancellationException("stopped")
+            val session = currentSessionOrNull()
+            val replacement = when (outcome) {
+                is HistoryCompactor.Outcome.Summarized -> {
+                    val saved = HistoryCompaction(outcome.turn.content, firstMessageId)
+                    _sessions.value = _sessions.value.map {
+                        if (it.id == session?.id) it.copy(compaction = saved) else it
+                    }
+                    // Now, not at run end: a process death mid-run would otherwise lose the summary.
+                    persistState()
+                    listOf(outcome.turn)
+                }
+                else -> rebuildHistoryFrom(
+                    _messages.value.takeWhile { it.id != firstMessageId },
+                    session?.compaction,
+                    minOf(MAX_RESTORED_HISTORY_CHARS, estimate.historyRoomChars),
+                )
+            }
+            _history.value = replacement
+            // The rollback point of this run is now the compacted history, not the one it replaced.
+            historySizeBeforeLastRun = replacement.size
+            replacement
+        }
+        val summarized = outcome is HistoryCompactor.Outcome.Summarized
+        AgentTrace.stage("COMPACT", "summarized=$summarized turnsKept=${compacted.size}")
+        val notice = when {
+            summarized -> R.string.chat_compacted
+            summarizes -> R.string.chat_compaction_failed
+            else -> R.string.chat_compaction_trimmed
+        }
+        addSystemMessage(str(notice), MessageStatus.SENT)
+        withContext(Dispatchers.Main) { setState(AgentState.Processing(str(R.string.msg_generating))) }
+        return compacted
     }
 
     /**
@@ -1182,26 +1341,30 @@ class ChatViewModel(
     }
 
     /**
-     * Asks the selected backend to name the current chat, once, after its first completed reply.
-     * Leaves chats the user named, or that already have a title, alone. Main-thread only; the
-     * request itself runs on IO as [titleRequest], which the next run waits out before generating.
+     * Asks the selected backend to name the current chat from its first prompt, before that prompt
+     * runs. Leaves chats the user named, that already have a title, or that hold an earlier prompt
+     * alone. Main only; the request runs on IO as [titleRequest], which the run waits out.
      *
-     * @param llmService the inference service the run just used.
+     * @param llmService the inference service the run will use.
+     * @param prompt the prompt about to run, not yet posted to the chat.
      * @return whether a request was started; it then settles [titlePending] itself when it ends.
      */
-    internal fun requestTitleIfUntitled(llmService: LlmInferenceService): Boolean {
+    internal fun requestTitleIfUntitled(llmService: LlmInferenceService, prompt: String): Boolean {
         val session = currentSessionOrNull() ?: return false
         if (!needsTitle(session)) return false
-        val userText = session.messages.firstOrNull { it.sender == Sender.USER }?.text ?: return false
-        val replyText = session.messages.lastOrNull { it.sender == Sender.AGENT && it.text.isNotBlank() }
-            ?.text ?: return false
         titleRequested.add(session.id)
         val sessionId = session.id
+        _titlePending.value = _titlePending.value + sessionId
         // Lazy, so titleRequest is set before the finally below can compare against it.
         val job = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val self = coroutineContext.job
             try {
-                generateTitle(llmService, sessionId, userText, replyText)
+                generateTitle(llmService, sessionId, prompt)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                // Nothing above this job handles it, and an escape would take the IDE down.
+                logWarn("title request failed for session $sessionId", e)
             } finally {
                 // A request clearMessages() dropped must not end the placeholder of the run after it.
                 withContext(NonCancellable + Dispatchers.Main) {
@@ -1224,9 +1387,27 @@ class ChatViewModel(
         request.job.join()
     }
 
-    /** Whether [session] is still to be titled: not named by the user, untitled, and not yet asked. */
+    /**
+     * Whether [session] is still to be titled: unnamed, untitled, not failed this process, and on its
+     * first prompt. Older chats keep their prompt's words, so no restart makes a reply wait again.
+     */
     private fun needsTitle(session: ChatSession): Boolean =
-        session.name == null && session.generatedTitle == null && session.id !in titleRequested
+        session.name == null && session.generatedTitle == null && session.id !in titleRequested &&
+            session.messages.none { it.sender == Sender.USER }
+
+    /**
+     * Cancels [sessionId]'s title request, if one is in flight, and ends its spinner; the chat falls
+     * back to its prompt's first words. Not the global cancel: that would reach other plugins' calls.
+     * A dropped request did not fail, so the chat may be asked again if its first prompt is re-sent.
+     */
+    private fun dropTitleRequest(sessionId: String) {
+        titleRequest?.takeIf { it.sessionId == sessionId }?.let {
+            it.job.cancel()
+            titleRequest = null
+            titleRequested.remove(sessionId)
+        }
+        settleTitle(sessionId)
+    }
 
     /** Ends [sessionId]'s loading title; it now shows its generated title or its clamped prompt. */
     private fun settleTitle(sessionId: String) {
@@ -1241,7 +1422,6 @@ class ChatViewModel(
         llmService: LlmInferenceService,
         sessionId: String,
         userText: String,
-        replyText: String,
     ) {
         val response = try {
             // Inside the try: a config that failed to load costs the title, not the chat.
@@ -1252,7 +1432,7 @@ class ChatViewModel(
                 systemPrompt = ChatTitle.systemPrompt(prompts)
             }
             withTimeoutOrNull(ChatTitle.TIMEOUT_MS) {
-                llmService.generateCompletion(ChatTitle.prompt(prompts, userText, replyText), config).await()
+                llmService.generateCompletion(ChatTitle.prompt(prompts, userText), config).await()
             }
         } catch (ce: CancellationException) {
             throw ce
@@ -1290,9 +1470,9 @@ class ChatViewModel(
     }
 
     /**
-     * Re-runs the last prompt, dropping the failed run's turns from [history] first: a denied tool
-     * leaves "FAILED: User denied permission" there, and retrying behind it had the model answer
-     * from that line rather than ask for the tool again, so the dialog never reappeared.
+     * Re-runs the last prompt, dropping the failed run's turns from [history] first (an overflow's
+     * are summarized instead): a denied tool leaves "FAILED: User denied permission" there, and the
+     * model answered from that line rather than ask for the tool again, so the dialog never reappeared.
      */
     fun retryLastRun() {
         val prompt = lastRunPrompt
@@ -1305,7 +1485,8 @@ class ChatViewModel(
             logDebug("retryLastRun: a run is already in flight")
             return
         }
-        _history.value = _history.value.take(historySizeBeforeLastRun)
+        // After an overflow the run's turns stay for the forced summary, which records what it changed.
+        if (!lastRunOverflowed) _history.value = _history.value.take(historySizeBeforeLastRun)
         sendMessage(prompt)
     }
 
@@ -1394,7 +1575,7 @@ class ChatViewModel(
      */
     private fun adoptBranch(session: ChatSession, stage: String, detail: String) {
         _sessions.value = _sessions.value.map { if (it.id == session.id) session else it }
-        showTranscript(session.messages)
+        showTranscript(session.messages, session.compaction)
         traceHistoryCut(stage, detail)
         persistState()
     }
@@ -1424,10 +1605,10 @@ class ChatViewModel(
         _messages.value = kept
         replaceCurrentSessionMessages(kept)
         // The live history carries the tool turns a rebuild cannot; use it when it is this prompt's.
-        _history.value = if (messageId == lastRunUserMessageId) {
+        _history.value = if (messageId == lastRunUserMessageId.value) {
             _history.value.take(historySizeBeforeLastRun)
         } else {
-            rebuildHistoryFrom(kept)
+            rebuildHistoryFrom(kept, currentSessionOrNull()?.compaction)
         }
         forgetRetryPoint()
         // A title written from the discarded first exchange would name a conversation that is gone.
@@ -1531,8 +1712,10 @@ class ChatViewModel(
                     }
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
+                    val recapsShownAnswer = askedToFinishAfterProse.also { askedToFinishAfterProse = false }
 
-                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL)) {
+                    // A recap of the prose answer already on screen would show the answer twice.
+                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL, recapsShownAnswer, lastToolFailed)) {
                         viewModelScope.launch(Dispatchers.Main) {
                             removeMessageFromSession(agentMessageId)
                         }
@@ -1549,16 +1732,20 @@ class ChatViewModel(
                         noResponseText = str(R.string.agent_no_response),
                         unparsedReplyText = { str(unparsedReplyMessage(it)) },
                     )
+                    proseTurnShowedAnswer = toolCalls.isEmpty() &&
+                        AgentReplyRenderer.showsAnswer(displayText, str(R.string.agent_no_response))
                     if (AnswerReview.holdsCode(displayText)) {
                         runCodeReply = CodeReply(agentMessageId, displayText, reply.historyText)
                     }
+                    // An unreadable call usually parses on a second try, so its bubble carries Retry.
+                    val unparsed = toolCalls.isEmpty() && ToolCallExtractor.diagnoseUnparsedReply(text) != null
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val finalMsg = ChatMessage(
                             id = agentMessageId,
                             text = displayText,
                             sender = Sender.AGENT,
-                            status = MessageStatus.COMPLETED,
+                            status = if (unparsed) MessageStatus.ERROR else MessageStatus.COMPLETED,
                             durationMs = durationMs,
                             // Only when it differs, so a turn is not stored twice over.
                             historyText = reply.historyText.takeIf { it != displayText }
@@ -1571,7 +1758,9 @@ class ChatViewModel(
                     deferred.complete(reply)
                 }
 
-                override fun onError(error: String) {
+                override fun onError(error: String) = onError(error, LlmInferenceService.FailureKind.OTHER)
+
+                override fun onError(error: String, kind: LlmInferenceService.FailureKind) {
                     if (isStale()) {
                         deferred.completeExceptionally(CancellationException("stopped"))
                         return
@@ -1580,7 +1769,12 @@ class ChatViewModel(
                         // Drop the empty/partial bubble; the error surfaces as a SYSTEM message.
                         removeMessageFromSession(agentMessageId)
                     }
-                    deferred.completeExceptionally(RuntimeException(error))
+                    val failure = when (kind) {
+                        LlmInferenceService.FailureKind.CONTEXT_TOO_LONG -> ContextOverflowException(error)
+                        LlmInferenceService.FailureKind.CONFIGURATION -> BackendSettingsException(error)
+                        else -> BackendFailure(error)
+                    }
+                    deferred.completeExceptionally(failure)
                 }
             }
 
@@ -1620,6 +1814,9 @@ class ChatViewModel(
                         streamCallback.onComplete(response)
 
                     override fun onError(error: String) = streamCallback.onError(error)
+
+                    override fun onError(error: String, kind: LlmInferenceService.FailureKind) =
+                        streamCallback.onError(error, kind)
                 }
             )
         } catch (e: Exception) {
@@ -1789,13 +1986,22 @@ class ChatViewModel(
      * Appends a SYSTEM message to the chat (on the main thread).
      * @param text the message text.
      * @param status the message status.
+     * @param isSetupError whether the backend is unconfigured; see [ChatMessage.isSetupError].
+     * @param isSettingsError see [ChatMessage.isSettingsError].
      */
-    private suspend fun addSystemMessage(text: String, status: MessageStatus) {
+    private suspend fun addSystemMessage(
+        text: String,
+        status: MessageStatus,
+        isSetupError: Boolean = false,
+        isSettingsError: Boolean = false,
+    ) {
         val message = ChatMessage(
             id = UUID.randomUUID().toString(),
             text = text,
             sender = Sender.SYSTEM,
-            status = status
+            status = status,
+            isSetupError = isSetupError,
+            isSettingsError = isSettingsError
         )
         withContext(Dispatchers.Main) {
             _messages.value = _messages.value + message
@@ -1843,7 +2049,11 @@ class ChatViewModel(
         // Its other versions go too: a cleared chat has no prompt left for them to belong to.
         _currentSessionId.value?.let { sessionId ->
             _sessions.value = _sessions.value.map {
-                if (it.id == sessionId) it.copy(otherBranches = null, selectedBranches = null) else it
+                if (it.id == sessionId) {
+                    it.copy(otherBranches = null, selectedBranches = null, compaction = null)
+                } else {
+                    it
+                }
             }
         }
         // The title described the conversation just cleared; the next first reply writes a new one.
@@ -1861,13 +2071,8 @@ class ChatViewModel(
     private fun resetGeneratedTitle() {
         val sessionId = _currentSessionId.value ?: return
         // Its reply would name the discarded chat, and its settle would end the next run's placeholder.
-        // Another chat's request is left to finish and settle its own placeholder.
-        titleRequest?.takeIf { it.sessionId == sessionId }?.let {
-            it.job.cancel()
-            titleRequest = null
-        }
+        dropTitleRequest(sessionId)
         titleRequested.remove(sessionId)
-        settleTitle(sessionId)
         _sessions.value = _sessions.value.map {
             if (it.id == sessionId) it.copy(generatedTitle = null) else it
         }
@@ -1888,7 +2093,7 @@ class ChatViewModel(
 
     /**
      * Cancels the run's job and, only while one of its model turns is generating, the backend
-     * stream too. A prompt still queued behind a title leaves that title running.
+     * stream too. A title being written is not the run's to cancel; see [dropTitleRequest].
      */
     private fun cancelGenerationJob() {
         // Read before the cancel: the turn's finally may clear it as soon as the job is cancelled.
@@ -1932,7 +2137,7 @@ class ChatViewModel(
      */
     private fun adoptSession(session: ChatSession) {
         _currentSessionId.value = session.id
-        showTranscript(session.messages)
+        showTranscript(session.messages, session.compaction)
         // Also dropped here: the readiness edge may have fired while another chat was current.
         if (_backendStatus.value.isAvailable) clearBackendSetupNotices()
         persistState()
@@ -1943,10 +2148,10 @@ class ChatViewModel(
      * move together: set side by side at each call site, ADFA-5584 (screen restored, model handed
      * an empty history) was fixed in one of them and not the others.
      */
-    private fun showTranscript(messages: List<ChatMessage>) {
+    private fun showTranscript(messages: List<ChatMessage>, compaction: HistoryCompaction?) {
         // Immutable snapshot, so a later mutation cannot reach collectors behind the StateFlow.
         _messages.value = messages.toList()
-        _history.value = rebuildHistoryFrom(messages)
+        _history.value = rebuildHistoryFrom(messages, compaction)
         // The rewind point names a run this transcript does not have, and would truncate it.
         forgetRetryPoint()
     }
@@ -1965,6 +2170,8 @@ class ChatViewModel(
      * @param reason what caused the change, for the CANCEL trace line.
      */
     private fun endRunBeforeSessionChange(reason: String) {
+        // Before the check: a title can outlive the run that asked for it, and its spinner with it.
+        _currentSessionId.value?.let(::dropTitleRequest)
         if (!_agentState.value.isRunning) return
         stopProcessing(reason = reason)
     }
@@ -1987,8 +2194,8 @@ class ChatViewModel(
         _sessions.value = _sessions.value.map {
             if (it.id == sessionId) it.copy(name = trimmed) else it
         }
-        // A user name outranks the title being written, so its placeholder must not outlast it.
-        if (trimmed != null) settleTitle(sessionId)
+        // A user name outranks the title being written, so a reply queued behind it starts now.
+        if (trimmed != null) dropTitleRequest(sessionId)
         // Written now rather than debounced: a rename is deliberate and may be the last thing the
         // user does before leaving the tab, where no streamed token follows to flush it.
         persistState()
@@ -2085,8 +2292,9 @@ class ChatViewModel(
      */
     private fun forgetRetryPoint() {
         lastRunPrompt = null
-        lastRunUserMessageId = null
+        lastRunUserMessageId.value = null
         historySizeBeforeLastRun = 0
+        lastRunOverflowed = false
     }
 
     /**
@@ -2095,15 +2303,26 @@ class ChatViewModel(
      * saved messages, so they are not reconstructed here.
      *
      * @param messages the session's transcript, oldest first.
-     * @return the eligible messages that fit both budgets, oldest first; the newest one is
-     *   always kept, truncated to the character budget when it alone exceeds it.
+     * @param compaction the session's summary; used only when [messages] holds its first message.
+     * @param maxChars the most characters the restored turns may hold together.
+     * @return the summary turn, if used, then the eligible messages after it that fit both budgets,
+     *   oldest first; the newest one is kept, truncated, unless the summary leaves no room.
      */
     private fun rebuildHistoryFrom(
-        messages: List<ChatMessage>
+        messages: List<ChatMessage>,
+        compaction: HistoryCompaction?,
+        maxChars: Int = MAX_RESTORED_HISTORY_CHARS,
     ): List<LlmInferenceService.ChatMessage> {
         // A new chat restores nothing; without this every one of them traces an empty restore.
         if (messages.isEmpty()) return emptyList()
-        val eligible = messages.filter {
+        // Not on screen means rewound or switched past it, so the summary covers another chat.
+        val start = compaction?.let { c -> messages.indexOfFirst { it.id == c.firstMessageId } } ?: -1
+        // Counted against the budget like any turn; one that alone passes it would overflow the cut.
+        val summary = compaction?.takeIf { start >= 0 && it.summary.length <= maxChars }?.let {
+            LlmInferenceService.ChatMessage(LlmInferenceService.ChatMessage.Role.USER, it.summary)
+        }
+        val turnChars = maxChars - summary?.content.orEmpty().length
+        val eligible = messages.drop(start.coerceAtLeast(0)).filter {
             // SYSTEM notices and TOOL output are the scaffolding this rebuild exists to leave out.
             (it.sender == Sender.USER || it.sender == Sender.AGENT) &&
                 // Only a finished agent turn carries a duration: null is a bubble process death
@@ -2120,13 +2339,15 @@ class ChatViewModel(
             // What the model wrote, not the bubble: a turn whose tool call failed renders as
             // "the action failed" in the IDE's language, a sentence the model never produced.
             var text = message.historyText ?: message.text
+            // No room means no turns: a turn cut to nothing is sent empty, which Claude refuses.
+            if (turnChars <= 0) break
             // The newest eligible turn is never dropped — breaking on it would restore nothing at
             // all — but it is truncated, since nothing upstream bounds what a user can paste.
             if (kept.isNotEmpty() && (kept.size >= MAX_RESTORED_HISTORY ||
-                    chars + text.length > MAX_RESTORED_HISTORY_CHARS)
+                    chars + text.length > turnChars)
             ) break
-            if (text.length > MAX_RESTORED_HISTORY_CHARS) {
-                text = text.takeLast(MAX_RESTORED_HISTORY_CHARS)
+            if (text.length > turnChars) {
+                text = text.takeLast(turnChars)
             }
             chars += text.length
             val role = if (message.sender == Sender.USER) {
@@ -2141,9 +2362,9 @@ class ChatViewModel(
         AgentTrace.detail(
             "RESTORE",
             "retained=${kept.size} discarded=${messages.size - eligible.size} " +
-                "capped=${eligible.size - kept.size}"
+                "capped=${eligible.size - kept.size} summary=${summary != null}"
         )
-        return kept.toList()
+        return listOfNotNull(summary) + kept
     }
 
     /**
@@ -2236,6 +2457,8 @@ class ChatViewModel(
         // Cancelling the job alone would strand an open approval dialog with nothing awaiting it.
         approvalManager.cancelPendingApproval()
         cancelGenerationJob()
+        // The run queued behind it is gone, so the chat takes its prompt's first words instead.
+        _currentSessionId.value?.let(::dropTitleRequest)
         stopStateTimer()
         finalizeInProgressMessages()
         setState(AgentState.Idle)
