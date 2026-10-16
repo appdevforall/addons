@@ -95,16 +95,20 @@ Two dependencies were deliberately not taken:
   Keystore under this plugin's own alias; only ciphertext is written to disk.
   `security/SecureTokenStore.kt` holds nothing but that alias (`cotg_ai_mcp_token_v1`);
   the AES/GCM itself is the IDE's `KeystoreSecretStore` (`plugin-api`, since
-  **26.36** — hence this plugin's `min_ide_version`), so there is one implementation
-  in the process rather than a copy per plugin. The alias stays per plugin: they all
+  **26.36**), so there is one implementation in the process rather than a copy per plugin. The alias stays per plugin: they all
   share the host's Keystore, so a shared alias would let one plugin's invalidated-key
   recovery delete another's secret. A token that can no longer be decrypted — a
   restored backup, an OEM Keystore reset — is reported as exactly that, never sent as
   an absent one, which would surface as the server refusing a token that is still
   stored and still correct; a Keystore that merely would not answer is told apart
   again, since that token is intact and the call is only worth retrying.
-- A token or a custom header is refused on an `http://` URL: encryption at rest
-  buys nothing for a credential sent in the clear.
+- `http://` is accepted only for a server on this device (`localhost`, `127.0.0.0/8`,
+  `[::1]`), with or without credentials; any other host needs `https://`, since its
+  traffic would cross a network in the clear. The check is `McpUrlPolicy`, built on
+  the host's `ServerUrl` (plugin-api **26.42**, hence this plugin's
+  `min_ide_version`), and judges the URL as typed with no DNS lookup. Save refuses
+  such a URL, and the transport refuses it again, so a server saved before the rule
+  is listed with a warning and never contacted until it is switched to `https://`.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.

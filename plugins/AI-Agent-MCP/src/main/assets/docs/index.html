@@ -56,10 +56,13 @@
     <li>Add an <b>access token</b> if the server needs one. It is encrypted with a
       key held in the Android Keystore, and sent only to that server, as an
       <code>Authorization: Bearer</code> header.</li>
-    <li>A token or an extra header requires an <b>https://</b> URL. Encryption at
-      rest does nothing for a credential put on the wire in the clear, and a phone
-      IDE runs on shared Wi-Fi by definition. A plain <code>http://</code> server
-      with no credential is still allowed.</li>
+    <li>The URL must be <b>https://</b> unless the server runs on this device.
+      Plain <code>http://</code> is accepted only for <code>localhost</code>,
+      <code>127.0.0.1</code> or <code>[::1]</code>, such as a server started in the
+      Terminal, with or without a token; that traffic never leaves the phone.
+      Anywhere else, your home network included, it would cross Wi-Fi in the clear,
+      so Save refuses it. A server saved earlier with such a URL stays in the list,
+      marked, and does not connect until you change it to <b>https://</b>.</li>
     <li><b>Clear stored credential</b> appears once something is stored. The token
       field never shows what it holds and leaving it empty keeps it, so this is the
       way back to a server that needs no credential at all — after pasting the
