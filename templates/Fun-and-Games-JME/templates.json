@@ -1,4 +1,5 @@
 {
+  "displayName": "Fun and Games",
   "templates": [
     { "path": "demo",
       "libraries" : [
