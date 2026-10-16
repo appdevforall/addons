@@ -27,8 +27,8 @@ private const val DRAG_THRESHOLD_PIXELS = 6f
 
 enum class GameState { PLAYING, GAME_OVER }
 
-/** SimpleApplication implementing a self-contained Tetris-like game, rendered with an orthographic board of quads. */
-class TetrisGame : SimpleApplication(), RawInputListener {
+/** SimpleApplication implementing a self-contained falling-block puzzle game, rendered with an orthographic board of quads. */
+class BlockGame : SimpleApplication(), RawInputListener {
 
     private lateinit var boardNode: Node
     private lateinit var cellGeoms: Array<Array<Geometry>>
@@ -38,9 +38,9 @@ class TetrisGame : SimpleApplication(), RawInputListener {
     private lateinit var messageText: BitmapText
 
     private val board = Board()
-    private val bag = ArrayDeque<TetrominoType>()
+    private val bag = ArrayDeque<PieceType>()
     private lateinit var current: Piece
-    private lateinit var nextType: TetrominoType
+    private lateinit var nextType: PieceType
 
     private var state = GameState.PLAYING
     private var score = 0
@@ -137,8 +137,8 @@ class TetrisGame : SimpleApplication(), RawInputListener {
         guiNode.attachChild(messageText)
     }
 
-    private fun nextFromBag(): TetrominoType {
-        if (bag.isEmpty()) bag.addAll(TetrominoType.entries.shuffled())
+    private fun nextFromBag(): PieceType {
+        if (bag.isEmpty()) bag.addAll(PieceType.entries.shuffled())
         return bag.removeFirst()
     }
 
