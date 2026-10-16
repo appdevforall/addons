@@ -1,0 +1,86 @@
+{
+  "displayName": "Fun and Games (libGDX)",
+  "templates": [
+    { "path": "demo",
+      "libraries" : [
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx/1.13.1/gdx-1.13.1.jar",
+          "dst": "app/libs",
+          "sha256": "d5860eaf5787a4083e14183ae47da99d3e6908029ca99691947bbd0852b49264"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-jnigen-loader/2.5.2/gdx-jnigen-loader-2.5.2.jar",
+          "dst": "app/libs",
+          "sha256": "df81f23cfd6785c52d35e108eeaa3930f559d4d2770a6102e75ca7bfa6f9f27a"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-backend-android/1.13.1/gdx-backend-android-1.13.1.aar",
+          "dst": "app/libs",
+          "sha256": "8ec3def7d7c26c0104e0edfdd78ffddefe63f84f84374a9aaa2e11ad4ac2a093"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-platform/1.13.1/gdx-platform-1.13.1-natives-armeabi-v7a.jar",
+          "dst": "app/libs",
+          "sha256": "19c0a883172123518f885e667f867ebc841f6ed5d07d2aff0151d431cf90d38e"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-platform/1.13.1/gdx-platform-1.13.1-natives-arm64-v8a.jar",
+          "dst": "app/libs",
+          "sha256": "e15f8a47932ae1928dbcc68dff012611928d59464afae9c6f239b8d143728a96"
+        } ] },
+    { "path": "blockgame",
+      "libraries" : [
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx/1.13.1/gdx-1.13.1.jar",
+          "dst": "app/libs",
+          "sha256": "d5860eaf5787a4083e14183ae47da99d3e6908029ca99691947bbd0852b49264"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-jnigen-loader/2.5.2/gdx-jnigen-loader-2.5.2.jar",
+          "dst": "app/libs",
+          "sha256": "df81f23cfd6785c52d35e108eeaa3930f559d4d2770a6102e75ca7bfa6f9f27a"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-backend-android/1.13.1/gdx-backend-android-1.13.1.aar",
+          "dst": "app/libs",
+          "sha256": "8ec3def7d7c26c0104e0edfdd78ffddefe63f84f84374a9aaa2e11ad4ac2a093"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-platform/1.13.1/gdx-platform-1.13.1-natives-armeabi-v7a.jar",
+          "dst": "app/libs",
+          "sha256": "19c0a883172123518f885e667f867ebc841f6ed5d07d2aff0151d431cf90d38e"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-platform/1.13.1/gdx-platform-1.13.1-natives-arm64-v8a.jar",
+          "dst": "app/libs",
+          "sha256": "e15f8a47932ae1928dbcc68dff012611928d59464afae9c6f239b8d143728a96"
+        } ] },
+    { "path": "bubblewand",
+      "libraries" : [
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx/1.13.1/gdx-1.13.1.jar",
+          "dst": "app/libs",
+          "sha256": "d5860eaf5787a4083e14183ae47da99d3e6908029ca99691947bbd0852b49264"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-jnigen-loader/2.5.2/gdx-jnigen-loader-2.5.2.jar",
+          "dst": "app/libs",
+          "sha256": "df81f23cfd6785c52d35e108eeaa3930f559d4d2770a6102e75ca7bfa6f9f27a"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-backend-android/1.13.1/gdx-backend-android-1.13.1.aar",
+          "dst": "app/libs",
+          "sha256": "8ec3def7d7c26c0104e0edfdd78ffddefe63f84f84374a9aaa2e11ad4ac2a093"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-platform/1.13.1/gdx-platform-1.13.1-natives-armeabi-v7a.jar",
+          "dst": "app/libs",
+          "sha256": "19c0a883172123518f885e667f867ebc841f6ed5d07d2aff0151d431cf90d38e"
+        },
+        {
+          "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx-platform/1.13.1/gdx-platform-1.13.1-natives-arm64-v8a.jar",
+          "dst": "app/libs",
+          "sha256": "e15f8a47932ae1928dbcc68dff012611928d59464afae9c6f239b8d143728a96"
+        } ] }
+  ]
+}
