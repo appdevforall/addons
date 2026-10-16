@@ -184,6 +184,68 @@ def test_verify_rejects_a_surviving_parent_path(tmp_path):
         tarball.verify(top, "plugins/Keystore-Generator", ["plugin-api.jar"])
 
 
+LLAMA_URL = "https://github.com/appdevforall/llama.cpp.git"
+
+
+def add_submodule(root: Path, addon: Path, url: str | None = LLAMA_URL) -> str:
+    """Track a nested repo under the addon as a gitlink; returns its commit."""
+    nested = addon / "subprojects" / "llama.cpp"
+    subprocess.run(["git", "init", "-q", str(nested)], check=True)
+    (nested / "CMakeLists.txt").write_text("project(llama)\n")
+    commit(nested)
+    if url:
+        (root / ".gitmodules").write_text(
+            '[submodule "llama"]\n'
+            f"\tpath = {nested.relative_to(root).as_posix()}\n"
+            f"\turl = {url}\n")
+    commit(root)
+    return subprocess.run(["git", "-C", str(nested), "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+
+
+def test_a_submodule_is_left_out_of_the_archive(tmp_path):
+    """AI-Agent-Local's llama.cpp: copying the gitlink raised IsADirectoryError."""
+    addon = make_repo(tmp_path)
+    pinned = add_submodule(tmp_path, addon)
+    archive = build(tmp_path, addon, META)
+    top = "keystore-generator-src"
+    names = names_in(archive)
+    assert f"{top}/build.gradle.kts" in names
+    assert not any(n.startswith(f"{top}/subprojects") for n in names)
+    notes = text_in(archive, f"{top}/BUILDING.md")
+    assert f"git clone {LLAMA_URL} subprojects/llama.cpp" in notes
+    assert f"checkout {pinned}" in notes
+    # R46: the prerequisite comes before the build instructions
+    assert notes.index("git clone") < notes.index("./gradlew assemblePlugin")
+    # Blank lines keep the note out of the License bullet and end the code block
+    assert "this file.\n\n`subprojects/llama.cpp`" in notes
+    assert f"checkout {pinned}\n\nThis folder" in notes
+
+
+def test_an_addon_without_submodules_gets_no_submodule_note(tmp_path):
+    archive = build(tmp_path, make_repo(tmp_path), META)
+    notes = text_in(archive, "keystore-generator-src/BUILDING.md")
+    assert "submodule" not in notes
+    assert "this file.\n\nThis folder" in notes
+
+
+def test_a_submodule_missing_from_gitmodules_stops_the_build(tmp_path):
+    """No clone instructions at all beats ones with a placeholder URL."""
+    addon = make_repo(tmp_path)
+    add_submodule(tmp_path, addon, url=None)
+    with pytest.raises(RuntimeError, match="has no url in .gitmodules"):
+        build(tmp_path, addon, META)
+
+
+def test_an_addon_shipping_its_own_building_md_stops_the_build(tmp_path):
+    """AI-Agent-Local's guide is NATIVE-BUILD.md for this reason (ADFA-6566)."""
+    addon = make_repo(tmp_path)
+    (addon / "BUILDING.md").write_text("# The addon's own guide\n")
+    commit(tmp_path)
+    with pytest.raises(RuntimeError, match="BUILDING.md is claimed twice"):
+        build(tmp_path, addon, META)
+
+
 def test_a_sibling_directory_is_not_inside_the_archive(tmp_path):
     # "/out/foo-src-evil" starts with "/out/foo-src" but is not inside it
     root = tmp_path / "foo-src"

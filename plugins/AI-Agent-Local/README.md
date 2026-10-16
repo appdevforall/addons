@@ -34,7 +34,7 @@ checked out (`subprojects/llama.cpp/CMakeLists.txt` exists) — which is exactly
 the setup a CI checkout does *not* have, so CI builds against the prebuilt AAR.
 
 To regenerate the AAR after bumping the llama.cpp fork, see
-**[BUILDING.md](BUILDING.md)** and `scripts/rebuild-llama-aar.sh` (requires the
+**[NATIVE-BUILD.md](NATIVE-BUILD.md)** and `scripts/rebuild-llama-aar.sh` (requires the
 submodule + NDK/CMake). Notes on the fork live in
 [SUBMODULE_NOTES.md](SUBMODULE_NOTES.md).
 
