@@ -112,9 +112,9 @@
           Shown only while something is stored: an empty token field means "keep what is there", so
           without this there is no way back to "no credential" short of deleting the server.
         -->
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/mcpClearCredential"
-            style="?android:attr/borderlessButtonStyle"
+            style="@style/McpButton.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
@@ -213,6 +213,15 @@
             android:layout_marginTop="8dp"
             android:textColor="@color/plugin_on_surface_variant"
             android:textSize="13sp" />
+
+        <!-- Shown only under a failed Connect: opens what was actually sent and received. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/mcpShowDetails"
+            style="@style/McpButton.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/mcp_show_details"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="match_parent"
