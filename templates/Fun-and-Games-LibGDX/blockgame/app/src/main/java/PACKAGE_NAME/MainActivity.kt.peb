@@ -8,6 +8,6 @@ class MainActivity : AndroidApplication() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val config = AndroidApplicationConfiguration().apply { useImmersiveMode = true }
-        initialize(TetrisGame(), config)
+        initialize(BlockGame(), config)
     }
 }

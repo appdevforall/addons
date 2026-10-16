@@ -8,7 +8,7 @@ They are ports of the jMonkeyEngine games in [`../Fun-and-Games-JME`](../Fun-and
 | Template | Directory | Language | Game |
 |---|---|---|---|
 | Demo (libGDX) | `demo/` | Java | A 3D Earth you drag to spin, an orbiting rocket with an exhaust trail and bloom glow, a starfield; tap for points |
-| Tetris (libGDX) | `tetris/` | Kotlin | Falling-block puzzle: drag to move, drag down to drop faster, tap to rotate, long-press to hard-drop |
+| Block Game (libGDX) | `blockgame/` | Kotlin | Falling-block puzzle: drag to move, drag down to drop faster, tap to rotate, long-press to hard-drop |
 | Bubble Wand (libGDX) | `bubblewand/` | Kotlin | First-person shooter: catch floating balloon animals in bubbles with an on-screen D-pad and **FIRE** button |
 
 ## How it works
@@ -56,7 +56,7 @@ compatibility tokens.
 | Game | Controls |
 |---|---|
 | Demo | Drag to rotate the Earth · flick to spin with inertia · tap for +10 points |
-| Tetris | Drag left/right to move · drag down to soft-drop · tap to rotate · long-press to hard-drop |
+| Block Game | Drag left/right to move · drag down to soft-drop · tap to rotate · long-press to hard-drop |
 | Bubble Wand | Left half: drag to walk · right half: drag to look, tap to shoot · or use the D-pad and **FIRE** · **HIDE UI** toggles the buttons |
 
 A hardware keyboard also works (arrow keys, space, WASD).

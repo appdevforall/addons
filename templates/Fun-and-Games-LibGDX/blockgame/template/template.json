@@ -1,6 +1,6 @@
 {
-    "name": "Tetris (libGDX)",
-    "description": "Creates a tetris Game (libGDX)",
+    "name": "Block Game (libGDX)",
+    "description": "Creates a falling-block puzzle game (libGDX)",
     "version": "0.1",
     "parameters": {
         "required": {

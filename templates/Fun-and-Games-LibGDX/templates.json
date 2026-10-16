@@ -1,4 +1,5 @@
 {
+  "displayName": "Fun and Games (libGDX)",
   "templates": [
     { "path": "demo",
       "libraries" : [
@@ -27,7 +28,7 @@
           "dst": "app/libs",
           "sha256": "e15f8a47932ae1928dbcc68dff012611928d59464afae9c6f239b8d143728a96"
         } ] },
-    { "path": "tetris",
+    { "path": "blockgame",
       "libraries" : [
         {
           "src": "https://repo1.maven.org/maven2/com/badlogicgames/gdx/gdx/1.13.1/gdx-1.13.1.jar",

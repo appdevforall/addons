@@ -25,8 +25,8 @@ private const val MESSAGE_TEXT_SCALE = 1.6f
 
 enum class GameState { PLAYING, GAME_OVER }
 
-/** libGDX application implementing a self-contained Tetris-like game, rendered as filled rects under an orthographic camera. */
-class TetrisGame : ApplicationAdapter() {
+/** libGDX application implementing a self-contained falling-block puzzle game, rendered as filled rects under an orthographic camera. */
+class BlockGame : ApplicationAdapter() {
 
     private lateinit var camera: OrthographicCamera
     private lateinit var shapes: ShapeRenderer
@@ -36,9 +36,9 @@ class TetrisGame : ApplicationAdapter() {
     private var messageText = ""
 
     private val board = Board()
-    private val bag = ArrayDeque<TetrominoType>()
+    private val bag = ArrayDeque<PieceType>()
     private lateinit var current: Piece
-    private lateinit var nextType: TetrominoType
+    private lateinit var nextType: PieceType
 
     private var state = GameState.PLAYING
     private var score = 0
@@ -83,8 +83,8 @@ class TetrisGame : ApplicationAdapter() {
         camera.update()
     }
 
-    private fun nextFromBag(): TetrominoType {
-        if (bag.isEmpty()) bag.addAll(TetrominoType.entries.shuffled())
+    private fun nextFromBag(): PieceType {
+        if (bag.isEmpty()) bag.addAll(PieceType.entries.shuffled())
         return bag.removeFirst()
     }
 
