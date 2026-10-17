@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JVM Tools - Commands</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>JVM Tools</h1>
+<p class="lede">Run Java and Kotlin programs on the device, straight from the editor toolbar.</p>
+
+<p>JVM Tools adds a project template and two toolbar commands. The commands appear only while a
+JVM project is open; in an Android project the toolbar is left alone. Because Gradle plays no part
+in a JVM project, the Gradle actions (Quick Run, Quick Build, Sync, Debug, Run Tasks, Launch App)
+are hidden while you work in one.</p>
+
+<div class="callout">
+<p>A project counts as JVM when it has no Gradle build file (<code>build.gradle</code>,
+<code>build.gradle.kts</code>, <code>settings.gradle</code>, or <code>settings.gradle.kts</code>)
+and holds at least one <code>.java</code> or <code>.kt</code> file within four folders of its
+root.</p>
+</div>
+
+<h2>The commands</h2>
+
+<h3 id="run">Run</h3>
+<p>Compiles every <code>.java</code> and <code>.kt</code> file in the project, then starts the main
+class chosen in Run configuration with its program arguments. Folders named <code>build</code> and
+folders whose names start with a dot are skipped. Kotlin is compiled first, so Java and Kotlin
+classes can use each other.</p>
+<p>When no main class has been chosen, Run starts the main class of the file open in the editor,
+or else the first main class in alphabetical order.</p>
+<p>Compiler errors and the program's output stream into <b>Build Output</b>. While the program runs,
+the button becomes <b>Cancel Run</b>; tap it to stop the program. A run is stopped after 30
+minutes. Unsaved changes in open Java and Kotlin files are saved before compiling.</p>
+
+<h3 id="run-configuration">Run configuration</h3>
+<p>Chooses which main class Run starts and the program arguments it passes. The list holds every
+class with a <code>main</code> method:</p>
+<ul>
+  <li>a Java class with <code>public static void main(String[] args)</code></li>
+  <li>a Kotlin file with a top-level <code>fun main()</code>, which runs as
+  <code>FileNameKt</code></li>
+  <li>a Kotlin <code>object</code> or companion object with a <code>@JvmStatic</code>
+  <code>main</code></li>
+</ul>
+<p>A class nested inside another is listed by the name Java runs it under, such as
+<code>Outer$Inner</code>.</p>
+<p>Program arguments are split on spaces. Wrap an argument in single or double quotes to keep its
+spaces, for example <code>--name "Ada Lovelace"</code>. The choice is saved for each project.</p>
+
+<h2>The project template</h2>
+<p><b>Java/Kotlin Program</b> on the New Project screen creates a program in
+<code>src/</code>: a <code>Main</code> class that prints a greeting built by a
+<code>Greeter</code> class. Choose Java or Kotlin when you create it, then tap Run.</p>
+
+<h2>What it cannot do</h2>
+<ul>
+  <li>The program cannot read keyboard input: <code>Scanner</code> and <code>readLine()</code>
+  see the end of input. Pass values as program arguments instead.</li>
+  <li>Libraries are not downloaded. A program can use the Java class library and, for Kotlin, the
+  Kotlin standard library.</li>
+  <li>Gradle projects are not handled; build and run them with the IDE's own Gradle actions.</li>
+</ul>
+
+<h2>Turning it off</h2>
+<p>Disable JVM Tools in the Plugin Manager. The two commands disappear, the Gradle actions come
+back for every project, and the template is removed from the New Project screen.</p>
+
+</body>
+</html>
