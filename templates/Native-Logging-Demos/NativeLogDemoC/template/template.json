@@ -1,27 +1,27 @@
 {
-    "name": "Empty Activity",
-    "description": "Creates a new empty activity",
-    "version": "0.1",
-    "tooltipTag": "template.empty.activity",
+    "name": "Native Log Demo (C)",
+    "description": "Writes to the App Logs window from C. Needs the NDK-Installer plugin",
+    "version": "1.0.0",
+    "tooltipTag": "template.ndk.activity",
     "parameters": {
         "required": {
-            "appName": {identifier: "APP_NAME"},
-            "packageName":  {identifier: "PACKAGE_NAME"},
-            "saveLocation":  {identifier: "SAVE_LOCATION"}
+            "appName": { "identifier": "APP_NAME" },
+            "packageName": { "identifier": "PACKAGE_NAME" },
+            "saveLocation": { "identifier": "SAVE_LOCATION" }
         },
         "optional": {
-            "language": {identifier: "LANGUAGE"},
-            "minsdk":  {identifier: "MIN_SDK"}
+            "language": { "identifier": "LANGUAGE" },
+            "minsdk": { "identifier": "MIN_SDK" }
         }
     },
     "system": {
-      "agpVersion": { "identifier": "AGP_VERSION" },
-      "kotlinVersion": { "identifier": "KOTLIN_VERSION" },
-      "gradleVersion": { "identifier": "GRADLE_VERSION" },
-      "compileSdk": { "identifier": "COMPILE_SDK" },
-      "targetSdk": { "identifier": "TARGET_SDK" },
-      "javaSourceCompat": { "identifier": "JAVA_SOURCE_COMPAT" },
-      "javaTargetCompat": { "identifier": "JAVA_TARGET_COMPAT" },
-      "javaTarget": { "identifier": "JAVA_TARGET" }
+        "agpVersion": { "identifier": "AGP_VERSION" },
+        "kotlinVersion": { "identifier": "KOTLIN_VERSION" },
+        "gradleVersion": { "identifier": "GRADLE_VERSION" },
+        "compileSdk": { "identifier": "COMPILE_SDK" },
+        "targetSdk": { "identifier": "TARGET_SDK" },
+        "javaSourceCompat": { "identifier": "JAVA_SOURCE_COMPAT" },
+        "javaTargetCompat": { "identifier": "JAVA_TARGET_COMPAT" },
+        "javaTarget": { "identifier": "JAVA_TARGET" }
     }
 }

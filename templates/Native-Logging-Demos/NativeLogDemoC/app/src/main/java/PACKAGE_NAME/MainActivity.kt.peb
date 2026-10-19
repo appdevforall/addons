@@ -10,17 +10,23 @@ import ${{PACKAGE_NAME}}.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
 
     private var _binding: ActivityMainBinding? = null
-    
+
     private val binding: ActivityMainBinding
       get() = checkNotNull(_binding) { "Activity has been destroyed" }
-    
+
+    // Implemented in app/src/main/cpp/native-log.c, which binds it in JNI_OnLoad.
+    private external fun runDemo()
+
+    companion object {
+        init {
+            System.loadLibrary("native-log")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inflate and get instance of binding
         _binding = ActivityMainBinding.inflate(layoutInflater)
-
-        // set content view to binding's root
         setContentView(binding.root)
 
         // Keep content clear of the system bars (edge-to-edge is enforced on API 35+)
@@ -31,8 +37,13 @@ class MainActivity : AppCompatActivity() {
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
+
+        binding.runButton.setOnClickListener {
+            runDemo()
+            binding.statusText.setText(R.string.status_done)
+        }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         _binding = null

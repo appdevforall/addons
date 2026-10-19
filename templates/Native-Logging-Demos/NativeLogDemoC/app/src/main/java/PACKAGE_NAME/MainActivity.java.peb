@@ -1,5 +1,5 @@
 
-package ${{PACKAGE_NAME}}; 
+package ${{PACKAGE_NAME}};
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -11,14 +11,18 @@ import ${{PACKAGE_NAME}}.databinding.ActivityMainBinding;
 public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
 
+    static {
+        System.loadLibrary("native-log");
+    }
+
+    // Implemented in app/src/main/cpp/native-log.c, which binds it in JNI_OnLoad.
+    private native void runDemo();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Inflate and get instance of binding
         binding = ActivityMainBinding.inflate(getLayoutInflater());
-
-        // set content view to binding's root
         setContentView(binding.getRoot());
 
         // Keep content clear of the system bars (edge-to-edge is enforced on API 35+)
@@ -28,8 +32,13 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
             return insets;
         });
+
+        binding.runButton.setOnClickListener(v -> {
+            runDemo();
+            binding.statusText.setText(R.string.status_done);
+        });
     }
-    
+
     @Override
     protected void onDestroy() {
         super.onDestroy();

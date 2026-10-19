@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Native Logging Demos</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #111111;
+    --muted: #555555;
+    --accent: #0553b1;
+    --accent-light: #eaf2fc;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: var(--muted); margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-light); font-weight: 600; }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Native Logging Demos</h1>
+  <p class="subtitle">Two projects that show how to write to Code on the Go's App Logs window from C and from C++</p>
+  <div class="meta">Version 1.0.0 &middot; Author: James Turner &middot; Template bundle: <code>org.appdevforall.nativeloggingdemos</code></div>
+</header>
+
+<section id="overview">
+  <h2>Overview</h2>
+  <p>
+    When you run a debug build, Code on the Go's <strong>App Logs</strong> window shows what your
+    app writes to the Android log. This bundle adds two templates to the New Project screen that
+    write to it from native code. Each project has one button. Tap it, and the native code writes
+    a short series of log lines, all with one tag so they are easy to find.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Template</th><th>Tag</th><th>What it shows</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Native Log Demo (C)</td><td><code>NativeDemoC</code></td><td>C11. <code>LOGD</code>-style
+        macros over <code>__android_log_print</code>, <code>__android_log_write</code>, your own
+        wrapper with <code>__android_log_vprint</code>, a compiler-checked helper that adds the
+        function and line, reporting <code>errno</code>, and logging from a second thread.</td></tr>
+      <tr><td>Native Log Demo (C++)</td><td><code>NativeDemoCpp</code></td><td>C++17. A type-safe
+        <code>logx::info() &lt;&lt; ...</code> stream logger, an RAII timer that logs how long a scope
+        took, containers and your own types, an exception message, and a <code>std::thread</code>.</td></tr>
+    </tbody>
+  </table>
+  <p>Both let you choose Kotlin or Java for the activity that calls the native code.</p>
+</section>
+
+<section id="requirements">
+  <h2>Requirements</h2>
+  <ul>
+    <li><strong>The NDK-Installer plugin.</strong> It installs the NDK and CMake the projects build
+      with. Install it from the add-on gallery first.</li>
+    <li><strong>A debug build.</strong> App Logs receives lines only from debug builds.</li>
+    <li><strong>The project open in the editor</strong> while the app runs.</li>
+    <li>A 64-bit ARM device. The projects build for <code>arm64-v8a</code> only.</li>
+  </ul>
+</section>
+
+<section id="usage">
+  <h2>Usage</h2>
+  <h3>Install</h3>
+  <ol>
+    <li>Download <code>native-logging-demos.cgt</code> from the add-on gallery.</li>
+    <li>In Code on the Go, open <em>Preferences &rarr; Extensions Manager</em> and switch to the
+      <strong>Templates</strong> tab.</li>
+    <li>Tap <strong>+</strong>, browse to the downloaded <code>.cgt</code> and select it.</li>
+    <li>A dialog lists the two templates. Tap <strong>Install</strong>.</li>
+  </ol>
+
+  <h3>Create and run a demo</h3>
+  <ol>
+    <li>Open <strong>New Project</strong> and pick <strong>Native Log Demo (C)</strong> or
+      <strong>Native Log Demo (C++)</strong>.</li>
+    <li>Enter an app name and package name, choose Kotlin or Java, and tap <strong>Create</strong>.</li>
+    <li>Run the debug build.</li>
+    <li>In the app, tap <strong>Write to App Logs</strong>.</li>
+    <li>Open <strong>App Logs</strong> in Code on the Go and type the tag in its filter box.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Why not <code>printf</code>?</strong> Android throws away an app's standard output, so
+    <code>printf</code> and <code>std::cout</code> never reach App Logs. Write through
+    <code>&lt;android/log.h&gt;</code> instead, as these demos do.
+  </div>
+</section>
+
+<section id="limitations">
+  <h2>Limitations</h2>
+  <ul>
+    <li>The demos do not log at the fatal level. App Logs does not recognise it and shows such a
+      line as raw text.</li>
+    <li>A release build writes the same lines to the Android log, but App Logs does not receive them.</li>
+  </ul>
+</section>
+
+<footer>
+  Native Logging Demos &middot; Version 1.0.0 &middot; org.appdevforall.nativeloggingdemos
+</footer>
+
+</body>
+</html>
