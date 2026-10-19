@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom Keyboard</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #111111;
+    --muted: #555555;
+    --accent: #0553b1;
+    --accent-light: #eaf2fc;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: var(--muted); margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Custom Keyboard</h1>
+  <p class="subtitle">A starter project for an Android keyboard in your own language</p>
+  <div class="meta">Version 1.0.0 &middot; Author: James Turner &middot; Template bundle: <code>org.appdevforall.customkeyboard</code></div>
+</header>
+
+<section id="overview">
+  <h2>Overview</h2>
+  <p>
+    Millions of people speak languages that the keyboards on their phones do not support. This
+    template adds a <strong>Custom Keyboard</strong> project to Code on the Go's New Project screen.
+    It creates a complete Android keyboard that builds and runs on the device, with English and
+    Hindi layouts to start from.
+  </p>
+  <p>
+    Each language is a JSON file you edit. To support a new language, write its layout; the
+    Kotlin code does not change.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>What the keyboard does</h2>
+  <ul>
+    <li>Letter, shift and symbols pages, with caps lock on a double-tap of shift.</li>
+    <li>Long-press a key for its alternatives, such as accented letters or nukta forms.</li>
+    <li>Keys that type several code points, as conjuncts such as <code>क्ष</code> need.</li>
+    <li>An enter key that shows what it will do: Send, Search, Go, Next or Done.</li>
+    <li>Capitals at the start of a sentence, where the layout and the text field want them.</li>
+    <li>Every key readable by TalkBack. Keys grow with the system font size.</li>
+    <li>A setup screen that walks the user through turning the keyboard on and choosing it.</li>
+  </ul>
+</section>
+
+<section id="usage">
+  <h2>Usage</h2>
+  <h3>Install</h3>
+  <ol>
+    <li>Download <code>custom-keyboard.cgt</code> from the add-on gallery.</li>
+    <li>In Code on the Go, open <em>Preferences &rarr; Add-ons Manager</em> and switch to the
+      <strong>Templates</strong> tab.</li>
+    <li>Tap <strong>+</strong>, browse to the downloaded <code>.cgt</code> and select it, then tap
+      <strong>Install</strong>.</li>
+  </ol>
+
+  <h3>Create and try a keyboard</h3>
+  <ol>
+    <li>Open <strong>New Project</strong>, pick <strong>Custom Keyboard</strong>, enter an app name
+      and package name, and tap <strong>Create</strong>.</li>
+    <li>Run the project. The setup screen opens.</li>
+    <li>Tap <strong>Open keyboard settings</strong> and switch the keyboard on, then tap
+      <strong>Choose keyboard</strong> and pick it.</li>
+    <li>Type in the <strong>Try it</strong> field. The key beside <strong>?123</strong> changes language.</li>
+  </ol>
+
+  <h3>Add a language</h3>
+  <p>
+    Copy <code>app/src/main/assets/layouts/01-english.json</code>, edit the rows, and run again.
+    The project's <code>README</code> describes every field.
+  </p>
+</section>
+
+<section id="limitations">
+  <h2>Limitations</h2>
+  <ul>
+    <li>No word prediction, dictionary or swipe typing. This is a starting point, not a finished
+      product.</li>
+    <li>The keyboard can type any Unicode text, but other apps draw it with the system font. A
+      script with no font on the device shows as boxes there.</li>
+  </ul>
+</section>
+
+<footer>
+  Custom Keyboard &middot; Version 1.0.0 &middot; org.appdevforall.customkeyboard
+</footer>
+
+</body>
+</html>

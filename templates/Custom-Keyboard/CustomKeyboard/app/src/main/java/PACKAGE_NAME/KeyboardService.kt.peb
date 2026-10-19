@@ -1,0 +1,183 @@
+package ${{PACKAGE_NAME}}
+
+import android.inputmethodservice.InputMethodService
+import android.os.SystemClock
+import android.text.InputType
+import android.view.KeyEvent
+import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import ${{PACKAGE_NAME}}.KeyboardView.Shift
+
+/**
+ * The keyboard. Android starts it when the user picks this keyboard, and calls
+ * [onStartInputView] each time a text field gains focus.
+ *
+ * Never log what the user types: this service sees passwords too.
+ */
+class KeyboardService : InputMethodService(), KeyboardView.Listener {
+
+    private lateinit var layouts: List<KeyboardLayout>
+    private var layoutIndex = 0
+    private var layer = KeyboardLayout.MAIN
+    private var shift = Shift.OFF
+    private var lastShiftTap = 0L
+    private var view: KeyboardView? = null
+
+    private val layout: KeyboardLayout
+        get() = layouts[layoutIndex]
+
+    override fun onCreate() {
+        super.onCreate()
+        layouts = KeyboardLayout.loadAll(this)
+        layoutIndex = prefs().getInt(PREF_LAYOUT, 0).coerceIn(0, layouts.lastIndex)
+    }
+
+    override fun onCreateInputView(): View = KeyboardView(this, this).also { view = it }
+
+    override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        // Number and phone fields open on the symbols layer, where the digits are.
+        val textClass = info.inputType and InputType.TYPE_MASK_CLASS
+        val numeric = textClass == InputType.TYPE_CLASS_NUMBER || textClass == InputType.TYPE_CLASS_PHONE
+        layer = if (numeric && layout.hasLayer(KeyboardLayout.SYMBOLS)) KeyboardLayout.SYMBOLS else KeyboardLayout.MAIN
+        shift = Shift.OFF
+        updateAutoCapitalize()
+        render()
+    }
+
+    override fun onKey(key: Key, output: String) {
+        when (key.type) {
+            KeyType.CHARACTER -> {
+                currentInputConnection?.commitText(output, 1)
+                if (shift == Shift.ONCE) shift = Shift.OFF
+                updateAutoCapitalize()
+            }
+            KeyType.SPACE -> {
+                currentInputConnection?.commitText(" ", 1)
+                updateAutoCapitalize()
+            }
+            KeyType.BACKSPACE -> {
+                deleteBackward()
+                updateAutoCapitalize()
+            }
+            KeyType.ENTER -> {
+                pressEnter()
+                updateAutoCapitalize()
+            }
+            KeyType.SHIFT -> toggleShift()
+            KeyType.SYMBOLS -> layer = KeyboardLayout.SYMBOLS
+            KeyType.LETTERS -> {
+                layer = KeyboardLayout.MAIN
+                shift = Shift.OFF
+            }
+            KeyType.LANGUAGE -> nextLayout()
+        }
+        render()
+    }
+
+    override fun onKeyLongPress(key: Key) {
+        // Long-press on the language key lists every keyboard on the device.
+        if (key.type == KeyType.LANGUAGE) {
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+        }
+    }
+
+    private fun render() {
+        val v = view ?: return
+        val name = if (layer == KeyboardLayout.MAIN && shift != Shift.OFF) KeyboardLayout.SHIFT else layer
+        val next = layouts[(layoutIndex + 1) % layouts.size]
+        v.show(layout.layer(name), layout.heightInRows, shift, enterLabel(), layout.name, next.shortName)
+    }
+
+    // Tap: shift the next letter. Double-tap: caps lock. Tap again: off.
+    private fun toggleShift() {
+        val now = SystemClock.uptimeMillis()
+        shift = when (shift) {
+            Shift.OFF -> Shift.ONCE
+            Shift.ONCE -> if (now - lastShiftTap < DOUBLE_TAP_MS) Shift.LOCKED else Shift.OFF
+            Shift.LOCKED -> Shift.OFF
+        }
+        lastShiftTap = now
+    }
+
+    private fun nextLayout() {
+        if (layouts.size == 1) {
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+            return
+        }
+        layoutIndex = (layoutIndex + 1) % layouts.size
+        prefs().edit().putInt(PREF_LAYOUT, layoutIndex).apply()
+        layer = KeyboardLayout.MAIN
+        shift = Shift.OFF
+        updateAutoCapitalize()
+    }
+
+    // Shift at the start of a sentence, if both the layout and the text field want it.
+    private fun updateAutoCapitalize() {
+        if (!layout.autoCapitalize || layer != KeyboardLayout.MAIN || shift == Shift.LOCKED) return
+        val info = currentInputEditorInfo ?: return
+        val caps = currentInputConnection?.getCursorCapsMode(info.inputType) ?: 0
+        shift = if (caps != 0) Shift.ONCE else Shift.OFF
+    }
+
+    private fun deleteBackward() {
+        val ic = currentInputConnection ?: return
+        if (!ic.getSelectedText(0).isNullOrEmpty()) {
+            ic.commitText("", 1)
+            return
+        }
+        val before = ic.getTextBeforeCursor(2, 0)
+        if (before.isNullOrEmpty()) {
+            // Nothing to delete as text. Some apps, terminals among them, want a key event.
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+            return
+        }
+        // Delete one code point. Devanagari removes a vowel sign before its consonant;
+        // an emoji outside the Basic Multilingual Plane is two UTF-16 units.
+        val pair = before.length == 2 && Character.isSurrogatePair(before[0], before[1])
+        ic.deleteSurroundingText(if (pair) 2 else 1, 0)
+    }
+
+    private fun pressEnter() {
+        val info = currentInputEditorInfo
+        val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
+        if (hasEnterAction(info, action)) {
+            currentInputConnection?.performEditorAction(action)
+        } else {
+            sendKeyChar('\n')
+        }
+    }
+
+    private fun hasEnterAction(info: EditorInfo?, action: Int): Boolean {
+        if (info == null) return false
+        val multiLine = info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
+        val noAction = info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
+        return !multiLine && !noAction &&
+            action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED
+    }
+
+    private fun enterLabel(): String {
+        val info = currentInputEditorInfo
+        val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
+        if (!hasEnterAction(info, action)) return "⏎"
+        return getString(
+            when (action) {
+                EditorInfo.IME_ACTION_GO -> R.string.action_go
+                EditorInfo.IME_ACTION_SEARCH -> R.string.action_search
+                EditorInfo.IME_ACTION_SEND -> R.string.action_send
+                EditorInfo.IME_ACTION_NEXT -> R.string.action_next
+                EditorInfo.IME_ACTION_PREVIOUS -> R.string.action_previous
+                else -> R.string.action_done
+            },
+        )
+    }
+
+    private fun prefs() = getSharedPreferences(PREFS, MODE_PRIVATE)
+
+    private companion object {
+        const val PREFS = "keyboard"
+        const val PREF_LAYOUT = "layout"
+        const val DOUBLE_TAP_MS = 400L
+    }
+}
