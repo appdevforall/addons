@@ -1,38 +1,76 @@
 
-package ${{PACKAGE_NAME}} 
+package ${{PACKAGE_NAME}}
 
+import android.content.Intent
+import android.os.Bundle
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import android.os.Bundle
 import ${{PACKAGE_NAME}}.databinding.ActivityMainBinding
 
+/**
+ * The setup screen. Android does not let an app turn itself on as a keyboard,
+ * so this walks the user through doing it in Settings.
+ */
 class MainActivity : AppCompatActivity() {
 
     private var _binding: ActivityMainBinding? = null
-    
+
     private val binding: ActivityMainBinding
       get() = checkNotNull(_binding) { "Activity has been destroyed" }
-    
+
+    private val imm by lazy { getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inflate and get instance of binding
         _binding = ActivityMainBinding.inflate(layoutInflater)
-
-        // set content view to binding's root
         setContentView(binding.root)
 
-        // Keep content clear of the system bars (edge-to-edge is enforced on API 35+)
+        // Keep content clear of the system bars (edge-to-edge is enforced on API 35+),
+        // and of the keyboard itself, so the "Try it" field scrolls into view above it.
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
             val bars = insets.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
+                    WindowInsetsCompat.Type.ime()
             )
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
+
+        binding.enableButton.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+        }
+        binding.chooseButton.setOnClickListener { imm.showInputMethodPicker() }
     }
-    
+
+    override fun onResume() {
+        super.onResume()
+        updateStatus()
+    }
+
+    // The keyboard picker is a dialog over this activity, so onResume does not run when it closes.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) updateStatus()
+    }
+
+    private fun updateStatus() {
+        val enabled = imm.enabledInputMethodList.any { it.packageName == packageName }
+        val current = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        val selected = current?.startsWith("$packageName/") == true
+        binding.chooseButton.isEnabled = enabled
+        binding.statusText.setText(
+            when {
+                selected -> R.string.status_selected
+                enabled -> R.string.status_enabled
+                else -> R.string.status_disabled
+            },
+        )
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         _binding = null

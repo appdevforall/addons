@@ -131,13 +131,11 @@ tasks.withType<JavaCompile> {
     options.compilerArgs.add("-Xlint:deprecation")
 }
 
-${% if LANGUAGE == 'kotlin' %}
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${{JAVA_TARGET}}"))
     }
 }
-${% endif %} 
 
 
 dependencies {
