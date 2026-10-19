@@ -1,0 +1,196 @@
+// Writing to Code on the Go's App Logs window from C++.
+//
+// App Logs shows what this app writes to the Android log while it runs as a
+// debug build. Anything sent through liblog (<android/log.h>) appears there.
+// std::cout and printf() do not: Android discards an app's standard output.
+//
+// Every line below uses the tag "NativeDemoCpp". Type it into the App Logs
+// filter box to hide everything else.
+
+#include <android/log.h>
+#include <jni.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <iterator>
+#include <map>
+#include <ostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <utility>
+
+namespace logx {
+
+constexpr const char* kTag = "NativeDemoCpp";
+
+enum class Level : int {
+    Verbose = ANDROID_LOG_VERBOSE,
+    Debug = ANDROID_LOG_DEBUG,
+    Info = ANDROID_LOG_INFO,
+    Warn = ANDROID_LOG_WARN,
+    Error = ANDROID_LOG_ERROR,
+};
+
+inline void write(Level level, std::string_view text) {
+    // liblog wants a NUL-terminated string, which a string_view need not be.
+    const std::string line(text);
+    __android_log_write(static_cast<int>(level), kTag, line.c_str());
+}
+
+// Collects a message with operator<< and writes it as one log line when the
+// statement ends, so anything with a stream operator can be logged:
+//
+//     logx::info() << "user " << id << " signed in";
+class Line {
+public:
+    explicit Line(Level level) : level_(level) {}
+    ~Line() { write(level_, stream_.str()); }
+
+    Line(const Line&) = delete;
+    Line& operator=(const Line&) = delete;
+
+    template <typename T>
+    Line& operator<<(const T& value) {
+        stream_ << value;
+        return *this;
+    }
+
+private:
+    Level level_;
+    std::ostringstream stream_;
+};
+
+inline Line verbose() { return Line(Level::Verbose); }
+inline Line debug() { return Line(Level::Debug); }
+inline Line info() { return Line(Level::Info); }
+inline Line warn() { return Line(Level::Warn); }
+inline Line error() { return Line(Level::Error); }
+
+// Logs when a scope starts and how long it took when it ends, however it ends.
+class ScopedTimer {
+public:
+    explicit ScopedTimer(std::string name)
+        : name_(std::move(name)), start_(std::chrono::steady_clock::now()) {
+        debug() << name_ << ": start";
+    }
+
+    ~ScopedTimer() {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start_);
+        debug() << name_ << ": done in " << elapsed.count() << " us";
+    }
+
+    ScopedTimer(const ScopedTimer&) = delete;
+    ScopedTimer& operator=(const ScopedTimer&) = delete;
+
+private:
+    std::string name_;
+    std::chrono::steady_clock::time_point start_;
+};
+
+}  // namespace logx
+
+namespace {
+
+struct Point {
+    int x;
+    int y;
+};
+
+// Giving a type a stream operator is all it takes to log it.
+std::ostream& operator<<(std::ostream& out, const Point& p) {
+    return out << '(' << p.x << ", " << p.y << ')';
+}
+
+void demoLevels() {
+    // ANDROID_LOG_FATAL is left out: App Logs does not recognise the F level
+    // and shows such a line as raw text.
+    logx::verbose() << "Verbose: the finest detail, usually switched off";
+    logx::debug() << "Debug: what a developer wants while testing";
+    logx::info() << "Info: normal progress, such as \"service started\"";
+    logx::warn() << "Warning: something unexpected that the app recovered from";
+    logx::error() << "Error: something failed";
+}
+
+void demoCApi() {
+    // The C calls work unchanged from C++, for code that prefers printf style.
+    __android_log_print(ANDROID_LOG_INFO, logx::kTag, "__android_log_print: %d + %d = %d", 2, 2, 2 + 2);
+}
+
+void demoValues() {
+    const std::map<std::string, int> inventory{{"apples", 3}, {"pears", 0}, {"plums", 12}};
+    logx::debug() << "Logging " << inventory.size() << " inventory entries";
+    for (const auto& [fruit, count] : inventory) {
+        logx::debug() << "  " << fruit << ": " << count;
+    }
+
+    const Point origin{0, 0};
+    const Point target{3, 4};
+    logx::debug() << "Moving from " << origin << " to " << target;
+}
+
+void demoException() {
+    try {
+        const int value = std::stoi("forty-two");
+        logx::info() << "Parsed " << value;
+    } catch (const std::exception& e) {
+        logx::error() << "std::stoi failed: " << e.what();
+    }
+}
+
+void demoThread() {
+    // The TID column in App Logs tells the two threads apart.
+    logx::info() << "Main thread " << gettid() << " starting a worker";
+    std::thread worker([job = 7] {
+        logx::info() << "Worker thread " << gettid() << " running job " << job;
+    });
+    worker.join();
+    logx::info() << "Worker finished";
+}
+
+void runDemo(JNIEnv*, jobject) {
+    const logx::ScopedTimer timer("runDemo");
+
+    logx::info() << "Step 1 of 5: one line at each priority";
+    demoLevels();
+    logx::info() << "Step 2 of 5: the C API from C++";
+    demoCApi();
+    logx::info() << "Step 3 of 5: containers and your own types";
+    demoValues();
+    logx::info() << "Step 4 of 5: reporting an exception";
+    demoException();
+    logx::info() << "Step 5 of 5: logging from another thread";
+    demoThread();
+}
+
+}  // namespace
+
+// Binding the native method here, rather than naming the function
+// Java_<package>_MainActivity_runDemo, works for any package name and
+// fails at load time, not at the first call, if the two sides disagree.
+extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    jclass activity = env->FindClass("${{ PACKAGE_NAME | replace({".": "/"}) }}/MainActivity");
+    if (activity == nullptr) {
+        return JNI_ERR;
+    }
+
+    static const JNINativeMethod methods[] = {
+        {"runDemo", "()V", reinterpret_cast<void*>(runDemo)},
+    };
+    const jint rc = env->RegisterNatives(activity, methods, std::size(methods));
+    env->DeleteLocalRef(activity);
+    if (rc != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    logx::info() << "Library loaded";
+    return JNI_VERSION_1_6;
+}

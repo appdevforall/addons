@@ -1,0 +1,168 @@
+// Writing to Code on the Go's App Logs window from C.
+//
+// App Logs shows what this app writes to the Android log while it runs as a
+// debug build. Anything sent through liblog (<android/log.h>) appears there.
+// printf() and stdout do not: Android discards an app's standard output.
+//
+// Every line below uses the tag "NativeDemoC". Type it into the App Logs
+// filter box to hide everything else.
+
+#include <android/log.h>
+#include <errno.h>
+#include <jni.h>
+#include <pthread.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#define LOG_TAG "NativeDemoC"
+
+// The usual shorthand: one macro per priority, printf-style arguments.
+#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+// Prefixes a message with the function and line that logged it.
+#define LOG_HERE(priority, ...) log_located((priority), __func__, __LINE__, __VA_ARGS__)
+
+// The format attribute makes the compiler check each call's arguments
+// against its format string, as it does for printf.
+__attribute__((format(printf, 4, 5)))
+static void log_located(android_LogPriority priority, const char *func, int line,
+                        const char *fmt, ...) {
+    char message[512];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(message, sizeof message, fmt, args);
+    va_end(args);
+    __android_log_print(priority, LOG_TAG, "%s:%d: %s", func, line, message);
+}
+
+// A wrapper of your own that forwards its arguments with __android_log_vprint.
+__attribute__((format(printf, 1, 2)))
+static void log_step(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    __android_log_vprint(ANDROID_LOG_INFO, LOG_TAG, fmt, args);
+    va_end(args);
+}
+
+static void demo_levels(void) {
+    // ANDROID_LOG_FATAL is left out: App Logs does not recognise the F level
+    // and shows such a line as raw text.
+    LOGV("Verbose: the finest detail, usually switched off");
+    LOGD("Debug: what a developer wants while testing");
+    LOGI("Info: normal progress, such as \"service started\"");
+    LOGW("Warning: something unexpected that the app recovered from");
+    LOGE("Error: something failed");
+}
+
+static void demo_write(void) {
+    // No format string, so a '%' in the text is printed as is.
+    __android_log_write(ANDROID_LOG_INFO, LOG_TAG, "__android_log_write: 100% literal text");
+}
+
+struct reading {
+    const char *sensor;
+    double value;
+    const char *unit;
+};
+
+static void demo_formatting(void) {
+    const struct reading readings[] = {
+        { .sensor = "battery", .value = 87.0, .unit = "%" },
+        { .sensor = "cpu", .value = 41.5, .unit = "C" },
+        { .sensor = "storage", .value = 12.25, .unit = "GiB free" },
+    };
+    const size_t count = sizeof readings / sizeof readings[0];
+
+    LOGD("Logging %zu readings, %zu bytes each", count, sizeof readings[0]);
+    for (size_t i = 0; i < count; i++) {
+        const struct reading *r = &readings[i];
+        LOGD("  [%zu] %-8s %7.2f %s", i, r->sensor, r->value, r->unit);
+    }
+}
+
+static void demo_errno(void) {
+    const char *path = "/no/such/file.txt";
+    FILE *file = fopen(path, "r");
+    if (file == NULL) {
+        // Copy errno at once: the logging call itself may change it.
+        const int err = errno;
+        LOG_HERE(ANDROID_LOG_ERROR, "fopen(\"%s\") failed: %s (errno %d)", path, strerror(err), err);
+        return;
+    }
+    fclose(file);
+}
+
+static void *worker(void *arg) {
+    const int job = *(const int *)arg;
+    LOGI("Worker thread %d running job %d", gettid(), job);
+    return NULL;
+}
+
+static void demo_thread(void) {
+    // The TID column in App Logs tells the two threads apart.
+    LOGI("Main thread %d starting a worker", gettid());
+
+    pthread_t thread;
+    int job = 7;
+    const int rc = pthread_create(&thread, NULL, worker, &job);
+    if (rc != 0) {
+        LOGE("pthread_create failed: %s", strerror(rc));
+        return;
+    }
+    pthread_join(thread, NULL);
+    LOGI("Worker finished");
+}
+
+static void run_demo(JNIEnv *env, jobject thiz) {
+    (void)env;
+    (void)thiz;
+
+    log_step("Step 1 of 5: one line at each priority");
+    demo_levels();
+    log_step("Step 2 of 5: a fixed string");
+    demo_write();
+    log_step("Step 3 of 5: formatted values");
+    demo_formatting();
+    log_step("Step 4 of 5: reporting a failed call");
+    demo_errno();
+    log_step("Step 5 of 5: logging from another thread");
+    demo_thread();
+    LOG_HERE(ANDROID_LOG_INFO, "Demo finished");
+}
+
+// Binding the native method here, rather than naming the function
+// Java_<package>_MainActivity_runDemo, works for any package name and
+// fails at load time, not at the first call, if the two sides disagree.
+JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+    (void)reserved;
+
+    JNIEnv *env;
+    if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    jclass activity = (*env)->FindClass(env, "${{ PACKAGE_NAME | replace({".": "/"}) }}/MainActivity");
+    if (activity == NULL) {
+        return JNI_ERR;
+    }
+
+    static const JNINativeMethod methods[] = {
+        { "runDemo", "()V", (void *)run_demo },
+    };
+    const jint rc = (*env)->RegisterNatives(env, activity, methods,
+                                            sizeof methods / sizeof methods[0]);
+    (*env)->DeleteLocalRef(env, activity);
+    if (rc != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    LOGI("Library loaded");
+    return JNI_VERSION_1_6;
+}

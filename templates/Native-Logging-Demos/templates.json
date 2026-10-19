@@ -1,0 +1,6 @@
+{
+  "templates": [
+    { "path": "NativeLogDemoC" },
+    { "path": "NativeLogDemoCpp" }
+  ]
+}
