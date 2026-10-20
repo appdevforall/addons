@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Animation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #2c5f8a;
+    --accent-light: #e8f0f8;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Build Animation</h1>
+  <p class="subtitle">An animated toolbar icon that shows when Gradle is working</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev for All &middot; Package: <code>org.appdevforall.buildanimation</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#limits">Limits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Build Animation adds a small icon to the end of the editor toolbar that shows whether Gradle
+    is working. A wrench rocks during a build or project sync, then a tick or a cross shows the
+    result for a few seconds. When nothing is building, the icon is a greyed-out wrench.
+  </p>
+  <p>
+    It is aimed at learners: a build that takes a minute on a phone is easier to wait for when
+    something on screen says it is still going. It needs no permissions, reads no files and uses
+    no network.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+  <table>
+    <thead>
+      <tr><th>Build event</th><th>Callback</th><th>Icon</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Build or sync starts</td><td><code>onBuildStarted()</code></td><td>Rocking wrench, <code>avd_build_running</code> (loops)</td></tr>
+      <tr><td>Build succeeds</td><td><code>onBuildFinished()</code></td><td>Tick draws itself, <code>avd_build_succeeded</code></td></tr>
+      <tr><td>Build fails or is cancelled</td><td><code>onBuildFailed(error)</code></td><td>Cross draws and shakes, <code>avd_build_failed</code></td></tr>
+      <tr><td>5 seconds after a result</td><td>&mdash;</td><td>Greyed-out wrench</td></tr>
+    </tbody>
+  </table>
+  <p>Tapping the icon while it is active shows the current status as a short message.</p>
+</section>
+
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+  <ul>
+    <li><code>BuildAnimationPlugin</code> implements <code>IPlugin</code>,
+        <code>UIExtension</code>, <code>DocumentationExtension</code> and
+        <code>BuildStatusListener</code>. Build callbacks arrive on the main thread.</li>
+    <li>Its single <code>ToolbarAction</code> uses <code>iconProvider</code> to pick the drawable
+        for the current state and <code>isEnabledProvider</code> to grey it out when idle. Each state
+        change calls <code>IdeUIService.refreshToolbarActions()</code>, and the host starts any
+        animated drawable it is given. The plugin draws no view of its own.</li>
+    <li><code>BuildAnimationState</code> is a small state machine with no Android dependencies,
+        so it is unit-tested on the JVM. A new build that starts while a result is still showing
+        cancels that result's pending return to idle.</li>
+    <li>The icon is never hidden, only greyed out. The toolbar is end-aligned, so adding or removing
+        an icon would shift every built-in button, and Stop would move out from under the finger
+        that just tapped Run.</li>
+    <li>The result shows for 5 seconds, longer than the IDE's own "Build successful" message,
+        which briefly covers the toolbar.</li>
+    <li>On activation it asks <code>IdeBuildService.isBuildInProgress()</code>, so enabling the
+        plugin mid-build shows the animation straight away. Deactivating or disposing the plugin
+        removes its build listener and cancels any pending timer.</li>
+  </ul>
+</section>
+
+<section id="usage">
+  <h2>4. Usage</h2>
+  <ol>
+    <li>Install the plugin from the Plugin Manager and restart Code on the Go when asked.</li>
+    <li>Open a project. A greyed-out wrench appears at the end of the editor toolbar.</li>
+    <li>Run, build or sync. The wrench rocks until Gradle finishes, then shows a tick or a cross.</li>
+    <li>Long-press the icon for help, including a link to the full in-app guide.</li>
+  </ol>
+  <p>To build the plugin from source:</p>
+  <pre><code>cd plugins/Build-Animation
+../../gradlew assemblePlugin</code></pre>
+  <p>The <code>.cgp</code> lands in <code>build/plugin/</code>.</p>
+</section>
+
+<section id="benefits">
+  <h2>5. Key Benefits</h2>
+  <ul>
+    <li><strong>See build status at a glance</strong> without opening the build output.</li>
+    <li><strong>Never moves your buttons.</strong> The icon keeps its slot, so taps land where you expect.</li>
+    <li><strong>No permissions, no network.</strong> It only listens for build events.</li>
+    <li><strong>Colour-independent.</strong> The result is a shape (tick or cross), and the toolbar
+        tints it to match the light or dark theme.</li>
+    <li><strong>Easy to re-skin.</strong> The animations are vector drawables in
+        <code>src/main/res/drawable/</code>.</li>
+  </ul>
+</section>
+
+<section id="limits">
+  <h2>6. Limits</h2>
+  <ul>
+    <li><strong>Sync animates too.</strong> The IDE reports a project sync to plugins as a build start.</li>
+    <li><strong>Quick Build does not animate.</strong> Quick Build is not reported to plugins yet.</li>
+    <li><strong>Activity, not progress.</strong> The plugin API carries no progress, so the animation is indeterminate.</li>
+    <li>Supports Code on the Go 26.29 through 26.99. 26.29 is the first release with dynamic toolbar icons.</li>
+  </ul>
+</section>
+
+<footer>
+  Build Animation Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.buildanimation
+</footer>
+
+</body>
+</html>
