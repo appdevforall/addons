@@ -97,26 +97,31 @@
 <nav>
   <h2>Contents</h2>
   <ol>
-    <li><a href="#overview">Overview</a></li>
-    <li><a href="#behaviour">Behaviour</a></li>
-    <li><a href="#architecture">How it works</a></li>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
     <li><a href="#limits">Limits</a></li>
-    <li><a href="#building">Building</a></li>
   </ol>
 </nav>
 
 <section id="overview">
-  <h2>1. Overview</h2>
+  <h2>1. Executive Overview</h2>
   <p>
-    Build Animation adds a small icon to the end of the editor toolbar while Gradle runs.
-    A wrench rocks during the build, then a tick or a cross shows the result for a few
-    seconds. When nothing is building the icon is a greyed-out wrench.
+    Build Animation adds a small icon to the end of the editor toolbar that shows whether Gradle
+    is working. A wrench rocks during a build or project sync, then a tick or a cross shows the
+    result for a few seconds. When nothing is building, the icon is a greyed-out wrench.
   </p>
-  <p>It needs no permissions: it only listens for build events and contributes a toolbar icon.</p>
+  <p>
+    It is aimed at learners: a build that takes a minute on a phone is easier to wait for when
+    something on screen says it is still going. It needs no permissions, reads no files and uses
+    no network.
+  </p>
 </section>
 
-<section id="behaviour">
-  <h2>2. Behaviour</h2>
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
   <table>
     <thead>
       <tr><th>Build event</th><th>Callback</th><th>Icon</th></tr>
@@ -128,45 +133,68 @@
       <tr><td>5 seconds after a result</td><td>&mdash;</td><td>Greyed-out wrench</td></tr>
     </tbody>
   </table>
-  <p>Tapping the icon shows the current status as a toast.</p>
+  <p>Tapping the icon while it is active shows the current status as a short message.</p>
 </section>
 
 <section id="architecture">
-  <h2>3. How it works</h2>
+  <h2>3. Technical Architecture</h2>
   <ul>
     <li><code>BuildAnimationPlugin</code> implements <code>IPlugin</code>,
         <code>UIExtension</code>, <code>DocumentationExtension</code> and
-        <code>BuildStatusListener</code>.</li>
+        <code>BuildStatusListener</code>. Build callbacks arrive on the main thread.</li>
     <li>Its single <code>ToolbarAction</code> uses <code>iconProvider</code> to pick the drawable
         for the current state and <code>isEnabledProvider</code> to grey it out when idle. Each state
         change calls <code>IdeUIService.refreshToolbarActions()</code>, and the host starts any
-        animated drawable it is given.</li>
+        animated drawable it is given. The plugin draws no view of its own.</li>
     <li><code>BuildAnimationState</code> is a small state machine with no Android dependencies,
         so it is unit-tested on the JVM. A new build that starts while a result is still showing
         cancels that result's pending return to idle.</li>
     <li>The icon is never hidden, only greyed out. The toolbar is end-aligned, so adding or removing
         an icon would shift every built-in button, and Stop would move out from under the finger
         that just tapped Run.</li>
+    <li>The result shows for 5 seconds, longer than the IDE's own "Build successful" message,
+        which briefly covers the toolbar.</li>
     <li>On activation it asks <code>IdeBuildService.isBuildInProgress()</code>, so enabling the
-        plugin mid-build shows the animation straight away.</li>
+        plugin mid-build shows the animation straight away. Deactivating or disposing the plugin
+        removes its build listener and cancels any pending timer.</li>
+  </ul>
+</section>
+
+<section id="usage">
+  <h2>4. Usage</h2>
+  <ol>
+    <li>Install the plugin from the Plugin Manager and restart Code on the Go when asked.</li>
+    <li>Open a project. A greyed-out wrench appears at the end of the editor toolbar.</li>
+    <li>Run, build or sync. The wrench rocks until Gradle finishes, then shows a tick or a cross.</li>
+    <li>Long-press the icon for help, including a link to the full in-app guide.</li>
+  </ol>
+  <p>To build the plugin from source:</p>
+  <pre><code>cd plugins/Build-Animation
+../../gradlew assemblePlugin</code></pre>
+  <p>The <code>.cgp</code> lands in <code>build/plugin/</code>.</p>
+</section>
+
+<section id="benefits">
+  <h2>5. Key Benefits</h2>
+  <ul>
+    <li><strong>See build status at a glance</strong> without opening the build output.</li>
+    <li><strong>Never moves your buttons.</strong> The icon keeps its slot, so taps land where you expect.</li>
+    <li><strong>No permissions, no network.</strong> It only listens for build events.</li>
+    <li><strong>Colour-independent.</strong> The result is a shape (tick or cross), and the toolbar
+        tints it to match the light or dark theme.</li>
+    <li><strong>Easy to re-skin.</strong> The animations are vector drawables in
+        <code>src/main/res/drawable/</code>.</li>
   </ul>
 </section>
 
 <section id="limits">
-  <h2>4. Limits</h2>
+  <h2>6. Limits</h2>
   <ul>
     <li><strong>Sync animates too.</strong> The IDE reports a project sync to plugins as a build start.</li>
     <li><strong>Quick Build does not animate.</strong> Quick Build is not reported to plugins yet.</li>
     <li><strong>Activity, not progress.</strong> The plugin API carries no progress, so the animation is indeterminate.</li>
-    <li>Requires Code on the Go 26.29 or later, the first release with dynamic toolbar icons.</li>
+    <li>Supports Code on the Go 26.29 through 26.99. 26.29 is the first release with dynamic toolbar icons.</li>
   </ul>
-</section>
-
-<section id="building">
-  <h2>5. Building</h2>
-  <pre><code>cd plugins/Build-Animation
-../../gradlew assemblePlugin</code></pre>
-  <p>The <code>.cgp</code> lands in <code>build/plugin/</code> and installs from the IDE's plugin manager.</p>
 </section>
 
 <footer>

@@ -58,13 +58,19 @@ class BuildAnimationPlugin : IPlugin, UIExtension, DocumentationExtension, Build
     }
 
     override fun deactivate(): Boolean {
-        buildService?.removeBuildStatusListener(this)
-        buildService = null
-        state.dispose()
+        tearDown()
         return true
     }
 
-    override fun dispose() {}
+    // Also run here: the host may dispose without deactivating first.
+    override fun dispose() = tearDown()
+
+    /** Idempotent, so running it from both deactivate() and dispose() is safe. */
+    private fun tearDown() {
+        buildService?.removeBuildStatusListener(this)
+        buildService = null
+        state.dispose()
+    }
 
     override fun onBuildStarted() = state.onStarted()
 

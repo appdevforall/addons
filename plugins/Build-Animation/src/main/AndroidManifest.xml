@@ -33,6 +33,10 @@
             android:name="plugin.min_ide_version"
             android:value="26.29" />
 
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
         <!-- No plugin.permissions: build events and the toolbar need none. -->
 
         <meta-data

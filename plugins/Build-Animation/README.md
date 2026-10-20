@@ -18,7 +18,7 @@ Tap the icon for the current status.
 - One `ToolbarAction` whose `iconProvider` returns the drawable for the current state and whose `isEnabledProvider` greys it out when idle. It is never hidden: the toolbar is end-aligned, so showing or hiding an icon would shift every built-in button. Each state change calls `IdeUIService.refreshToolbarActions()`; the host starts animated drawables itself.
 - `BuildAnimationState` holds the state machine with an injectable `Scheduler`, so it is unit-tested without Android.
 - `order = 1000` puts the icon after every built-in button.
-- Needs no permissions. Requires Code on the Go **26.29**+ (dynamic toolbar icons).
+- Needs no permissions. Supports Code on the Go **26.29** (the first release with dynamic toolbar icons) through 26.99.
 
 ## Limits
 
