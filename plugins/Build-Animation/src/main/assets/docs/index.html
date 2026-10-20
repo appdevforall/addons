@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Animation</title>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #ffffff;
+    color: #000000;
+    line-height: 1.5;
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #999999; padding: 0.4rem; text-align: left; vertical-align: top; }
+  code { font-family: monospace; }
+</style>
+</head>
+<body>
+
+<h1>Build Animation</h1>
+<p>Build Animation puts a small animated icon at the end of the editor toolbar while Gradle is
+working, so you can see at a glance that a build is running and how it ended.</p>
+
+<h2>What you see</h2>
+<table>
+  <tr><th>When</th><th>The icon</th></tr>
+  <tr><td>Nothing is building</td><td>A greyed-out wrench. It stays in place so the other toolbar buttons never move.</td></tr>
+  <tr><td>A build or project sync is running</td><td>A wrench rocks back and forth.</td></tr>
+  <tr><td>The build finished</td><td>A tick draws itself, then the icon greys out again after a few seconds.</td></tr>
+  <tr><td>The build failed or was cancelled</td><td>A cross draws itself and shakes, then the icon greys out again after a few seconds.</td></tr>
+</table>
+<p>Tap the icon to see the current status as a short message.</p>
+
+<h2>Good to know</h2>
+<ul>
+  <li><b>Project sync animates too.</b> Opening or syncing a project runs Gradle, and the IDE
+    reports that to plugins the same way as a build.</li>
+  <li><b>Quick Build does not animate.</b> The IDE does not report Quick Build to plugins yet.</li>
+  <li><b>The animation shows activity, not progress.</b> It cannot tell how far along a build
+    is.</li>
+  <li><b>Turning animations off works.</b> If you turn off animations in Android's
+    accessibility or developer settings, the icon still appears but stays still.</li>
+  <li>If your toolbar is full, the icon may be scrolled out of view at the end.</li>
+</ul>
+
+<h2>Permissions</h2>
+<p>None. The plugin only listens for build events and adds a toolbar icon. It does not read
+your files or use the network.</p>
+
+</body>
+</html>

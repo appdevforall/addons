@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.buildanimation" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Build Animation" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Shows an animated toolbar icon while Gradle builds, then a tick or a cross for the result." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <!-- 26.29 added ToolbarAction.iconProvider, refreshToolbarActions() and the host's
+             auto-start of animated toolbar icons. On an older host the icon would never animate
+             or hide. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.29" />
+
+        <!-- No plugin.permissions: build events and the toolbar need none. -->
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.buildanimation.BuildAnimationPlugin" />
+
+        <!-- Plugin Manager icons (day/night). Required for debug installs. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>
