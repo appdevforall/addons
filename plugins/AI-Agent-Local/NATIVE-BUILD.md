@@ -404,7 +404,7 @@ When contributing changes to the AI plugins:
 2. Verify **ai-core**, **ai-agent-local**, **ai-agent-gemini** and **ai-assistant** work together
 3. Ensure **llama.cpp submodule** updates are documented
 4. Run ProGuard/R8 release build to catch reflection issues
-5. Update this BUILDING.md with any new dependencies or steps
+5. Update this guide with any new dependencies or steps
 
 ---
 

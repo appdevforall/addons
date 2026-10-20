@@ -2,7 +2,7 @@ package ${{PACKAGE_NAME}}
 
 import com.jme3.math.ColorRGBA
 
-enum class TetrominoType(val color: ColorRGBA) {
+enum class PieceType(val color: ColorRGBA) {
     I(ColorRGBA(0f, 0.9f, 0.9f, 1f)),
     O(ColorRGBA(0.9f, 0.9f, 0f, 1f)),
     T(ColorRGBA(0.6f, 0f, 0.9f, 1f)),
@@ -13,44 +13,44 @@ enum class TetrominoType(val color: ColorRGBA) {
 }
 
 // Each rotation state lists the 4 occupied (col, row) cells within a 4x4 bounding box.
-val SHAPES: Map<TetrominoType, List<List<IntArray>>> = mapOf(
-    TetrominoType.I to listOf(
+val SHAPES: Map<PieceType, List<List<IntArray>>> = mapOf(
+    PieceType.I to listOf(
         listOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(3, 1)),
         listOf(intArrayOf(2, 0), intArrayOf(2, 1), intArrayOf(2, 2), intArrayOf(2, 3)),
         listOf(intArrayOf(0, 2), intArrayOf(1, 2), intArrayOf(2, 2), intArrayOf(3, 2)),
         listOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(1, 2), intArrayOf(1, 3))
     ),
-    TetrominoType.O to listOf(
+    PieceType.O to listOf(
         listOf(intArrayOf(1, 0), intArrayOf(2, 0), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(2, 0), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(2, 0), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(2, 0), intArrayOf(1, 1), intArrayOf(2, 1))
     ),
-    TetrominoType.T to listOf(
+    PieceType.T to listOf(
         listOf(intArrayOf(1, 0), intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(1, 2)),
         listOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(1, 2)),
         listOf(intArrayOf(1, 0), intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(1, 2))
     ),
-    TetrominoType.S to listOf(
+    PieceType.S to listOf(
         listOf(intArrayOf(1, 0), intArrayOf(2, 0), intArrayOf(0, 1), intArrayOf(1, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(2, 2)),
         listOf(intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(0, 2), intArrayOf(1, 2)),
         listOf(intArrayOf(0, 0), intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(1, 2))
     ),
-    TetrominoType.Z to listOf(
+    PieceType.Z to listOf(
         listOf(intArrayOf(0, 0), intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(2, 0), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(1, 2)),
         listOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(1, 2), intArrayOf(2, 2)),
         listOf(intArrayOf(1, 0), intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(0, 2))
     ),
-    TetrominoType.J to listOf(
+    PieceType.J to listOf(
         listOf(intArrayOf(0, 0), intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(2, 0), intArrayOf(1, 1), intArrayOf(1, 2)),
         listOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(2, 2)),
         listOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(0, 2), intArrayOf(1, 2))
     ),
-    TetrominoType.L to listOf(
+    PieceType.L to listOf(
         listOf(intArrayOf(2, 0), intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1)),
         listOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(1, 2), intArrayOf(2, 2)),
         listOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(2, 1), intArrayOf(0, 2)),
@@ -58,7 +58,7 @@ val SHAPES: Map<TetrominoType, List<List<IntArray>>> = mapOf(
     )
 )
 
-class Piece(val type: TetrominoType, var rotation: Int = 0, var col: Int = 3, var row: Int = 0) {
+class Piece(val type: PieceType, var rotation: Int = 0, var col: Int = 3, var row: Int = 0) {
 
     fun cells(rot: Int = rotation): List<IntArray> = SHAPES.getValue(type)[rot.mod(4)]
 
