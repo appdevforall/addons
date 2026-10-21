@@ -11,6 +11,7 @@
     <string name="mcp_empty">No servers yet. Add one to give the Agent remote tools.</string>
     <string name="mcp_add_server">Add server</string>
     <string name="mcp_server_tools_summary">%1$d of %2$d tools enabled</string>
+    <string name="mcp_server_url_cleartext">Not connecting: this http:// URL is not on this device. Tap to change it to https://.</string>
     <string name="mcp_cd_server_enabled">Use this server</string>
 
     <!-- Add/edit dialog -->
@@ -42,7 +43,9 @@
     <string name="mcp_name_required">Give the server a name — it also prefixes its tool names.</string>
     <string name="mcp_url_required">Enter the server\'s endpoint URL.</string>
     <string name="mcp_url_scheme_invalid">The URL must start with https:// or http://.</string>
-    <string name="mcp_url_insecure_credentials">A token or extra header cannot be sent to an http:// URL — it would travel in the clear, readable by anyone on the same network. Use https://, or remove the credential.</string>
+    <string name="mcp_url_malformed">That is not a valid URL. Check it for typos, e.g. https://example.com/mcp.</string>
+    <string name="mcp_url_no_host">The URL has no server address after the scheme.</string>
+    <string name="mcp_url_cleartext_off_device">A server that is not on this device needs an encrypted https:// URL — over http:// anyone on the same network could read the traffic. http:// is allowed only for localhost or 127.0.0.1.</string>
     <string name="mcp_clear_credential">Clear stored credential</string>
     <string name="mcp_credential_cleared">The stored token and headers for this server have been removed.</string>
     <string name="mcp_credentials_loading">Still reading this server\'s stored credentials — try again in a moment.</string>
@@ -75,6 +78,7 @@
     <string name="mcp_error_tls">The secure connection to %1$s failed. Check that the URL is https.</string>
     <string name="mcp_error_timeout">%1$s did not answer in time. It may be slow or offline.</string>
     <string name="mcp_error_cancelled">The call to %1$s was cancelled.</string>
+    <string name="mcp_error_cleartext">%1$s uses an http:// URL but is not on this device, so it was not contacted. Change its URL to https:// in MCP server settings.</string>
     <string name="mcp_error_redirect_refused">%1$s redirected the request to another address, so it was not sent — it carries your token. Check the endpoint URL.</string>
     <string name="mcp_error_secret_unreadable">%1$s\'s saved token can no longer be read on this device. Open MCP server settings and enter it again.</string>
     <string name="mcp_error_secret_unavailable">%1$s\'s saved credentials could not be read just now. They are still stored — try again in a moment.</string>

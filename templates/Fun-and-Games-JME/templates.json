@@ -23,7 +23,7 @@
           "dst": "app/libs",
           "sha256": "64978cc0f992001c4605b118dba431f819e6ba898eff066cd53bdec1dbed6c28"
         } ] },
-    { "path": "tetris",
+    { "path": "blockgame",
       "libraries" : [
         {
           "src": "https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-core/3.9.0-stable/jme3-core-3.9.0-stable.jar",

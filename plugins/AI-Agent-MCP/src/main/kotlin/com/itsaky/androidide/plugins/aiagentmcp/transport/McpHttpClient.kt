@@ -240,7 +240,11 @@ open class McpHttpClient(
      * token is checked first: a CR or LF in it would forge a second header, and Save refuses one,
      * so reaching this means a value that predates that check.
      *
+     * A cleartext URL off this device is refused here too, not only on Save: a server saved before
+     * that check existed would otherwise keep sending its session and credentials in the clear.
+     *
      * @throws IOException when the token cannot be put in a header.
+     * @throws McpCleartextException when [url] is `http://` to a server not on this device.
      */
     private fun open(
         url: String,
@@ -248,6 +252,9 @@ open class McpHttpClient(
         token: String,
         headers: List<Pair<String, String>>,
     ): HttpURLConnection {
+        if (McpUrlPolicy.verdict(url) == McpUrlPolicy.Verdict.CleartextOffDevice) {
+            throw McpCleartextException("Refused an http:// URL to a server not on this device.")
+        }
         if (token.isNotBlank() && !McpHeaders.isSendableToken(token)) {
             throw IOException("The stored token cannot be sent: it contains a line break or control character.")
         }

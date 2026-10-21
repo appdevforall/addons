@@ -480,6 +480,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>A server that offers only the older stdio transport cannot be
                 used from a phone at all, and one that offers the deprecated
                 HTTP+SSE transport is not supported here.</p>
+                <p>Use <code>https://</code>. Plain <code>http://</code> is
+                accepted only for a server on this device —
+                <code>localhost</code>, <code>127.0.0.1</code> or
+                <code>[::1]</code>, such as one started in the Terminal — whose
+                traffic never leaves the phone. Anywhere else, the home network
+                included, Save refuses it.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
@@ -494,9 +500,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>It is encrypted with a key held in the Android Keystore, so a
                 copy of the settings file is useless on another device. Leave it
                 empty for a server that needs no token.</p>
-                <p>A token needs an <code>https://</code> endpoint: encryption at
-                rest buys nothing for a credential sent in the clear over shared
-                Wi-Fi, so this plugin refuses that combination on Save.</p>
+                <p>It is never sent in the clear over a network: a server off
+                this device needs an <code>https://</code> URL, and only a
+                server on this device may use <code>http://</code>.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)

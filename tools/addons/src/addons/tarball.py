@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tarfile
 from pathlib import Path
+from typing import NamedTuple
 
 from addons import model
 
@@ -19,7 +20,7 @@ Source for the {name} addon for Code on the Go.
 - Author: {author}
 - Comes from: {source}/tree/main/{directory}
 - License: {license}. The full text is in LICENSE beside this file.
-
+{prerequisites}
 This folder is the project root. Open it in Code on the Go, or build it from a
 desktop:
 
@@ -54,6 +55,16 @@ one command fails:
     ./gradlew downloadAssets
 """
 
+# Stated before the build instructions (design §9.4, R46): a submodule is not
+# copied, so a reader who needs it has to fetch the exact commit themselves.
+SUBMODULE_NOTE = """
+`{path}` is a git submodule and is not in this archive. If you
+need it, clone it into place at the commit this source was published with:
+
+    git clone {url} {path}
+    git -C {path} checkout {commit}
+"""
+
 # Every shared jar is referenced as "../libs/x.jar" (or "../../libs/x.jar")
 # from the addon's place in the repository. Flattening moves the addon to the
 # archive root, so those references have to lose their parent hops.
@@ -63,6 +74,9 @@ PARENT_LIBS = re.compile(r"(?:\.\./)+libs/")
 # shared jars by path; READMEs and HTML documentation describe the repository
 # and stay as they are.
 REWRITTEN = ("build.gradle.kts", "settings.gradle.kts")
+
+# The index mode git gives a submodule: a commit pointer, not a file.
+GITLINK = "160000"
 
 
 def jars_for(addon: Path) -> list[str]:
@@ -74,12 +88,62 @@ def jars_for(addon: Path) -> list[str]:
     return sorted(set(re.findall(r"\.\./libs/([A-Za-z0-9._-]+\.jar)", text)))
 
 
-def tracked_files(root: Path, addon: Path) -> list[str]:
+class IndexEntry(NamedTuple):
+    mode: str
+    object_id: str
+    path: str
+
+    @property
+    def is_submodule(self) -> bool:
+        return self.mode == GITLINK
+
+
+def _index(root: Path, addon: Path) -> list[IndexEntry]:
+    """Every index entry under the addon, submodules included."""
     relative = addon.relative_to(root).as_posix()
     result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--", relative],
+        ["git", "-C", str(root), "ls-files", "--stage", "-z", "--", relative],
         capture_output=True, text=True, check=True)
-    return [line for line in result.stdout.splitlines() if line]
+    entries = []
+    for entry in result.stdout.split("\0"):
+        if entry:
+            info, path = entry.split("\t", 1)
+            mode, object_id, _ = info.split(" ")
+            entries.append(IndexEntry(mode, object_id, path))
+    return entries
+
+
+def submodule_urls(root: Path) -> dict[str, str]:
+    """Submodule path -> URL, from .gitmodules (keyed by path, not name)."""
+    result = subprocess.run(
+        ["git", "-C", str(root), "config", "-f", ".gitmodules",
+         "--get-regexp", r"^submodule\..*\.(path|url)$"],
+        capture_output=True, text=True)
+    # Exit 1 only means no .gitmodules or no match; anything else is a real error
+    if result.returncode not in (0, 1):
+        raise RuntimeError(f"reading .gitmodules failed: {result.stderr.strip()}")
+    fields: dict[str, dict[str, str]] = {}
+    for line in result.stdout.splitlines():
+        key, value = line.split(" ", 1)
+        name, field = key.removeprefix("submodule.").rsplit(".", 1)
+        fields.setdefault(name, {})[field] = value
+    return {f["path"]: f["url"] for f in fields.values() if "path" in f and "url" in f}
+
+
+def _submodule_notes(root: Path, addon: Path, submodules: list[IndexEntry]) -> str:
+    """The clone instructions for each submodule, or "" when there are none."""
+    if not submodules:
+        return ""
+    inside = addon.relative_to(root).as_posix()
+    urls = submodule_urls(root)
+    notes = ""
+    for entry in submodules:
+        if entry.path not in urls:
+            raise RuntimeError(
+                f"{addon.name}: submodule {entry.path} has no url in .gitmodules")
+        notes += SUBMODULE_NOTE.format(path=entry.path[len(inside) + 1:],
+                                       url=urls[entry.path], commit=entry.object_id)
+    return notes
 
 
 def flatten(text: str) -> str:
@@ -107,7 +171,11 @@ def _stage(root: Path, addon: Path, out: Path, meta: dict) -> Path:
     top.mkdir(parents=True)
 
     inside = addon.relative_to(root).as_posix()
-    files = tracked_files(root, addon)
+    entries = _index(root, addon)
+    # A submodule is one entry pointing at a commit, not a file, so there is
+    # nothing to copy. AI-Agent-Local's llama.cpp is the case in point: its
+    # build only needs the committed AAR (see its settings.gradle.kts).
+    files = [entry.path for entry in entries if not entry.is_submodule]
     if not files:
         raise RuntimeError(f"{addon.name}: git tracks no file in this directory")
     # The archive root IS the project root: Code on the Go reads a folder as a
@@ -152,9 +220,12 @@ def _stage(root: Path, addon: Path, out: Path, meta: dict) -> Path:
     if mentions("build.gradle.kts", "downloadAssets"):
         caveats += DOWNLOAD_NOTE
 
+    prerequisites = _submodule_notes(
+        root, addon, [entry for entry in entries if entry.is_submodule])
+
     author = meta.get("author") or {}
     _claim(top, "BUILDING.md", addon.name).write_text(NOTES.format(
-        caveats=caveats,
+        caveats=caveats, prerequisites=prerequisites,
         name=model.display_name(addon.name), directory=inside,
         origin="Community contribution" if meta.get("origin") == "community"
                else "App Dev for All",
