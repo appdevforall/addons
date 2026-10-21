@@ -1,5 +1,5 @@
 {
-  "displayName": "Fun and Games (libGDX)",
+  "displayName": "Fun and Games",
   "templates": [
     { "path": "demo",
       "libraries" : [
