@@ -1,0 +1,30 @@
+# ${{APP_NAME}}
+
+A Rust crate created with Code on the Go.
+
+## Run
+
+Tap **Run app** in the editor toolbar. It runs `cargo run`.
+
+## Test
+
+Tap **Run tests**. It runs `cargo test`, including the unit tests at the bottom of
+`src/main.rs`.
+
+## Format
+
+Tap **Format code** to apply the standard Rust style with `rustfmt`.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  Cargo.toml      # package ${{CRATE_NAME}}
+  src/
+    main.rs       # greet, main, and unit tests
+  README.md
+```
+
+This crate uses only the standard library, so it builds and runs with no network
+connection. Adding a crate under `[dependencies]` needs to be online once, while
+cargo downloads it.

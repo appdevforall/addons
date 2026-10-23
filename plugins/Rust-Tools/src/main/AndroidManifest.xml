@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="Rust Tools"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.appdevforall.rust.plugin" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Rust Tools" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Adds Rust projects to Code On the Go: two templates, cargo run, test, and format actions, highlighting, and rust-analyzer, with the Rust toolchain bundled for offline use on 64-bit ARM." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.41" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure,native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.appdevforall.rust.plugin.RustToolsPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

@@ -1,0 +1,15 @@
+{
+  "summary": "Adds Rust project templates, and builds, runs, tests, and formats them on the device.",
+  "description": "Bundles the Rust toolchain (rustc, cargo, rustfmt, rust-analyzer, and the clang linker) for 64-bit ARM, adds a starter crate and a std::net HTTP server template, highlights .rs files, and puts run, test, and format actions on the editor toolbar for Rust projects. Needs the 64-bit build of Code on the Go and about 600 MB of space.",
+  "tags": [
+    "rust",
+    "cargo",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

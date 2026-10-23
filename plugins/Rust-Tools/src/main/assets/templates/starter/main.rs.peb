@@ -1,0 +1,23 @@
+fn greet(name: &str) -> String {
+    format!("Hello, {name}!")
+}
+
+fn main() {
+    println!("{}", greet("${{APP_NAME}}"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::greet;
+
+    #[test]
+    fn greets_by_name() {
+        let cases = [
+            ("Ada", "Hello, Ada!"),
+            ("Code on the Go", "Hello, Code on the Go!"),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(greet(name), expected);
+        }
+    }
+}

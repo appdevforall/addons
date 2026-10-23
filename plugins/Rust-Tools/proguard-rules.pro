@@ -1,0 +1,2 @@
+-keep class com.appdevforall.rust.plugin.** { *; }
+-keep class com.itsaky.androidide.plugins.** { *; }

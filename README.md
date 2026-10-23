@@ -41,6 +41,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Python-Tools/`](plugins/Python-Tools/) | Adds Python and Flask project templates, and runs them. |
 | [`plugins/Rainbow-Brackets/`](plugins/Rainbow-Brackets/) | Colours brackets by depth so pairs are easy to see. |
 | [`plugins/Random-XKCD/`](plugins/Random-XKCD/) | Shows xkcd comics in the editor's bottom sheet. |
+| [`plugins/Rust-Tools/`](plugins/Rust-Tools/) | Adds Rust project templates, and builds, runs, and tests them on 64-bit ARM. |
 | [`plugins/Sketch-to-UI/`](plugins/Sketch-to-UI/) | Turns a drawing or screenshot into an Android layout. |
 | [`plugins/Speech-to-Text/`](plugins/Speech-to-Text/) | Dictates code and text into the editor with your voice. |
 | [`plugins/Vector-Search/`](plugins/Vector-Search/) | Searches the project by meaning, not only by exact text. |

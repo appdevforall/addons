@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rust Tools - Commands</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>Rust Tools</h1>
+<p class="lede">Build, run, test, and format Rust programs on the device, straight from the editor toolbar.</p>
+
+<p>Rust Tools adds two project templates and four toolbar commands. The commands appear only while a
+Rust project is open; in a Java, Kotlin, or Android project the toolbar is left alone. Because Gradle
+plays no part in a Rust project, the Gradle actions (Quick Run, Sync, Debug, Run Tasks, Launch App)
+are hidden while you work in one.</p>
+
+<div class="callout">
+<p>A project counts as Rust when its root holds a <code>Cargo.toml</code> or any <code>.rs</code>
+file, and no Gradle build script.</p>
+</div>
+
+<h2>Getting the Rust toolchain</h2>
+<p>The Rust toolchain ships inside the plugin: <code>rustc</code>, <code>cargo</code>,
+<code>rustfmt</code>, <code>rust-analyzer</code>, the standard library and its source, and the clang
+and lld linker. The first time the plugin activates it unpacks them into its own private directory -
+no download and no network. It takes about 600 MB on the device and happens once.</p>
+<div class="callout">
+<p>The toolchain is built for 64-bit ARM (<code>arm64-v8a</code>) only, so Rust Tools needs the
+64-bit build of Code on the Go. On the 32-bit build the plugin tells you so and adds no
+commands.</p>
+</div>
+
+<h2>The commands</h2>
+<table>
+  <tr><th>Command</th><th>What it runs</th><th>Stopped after</th></tr>
+  <tr><td><a href="#run-app">Run app</a></td><td><code>cargo run</code></td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-current-file">Run current file</a></td><td><code>rustc</code> on the open file, then the binary</td><td>30 minutes</td></tr>
+  <tr><td><a href="#format-code">Format code</a></td><td><code>cargo fmt</code></td><td>5 minutes</td></tr>
+  <tr><td><a href="#run-tests">Run tests</a></td><td><code>cargo test</code></td><td>15 minutes</td></tr>
+</table>
+<p>Every command streams its output into the <b>Build Output</b> panel at the bottom of the editor,
+and the panel opens itself when a command starts. While a command is running its toolbar button
+turns into a Cancel button: tap it to stop the process.</p>
+
+<h3 id="run-app">Run app</h3>
+<p>Runs <code>cargo run</code> in the project root. Cargo compiles the crate and then replaces itself
+with your program, so the process the IDE tracks is your program and Cancel really stops it - which
+matters most for a server.</p>
+<p>Build output goes to the plugin's private directory, not to a <code>target</code> folder in your
+project. Android does not let programs start from the device's shared storage, where your projects
+live, and builds there are also slower.</p>
+
+<h3 id="run-current-file">Run current file</h3>
+<p>Compiles exactly the <code>.rs</code> file open in the editor with <code>rustc</code> and runs
+it - useful for a scratch program that is not part of the crate. Open a <code>.rs</code> file before
+tapping it.</p>
+<p>A single-file build sees only the file you point it at, so it needs a <code>main</code> function
+and cannot use other modules or crates. For anything larger, use <b>Run app</b>.</p>
+
+<h3 id="format-code">Format code</h3>
+<p>Runs <code>cargo fmt</code>, which rewrites every <code>.rs</code> file in the crate to the
+standard Rust style. It works on the files on disk, so save your changes first. A
+<code>rustfmt.toml</code> in the project root adjusts the style.</p>
+
+<h3 id="run-tests">Run tests</h3>
+<p>Runs <code>cargo test</code>: unit tests, integration tests in <code>tests/</code>, and the
+examples in documentation comments. The test runner is part of the toolchain, so tests work
+offline.</p>
+
+<h2>Editing</h2>
+<ul>
+  <li><b>Syntax highlighting</b> for <code>.rs</code> files, from a tree-sitter grammar.</li>
+  <li><b>Completion, diagnostics, go to definition, references, and formatting</b> from
+  rust-analyzer, which starts the first time you open a <code>.rs</code> file.</li>
+</ul>
+
+<h2>Crates and the network</h2>
+<p>Both templates use only the standard library, so they build, run, and test with no connection.
+Adding a crate under <code>[dependencies]</code> in <code>Cargo.toml</code> needs a connection once,
+while cargo downloads it from crates.io; after that it builds offline.</p>
+
+<h2>The templates</h2>
+<p><b>Rust Starter</b> is a minimal crate: a <code>greet</code> function, a <code>main</code> that
+calls it, and a unit test so <b>Run tests</b> has something to run on the first tap.</p>
+<p><b>Rust HTTP Server</b> is a <code>std::net</code> server with an HTML landing page and a JSON
+<code>/api/status</code> route, one thread per connection, and read and write timeouts. Run it and
+open <code>http://localhost:8080</code> in a browser on the same device.</p>
+<p>Both ask for a crate name when you create them - what goes on the <code>name</code> line of
+<code>Cargo.toml</code>. Use lowercase letters, digits, and underscores.</p>
+
+</body>
+</html>

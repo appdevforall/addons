@@ -1,0 +1,107 @@
+use std::io::{self, BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+const APP_NAME: &str = "${{APP_NAME}}";
+const PORT: u16 = ${{PORT}};
+
+fn main() -> io::Result<()> {
+    let listener = TcpListener::bind(("0.0.0.0", PORT))?;
+    println!("{APP_NAME} listening on http://localhost:{PORT}");
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                thread::spawn(move || {
+                    if let Err(e) = handle(stream) {
+                        eprintln!("request failed: {e}");
+                    }
+                });
+            }
+            Err(e) => eprintln!("connection failed: {e}"),
+        }
+    }
+    Ok(())
+}
+
+fn handle(mut stream: TcpStream) -> io::Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut request_line = String::new();
+    reader.read_line(&mut request_line)?;
+    loop {
+        let mut header = String::new();
+        if reader.read_line(&mut header)? == 0 || header.trim().is_empty() {
+            break;
+        }
+    }
+
+    let path = request_line.split_whitespace().nth(1).unwrap_or("/");
+    let (status, content_type, body) = match path {
+        "/" => ("200 OK", "text/html; charset=utf-8", index_page()),
+        "/api/status" => ("200 OK", "application/json", status_json()),
+        _ => (
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            String::from("Not found\n"),
+        ),
+    };
+
+    write!(
+        stream,
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )?;
+    stream.flush()
+}
+
+fn status_json() -> String {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default();
+    format!(
+        "{{\"app\":\"{}\",\"ok\":true,\"unix_time\":{seconds}}}\n",
+        json_escape(APP_NAME)
+    )
+}
+
+fn json_escape(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn index_page() -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{APP_NAME}</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 34rem; padding: 0 1rem; line-height: 1.6; }}
+  code {{ background: #f2f2f2; padding: 0.1rem 0.35rem; border-radius: 3px; }}
+</style>
+</head>
+<body>
+<h1>{APP_NAME}</h1>
+<p>Your Rust server is running. Try <a href="/api/status"><code>/api/status</code></a>.</p>
+<p>Edit <code>src/main.rs</code>, then tap <b>Run app</b> again to restart.</p>
+</body>
+</html>
+"#
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::json_escape;
+
+    #[test]
+    fn escapes_quotes_and_backslashes() {
+        assert_eq!(json_escape(r#"a "b" \c"#), r#"a \"b\" \\c"#);
+    }
+}

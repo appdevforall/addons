@@ -1,0 +1,32 @@
+# ${{APP_NAME}}
+
+A Rust HTTP server created with Code on the Go, using only `std::net`.
+
+## Run
+
+Tap **Run app** in the editor toolbar, then open
+`http://localhost:${{PORT}}` in a browser on the same device. Tap **Cancel Run app**
+to stop the server.
+
+| Route | Returns |
+|---|---|
+| `/` | An HTML page |
+| `/api/status` | A JSON status object |
+
+## Test
+
+Tap **Run tests** to run `cargo test`.
+
+## Project structure
+
+```
+${{APP_NAME}}/
+  Cargo.toml      # package ${{CRATE_NAME}}
+  src/
+    main.rs       # listener, request handling, and routes
+  README.md
+```
+
+Each connection is handled on its own thread with read and write timeouts. The
+crate uses only the standard library, so it builds and runs with no network
+connection.

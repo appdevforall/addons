@@ -1,0 +1,6 @@
+/target
+Cargo.lock.orig
+*.rs.bk
+.env
+release.keystore
+release.properties
