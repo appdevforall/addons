@@ -14,16 +14,19 @@ package org.appdevforall.maps.slicer
  */
 internal object Hilbert {
 
+    /** The deepest zoom the PMTiles v3 tile-id space covers. */
+    private const val MAX_ZOOM = 26
+
     /** Tile ID space accumulator. Tiles at zooms 0..z-1 occupy ids `0..accumulate(z)-1`. */
     fun accumulate(z: Int): Long {
-        require(z in 0..26) { "zoom $z out of range [0, 26]" }
+        require(z in 0..MAX_ZOOM) { "zoom $z out of range [0, $MAX_ZOOM]" }
         // ((1 << 2z) - 1) / 3 in 64-bit arithmetic
         return ((1L shl (2 * z)) - 1L) / 3L
     }
 
     /** Returns the (z, x, y) → tile-id mapping. */
     fun zxyToTileId(z: Int, x: Int, y: Int): Long {
-        require(z in 0..26) { "zoom $z out of range" }
+        require(z in 0..MAX_ZOOM) { "zoom $z out of range" }
         val n = 1 shl z
         require(x in 0..(n - 1) && y in 0..(n - 1)) {
             "tile ($x, $y) out of range at zoom $z (max ${n - 1})"
@@ -34,19 +37,13 @@ internal object Hilbert {
     /** Reverse mapping: tile-id → (z, x, y). Used for sanity tests. */
     fun tileIdToZxy(tileId: Long): Triple<Int, Int, Int> {
         require(tileId >= 0) { "tileId $tileId must be nonnegative" }
-        // Find the zoom level whose accumulator bracket contains tileId.
-        var acc = 0L
+        // Find the zoom level whose accumulator bracket contains tileId. Zoom 26 has no
+        // accumulate(27) to compare against, so its upper bound is checked separately.
         var z = 0
-        while (true) {
-            val nextAcc = accumulate(z + 1)
-            if (tileId < nextAcc) {
-                acc = accumulate(z)
-                break
-            }
-            z++
-            require(z <= 26) { "tileId $tileId implies zoom > 26" }
-        }
+        while (z < MAX_ZOOM && tileId >= accumulate(z + 1)) z++
+        val acc = accumulate(z)
         val n = 1 shl z
+        require(tileId - acc < n.toLong() * n) { "tileId $tileId implies zoom > $MAX_ZOOM" }
         val (x, y) = hilbertDToXy(n, tileId - acc)
         return Triple(z, x, y)
     }
