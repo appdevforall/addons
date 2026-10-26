@@ -1,10 +1,10 @@
 package org.appdevforall.maps.data
 
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.appdevforall.maps.util.AtomicFiles
 import java.io.File
+import org.appdevforall.maps.PluginLog
 
 /**
  * Read/write the per-project "active region" pointer.
@@ -27,7 +27,6 @@ internal object ActiveRegionStore {
      *  can't OOM the panel (CodeRabbit resource-bounds theme). */
     private const val MARKER_MAX_BYTES = 1024L
 
-    private const val TAG = "MapsPlugin.ActiveRegion"
 
     /**
      * Read the currently active regionId for the project, or null when none is
@@ -47,20 +46,16 @@ internal object ActiveRegionStore {
      */
     suspend fun write(projectDir: File, mapsSubpath: String, regionId: String) =
         withContext(Dispatchers.IO) {
-            Log.i(TAG, "write: enter regionId=$regionId projectDir=$projectDir")
             if (!RegionCache.isValidRegionId(regionId)) {
-                Log.w(TAG, "Refusing to write invalid regionId to active.txt: $regionId")
+                PluginLog.warn("Refusing to write invalid regionId to active.txt: $regionId")
                 return@withContext
             }
             val mapsRoot = File(projectDir, mapsSubpath).apply { mkdirs() }
             val dest = File(mapsRoot, ACTIVE_REGION_FILE)
-            Log.i(TAG, "write: about to write $dest")
             runCatching {
                 AtomicFiles.writeText(dest, regionId)
-            }.onSuccess {
-                Log.i(TAG, "write: wrote ok, dest.exists=${dest.exists()} size=${dest.length()}")
             }.onFailure {
-                Log.e(TAG, "write FAILED for dest=$dest", it)
+                PluginLog.error("Writing the active region to $dest failed", it)
             }
         }
 
@@ -75,7 +70,7 @@ internal object ActiveRegionStore {
             val f = File(projectDir, "$mapsSubpath/$name")
             if (f.exists()) {
                 runCatching { f.delete() }
-                    .onFailure { Log.w(TAG, "clear: couldn't delete $name: ${it.message}") }
+                    .onFailure { PluginLog.warn("Clearing the active region: couldn't delete $name", it) }
             }
         }
     }

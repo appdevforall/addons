@@ -23,6 +23,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
+import org.appdevforall.maps.PluginLog
 
 /**
  * Region download coordinator. Writes the canonical cache layout in
@@ -118,10 +119,7 @@ internal object RegionDownloader {
         cacheRoot: suspend () -> File = { RegionCache.rootDir() },
         onProgress: ProgressListener = ProgressListener { _, _, _ -> },
     ): File {
-        android.util.Log.i(
-            "RegionDownloader",
-            "download: regionId=$regionId bbox=$bbox z=$zoomMin..$zoomMax",
-        )
+        PluginLog.info("download: regionId=$regionId bbox=$bbox z=$zoomMin..$zoomMax")
         // The estimate loop populates HttpRangeByteCache; a download re-reads everything so a
         // replaced file cannot pair a cached header with fresh leaves.
         org.appdevforall.maps.slicer.HttpRangeByteCache.clear()
@@ -361,9 +359,5 @@ internal object RegionDownloader {
                 }
             }
         }
-        android.util.Log.i(
-            "RegionDownloader",
-            "basemap copied from bundle ($BUNDLED_BASEMAP_ASSET, $total bytes)",
-        )
     }
 }

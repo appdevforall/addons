@@ -1,7 +1,6 @@
 package org.appdevforall.maps.data
 
 import android.os.Environment
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.appdevforall.maps.domain.RegionId
@@ -9,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import org.appdevforall.maps.util.runCatchingCancellable
+import org.appdevforall.maps.PluginLog
 
 /**
  * On-disk view of `/sdcard/CodeOnTheGo/maps/<region-id>/`.
@@ -220,15 +220,7 @@ internal object RegionCache {
         )
     }
 
-    /**
-     * Defensive logger wrapper. Production calls go to `android.util.Log`;
-     * unit tests run on the JVM where `Log` isn't classloaded, so we
-     * runCatch around it and fall back to stderr.
-     */
-    private fun warn(message: String) {
-        runCatching { Log.w(TAG, message) }
-            .onFailure { System.err.println("$TAG: $message") }
-    }
+    private fun warn(message: String) = PluginLog.warn("$TAG: $message")
 }
 
 /**

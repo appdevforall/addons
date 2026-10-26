@@ -2,6 +2,7 @@ package org.appdevforall.maps.data
 
 import android.content.ContextWrapper
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.ResourceManager
 import java.io.File
 import java.io.IOException
@@ -64,9 +65,22 @@ class RegionDownloaderEndToEndTest {
         override fun openPluginResource(path: String): InputStream = throw UnsupportedOperationException()
     }
 
+    private object SilentLogger : PluginLogger {
+        override val pluginId: String = MapsPlugin.PLUGIN_ID
+        override fun debug(message: String) = Unit
+        override fun debug(message: String, throwable: Throwable) = Unit
+        override fun info(message: String) = Unit
+        override fun info(message: String, throwable: Throwable) = Unit
+        override fun warn(message: String) = Unit
+        override fun warn(message: String, throwable: Throwable) = Unit
+        override fun error(message: String) = Unit
+        override fun error(message: String, throwable: Throwable) = Unit
+    }
+
     private fun installAssets(basemap: ByteArray?) {
         MapsPlugin.pluginContext = object : PluginContext by UnusedPluginContext {
             override val resources: ResourceManager = AssetBundle(basemap)
+            override val logger: PluginLogger = SilentLogger
         }
     }
 

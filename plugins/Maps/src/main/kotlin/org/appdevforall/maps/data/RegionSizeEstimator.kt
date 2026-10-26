@@ -1,6 +1,5 @@
 package org.appdevforall.maps.data
 
-import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,6 +13,7 @@ import org.appdevforall.maps.domain.Bbox
 import org.appdevforall.maps.slicer.PmtilesRegionSlicer
 import org.appdevforall.maps.slicer.SliceEstimateCache
 import org.appdevforall.maps.slicer.TileEntry
+import org.appdevforall.maps.PluginLog
 
 /**
  * Owns the debounced "how big is this region's download?" slicer call for the bbox picker.
@@ -72,7 +72,6 @@ internal class RegionSizeEstimator(
         job?.cancel()
         job = scope.launch {
             delay(ESTIMATE_DEBOUNCE_MS)
-            Log.i(TAG, "Slicer estimate START: url=$tilesUrl bbox=$bbox z=$zoomMin..$zoomMax")
             val startMs = System.currentTimeMillis()
             val tiles = try {
                 // Hard timeout so the user is never stuck on "Calculating…" forever.
@@ -86,7 +85,7 @@ internal class RegionSizeEstimator(
                     ).getOrThrow()
                 }
             } catch (_: TimeoutCancellationException) {
-                Log.w(TAG, "Slicer estimate TIMEOUT after ${elapsed(startMs)}ms — too complex / upstream slow")
+                PluginLog.warn("Slicer estimate timed out after ${elapsed(startMs)} ms")
                 // Same staleness guard as the Done path: a superseded request's
                 // failure must not clobber state for the bbox the user is on now.
                 if (latest == req) onState(State.Failed)
@@ -95,14 +94,10 @@ internal class RegionSizeEstimator(
                 // A newer estimate is already in flight (user moved the bbox); bow out quietly.
                 return@launch
             } catch (e: Throwable) {
-                Log.w(TAG, "Slicer estimate FAILED after ${elapsed(startMs)}ms: ${e.javaClass.simpleName}: ${e.message}")
-                MapsPlugin.pluginContext?.logger?.warn(
-                    "Slicer estimate failed (${e.javaClass.simpleName}): ${e.message}"
-                )
+                PluginLog.warn("Slicer estimate failed (${e.javaClass.simpleName}): ${e.message}")
                 if (latest == req) onState(State.Failed)
                 return@launch
             }
-            Log.i(TAG, "Slicer estimate DONE in ${elapsed(startMs)}ms: ${tiles.size} tiles")
             SliceEstimateCache.put(tilesUrl, bbox, zoomMin, zoomMax, tiles)
             // Only report if the user hasn't moved on to a newer bbox in the meantime.
             if (latest == req) onState(State.Done(tiles))
@@ -117,8 +112,6 @@ internal class RegionSizeEstimator(
     private fun elapsed(startMs: Long) = System.currentTimeMillis() - startMs
 
     companion object {
-        private const val TAG = "RegionSizeEstimator"
-
         /** Debounce delay between a bbox change and the slicer kickoff (ms). */
         private const val ESTIMATE_DEBOUNCE_MS = 300L
 

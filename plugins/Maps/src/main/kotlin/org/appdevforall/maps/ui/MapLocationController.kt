@@ -15,6 +15,7 @@ import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
+import org.appdevforall.maps.PluginLog
 
 /**
  * Owns the GPS-plumbing for [BboxPickerFragment] — the location permission check, the
@@ -133,7 +134,7 @@ class MapLocationController(
                     intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     ctx.startActivity(intent)
                 }.onFailure {
-                    android.util.Log.w("BboxPicker", "Open Settings failed: ${it.message}")
+                    PluginLog.warn("Open Settings failed", it)
                 }
             }
             .setNegativeButton(R.string.maps_location_off_not_now, null)
@@ -169,9 +170,7 @@ class MapLocationController(
         )
         val loc = providers.firstNotNullOfOrNull { provider ->
             runCatching { lm.getLastKnownLocation(provider) }.getOrNull()
-                ?.also { android.util.Log.i("BboxPicker", "LocationManager.$provider: ${it.latitude},${it.longitude}") }
         }
         if (loc != null) onLocationFix(loc.latitude, loc.longitude)
-        else android.util.Log.i("BboxPicker", "all LocationManager providers returned null — staying at fallback")
     }
 }

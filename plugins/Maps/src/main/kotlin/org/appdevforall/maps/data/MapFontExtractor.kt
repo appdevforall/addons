@@ -2,6 +2,7 @@ package org.appdevforall.maps.data
 
 import com.itsaky.androidide.plugins.ResourceManager
 import java.io.File
+import org.appdevforall.maps.PluginLog
 
 /**
  * Extracts bundled glyph PBFs from plugin assets into the app's filesystem cache.
@@ -44,7 +45,7 @@ object MapFontExtractor {
     fun extract(resources: ResourceManager, cacheDir: File): File? {
         val root = File(cacheDir, "maps-plugin-fonts")
         if (!root.exists() && !root.mkdirs()) {
-            android.util.Log.w("BboxPicker", "failed to mkdir $root")
+            PluginLog.warn("Font cache: failed to mkdir $root")
             return null
         }
         var extracted = 0
@@ -57,7 +58,7 @@ object MapFontExtractor {
                 if (dest.exists() && dest.length() > 0) { skipped++; continue }
                 val input = resources.openPluginAsset("fonts/$stack/$range.pbf")
                 if (input == null) {
-                    android.util.Log.w("BboxPicker", "missing asset fonts/$stack/$range.pbf")
+                    PluginLog.warn("Font cache: missing asset fonts/$stack/$range.pbf")
                     continue
                 }
                 runCatching {
@@ -66,15 +67,11 @@ object MapFontExtractor {
                     }
                     extracted++
                 }.onFailure {
-                    android.util.Log.w("BboxPicker", "extract failed: $stack/$range.pbf", it)
+                    PluginLog.warn("Font cache: extract failed for $stack/$range.pbf", it)
                     dest.delete()
                 }
             }
         }
-        android.util.Log.i(
-            "BboxPicker",
-            "ensureFontsExtracted: $extracted new, $skipped cached, root=${root.absolutePath}"
-        )
         return root
     }
 }

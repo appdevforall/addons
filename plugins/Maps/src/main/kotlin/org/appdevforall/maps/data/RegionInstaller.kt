@@ -1,11 +1,11 @@
 package org.appdevforall.maps.data
 
-import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.appdevforall.maps.templates.ProjectMapEmitter
 import java.io.File
+import org.appdevforall.maps.PluginLog
 
 /**
  * Applies a cached region to an open Maps project as a pure **data copy**: copies
@@ -23,7 +23,6 @@ import java.io.File
  */
 internal object RegionInstaller {
 
-    private const val TAG = "MapsPlugin.RegionInstaller"
 
     /**
      * Copy [info]'s data files into [projectDir]'s fixed flat maps assets,
@@ -68,8 +67,7 @@ internal object RegionInstaller {
             val safetyMargin = 1L * 1024L * 1024L
             val usable = File(projectDir, "app").usableSpace
             if (usable in 1 until needed + safetyMargin) {
-                Log.w(
-                    TAG,
+                PluginLog.warn(
                     "Insufficient space to apply region ${info.regionId}: " +
                         "need ${needed + safetyMargin}, have $usable",
                 )
@@ -78,15 +76,12 @@ internal object RegionInstaller {
 
             val result = ProjectMapEmitter.apply(projectDir, canonicalSrc, root, onChunk)
             if (!result.success) {
-                Log.w(TAG, "apply region ${info.regionId} failed: ${result.reason}")
+                PluginLog.warn("apply region ${info.regionId} failed: ${result.reason}")
             }
             result.success
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Log.e to logcat too (the plugin logger only routes to CoGo's own
-            // log file, invisible via `adb logcat`).
-            Log.e(TAG, "applyRegionToProject failed for ${info.regionId}", e)
             logError("applyRegionToProject failed for ${info.regionId}", e)
             false
         }
