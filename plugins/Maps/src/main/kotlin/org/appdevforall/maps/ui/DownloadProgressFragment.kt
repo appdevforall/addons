@@ -123,11 +123,11 @@ class DownloadProgressFragment : Fragment() {
 
         regionNameLabel.text = displayName
         val sourceLabel = when (sourceKind) {
-            SourceKind.IIAB_LAN -> sourceHost ?: "LAN"
+            SourceKind.IIAB_LAN -> sourceHost ?: getString(R.string.maps_download_source_lan)
             SourceKind.INTERNET -> "iiab.switnet.org"
-            else -> "unknown"
+            else -> getString(R.string.maps_download_source_unknown)
         }
-        headerLabel.text = "From $sourceLabel"
+        headerLabel.text = getString(R.string.maps_download_from, sourceLabel)
 
         statusBasemap.text = getString(R.string.maps_download_status_queued)
         statusTiles.text = getString(R.string.maps_download_status_queued)
