@@ -152,6 +152,20 @@ class ProjectMapEmitterTest {
     // ----- containment guard -----
 
     @Test
+    fun `apply reports a maps dir it cannot create instead of failing the copy`() {
+        addMapRegionActivity()
+        val region = makeRegion("lagos", fullRegionFiles)
+        // A plain file where the maps directory belongs makes mkdirs() fail.
+        File(appDir, "src/main/assets").mkdirs()
+        File(appDir, "src/main/assets/maps").writeText("not a directory")
+
+        val result = ProjectMapEmitter.apply(projectDir, region, cacheRoot)
+
+        assertFalse(result.success)
+        assertTrue(result.reason, result.reason!!.startsWith("couldn't create "))
+    }
+
+    @Test
     fun `apply refuses a source outside the cache root`() {
         addMapRegionActivity()
         // Region dir lives OUTSIDE the declared cache root.
