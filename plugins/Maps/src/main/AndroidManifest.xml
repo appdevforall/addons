@@ -47,15 +47,25 @@
             android:value="App Dev For All" />
 
         <!--
-            Minimum compatible IDE version, pinned to the current stable CoGo
-            (26.23, the real YY.WW scheme) as of the 2026-06-04 review. Max is
-            left open (no plugin.max_ide_version) so future CoGo releases aren't
-            rejected. The host's plugin-api currently only enforces that min is
-            non-blank (no hard range gate yet).
+            26.23 is the first release that ships every plugin-api member this plugin calls.
+            The 26.99 cap matches the other plugins in this repo, so all of them move together
+            when Code on the Go starts enforcing the range.
         -->
         <meta-data
             android:name="plugin.min_ide_version"
             android:value="26.23" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- Build provenance, filled in by the plugin builder (see plugins/README.md). -->
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
 
         <!--
             native.code is REQUIRED to make production CoGo's plugin loader
