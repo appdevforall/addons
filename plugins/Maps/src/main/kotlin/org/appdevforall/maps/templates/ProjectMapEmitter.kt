@@ -93,7 +93,9 @@ internal object ProjectMapEmitter {
         if (!canonicalMaps.toPath().startsWith(canonicalApp.toPath())) {
             return EmitResult(success = false, reason = "maps dir escapes project: $canonicalMaps")
         }
-        canonicalMaps.mkdirs()
+        if (!canonicalMaps.isDirectory && !canonicalMaps.mkdirs()) {
+            return EmitResult(success = false, reason = "couldn't create $canonicalMaps")
+        }
 
         // Build the copy list: the required files that exist. A region missing
         // tiles.pmtiles is unusable, so require it.
