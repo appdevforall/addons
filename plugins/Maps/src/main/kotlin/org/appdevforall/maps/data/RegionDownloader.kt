@@ -100,6 +100,7 @@ internal object RegionDownloader {
      * Run the full download into `<cacheRoot>/<regionId>.partial/`; rename
      * atomically to `<regionId>/` on success.
      *
+     * @param cacheRoot resolves the cache directory; tests pass a temp dir.
      * @return the final region directory (NOT the .partial path).
      * @throws IOException on network / disk failures.
      * @throws IllegalArgumentException if [regionId] is malformed.
@@ -114,6 +115,7 @@ internal object RegionDownloader {
         sourceKind: SourceKind = SourceKind.UNKNOWN,
         sourceHost: String? = null,
         sourceVersion: String? = null,
+        cacheRoot: suspend () -> File = { RegionCache.rootDir() },
         onProgress: ProgressListener = ProgressListener { _, _, _ -> },
     ): File {
         android.util.Log.i(
@@ -125,9 +127,9 @@ internal object RegionDownloader {
         org.appdevforall.maps.slicer.HttpRangeByteCache.clear()
         val tilesUrl = resolveTilesUrl(sourceKind, sourceHost)
         return downloadInto(
-            // RegionCache.rootDir() is a suspend, self-enforcing-IO call (does exists()/mkdirs()
-            // on /sdcard on Dispatchers.IO), so it's safe to call from this Main-dispatched scope.
-            cacheRoot = RegionCache.rootDir(),
+            // The default, RegionCache.rootDir(), does its exists()/mkdirs() on Dispatchers.IO,
+            // so it's safe to call from this Main-dispatched scope.
+            cacheRoot = cacheRoot(),
             regionId = regionId,
             displayName = displayName,
             bbox = bbox,
