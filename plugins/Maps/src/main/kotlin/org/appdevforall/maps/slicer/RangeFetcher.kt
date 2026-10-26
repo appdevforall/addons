@@ -7,6 +7,7 @@ import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import org.appdevforall.maps.util.MAPS_TRAFFIC_STATS_TAG
 
 /**
  * Abstraction over "read a byte range from a PMTiles archive". Implementations:
@@ -116,13 +117,6 @@ internal class HttpRangeFetcher(
          * unknown-length bodies are refused rather than buffered.
          */
         const val MAX_200_FALLBACK_BYTES = 32L * 1024L * 1024L
-
-        /**
-         * Socket traffic-stats tag for range fetches. Tagging the thread before
-         * the okhttp call keeps StrictMode's UntaggedSocketViolation quiet and
-         * lets the platform attribute this traffic to the slicer.
-         */
-        private const val THREAD_STATS_TAG = 0x4D41_5053 // "MAPS"
     }
 
     override fun readRange(offset: Long, length: Int): ByteArray {
@@ -134,7 +128,7 @@ internal class HttpRangeFetcher(
             .url(url)
             .header("Range", "bytes=$offset-$end")
             .build()
-        TrafficStats.setThreadStatsTag(THREAD_STATS_TAG)
+        TrafficStats.setThreadStatsTag(MAPS_TRAFFIC_STATS_TAG)
         try {
             client.newCall(req).execute().use { resp ->
                 // 206 is the spec-compliant range response; 200 means the server
