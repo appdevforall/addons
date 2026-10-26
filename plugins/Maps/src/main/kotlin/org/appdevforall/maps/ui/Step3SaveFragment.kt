@@ -210,12 +210,12 @@ class Step3SaveFragment : Fragment() {
         // tapped Next; show "Calculating…" rather than a misleading basemap-only
         // total.
         val totalText = if (sizeBytesEstimate < 0) {
-            "Calculating download size…"
+            getString(R.string.maps_save_total_calculating)
         } else {
             val vectorMb = (sizeBytesEstimate / (1024.0 * 1024.0)).coerceAtLeast(0.0)
             val neMb = 7.0
             val totalMb = vectorMb + neMb
-            "%.1f MB".format(totalMb)
+            getString(R.string.maps_save_total_mb, totalMb)
         }
         setRow(
             R.id.sum_total,

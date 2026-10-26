@@ -359,7 +359,7 @@ class RegionManagerFragment : Fragment(),
                 render(wizard.onEvent(Event.DownloadDone))
                 Snackbar.make(
                     requireView(),
-                    "Region downloaded: $regionId (no project open — open one to use it)",
+                    getString(R.string.maps_download_done_no_project, regionId),
                     Snackbar.LENGTH_LONG,
                 ).show()
                 return@launch
@@ -378,13 +378,13 @@ class RegionManagerFragment : Fragment(),
             val spec = DownloadCompleteMessage.forResult(result, regionId)
             val snackbar = Snackbar.make(
                 requireView(),
-                spec.message,
+                getString(spec.messageRes, spec.messageArg),
                 // Indefinite iff there's an action to take — give the user time
                 // to tap "Apply" instead of racing a timeout.
                 if (spec.showApplyAction) Snackbar.LENGTH_INDEFINITE else Snackbar.LENGTH_LONG,
             )
             if (spec.showApplyAction) {
-                snackbar.setAction("Apply") {
+                snackbar.setAction(R.string.maps_download_apply_action) {
                     applyDownloadedRegionFromSnackbar(projectDir, regionId)
                 }
             }
@@ -410,7 +410,7 @@ class RegionManagerFragment : Fragment(),
                 refresh()
                 Snackbar.make(
                     requireView(),
-                    "Switched active region to: $regionId",
+                    getString(R.string.maps_regions_switched, regionId),
                     Snackbar.LENGTH_SHORT,
                 ).show()
             } else {
@@ -427,7 +427,7 @@ class RegionManagerFragment : Fragment(),
         render(wizard.onEvent(Event.DownloadCancelled))
         Snackbar.make(
             requireView(),
-            "Download cancelled — partial files removed",
+            getString(R.string.maps_download_cancelled),
             Snackbar.LENGTH_SHORT,
         ).show()
     }
@@ -436,7 +436,7 @@ class RegionManagerFragment : Fragment(),
         render(wizard.onEvent(Event.DownloadFailed))
         Snackbar.make(
             requireView(),
-            "Download failed: $message",
+            getString(R.string.maps_download_failed, message),
             Snackbar.LENGTH_LONG,
         ).show()
     }

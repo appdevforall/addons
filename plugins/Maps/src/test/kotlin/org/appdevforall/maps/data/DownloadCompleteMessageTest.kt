@@ -1,5 +1,6 @@
 package org.appdevforall.maps.data
 
+import org.appdevforall.maps.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -8,8 +9,8 @@ import org.junit.Test
 /**
  * Tests for [DownloadCompleteMessage] — the pure
  * `FirstRegionAutoActivator.Result` → post-download Snackbar mapping extracted
- * from `RegionManagerFragment.onDownloadComplete`. Asserts the *exact*
- * user-facing strings: they're the contract the android-qa walks verify.
+ * from `RegionManagerFragment.onDownloadComplete`. Asserts the string resource and its argument
+ * for each branch; the text itself lives in `strings.xml`.
  */
 class DownloadCompleteMessageTest {
 
@@ -19,7 +20,8 @@ class DownloadCompleteMessageTest {
             FirstRegionAutoActivator.Result.Activated(regionId = "lagos", displayName = "Lagos"),
             regionId = "lagos",
         )
-        assertEquals("Region downloaded and applied to project: Lagos", spec.message)
+        assertEquals(R.string.maps_download_done_applied, spec.messageRes)
+        assertEquals("Lagos", spec.messageArg)
         assertFalse(spec.showApplyAction)
     }
 
@@ -29,10 +31,8 @@ class DownloadCompleteMessageTest {
             FirstRegionAutoActivator.Result.NoOpAlreadyActive,
             regionId = "lagos",
         )
-        assertEquals(
-            "Region downloaded: lagos. Project's active region is unchanged.",
-            spec.message,
-        )
+        assertEquals(R.string.maps_download_done_unchanged, spec.messageRes)
+        assertEquals("lagos", spec.messageArg)
         assertTrue("the only branch with a one-tap Apply escape hatch", spec.showApplyAction)
     }
 
@@ -42,7 +42,8 @@ class DownloadCompleteMessageTest {
             FirstRegionAutoActivator.Result.NoOpRegionNotFound,
             regionId = "lagos",
         )
-        assertEquals("Region downloaded but couldn't be located in cache: lagos", spec.message)
+        assertEquals(R.string.maps_download_done_not_found, spec.messageRes)
+        assertEquals("lagos", spec.messageArg)
         assertFalse(spec.showApplyAction)
     }
 
@@ -52,7 +53,8 @@ class DownloadCompleteMessageTest {
             FirstRegionAutoActivator.Result.ApplyFailed(regionId = "lagos", reason = "disk full"),
             regionId = "lagos",
         )
-        assertEquals("Region downloaded; apply failed: disk full", spec.message)
+        assertEquals(R.string.maps_download_done_apply_failed, spec.messageRes)
+        assertEquals("disk full", spec.messageArg)
         assertFalse(spec.showApplyAction)
     }
 }
