@@ -6,6 +6,7 @@ import android.content.res.Resources
 import org.appdevforall.maps.MapsPlugin
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import org.appdevforall.maps.PluginLog
 
 /**
  * Process-wide MapLibre singleton bootstrap, extracted from
@@ -59,10 +60,7 @@ internal object MapLibreBootstrap {
                 WellKnownTileServer.MapLibre,
             )
         } catch (t: Throwable) {
-            android.util.Log.e("MapsPlugin", "MapLibre.getInstance failed", t)
-            MapsPlugin.pluginContext?.logger?.warn(
-                "MapLibre.getInstance failed: ${t.message}"
-            )
+            PluginLog.error("MapLibre.getInstance failed", t)
         }
     }
 }

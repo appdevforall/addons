@@ -482,7 +482,6 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
     private fun applyLocation(lat: Double, lon: Double) {
         if (view == null) return
         selectionModel.applyLocationFix(lat, lon)
-        android.util.Log.i("BboxPicker", "applyLocation: ${selectionModel.anchorLat},${selectionModel.anchorLon}")
         // When GPS resolves, swap to a 50×50 km box centered on the fix, zoomed
         // to ~half the screen width. Skip if editing an existing region (prefill
         // bbox) — a late GPS fix shouldn't clobber the user's saved bounds.
@@ -547,10 +546,6 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
         // default bbox renders as a clearly-visible rectangle. (GPS path uses the
         // fitting math in applyInitialBbox.)
         val worldView = (prefillBbox == null)
-        android.util.Log.i(
-            "BboxPicker",
-            "applyStyleReady: initialBbox=$initialBbox prefill=${prefillBbox != null} worldView=$worldView"
-        )
         applyInitialBbox(map, initialBbox, worldView = worldView)
         if (ContextCompat.checkSelfPermission(
                 requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION
@@ -587,11 +582,6 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
         } else {
             ZoomFit.fitZoom(bbox, mapView.width, GPS_DEFAULT_SCREEN_FRACTION)
         }
-        android.util.Log.i(
-            "BboxPicker",
-            "applyInitialBbox: bbox=$bbox centerLat=$centerLat widthKm=${bbox.widthKm()} " +
-                "worldView=$worldView → zoom=$targetZoom",
-        )
         map.cameraPosition = org.maplibre.android.camera.CameraPosition.Builder()
             .target(LatLng(centerLat, (bbox.west + bbox.east) / 2.0))
             .zoom(targetZoom)
