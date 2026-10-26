@@ -8,6 +8,7 @@ import org.appdevforall.maps.domain.RegionId
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import org.appdevforall.maps.util.runCatchingCancellable
 
 /**
  * On-disk view of `/sdcard/CodeOnTheGo/maps/<region-id>/`.
@@ -88,7 +89,7 @@ internal object RegionCache {
      * as ghost rows. Plain dirs land on a quiet log line, not in the UI.
      */
     suspend fun list(): List<RegionInfo> {
-        val root = runCatching { rootDir() }.getOrNull() ?: return emptyList()
+        val root = runCatchingCancellable { rootDir() }.getOrNull() ?: return emptyList()
         return listFromRoot(root)
     }
 
@@ -122,7 +123,7 @@ internal object RegionCache {
      * canonicalisation catches anything the regex missed (defense in depth).
      */
     suspend fun delete(info: RegionInfo): Boolean {
-        val root = runCatching { rootDir() }.getOrNull() ?: return false
+        val root = runCatchingCancellable { rootDir() }.getOrNull() ?: return false
         return deleteFromRoot(root, info)
     }
 

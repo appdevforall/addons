@@ -3,6 +3,7 @@ package org.appdevforall.maps.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import org.appdevforall.maps.util.runCatchingCancellable
 
 /**
  * Decides — and executes — auto-activation of the **first** region in a
@@ -64,7 +65,7 @@ internal object FirstRegionAutoActivator {
         val existingActive = readActiveSentinel(activeFile)
         // Look up the cache list once — used for both the stale-sentinel
         // check below AND the downloaded-region lookup further down.
-        val cacheEntries = runCatching { RegionCache.listFromRoot(regionsCacheRoot) }
+        val cacheEntries = runCatchingCancellable { RegionCache.listFromRoot(regionsCacheRoot) }
             .getOrNull() ?: emptyList()
         if (!existingActive.isNullOrBlank()) {
             // Verify the named region still exists. If the user deleted the

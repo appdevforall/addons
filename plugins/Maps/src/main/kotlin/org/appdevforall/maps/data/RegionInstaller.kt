@@ -1,6 +1,7 @@
 package org.appdevforall.maps.data
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.appdevforall.maps.templates.ProjectMapEmitter
@@ -80,6 +81,8 @@ internal object RegionInstaller {
                 Log.w(TAG, "apply region ${info.regionId} failed: ${result.reason}")
             }
             result.success
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Log.e to logcat too (the plugin logger only routes to CoGo's own
             // log file, invisible via `adb logcat`).

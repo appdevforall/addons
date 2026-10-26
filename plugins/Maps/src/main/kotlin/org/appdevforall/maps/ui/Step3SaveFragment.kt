@@ -20,6 +20,7 @@ import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.appdevforall.maps.util.runCatchingCancellable
 
 /**
  * Wizard step 3 — Save Region.
@@ -179,7 +180,7 @@ class Step3SaveFragment : Fragment() {
     private fun loadExistingRegionIds() {
         viewLifecycleOwner.lifecycleScope.launch {
             val ids = withContext(Dispatchers.IO) {
-                runCatching { RegionCache.list().map { it.regionId }.toSet() }
+                runCatchingCancellable { RegionCache.list().map { it.regionId }.toSet() }
                     .getOrDefault(emptySet())
             }
             existingRegionIds = ids

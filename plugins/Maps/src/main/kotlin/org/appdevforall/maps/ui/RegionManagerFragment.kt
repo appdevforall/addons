@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import org.appdevforall.maps.util.runCatchingCancellable
 
 /**
  * Host-resolved Fragment for the "Maps" panel. Registered as a
@@ -401,7 +402,7 @@ class RegionManagerFragment : Fragment(),
     private fun applyDownloadedRegionFromSnackbar(projectDir: File, regionId: String) {
         viewLifecycleOwner.lifecycleScope.launch {
             val applied = withContext(Dispatchers.IO) {
-                val info = runCatching { RegionCache.list() }.getOrNull()
+                val info = runCatchingCancellable { RegionCache.list() }.getOrNull()
                     ?.firstOrNull { it.regionId == regionId } ?: return@withContext false
                 projectRegions.applyAndActivate(info, projectDir)
             }
@@ -457,7 +458,7 @@ class RegionManagerFragment : Fragment(),
                 projectRegions.readActiveRegionId(projectDir)
             }
             val priorName = priorActive?.let { activeId ->
-                withContext(Dispatchers.IO) { runCatching { RegionCache.list() }.getOrNull() }
+                withContext(Dispatchers.IO) { runCatchingCancellable { RegionCache.list() }.getOrNull() }
                     ?.firstOrNull { it.regionId == activeId }?.displayName
             }
             val ok = withContext(Dispatchers.IO) {
