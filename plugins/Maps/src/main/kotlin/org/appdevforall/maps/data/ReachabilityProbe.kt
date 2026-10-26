@@ -7,6 +7,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.appdevforall.maps.domain.SourceKind
 import java.net.HttpURLConnection
 import java.net.URL
+import org.appdevforall.maps.util.MAPS_TRAFFIC_STATS_TAG
 
 /**
  * Tells the source picker whether a tile source is reachable, via a lightweight HTTP HEAD.
@@ -52,7 +53,7 @@ internal class ReachabilityProbe(
     private suspend fun probeHead(url: String): Boolean = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
         // Tag the socket so the HEAD probe doesn't trip StrictMode's UntaggedSocketViolation
         // (same fix as RangeFetcher's range fetch).
-        TrafficStats.setThreadStatsTag(PROBE_STATS_TAG)
+        TrafficStats.setThreadStatsTag(MAPS_TRAFFIC_STATS_TAG)
         try {
             runCatching {
                 val conn = URL(url).openConnection() as HttpURLConnection
@@ -74,6 +75,5 @@ internal class ReachabilityProbe(
     companion object {
         const val INTERNET_PROBE_URL = "https://iiab.switnet.org/maps/2/"
         private const val PROBE_TIMEOUT_MS = 6_000L
-        private const val PROBE_STATS_TAG = 0x4D41_5053 // "MAPS"
     }
 }

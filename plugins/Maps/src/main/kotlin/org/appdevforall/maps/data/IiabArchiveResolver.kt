@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.appdevforall.maps.util.MAPS_TRAFFIC_STATS_TAG
 
 /**
  * Resolves the internet source's vector archive name from [IiabCatalog], once per process, so
@@ -42,8 +43,6 @@ internal class IiabArchiveResolver(private val fetchCatalog: suspend () -> Strin
         /** The catalog is a few KB; anything far larger is not the catalog. */
         internal const val MAX_CATALOG_BYTES = 256L * 1024L
 
-        private const val THREAD_STATS_TAG = 0x4D41_5053 // "MAPS"
-
         // The picker waits on this fetch before loading its map, so bound the whole call: the
         // connect and read timeouts alone do not cover DNS or a server that trickles bytes.
         internal val catalogClient =
@@ -63,7 +62,7 @@ internal class IiabArchiveResolver(private val fetchCatalog: suspend () -> Strin
             maxBytes: Long = MAX_CATALOG_BYTES,
         ): String? =
             withContext(Dispatchers.IO) {
-                TrafficStats.setThreadStatsTag(THREAD_STATS_TAG)
+                TrafficStats.setThreadStatsTag(MAPS_TRAFFIC_STATS_TAG)
                 try {
                     client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
                         val body = resp.body ?: return@use null
