@@ -234,4 +234,27 @@ class RangeFetcherCoverageTest {
       f.delete()
     }
   }
+
+  @Test
+  fun file_reads_from_many_threads_each_get_their_own_range() {
+    val f = File.createTempFile("range", ".bin")
+    try {
+      val data = ByteArray(64 * 1024) { (it * 31 + 7).toByte() }
+      f.writeBytes(data)
+      val fetcher = FileRangeFetcher(f)
+      val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+      try {
+        val reads = (0 until 2000).map { i ->
+          val offset = (i * 977L) % (data.size - 512)
+          pool.submit<Boolean> { fetcher.readRange(offset, 512).contentEquals(data.copyOfRange(offset.toInt(), offset.toInt() + 512)) }
+        }
+        assertEquals("reads that returned another range's bytes", 0, reads.count { !it.get() })
+      } finally {
+        pool.shutdown()
+        fetcher.close()
+      }
+    } finally {
+      f.delete()
+    }
+  }
 }

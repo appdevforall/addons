@@ -187,6 +187,8 @@ internal class HttpRangeFetcher(
 internal class FileRangeFetcher(file: File) : RangeFetcher {
     private val raf = RandomAccessFile(file, "r")
 
+    // The slicer reads ranges from several coroutines at once, and seek+read on one file is not atomic.
+    @Synchronized
     override fun readRange(offset: Long, length: Int): ByteArray {
         val buf = ByteArray(length)
         raf.seek(offset)
@@ -199,6 +201,7 @@ internal class FileRangeFetcher(file: File) : RangeFetcher {
         return buf
     }
 
+    @Synchronized
     override fun close() {
         raf.close()
     }
