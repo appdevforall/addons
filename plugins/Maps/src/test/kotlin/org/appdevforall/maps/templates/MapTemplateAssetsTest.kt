@@ -363,6 +363,31 @@ class MapTemplateAssetsTest {
         }
     }
 
+    private val repoManifest =
+        File(templateRoot, "offline-maplibre-repo/repo-manifest.txt").readLines().map { it.trim() }.toSet()
+
+    /** The files a generated Kotlin or Java project resolved from the vendored repo, offline. */
+    private val resolvedFromRepo =
+        javaClass.getResource("/templates/vendored-repo-resolved-files.txt")!!.readText()
+            .lines().filter { it.isNotBlank() && !it.startsWith("#") }
+
+    @Test
+    fun `every file a generated project resolves from the vendored repo ships with the template`() {
+        val missing = resolvedFromRepo.filterNot {
+            it in repoManifest && File(templateRoot, "offline-maplibre-repo/$it").isFile
+        }
+        assertEquals("resolved but not shipped (the manifest decides what is emitted)", emptyList<String>(), missing)
+    }
+
+    @Test
+    fun `the vendored repo carries only the kotlin-stdlib jars a generated project resolves`() {
+        val stdlib = Regex("""^org/jetbrains/kotlin/kotlin-stdlib[^/]*/.*\.jar$""")
+        assertEquals(
+            resolvedFromRepo.filter { stdlib.matches(it) }.toSet(),
+            repoManifest.filter { stdlib.matches(it) }.toSet(),
+        )
+    }
+
     @Test
     fun `old MainActivity and region template assets are gone`() {
         val base = "app/src/main/java/PACKAGE_NAME"
