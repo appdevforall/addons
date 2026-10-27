@@ -1,8 +1,6 @@
+// AGP 9+ compiles Kotlin itself (built-in Kotlin), so there is no kotlin-android plugin here.
 plugins {
     id("com.android.application") version "${{AGP_VERSION}}"
-${% if LANGUAGE == 'kotlin' %}
-    kotlin("android") version "${{KOTLIN_VERSION}}"
-${% endif %}
 }
 
 android {
@@ -33,16 +31,6 @@ android {
         sourceCompatibility = ${{JAVA_SOURCE_COMPAT}}  // resolves to JavaVersion.VERSION_NN
         targetCompatibility = ${{JAVA_TARGET_COMPAT}}  // resolves to JavaVersion.VERSION_NN
     }
-${% if LANGUAGE == 'kotlin' %}
-    kotlinOptions {
-        jvmTarget = "${{JAVA_TARGET}}"
-        // MapLibre 13.1.0 is published with Kotlin 2.2 metadata; the IDE's embedded
-        // Kotlin compiler is older and otherwise rejects it ("module compiled with an
-        // incompatible version of Kotlin"). Skipping the metadata-version check lets
-        // the app compile against MapLibre's Kotlin classes. (ADFA-2436)
-        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
-    }
-${% endif %}
 
     // PMTiles assets must stay uncompressed so MapLibre's loopback HTTP server
     // can random-access seek into them via AssetManager.openFd (ADFA-2436).
@@ -53,6 +41,17 @@ ${% endif %}
         noCompress.add("pbf")
     }
 }
+
+${% if LANGUAGE == 'kotlin' %}
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${{JAVA_TARGET}}"))
+        // MapLibre 13.1.0 is published with newer Kotlin metadata than some IDE releases'
+        // compiler accepts; skipping the check lets the app compile against it. (ADFA-2436)
+        freeCompilerArgs.add("-Xskip-metadata-version-check")
+    }
+}
+${% endif %}
 
 dependencies {
     // Versions aligned to CoGo's bundled offline Maven repo where one exists, so
@@ -66,6 +65,12 @@ dependencies {
     implementation("androidx.cardview:cardview:1.0.0")
     // Material — provides the Material3 app theme (themes.xml parent).
     implementation("com.google.android.material:material:1.9.0")
+
+    constraints {
+        // appcompat 1.6.1 asks for core-ktx 1.2.0. The IDE's bundled repo is searched first and
+        // has only that version's POM, so the build fails; 1.9.0 ships as an AAR there and here.
+        implementation("androidx.core:core-ktx:1.9.0")
+    }
 
     // MapLibre Native — OpenGL ES variant for low-end device compatibility.
     // Using android-sdk-opengl (not android-sdk) because many devices in

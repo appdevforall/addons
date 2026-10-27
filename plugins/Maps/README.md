@@ -86,7 +86,7 @@ cd plugins/Maps
 
 ### Requirements
 - Android API 28+ (Android 9)
-- Minimum IDE version: 26.23
+- Minimum IDE version: 26.38 (the first release that bundles AGP 9, which the generated project needs)
 - Network once, to download a region's tiles (the generated app then runs and builds offline)
 
 ## License

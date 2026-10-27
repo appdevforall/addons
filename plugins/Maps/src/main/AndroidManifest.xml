@@ -47,13 +47,14 @@
             android:value="App Dev For All" />
 
         <!--
-            26.23 is the first release that ships every plugin-api member this plugin calls.
+            26.38 is the first release that bundles AGP 9, which the Offline OSM Map template's
+            generated project needs.
             The 26.99 cap matches the other plugins in this repo, so all of them move together
             when Code on the Go starts enforcing the range.
         -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.23" />
+            android:value="26.38" />
 
         <meta-data
             android:name="plugin.max_ide_version"
