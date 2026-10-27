@@ -243,15 +243,23 @@ class MapTemplateAssetsTest {
 
     @Test
     fun `maplibre module metadata matches the vendored aar`() {
-        // The .module records the AAR's size and hashes; a re-stripped AAR must update both.
+        // A re-stripped AAR must update the size and every digest in every file entry, or the
+        // .module describes a file that is no longer there.
         val aar = File(maplibreDir, "android-sdk-opengl-13.1.0.aar")
         val module = File(maplibreDir, "android-sdk-opengl-13.1.0.module").readText()
-        val sha256 = java.security.MessageDigest.getInstance("SHA-256")
-            .digest(aar.readBytes()).joinToString("") { "%02x".format(it) }
-        val sizes = Regex("\"size\": (\\d+)").findAll(module).map { it.groupValues[1] }.toSet()
-        val hashes = Regex("\"sha256\": \"([0-9a-f]+)\"").findAll(module).map { it.groupValues[1] }.toSet()
-        assertEquals("module size", setOf(aar.length().toString()), sizes)
-        assertEquals("module sha256", setOf(sha256), hashes)
+        val bytes = aar.readBytes()
+        val entries = Regex("\"size\": (\\d+)").findAll(module).map { it.groupValues[1] }.toList()
+        assertTrue("module lists no files", entries.isNotEmpty())
+        assertEquals("module size", entries.map { aar.length().toString() }, entries)
+        val algorithms = mapOf("md5" to "MD5", "sha1" to "SHA-1", "sha256" to "SHA-256", "sha512" to "SHA-512")
+        for ((key, algorithm) in algorithms) {
+            val recorded = Regex("\"$key\": \"([^\"]*)\"").findAll(module).map { it.groupValues[1] }.toList()
+            // This .module carries no sha512; check it only once one is recorded.
+            if (key == "sha512" && recorded.isEmpty()) continue
+            val actual = java.security.MessageDigest.getInstance(algorithm)
+                .digest(bytes).joinToString("") { "%02x".format(it) }
+            assertEquals("module $key", entries.map { actual }, recorded)
+        }
     }
 
     @Test
@@ -336,13 +344,22 @@ class MapTemplateAssetsTest {
     }
 
     @Test
-    fun `generated app docs do not say it is 64-bit only`() {
+    fun `generated app docs say the app runs on both 64-bit and 32-bit ARM`() {
         val docs = listOf(
             asset("README.md.peb"),
             File("src/main/assets/docs/osm-tutorial.html"),
         )
         for (doc in docs) {
-            assertFalse("${doc.name} still says 64-bit only", doc.readText().contains("64-bit ARM phones only"))
+            // Collapse whitespace so a re-wrapped line in the HTML does not hide the phrase.
+            val text = doc.readText().replace(Regex("\\s+"), " ")
+            assertTrue("${doc.name} must say 64-bit and 32-bit ARM", text.contains("64-bit and 32-bit ARM phones"))
+            assertTrue("${doc.name} must name arm64-v8a", text.contains("arm64-v8a"))
+            assertTrue("${doc.name} must name armeabi-v7a", text.contains("armeabi-v7a"))
+            assertFalse(
+                "${doc.name} still says 64-bit ARM only",
+                text.contains(Regex("64-bit ARM[^.]*\\bonly\\b", RegexOption.IGNORE_CASE)),
+            )
+            assertFalse("${doc.name} still says it will not install on 32-bit", text.contains("not install on a 32-bit"))
         }
     }
 
