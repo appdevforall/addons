@@ -17,8 +17,11 @@ internal object IiabCatalog {
     /** The mirror directory every archive in the catalog lives under. */
     const val MIRROR_BASE = "https://iiab.switnet.org/maps/2/"
 
-    /** Used when the catalog cannot be read. Still on the mirror as of 2026-10-14. */
-    const val FALLBACK_VECTOR_ARCHIVE = "openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles"
+    /**
+     * Used when the catalog cannot be read, and always for an IIAB LAN box. The catalog's z00-z14
+     * archive as of 2026-10-27.
+     */
+    const val FALLBACK_VECTOR_ARCHIVE = "openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
     private val VECTOR_ARCHIVE =
         Regex("""openstreetmap-openmaptiles\.(\d{4}-\d{2}-\d{2})\.z00-z14\.pmtiles""")

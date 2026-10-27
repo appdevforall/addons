@@ -33,7 +33,7 @@ import kotlin.system.measureTimeMillis
 class OnlineDownloadThroughputTest {
 
     private val osmVectorUrl =
-        "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles"
+        "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
     @Test
     fun coxs_bazar_z6_z14_downloads_at_or_above_throughput_floor() = runBlocking {

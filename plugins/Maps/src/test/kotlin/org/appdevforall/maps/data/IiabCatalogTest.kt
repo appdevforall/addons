@@ -50,7 +50,7 @@ class IiabCatalogTest {
 
     @Test
     fun `dateOf extracts the archive date and rejects other names`() {
-        assertEquals("2026-04-01", IiabCatalog.dateOf(IiabCatalog.FALLBACK_VECTOR_ARCHIVE))
+        assertEquals("2026-10-01", IiabCatalog.dateOf(IiabCatalog.FALLBACK_VECTOR_ARCHIVE))
         assertNull(IiabCatalog.dateOf("naturalearth-openmaptiles.2025-12-10.z00-z08.pmtiles"))
     }
 
@@ -70,9 +70,11 @@ class IiabCatalogTest {
 
         assertEquals(IiabCatalog.FALLBACK_VECTOR_ARCHIVE, resolver.resolve())
         assertEquals(IiabCatalog.FALLBACK_VECTOR_ARCHIVE, resolver.current())
-        answer = realCatalog
-        assertEquals("openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles", resolver.resolve())
-        assertEquals("openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles", resolver.current())
+        // A date the fallback does not carry, so a resolver that ignored the catalog fails here.
+        val newer = "openstreetmap-openmaptiles.2027-04-01.z00-z14.pmtiles"
+        answer = catalog("${IiabCatalog.MIRROR_BASE}$newer")
+        assertEquals(newer, resolver.resolve())
+        assertEquals(newer, resolver.current())
         resolver.resolve()
         assertEquals("a failed fetch is retried; a successful one is not", 2, calls)
     }

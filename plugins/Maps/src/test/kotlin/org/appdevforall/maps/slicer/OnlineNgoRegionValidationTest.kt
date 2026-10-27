@@ -29,12 +29,12 @@ class OnlineNgoRegionValidationTest {
     /**
      * Public IIAB OSM archive (OpenStreetMap / OpenMapTiles vector).
      *
-     * 2026-04-01 = fallback date used by RegionDownloader; if iiab.switnet.org
+     * 2026-10-01 = fallback date used by RegionDownloader; if iiab.switnet.org
      * has rotated to a newer dated file, this test will return 404 and we'll
      * need to refresh the constant.
      */
     private val osmVectorUrl =
-        "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles"
+        "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
     /** Catalog estimates (low-MB, high-MB), z0-z14 vector. */
     private val ngoRegions = listOf(
