@@ -23,6 +23,7 @@ import org.appdevforall.maps.domain.SourceKind
 import org.appdevforall.maps.domain.ZoomFit
 import org.appdevforall.maps.domain.ZoomLabel
 import org.appdevforall.maps.domain.TileEstimate
+import org.appdevforall.maps.util.runCatchingCancellable
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -346,7 +347,14 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
                     null
                 }
                 // Resolve the current archive before the first estimate builds its URL.
-                if (selectionModel.sourceKind == SourceKind.INTERNET) IiabArchiveResolver.shared.resolve()
+                when (selectionModel.sourceKind) {
+                    SourceKind.INTERNET -> IiabArchiveResolver.shared.resolve()
+                    // A box missing every known archive surfaces as an estimate error instead.
+                    SourceKind.IIAB_LAN -> runCatchingCancellable {
+                        RegionDownloader.resolveTilesUrl(SourceKind.IIAB_LAN, selectionModel.sourceHost)
+                    }
+                    else -> Unit
+                }
                 resolveIiabTilesUrl() to fonts?.absolutePath
             }
             if (view == null) return@launch

@@ -23,6 +23,13 @@ internal object IiabCatalog {
      */
     const val FALLBACK_VECTOR_ARCHIVE = "openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
+    /**
+     * The archive names a LAN box may hold, newest first. A box keeps the build it was installed
+     * with, and boxes installed before IIAB's 2026-10-06 update hold the 2026-04-01 one.
+     */
+    val LAN_VECTOR_ARCHIVES =
+        listOf(FALLBACK_VECTOR_ARCHIVE, "openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles")
+
     private val VECTOR_ARCHIVE =
         Regex("""openstreetmap-openmaptiles\.(\d{4}-\d{2}-\d{2})\.z00-z14\.pmtiles""")
 

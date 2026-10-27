@@ -1,6 +1,7 @@
 package org.appdevforall.maps.data
 
 import android.content.Context
+import android.net.TrafficStats
 import org.appdevforall.maps.domain.Bbox
 import org.appdevforall.maps.domain.SourceKind
 import org.appdevforall.maps.MapsPlugin
@@ -15,15 +16,18 @@ import kotlinx.coroutines.withContext
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 import org.appdevforall.maps.PluginLog
+import org.appdevforall.maps.util.MAPS_TRAFFIC_STATS_TAG
 
 /**
  * Region download coordinator. Writes the canonical cache layout in
@@ -44,7 +48,8 @@ import org.appdevforall.maps.PluginLog
  *  - **Internet** — `https://iiab.switnet.org/maps/2/`:
  *    - `openstreetmap-openmaptiles.<date>.z00-z14.pmtiles` (vector tiles), with the date read
  *      from IIAB's catalog by [IiabArchiveResolver]
- *  - **LAN** — `http://<host>/maps/` with the fallback file name.
+ *  - **LAN** — `http://<host>/maps/` with the newest of [IiabCatalog.LAN_VECTOR_ARCHIVES] the box
+ *    serves, probed by [resolveTilesUrl].
  *  The Natural Earth basemap is copied from the plugin bundle, not fetched.
  */
 internal object RegionDownloader {
@@ -123,11 +128,13 @@ internal object RegionDownloader {
         // The estimate loop populates HttpRangeByteCache; a download re-reads everything so a
         // replaced file cannot pair a cached header with fresh leaves.
         org.appdevforall.maps.slicer.HttpRangeByteCache.clear()
+        // The default, RegionCache.rootDir(), does its exists()/mkdirs() on Dispatchers.IO, so it's
+        // safe to call from this Main-dispatched scope. It runs first so missing storage fails
+        // before the LAN archive probe goes out.
+        val root = cacheRoot()
         val tilesUrl = resolveTilesUrl(sourceKind, sourceHost)
         return downloadInto(
-            // The default, RegionCache.rootDir(), does its exists()/mkdirs() on Dispatchers.IO,
-            // so it's safe to call from this Main-dispatched scope.
-            cacheRoot = cacheRoot(),
+            cacheRoot = root,
             regionId = regionId,
             displayName = displayName,
             bbox = bbox,
@@ -320,19 +327,62 @@ internal object RegionDownloader {
         sourceKind: SourceKind,
         sourceHost: String?,
         resolver: IiabArchiveResolver = IiabArchiveResolver.shared,
-    ): String =
-        base(sourceKind, sourceHost) +
-            if (sourceKind == SourceKind.IIAB_LAN) IiabCatalog.FALLBACK_VECTOR_ARCHIVE
-            else resolver.current()
+    ): String {
+        val base = base(sourceKind, sourceHost)
+        return base +
+            if (sourceKind == SourceKind.IIAB_LAN) {
+                lanArchives[base] ?: IiabCatalog.FALLBACK_VECTOR_ARCHIVE
+            } else {
+                resolver.current()
+            }
+    }
 
-    /** The URL a download reads: internet resolves the current archive first. */
+    /**
+     * The URL a download reads: internet resolves the current archive first, and LAN probes the box
+     * for the newest archive it holds.
+     *
+     * @throws IOException when a LAN box answers for none of [IiabCatalog.LAN_VECTOR_ARCHIVES].
+     */
     internal suspend fun resolveTilesUrl(
         sourceKind: SourceKind,
         sourceHost: String?,
         resolver: IiabArchiveResolver = IiabArchiveResolver.shared,
     ): String {
-        if (sourceKind != SourceKind.IIAB_LAN) resolver.resolve()
+        if (sourceKind == SourceKind.IIAB_LAN) {
+            val base = base(sourceKind, sourceHost)
+            lanArchives[base] = probeLanArchive(base)
+        } else {
+            resolver.resolve()
+        }
         return buildTilesUrl(sourceKind, sourceHost, resolver)
+    }
+
+    /** The archive each LAN base last answered for, so the estimate reads what the download did. */
+    private val lanArchives = ConcurrentHashMap<String, String>()
+
+    /** The first of [IiabCatalog.LAN_VECTOR_ARCHIVES] that [base] serves a one-byte range of. */
+    private suspend fun probeLanArchive(base: String): String =
+        withContext(Dispatchers.IO) {
+            val misses = mutableListOf<String>()
+            for (name in IiabCatalog.LAN_VECTOR_ARCHIVES) {
+                val code = rangeProbe(base + name)
+                if (code == 200 || code == 206) return@withContext name
+                misses += "$name: ${code ?: "no answer"}"
+            }
+            throw IOException("IIAB box at $base has no known vector archive (${misses.joinToString()})")
+        }
+
+    /** HTTP status of a `bytes=0-0` GET on [url], or null if the request failed. */
+    private fun rangeProbe(url: String): Int? {
+        val request = Request.Builder().url(url).header("Range", "bytes=0-0").build()
+        TrafficStats.setThreadStatsTag(MAPS_TRAFFIC_STATS_TAG)
+        return try {
+            httpClient.newCall(request).execute().use { it.code }
+        } catch (e: IOException) {
+            null
+        } finally {
+            TrafficStats.clearThreadStatsTag()
+        }
     }
 
     /**
