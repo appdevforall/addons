@@ -21,12 +21,12 @@ class RegionDownloaderLanArchiveTest {
     private val oldArchive = "openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles"
     private val server = MockWebServer()
 
-    /** Answers a one-byte range for each name in [held], 404 for anything else. */
-    private fun serve(vararg held: String) {
+    /** Answers [code] (a one-byte range by default) for each name in [held], 404 for anything else. */
+    private fun serve(vararg held: String, code: Int = 206) {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse =
                 if (held.any { request.path == "/maps/$it" }) {
-                    MockResponse().setResponseCode(206).setBody("P")
+                    MockResponse().setResponseCode(code).setBody("P")
                 } else {
                     MockResponse().setResponseCode(404)
                 }
@@ -75,6 +75,28 @@ class RegionDownloaderLanArchiveTest {
             assertTrue(message, message.contains("no known vector archive"))
             assertTrue(message, message.contains("$newArchive: 404"))
             assertTrue(message, message.contains("$oldArchive: 404"))
+        }
+    }
+
+    @Test
+    fun `a box that ignores the Range header and sends the whole file still counts as holding it`() {
+        serve(newArchive, code = 200)
+        assertEquals(server.url("/maps/$newArchive").toString(), resolve())
+        assertEquals("bytes=0-0", server.takeRequest().getHeader("Range"))
+    }
+
+    @Test
+    fun `a host that refuses connections fails naming each archive as unanswered`() {
+        serve()
+        val deadHost = host
+        server.shutdown()
+        try {
+            runBlocking { RegionDownloader.resolveTilesUrl(SourceKind.IIAB_LAN, deadHost, IiabArchiveResolver { null }) }
+            fail("expected IOException for a host that answers no probe")
+        } catch (e: IOException) {
+            val message = e.message.orEmpty()
+            assertTrue(message, message.contains("$newArchive: no answer"))
+            assertTrue(message, message.contains("$oldArchive: no answer"))
         }
     }
 }
