@@ -6,9 +6,8 @@ place/street name labels and a recenter-on-me button. This README is the
 project-local Tier-2 doc; for the longer "how OpenStreetMap works" tutorial,
 long-press the **Maps** tab in the editor bottom sheet and tap "OSM + MapLibre tutorial".
 
-**Runs on 64-bit ARM phones only.** The bundled MapLibre library carries only its
-`arm64-v8a` native code, so the app will not install on a 32-bit (`armeabi-v7a`)
-phone.
+**Runs on 64-bit and 32-bit ARM phones.** The bundled MapLibre library carries
+native code for `arm64-v8a` and `armeabi-v7a`. It does not run on x86 emulators.
 
 ## What's where
 

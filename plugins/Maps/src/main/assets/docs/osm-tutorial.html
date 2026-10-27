@@ -186,10 +186,10 @@ support, and the <code>MapRegionActivity</code> substitutes
 <code>pmtiles://http://127.0.0.1:&lt;port&gt;/maps/tiles.pmtiles</code> into the
 style at runtime.</p>
 
-<p>The generated app runs on 64-bit ARM phones only. Its bundled copy of MapLibre
-carries native code for <code>arm64-v8a</code> alone, to keep the offline
-repository small, so the app will not install on a 32-bit
-(<code>armeabi-v7a</code>) phone.</p>
+<p>The generated app runs on 64-bit and 32-bit ARM phones. Its bundled copy of
+MapLibre carries native code for <code>arm64-v8a</code> and
+<code>armeabi-v7a</code>; the x86 libraries are left out to keep the offline
+repository small, so the app does not run on an x86 emulator.</p>
 
 <p>The loopback server has no authentication, so any other app on the phone can
 read from its port while your app is running. That is fine for map tiles, which

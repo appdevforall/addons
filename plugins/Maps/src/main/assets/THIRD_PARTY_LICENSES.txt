@@ -56,6 +56,11 @@ org.maplibre.gl:android-sdk-opengl:13.1.0
   Vector map renderer (OpenGL ES variant). Native PMTiles support.
   License: BSD-2-Clause
   https://github.com/maplibre/maplibre-native/blob/main/LICENSE.md
+  The generated-app template vendors this AAR in
+  templates/region-map/offline-maplibre-repo/. It is the Maven Central
+  artifact (sha1 cf8212d56350d0cef57c132d7c8855afd5ad328d) with jni/x86/ and
+  jni/x86_64/ removed by `zip -d`; arm64-v8a and armeabi-v7a are unchanged.
+  The .module beside it records the size and hashes of the stripped file.
 
 com.squareup.okhttp3:okhttp:4.12.0
   HTTP client for tile range-fetches.

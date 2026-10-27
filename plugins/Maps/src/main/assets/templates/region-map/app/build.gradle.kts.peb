@@ -21,12 +21,11 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // The bundled offline-maplibre-repo ships MapLibre's native lib for
-        // arm64-v8a ONLY (the team's target devices + the on-device build host
-        // are all arm64). Packaging only that ABI keeps the vendored repo small
-        // and avoids a missing-.so failure for the other ABIs. (ADFA-2436 / E13)
+        // The bundled offline-maplibre-repo carries MapLibre's native lib for these
+        // two ABIs only, so the app runs on 64-bit and 32-bit ARM phones. (ADFA-2436)
         ndk {
             abiFilters.add("arm64-v8a")
+            abiFilters.add("armeabi-v7a")
         }
     }
 

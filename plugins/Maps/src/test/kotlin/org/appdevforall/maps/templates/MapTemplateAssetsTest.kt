@@ -224,23 +224,34 @@ class MapTemplateAssetsTest {
         }
     }
 
+    private val maplibreDir =
+        File(templateRoot, "offline-maplibre-repo/org/maplibre/gl/android-sdk-opengl/13.1.0")
+
     @Test
-    fun `vendored maplibre aar is arm64-only`() {
-        // The AAR is stripped to arm64-v8a to keep the vendored repo small; the
-        // app pins abiFilters to arm64 to match.
-        val aar = File(
-            templateRoot,
-            "offline-maplibre-repo/org/maplibre/gl/android-sdk-opengl/13.1.0/android-sdk-opengl-13.1.0.aar",
-        )
+    fun `vendored maplibre aar carries the two ABIs Code on the Go runs on`() {
+        // x86 and x86_64 are removed from the upstream AAR because no phone CoGo runs on uses them.
         val abis = mutableSetOf<String>()
-        java.util.zip.ZipFile(aar).use { zf ->
+        java.util.zip.ZipFile(File(maplibreDir, "android-sdk-opengl-13.1.0.aar")).use { zf ->
             val e = zf.entries()
             while (e.hasMoreElements()) {
                 val name = e.nextElement().name
                 Regex("^jni/([^/]+)/").find(name)?.let { abis.add(it.groupValues[1]) }
             }
         }
-        assertEquals("AAR should carry only arm64-v8a native libs", setOf("arm64-v8a"), abis)
+        assertEquals("AAR native libs", setOf("arm64-v8a", "armeabi-v7a"), abis)
+    }
+
+    @Test
+    fun `maplibre module metadata matches the vendored aar`() {
+        // The .module records the AAR's size and hashes; a re-stripped AAR must update both.
+        val aar = File(maplibreDir, "android-sdk-opengl-13.1.0.aar")
+        val module = File(maplibreDir, "android-sdk-opengl-13.1.0.module").readText()
+        val sha256 = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(aar.readBytes()).joinToString("") { "%02x".format(it) }
+        val sizes = Regex("\"size\": (\\d+)").findAll(module).map { it.groupValues[1] }.toSet()
+        val hashes = Regex("\"sha256\": \"([0-9a-f]+)\"").findAll(module).map { it.groupValues[1] }.toSet()
+        assertEquals("module size", setOf(aar.length().toString()), sizes)
+        assertEquals("module sha256", setOf(sha256), hashes)
     }
 
     @Test
@@ -253,7 +264,7 @@ class MapTemplateAssetsTest {
     }
 
     @Test
-    fun `build gradle aligns deps to the bundled offline repo and pins arm64`() {
+    fun `build gradle aligns deps to the bundled offline repo and packages both ARM ABIs`() {
         val gradle = asset("app/build.gradle.kts.peb").readText()
         // Aligned to the bundled offline repo's versions (E12 enumeration).
         assertTrue("material must align to bundled 1.9.0",
@@ -264,8 +275,20 @@ class MapTemplateAssetsTest {
             gradle.contains("material:1.10.0"))
         assertFalse("must not pin the un-bundled coordinatorlayout 1.2.0",
             gradle.contains("coordinatorlayout:1.2.0"))
-        // arm64 ABI filter matches the arm64-only vendored native lib.
-        assertTrue("must pin arm64-v8a abiFilter", gradle.contains("arm64-v8a"))
+        // The ABI filter matches the native libs the vendored AAR carries.
+        assertTrue("must package arm64-v8a", gradle.contains("abiFilters.add(\"arm64-v8a\")"))
+        assertTrue("must package armeabi-v7a", gradle.contains("abiFilters.add(\"armeabi-v7a\")"))
+    }
+
+    @Test
+    fun `generated app docs do not say it is 64-bit only`() {
+        val docs = listOf(
+            asset("README.md.peb"),
+            File("src/main/assets/docs/osm-tutorial.html"),
+        )
+        for (doc in docs) {
+            assertFalse("${doc.name} still says 64-bit only", doc.readText().contains("64-bit ARM phones only"))
+        }
     }
 
     @Test
