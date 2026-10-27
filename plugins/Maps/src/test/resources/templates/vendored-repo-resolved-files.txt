@@ -5,6 +5,9 @@
 # localMvnRepository.zip (CodeOnTheGo adfa-4931-restack-1018, sha1 a46f061601958668413adf7a654cd23335f2ec59)
 # plus this repo, in both orders; every resolvable :app configuration, plus assembleDebug.
 # Both languages resolve the same files. Re-capture when the template's dependencies change.
+# Re-captured 2026-10-27 at 1c028e8 with every other version dir removed: same 38 files, same
+# full resolved set (1161 entries per run), assembleDebug green in all four runs.
+# A shipped jar or aar missing from this list fails MapTemplateAssetsTest.
 androidx/activity/activity/1.8.1/activity-1.8.1.aar
 androidx/annotation/annotation-experimental/1.4.0/annotation-experimental-1.4.0.aar
 androidx/annotation/annotation-jvm/1.8.2/annotation-jvm-1.8.2.jar
