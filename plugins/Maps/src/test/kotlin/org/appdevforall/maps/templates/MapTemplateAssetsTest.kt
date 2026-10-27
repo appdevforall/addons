@@ -379,12 +379,19 @@ class MapTemplateAssetsTest {
         assertEquals("resolved but not shipped (the manifest decides what is emitted)", emptyList<String>(), missing)
     }
 
+    /** Every jar or aar in the vendored repo, whether listed in the manifest or only present on disk. */
+    private fun shippedBinaries(): Set<String> {
+        val repo = File(templateRoot, "offline-maplibre-repo")
+        val onDisk = repo.walk().filter { it.isFile }.map { it.relativeTo(repo).invariantSeparatorsPath }
+        return (repoManifest + onDisk).filter { it.endsWith(".jar") || it.endsWith(".aar") }.toSortedSet()
+    }
+
     @Test
-    fun `the vendored repo carries only the kotlin-stdlib jars a generated project resolves`() {
-        val stdlib = Regex("""^org/jetbrains/kotlin/kotlin-stdlib[^/]*/.*\.jar$""")
+    fun `the vendored repo carries only the binaries a generated project resolves`() {
         assertEquals(
-            resolvedFromRepo.filter { stdlib.matches(it) }.toSet(),
-            repoManifest.filter { stdlib.matches(it) }.toSet(),
+            "shipped but no generated project resolves it",
+            emptyList<String>(),
+            (shippedBinaries() - resolvedFromRepo.toSet()).toList(),
         )
     }
 
