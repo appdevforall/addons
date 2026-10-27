@@ -1,10 +1,20 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
-// Pre-declaring the AGP version here (apply false) ensures Gradle sets up the AGP classpath
-// before any subproject plugin—including CoGo's internal LogSenderPlugin—is applied.  Without
-// this declaration, LogSenderPlugin's Gradle-decorated class generation fails at configuration
-// time with "com/android/build/api/variant/ApplicationVariant" (ADFA-2436).
+// AGP 9 compiles Kotlin itself, using the Kotlin Gradle plugin on this classpath; the IDE supplies
+// both versions so they always match its offline bundle.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${{KOTLIN_VERSION}}")
+    }
+}
+
+// Pre-declaring AGP here (apply false) puts it on the classpath before CoGo's LogSenderPlugin is
+// applied; without it that plugin fails with "com/android/build/api/variant/ApplicationVariant".
 plugins {
-    id("com.android.application") apply false version "8.11.0"
+    id("com.android.application") apply false version "${{AGP_VERSION}}"
 }
 
 tasks.register<Delete>("clean") {

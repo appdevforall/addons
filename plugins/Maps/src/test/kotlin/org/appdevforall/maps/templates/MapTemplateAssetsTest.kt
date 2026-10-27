@@ -280,6 +280,61 @@ class MapTemplateAssetsTest {
         assertTrue("must package armeabi-v7a", gradle.contains("abiFilters.add(\"armeabi-v7a\")"))
     }
 
+    /** Every version string a `com.android.application` plugin request names in [text]. */
+    private fun agpVersions(text: String): List<String> =
+        Regex("""id\("com\.android\.application"\)[^\n]*?version "([^"]+)"""")
+            .findAll(text)
+            .map { it.groupValues[1] }
+            .toList()
+
+    @Test
+    fun `root and app modules request the host's AGP version, not a hardcoded one`() {
+        // A hardcoded "8.11.0" in the root broke sync once the host bundle moved to AGP 9.3.1.
+        val root = agpVersions(asset("build.gradle.kts.peb").readText())
+        val app = agpVersions(asset("app/build.gradle.kts.peb").readText())
+        assertEquals("root AGP request", listOf("\${{AGP_VERSION}}"), root)
+        assertEquals("app AGP request", listOf("\${{AGP_VERSION}}"), app)
+    }
+
+    @Test
+    fun `root puts the host's Kotlin Gradle plugin on the buildscript classpath`() {
+        // AGP 9's built-in Kotlin compiles with whatever kotlin-gradle-plugin is on the classpath.
+        val root = asset("build.gradle.kts.peb").readText()
+        assertTrue(
+            "root must declare the Kotlin Gradle plugin classpath",
+            root.contains("classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${{KOTLIN_VERSION}}\")"),
+        )
+    }
+
+    @Test
+    fun `app module uses no construct AGP 9 removed`() {
+        val gradle = asset("app/build.gradle.kts.peb").readText()
+        assertFalse("kotlin(\"android\") fails to apply under AGP 9", gradle.contains("kotlin(\"android\")"))
+        assertFalse("org.jetbrains.kotlin.android fails to apply under AGP 9", gradle.contains("org.jetbrains.kotlin.android"))
+        assertFalse("kotlinOptions {} was removed in AGP 9", gradle.contains("kotlinOptions"))
+    }
+
+    @Test
+    fun `kotlin variant configures built-in Kotlin and keeps the metadata-version skip`() {
+        val gradle = asset("app/build.gradle.kts.peb").readText()
+        val kotlinBlock = gradle.substringAfter("kotlin {", missingDelimiterValue = "")
+        assertTrue("app must configure kotlin { compilerOptions }", kotlinBlock.contains("compilerOptions"))
+        assertTrue("jvmTarget must follow the host", kotlinBlock.contains("JvmTarget.fromTarget(\"\${{JAVA_TARGET}}\")"))
+        assertTrue("MapLibre's newer Kotlin metadata needs the skip flag", kotlinBlock.contains("-Xskip-metadata-version-check"))
+    }
+
+    @Test
+    fun `core-ktx is raised to a version that ships as an AAR`() {
+        // appcompat 1.6.1 asks for core-ktx 1.2.0; the host bundle carries only its POM and is
+        // searched first, so the build fails. 1.9.0 ships as an AAR in the bundle and here.
+        val gradle = asset("app/build.gradle.kts.peb").readText()
+        assertTrue("core-ktx must be raised to 1.9.0", gradle.contains("\"androidx.core:core-ktx:1.9.0\""))
+        assertTrue(
+            "core-ktx 1.9.0 AAR must be vendored",
+            File(templateRoot, "offline-maplibre-repo/androidx/core/core-ktx/1.9.0/core-ktx-1.9.0.aar").exists(),
+        )
+    }
+
     @Test
     fun `generated app docs do not say it is 64-bit only`() {
         val docs = listOf(
