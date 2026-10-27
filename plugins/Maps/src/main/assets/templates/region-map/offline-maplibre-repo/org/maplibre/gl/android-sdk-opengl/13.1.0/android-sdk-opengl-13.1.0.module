@@ -49,10 +49,10 @@
         {
           "name": "android-sdk-opengl-13.1.0.aar",
           "url": "android-sdk-opengl-13.1.0.aar",
-          "size": 4514904,
-          "sha256": "59382000d31f014330fb620b9213dcc6e0b0c3d91874f02d4ad3dfd4e7660922",
-          "sha1": "0a6675a63ef15f2f55e547e1713c0aa614a46b69",
-          "md5": "c3e39b4024e15e781b6ba5a12fe9163d"
+          "size": 7608458,
+          "sha256": "87886a85ac417afd4da2e72d422cce7ea5e0ed779b1de8c3865ca22970236f12",
+          "sha1": "0fb90c1f9e75a8d1dce3150605a869f439a6e98e",
+          "md5": "8ef0bec6e44f274ce0366913e0c849c3"
         }
       ]
     },
@@ -223,10 +223,10 @@
         {
           "name": "android-sdk-opengl-13.1.0.aar",
           "url": "android-sdk-opengl-13.1.0.aar",
-          "size": 4514904,
-          "sha256": "59382000d31f014330fb620b9213dcc6e0b0c3d91874f02d4ad3dfd4e7660922",
-          "sha1": "0a6675a63ef15f2f55e547e1713c0aa614a46b69",
-          "md5": "c3e39b4024e15e781b6ba5a12fe9163d"
+          "size": 7608458,
+          "sha256": "87886a85ac417afd4da2e72d422cce7ea5e0ed779b1de8c3865ca22970236f12",
+          "sha1": "0fb90c1f9e75a8d1dce3150605a869f439a6e98e",
+          "md5": "8ef0bec6e44f274ce0366913e0c849c3"
         }
       ]
     }
