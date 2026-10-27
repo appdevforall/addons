@@ -27,7 +27,7 @@ import java.nio.ByteOrder
 class OnDemandRegionSlicingTest {
 
     private val osmVectorUrl =
-        "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles"
+        "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
     @Test
     fun slice_cox_bazar_to_disk() = runBlocking {

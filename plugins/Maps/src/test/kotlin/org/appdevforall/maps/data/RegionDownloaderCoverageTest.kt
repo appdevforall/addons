@@ -183,7 +183,7 @@ class RegionDownloaderCoverageTest {
 
     // ----- buildTilesUrl / base: the pure URL-builder branches -----
 
-    private val tilesFile = "openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles"
+    private val tilesFile = "openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
     @Test
     fun `buildTilesUrl uses the internet base for non-LAN sources`() {
@@ -215,10 +215,11 @@ class RegionDownloaderCoverageTest {
 
     @Test
     fun `a download reads the archive named in IIAB's catalog, not the fallback date`() = runBlocking {
-        val catalog = """{"data":{"vector":{"14":"https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"}}}"""
+        // Dated after the fallback, so a download that ignored the catalog fails here.
+        val catalog = """{"data":{"vector":{"14":"https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2027-04-01.z00-z14.pmtiles"}}}"""
         val resolver = IiabArchiveResolver { catalog }
         assertEquals(
-            "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles",
+            "https://iiab.switnet.org/maps/2/openstreetmap-openmaptiles.2027-04-01.z00-z14.pmtiles",
             RegionDownloader.resolveTilesUrl(SourceKind.INTERNET, null, resolver),
         )
         // The estimate path reads the same resolved archive without I/O.

@@ -127,7 +127,7 @@ class RegionDownloaderEndToEndTest {
         assertEquals("PMTiles", String(tiles, 0, 7, Charsets.US_ASCII))
         // With no explicit version, the archive date comes from the file name.
         val source = JSONObject(File(dir, RegionCache.FILE_META_JSON).readText()).getJSONObject("source")
-        assertEquals("2026-04-01", source.getString("version"))
+        assertEquals("2026-10-01", source.getString("version"))
         assertTrue("the server must have been asked for ranges", server.requestCount > 0)
     }
 
