@@ -322,6 +322,8 @@ class MapsPluginCoverageTest {
         server.start()
         try {
             val clients = listOf(RegionDownloader.httpClient, IiabArchiveResolver.catalogClient)
+            // The pools are process-wide, so drop what earlier tests left before counting.
+            clients.forEach { it.connectionPool.evictAll() }
             for (client in clients) {
                 client.newCall(okhttp3.Request.Builder().url(server.url("/")).build()).execute().use { it.body!!.string() }
             }
