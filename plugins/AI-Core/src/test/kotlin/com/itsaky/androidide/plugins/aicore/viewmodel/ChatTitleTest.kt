@@ -56,6 +56,20 @@ class ChatTitleTest {
     }
 
     @Test
+    fun givenAPaddedLongMessage_whenTakingItsExcerpt_thenItIsTrimmedAndCut() {
+        assertEquals("fix the build", ChatTitle.excerpt("  fix the build \n"))
+        assertEquals(ChatTitle.EXCERPT_CHARS, ChatTitle.excerpt("q".repeat(5_000)).length)
+    }
+
+    @Test
+    fun givenABackendThatEchoesTheExcerpt_whenSanitized_thenTheTitleIsThePromptsFirstWords() {
+        // What the local backend answers: the excerpt itself, with no model call behind it.
+        val echoed = ChatTitle.excerpt("add a dark mode toggle to the settings screen and persist it\nthanks")
+
+        assertEquals("add a dark mode toggle to the settings", ChatTitle.sanitize(echoed))
+    }
+
+    @Test
     fun givenTheShippedConfig_whenChecked_thenBothTextsRender() {
         assertEquals(emptyList<String>(), ChatTitle.problems(shippedConfig))
     }

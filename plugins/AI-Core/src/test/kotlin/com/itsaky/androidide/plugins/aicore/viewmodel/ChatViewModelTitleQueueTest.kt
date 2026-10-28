@@ -255,6 +255,38 @@ class ChatViewModelTitleQueueTest {
     }
 
     @Test
+    fun givenAFirstPrompt_whenItsTitleIsAsked_thenTheRequestCarriesTheTextForABackendThatAnswersFromIt() {
+        val viewModel = newViewModel()
+
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "  add a dark mode toggle \n"))
+
+        verify {
+            llmService.generateCompletion(
+                any(),
+                match { it.extraParams?.get(ChatTitle.EXTRA_PARAM_SOURCE) == "add a dark mode toggle" },
+            )
+        }
+    }
+
+    @Test
+    fun givenABackendThatEchoesTheTitleSource_whenTheTitleArrives_thenItIsTheFirstWordsAndNoModelWasAsked() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "add a dark mode toggle to the settings screen today"))
+
+        // What the local backend answers: the source text back, with no generation behind it.
+        titleResponse.complete(
+            LlmInferenceService.LlmResponse.success("add a dark mode toggle to the settings screen today", 0, 0),
+        )
+        runBlocking { viewModel.awaitTitleRequest() }
+
+        assertEquals(
+            "add a dark mode toggle to the settings",
+            viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle,
+        )
+        assertFalse(SESSION_ID in viewModel.titlePending.value)
+    }
+
+    @Test
     fun givenAnUntitledChatWithAnEarlierPrompt_whenAnotherPromptIsSent_thenNoTitleIsAsked() {
         stored[SESSIONS_KEY] =
             """[{"id":"$SESSION_ID","createdAt":1000,"projectKey":"$TEST_PROJECT_KEY","messages":[""" +

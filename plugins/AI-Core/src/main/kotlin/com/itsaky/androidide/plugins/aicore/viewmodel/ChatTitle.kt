@@ -27,6 +27,17 @@ internal object ChatTitle {
     /** Longest excerpt of the prompt sent; the gist is at the start, and less prefills faster. */
     const val EXCERPT_CHARS = 500
 
+    /**
+     * [com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig.extraParams] key
+     * carrying the [excerpt] the title is to be named from; must match ai-agent-local's
+     * `LocalLlmBackend.EXTRA_PARAM_CHAT_TITLE_SOURCE`.
+     *
+     * A backend whose one cached prompt would be replaced by this request answers with the text
+     * itself, which [sanitize] cuts to a title, instead of generating one. Every other backend
+     * ignores the key and writes the title as before (ADFA-6757).
+     */
+    const val EXTRA_PARAM_SOURCE = "chat_title_source"
+
     const val MAX_WORDS = 8
 
     /** One toolbar line; longer still ellipsizes there, but the sidebar row wraps nothing. */
@@ -45,12 +56,18 @@ internal object ChatTitle {
         PromptTemplateEngine.render(config.chatTitle.instruction, emptyMap())
 
     /**
+     * @param userText the conversation's first user message.
+     * @return the part of it a title is named from: trimmed and cut to [EXCERPT_CHARS].
+     */
+    fun excerpt(userText: String): String = userText.trim().take(EXCERPT_CHARS)
+
+    /**
      * @param config the loaded prompt config.
      * @param userText the conversation's first user message.
-     * @return the request's user turn, the message cut to [EXCERPT_CHARS] and inserted verbatim.
+     * @return the request's user turn, the message's [excerpt] inserted verbatim.
      */
     fun prompt(config: AgentPromptConfig, userText: String): String {
-        val values = mapOf(PromptVariables.USER_TEXT to userText.trim().take(EXCERPT_CHARS))
+        val values = mapOf(PromptVariables.USER_TEXT to excerpt(userText))
         return PromptTemplateEngine.render(config.layout.chatTitle, values)
     }
 
