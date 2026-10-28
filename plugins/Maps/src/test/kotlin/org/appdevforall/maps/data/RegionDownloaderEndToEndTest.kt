@@ -156,9 +156,14 @@ class RegionDownloaderEndToEndTest {
             "bundled basemap asset 'maps/natural-earth-z0-z4.pmtiles' unavailable",
             thrown!!.message,
         )
-        // Only the LAN archive probe may run first, like the internet path's catalog fetch.
-        val ranges = List(server.requestCount) { server.takeRequest().getHeader("Range") }
-        assertEquals("no tile data may be read before the basemap", listOf("bytes=0-0"), ranges)
+        // Only LAN archive discovery (the listing, then the probe) may run first, like the internet
+        // path's catalog fetch.
+        val requests = List(server.requestCount) { server.takeRequest() }
+        assertEquals(
+            "no tile data may be read before the basemap",
+            listOf("/maps/data/" to null, "/maps/${IiabCatalog.FALLBACK_VECTOR_ARCHIVE}" to "bytes=0-0"),
+            requests.map { it.path to it.getHeader("Range") },
+        )
     }
 
     @Test

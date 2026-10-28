@@ -55,6 +55,27 @@ class IiabCatalogTest {
     }
 
     @Test
+    fun `listedFiles keeps file entries and rejects a listing that is not a JSON array`() {
+        val listing = """[{"name":"a.pmtiles","type":"file"},{"name":"d","type":"directory"},"x",{"type":"file"}]"""
+        assertEquals(listOf("a.pmtiles", ""), IiabCatalog.listedFiles(listing))
+        assertNull(IiabCatalog.listedFiles("""{"name":"a.pmtiles"}"""))
+        assertNull(IiabCatalog.listedFiles("<html></html>"))
+    }
+
+    @Test
+    fun `newestVectorArchive picks the latest date and ignores near-miss names`() {
+        val names =
+            listOf(
+                "openstreetmap-openmaptiles.2026-07-01.z00-z14.pmtiles",
+                "openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles.old",
+                "openstreetmap-openmaptiles.2026-09-01.z00-z14.pmtiles",
+                "openstreetmap-openmaptiles.2026-12-01.z00-z08.pmtiles",
+            )
+        assertEquals("openstreetmap-openmaptiles.2026-09-01.z00-z14.pmtiles", IiabCatalog.newestVectorArchive(names))
+        assertNull(IiabCatalog.newestVectorArchive(emptyList()))
+    }
+
+    @Test
     fun `resolver falls back when the fetch fails, returns null or yields an unusable catalog`() = runBlocking {
         val fallback = IiabCatalog.FALLBACK_VECTOR_ARCHIVE
         assertEquals(fallback, IiabArchiveResolver { throw java.io.IOException("offline") }.resolve())
