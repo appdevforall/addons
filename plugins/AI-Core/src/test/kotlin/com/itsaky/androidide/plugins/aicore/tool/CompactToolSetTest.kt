@@ -1,0 +1,111 @@
+package com.itsaky.androidide.plugins.aicore.tool
+
+import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.prompt.PromptToolCatalog
+import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
+import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import com.itsaky.androidide.plugins.aicore.tool.sources.PromptToolBudget
+import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
+import io.mockk.mockk
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The compact tool set a small on-device model is offered (ADFA-6757): which runs get it, that its
+ * prompt and grammar agree, and that it stays small.
+ */
+class CompactToolSetTest {
+
+    /** The catalogue the chat registers, so a built-in added or renamed later is seen here too. */
+    private val builtIns: List<ToolHandler> =
+        BuiltInToolHandlers.create(mockk<PluginContext>(relaxed = true))
+
+    private val full =
+        AgentTools.build(builtIns, ToolSourceStore(), ToolApprovalManager({ shippedConfig }), terminalTool = "respond")
+
+    private val compact = full.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384)
+
+    private fun namesIn(tools: AgentTools) = tools.promptTools.definitions.map { it.name }
+
+    /** The grammar spells each tool as a quoted alternative, so this is exact, not a substring of a longer name. */
+    private fun grammarAllows(tools: AgentTools, tool: String) = tools.grammar.contains("\\\"$tool\\\"")
+
+    @Test
+    fun givenTheRegisteredBuiltIns_whenTheCompactSetIsChecked_thenEveryNameInItIsARealTool() {
+        // A rename in a handler would otherwise shrink the compact set silently, leaving the model
+        // a tool short with nothing failing.
+        val registered = builtIns.map { it.toolName }.toSet()
+
+        assertEquals(emptySet<String>(), PromptToolBudget.COMPACT_BUILT_INS - registered)
+    }
+
+    @Test
+    fun givenASmallTextProtocolBackend_whenToolsAreChosen_thenOnlyTheCompactBuiltInsAreOffered() {
+        assertEquals(PromptToolBudget.COMPACT_BUILT_INS, namesIn(compact).toSet())
+        assertTrue(namesIn(full).size > namesIn(compact).size)
+    }
+
+    @Test
+    fun givenTheCompactSet_whenItsGrammarIsRead_thenItAllowsExactlyTheToolsThePromptDescribes() {
+        for (tool in namesIn(compact)) assertTrue("$tool is described but forbidden", grammarAllows(compact, tool))
+        assertTrue(grammarAllows(compact, "respond"))
+        // The point of building a second grammar: a tool the prompt omits must not be callable.
+        for (tool in namesIn(full) - namesIn(compact).toSet()) {
+            assertFalse("$tool is omitted from the prompt but allowed", grammarAllows(compact, tool))
+        }
+    }
+
+    @Test
+    fun givenANativelyCallingBackend_whenToolsAreChosen_thenItKeepsEveryTool() {
+        // The OpenAI backend takes its window from the user, so a small one is not the on-device model.
+        assertSame(full, full.forBackend(callsToolsNatively = true, contextWindowTokens = 8_192))
+    }
+
+    @Test
+    fun givenAnUnknownOrLargeWindow_whenToolsAreChosen_thenTheFullSetIsKept() {
+        assertSame(full, full.forBackend(callsToolsNatively = false, contextWindowTokens = 0))
+        assertSame(full, full.forBackend(callsToolsNatively = false, contextWindowTokens = 200_000))
+    }
+
+    @Test
+    fun givenTheSameAnswerTwice_whenToolsAreChosen_thenTheSameSnapshotComesBack() {
+        // Built once per tool-set rebuild, not per message, or every send would rebuild a grammar.
+        assertSame(compact, full.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384))
+        assertNotSame(full, compact)
+    }
+
+    @Test
+    fun givenTheCompactSnapshot_whenAskedAgain_thenItIsItsOwnCompactVariant() {
+        assertSame(compact, compact.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384))
+    }
+
+    @Test
+    fun givenTheCompactSet_whenItsToolTextIsMeasured_thenItStaysUnderTheCeiling() {
+        // The whole point is fewer tokens read before the model answers. An allowlist keeps new
+        // tools out; this keeps the ones inside from being reworded back up to the full list's size.
+        fun toolTextChars(tools: AgentTools) = PromptToolCatalog.definitions(tools, "respond", shippedConfig)
+            .sumOf { "- ${it.name}: ${it.description}\n".length }
+
+        val compactChars = toolTextChars(compact)
+
+        assertTrue("compact tool text is $compactChars characters", compactChars <= COMPACT_TOOL_TEXT_CEILING)
+        // Guards the measurement itself: if both were tiny, the ceiling above would prove nothing.
+        assertTrue(toolTextChars(full) > 2 * compactChars)
+    }
+
+    @Test
+    fun givenTheCompactSet_whenAskedWhatItCanDo_thenItCanRunAGradleTask() {
+        // Without it a small model asked to run the tests calls another tool with an invented argument.
+        assertTrue("run_gradle_task" in namesIn(compact))
+        assertTrue(grammarAllows(compact, "run_gradle_task"))
+    }
+
+    private companion object {
+        /** The compact set measures about 1,250 characters; this leaves room for rewording, not for a new tool. */
+        const val COMPACT_TOOL_TEXT_CEILING = 1_500
+    }
+}

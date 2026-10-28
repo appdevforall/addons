@@ -12,7 +12,10 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService
  */
 object PromptToolBudget {
 
-    /** Contributed tools admitted into the prompt. Built-ins are never counted or dropped. */
+    /**
+     * Contributed tools admitted into the prompt. Built-ins are never counted against it, and are
+     * left out only when a caller passes an explicit allowlist (see [COMPACT_BUILT_INS]).
+     */
     const val MAX_CONTRIBUTED_TOOLS = 12
 
     /** Per-description cap, applied to contributed descriptions only. */
@@ -23,6 +26,49 @@ object PromptToolBudget {
 
     /** Per-name cap, so one absurd property name cannot crowd out the rest of the list. */
     private const val MAX_ARGUMENT_NAME_CHARS = 40
+
+    /**
+     * The built-in tools a small on-device model is offered: reading and navigating the project,
+     * changing files, and running a Gradle task with its build output. The full list is about 4,000
+     * characters, over half of the local model's opening prompt, and every token of it is read before
+     * the model answers; these eight are under a third of that (ADFA-6757).
+     *
+     * `run_gradle_task` is in because a model without any way to run a build or the tests does not say
+     * so: asked to run the tests on a Pixel 6 Pro, it called `read_build_output` with an argument it
+     * made up. A build is the one request a coding assistant cannot answer with its eyes alone.
+     *
+     * An allowlist on purpose: a tool added to the app later stays out of a small model's prompt
+     * until someone decides it earns its tokens. Leaving a tool out also leaves it out of the grammar
+     * that constrains the model, so it cannot call one its prompt never mentioned.
+     */
+    val COMPACT_BUILT_INS: Set<String> = setOf(
+        "read_file",
+        "list_files",
+        "search_project",
+        "open_file",
+        "read_build_output",
+        "create_file",
+        "edit_file",
+        "run_gradle_task",
+    )
+
+    /** The largest context window, in tokens, that still gets [COMPACT_BUILT_INS]. */
+    const val COMPACT_UP_TO_TOKENS = 32_768
+
+    /**
+     * Whether a run should be offered [COMPACT_BUILT_INS] rather than every built-in.
+     *
+     * Both conditions, because neither alone describes the on-device model. A window can be small on
+     * a natively calling backend too, since the OpenAI backend takes one from the user for any server
+     * they point it at, and dropping that user's tools would be a surprise. And a text-protocol
+     * backend with room to spare can afford the full list.
+     *
+     * @param callsToolsNatively whether the backend carries tool calls in its provider's own API.
+     * @param contextWindowTokens the window the backend reports; 0 when it reports none.
+     * @return true for a text-protocol backend whose window is known and at most [COMPACT_UP_TO_TOKENS].
+     */
+    fun isCompact(callsToolsNatively: Boolean, contextWindowTokens: Int): Boolean =
+        !callsToolsNatively && contextWindowTokens in 1..COMPACT_UP_TO_TOKENS
 
     /**
      * The tool list as the prompt will see it.
@@ -44,9 +90,11 @@ object PromptToolBudget {
      * newline is enough to forge structure.
      *
      * @param handlers the registered handlers, built-in and contributed.
+     * @param builtIns the built-in tool names to keep, or null for every one. Contributed tools are
+     *   unaffected: they are capped by [MAX_CONTRIBUTED_TOOLS] either way.
      * @return the definitions to send plus what the budget cost.
      */
-    fun apply(handlers: List<ToolHandler>): Budgeted {
+    fun apply(handlers: List<ToolHandler>, builtIns: Set<String>? = null): Budgeted {
         val definitions = mutableListOf<LlmInferenceService.ToolDefinition>()
         val dropped = mutableListOf<String>()
         var admitted = 0
@@ -54,6 +102,7 @@ object PromptToolBudget {
 
         for (handler in handlers) {
             if (handler !is ContributedToolHandler) {
+                if (builtIns != null && handler.toolName !in builtIns) continue
                 definitions += LlmInferenceService.ToolDefinition(
                     handler.toolName,
                     handler.description,

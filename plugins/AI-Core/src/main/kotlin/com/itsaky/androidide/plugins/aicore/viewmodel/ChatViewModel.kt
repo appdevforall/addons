@@ -1040,8 +1040,14 @@ class ChatViewModel(
         lastRunUserMessageId.value = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
         lastRunOverflowed = false
-        // Read once: prompt, grammar and executor must all describe the same tool set.
-        val tools = agentTools
+        // Read once: prompt, grammar and executor must all describe the same tool set. Chosen per
+        // run because the backend can change between messages; a small on-device model gets the
+        // compact set (ADFA-6757). The window is read only where it can matter, and this is Main.
+        val callsToolsNatively = backendPrompts.callsToolsNatively()
+        val tools = agentTools.forBackend(
+            callsToolsNatively = callsToolsNatively,
+            contextWindowTokens = if (callsToolsNatively) 0 else reportedContextWindow(currentBackendId),
+        )
         val epoch = generationEpoch.incrementAndGet()
         // Asked before the message lands, so the header never shows the raw prompt as the title.
         requestTitleIfUntitled(llmService, userMessage)

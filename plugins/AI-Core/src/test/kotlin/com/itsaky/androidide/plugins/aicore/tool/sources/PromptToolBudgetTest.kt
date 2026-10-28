@@ -54,6 +54,45 @@ class PromptToolBudgetTest {
     }
 
     @Test
+    fun givenAnAllowlistOfBuiltIns_whenApplied_thenOnlyThoseBuiltInsRemain() {
+        val builtIns = listOf("read_file", "run_shell_command", "edit_file", "web_search").map(::BuiltInHandler)
+
+        val budgeted = PromptToolBudget.apply(builtIns, builtIns = setOf("read_file", "edit_file"))
+
+        assertEquals(listOf("read_file", "edit_file"), budgeted.definitions.map { it.name })
+        // Leaving a built-in out is the caller's choice, not the budget dropping it.
+        assertTrue(budgeted.droppedTools.isEmpty())
+    }
+
+    @Test
+    fun givenAnAllowlistOfBuiltIns_whenAppliedToContributedToolsToo_thenTheContributedOnesAreUntouched() {
+        val handlers = listOf(BuiltInHandler("run_shell_command")) + contributedHandlers(2)
+
+        val budgeted = PromptToolBudget.apply(handlers, builtIns = setOf("read_file"))
+
+        assertEquals(listOf("aiagentmcp_tool_1", "aiagentmcp_tool_2"), budgeted.definitions.map { it.name })
+    }
+
+    @Test
+    fun givenNoAllowlist_whenApplied_thenEveryBuiltInRemains() {
+        val builtIns = listOf("read_file", "run_shell_command").map(::BuiltInHandler)
+
+        assertEquals(2, PromptToolBudget.apply(builtIns, builtIns = null).definitions.size)
+    }
+
+    @Test
+    fun givenAWindowAndAProtocol_whenAskedIfCompact_thenOnlyASmallTextProtocolWindowIs() {
+        // The on-device model: text protocol, a window the plugin sized to the phone.
+        assertTrue(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = 16_384))
+        assertTrue(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = PromptToolBudget.COMPACT_UP_TO_TOKENS))
+        // A natively calling backend keeps every tool, even with a small window a user configured.
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = true, contextWindowTokens = 8_192))
+        // Unknown or large: nothing says the list needs to shrink.
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = 0))
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = PromptToolBudget.COMPACT_UP_TO_TOKENS + 1))
+    }
+
+    @Test
     fun givenALongContributedDescription_whenApplied_thenItIsShortenedAndCounted() {
         val handlers = contributedHandlers(1, description = "x".repeat(PromptToolBudget.MAX_DESCRIPTION_CHARS + 50))
 
