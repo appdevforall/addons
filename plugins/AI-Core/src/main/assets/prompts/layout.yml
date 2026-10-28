@@ -35,7 +35,9 @@ layout:
     {{#CAN_SEARCH_WEB}}
     {{SESSION_WEB_SEARCH}}
     {{/CAN_SEARCH_WEB}}
+    {{#CAN_FETCH_URL}}
     {{SESSION_WEB_ACCESS}}
+    {{/CAN_FETCH_URL}}
     {{#HAS_IDE_CONTEXT}}
 
     {{IDE_CONTEXT_HEADING}}:

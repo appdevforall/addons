@@ -11,10 +11,14 @@ import java.util.Locale
  *
  * @property currentTime the device's date, time and time zone, already worded for the prompt.
  * @property canSearchWeb whether this run offers web_search; told otherwise, a model calls it anyway.
+ * @property canFetchUrl whether this run offers fetch_url; true unless the caller knows better, since
+ *   the full tool list always carries it. A compact list leaves it out, and a prompt that told the
+ *   model to call it would name a tool its grammar forbids (ADFA-6757).
  */
 data class SessionContext(
     val currentTime: String,
     val canSearchWeb: Boolean = false,
+    val canFetchUrl: Boolean = true,
 ) {
 
     companion object {

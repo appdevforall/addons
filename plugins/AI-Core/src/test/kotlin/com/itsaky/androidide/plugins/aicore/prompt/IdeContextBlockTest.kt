@@ -47,6 +47,14 @@ class IdeContextBlockTest {
     }
 
     @Test
+    fun givenARunWithoutFetchUrl_whenRendering_thenItIsNotNamed() {
+        // A compact tool set leaves fetch_url out of the grammar; telling the model to call it is a lost turn.
+        val block = SystemPromptRenderer.renderIdeContext(shippedConfig, IdeContext.EMPTY, SESSION.copy(canFetchUrl = false))
+
+        assertFalse(block.contains("fetch_url"))
+    }
+
+    @Test
     fun givenOnlyAFocusedFile_whenRendering_thenNoModuleLineOrBlankLineAppears() {
         val block = facts(IdeContext("app/Main.kt", emptyList(), emptyList()))
 

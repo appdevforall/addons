@@ -93,13 +93,15 @@ class PromptToolBudgetTest {
     @Test
     fun givenAWindowAndAProtocol_whenAskedIfCompact_thenOnlyASmallTextProtocolWindowIs() {
         // The on-device model: text protocol, a window the plugin sized to the phone.
-        assertTrue(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = 16_384))
-        assertTrue(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = PromptToolBudget.COMPACT_UP_TO_TOKENS))
+        assertTrue(PromptToolBudget.isCompact(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 16_384))
+        assertTrue(PromptToolBudget.isCompact(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = PromptToolBudget.COMPACT_UP_TO_TOKENS))
         // A natively calling backend keeps every tool, even with a small window a user configured.
-        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = true, contextWindowTokens = 8_192))
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = true, hasOwnPrompt = true, contextWindowTokens = 8_192))
+        // Its own short prompt turned off: a larger model, which gets the full prompt and every tool.
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, hasOwnPrompt = false, contextWindowTokens = 16_384))
         // Unknown or large: nothing says the list needs to shrink.
-        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = 0))
-        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, contextWindowTokens = PromptToolBudget.COMPACT_UP_TO_TOKENS + 1))
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 0))
+        assertFalse(PromptToolBudget.isCompact(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = PromptToolBudget.COMPACT_UP_TO_TOKENS + 1))
     }
 
     @Test

@@ -42,12 +42,13 @@ class AgentTools private constructor(
      * disagree, and it brings its own grammar, so the model is never allowed a tool its prompt omits.
      *
      * @param callsToolsNatively whether the backend carries tool calls in its provider's own API.
+     * @param hasOwnPrompt whether the backend supplies its own, short system prompt for this run.
      * @param contextWindowTokens the window the backend reports; 0 when it reports none.
      * @return this snapshot, or its compact variant; the same instance for the same answer.
      * @see PromptToolBudget.isCompact
      */
-    fun forBackend(callsToolsNatively: Boolean, contextWindowTokens: Int): AgentTools =
-        if (PromptToolBudget.isCompact(callsToolsNatively, contextWindowTokens)) {
+    fun forBackend(callsToolsNatively: Boolean, hasOwnPrompt: Boolean, contextWindowTokens: Int): AgentTools =
+        if (PromptToolBudget.isCompact(callsToolsNatively, hasOwnPrompt, contextWindowTokens)) {
             compactVariant?.value ?: this
         } else {
             this

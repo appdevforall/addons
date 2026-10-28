@@ -29,7 +29,7 @@ class CompactToolSetTest {
     private val full =
         AgentTools.build(builtIns, ToolSourceStore(), ToolApprovalManager({ shippedConfig }), terminalTool = "respond")
 
-    private val compact = full.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384)
+    private val compact = full.forBackend(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 16_384)
 
     private fun namesIn(tools: AgentTools) = tools.promptTools.definitions.map { it.name }
 
@@ -64,25 +64,31 @@ class CompactToolSetTest {
     @Test
     fun givenANativelyCallingBackend_whenToolsAreChosen_thenItKeepsEveryTool() {
         // The OpenAI backend takes its window from the user, so a small one is not the on-device model.
-        assertSame(full, full.forBackend(callsToolsNatively = true, contextWindowTokens = 8_192))
+        assertSame(full, full.forBackend(callsToolsNatively = true, hasOwnPrompt = true, contextWindowTokens = 8_192))
+    }
+
+    @Test
+    fun givenABackendWithoutItsOwnShortPrompt_whenToolsAreChosen_thenTheFullSetIsKept() {
+        // The user turned the short prompt off to run a larger model; the window alone cannot say so.
+        assertSame(full, full.forBackend(callsToolsNatively = false, hasOwnPrompt = false, contextWindowTokens = 16_384))
     }
 
     @Test
     fun givenAnUnknownOrLargeWindow_whenToolsAreChosen_thenTheFullSetIsKept() {
-        assertSame(full, full.forBackend(callsToolsNatively = false, contextWindowTokens = 0))
-        assertSame(full, full.forBackend(callsToolsNatively = false, contextWindowTokens = 200_000))
+        assertSame(full, full.forBackend(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 0))
+        assertSame(full, full.forBackend(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 200_000))
     }
 
     @Test
     fun givenTheSameAnswerTwice_whenToolsAreChosen_thenTheSameSnapshotComesBack() {
         // Built once per tool-set rebuild, not per message, or every send would rebuild a grammar.
-        assertSame(compact, full.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384))
+        assertSame(compact, full.forBackend(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 16_384))
         assertNotSame(full, compact)
     }
 
     @Test
     fun givenTheCompactSnapshot_whenAskedAgain_thenItIsItsOwnCompactVariant() {
-        assertSame(compact, compact.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384))
+        assertSame(compact, compact.forBackend(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 16_384))
     }
 
     @Test
@@ -100,11 +106,12 @@ class CompactToolSetTest {
     }
 
     @Test
-    fun givenTheCompactSet_whenAskedWhatItCanDo_thenItCanRunAGradleTaskAndListThem() {
+    fun givenTheCompactSet_whenAskedWhatItCanDo_thenItCanSyncRunAGradleTaskAndListThem() {
         // Without run_gradle_task a small model asked to run the tests calls another tool with an
         // invented argument. Its description tells the model to call list_gradle_tasks when unsure of
-        // a task's name, so the grammar has to allow that too.
-        for (tool in listOf("run_gradle_task", "list_gradle_tasks")) {
+        // a task's name, so the grammar has to allow that too. list_gradle_tasks sends it to gradle_sync
+        // when the project has not synced.
+        for (tool in listOf("run_gradle_task", "list_gradle_tasks", "gradle_sync")) {
             assertTrue("$tool is missing", tool in namesIn(compact))
             assertTrue("$tool is described but forbidden", grammarAllows(compact, tool))
         }
@@ -119,7 +126,7 @@ class CompactToolSetTest {
         }
         val withSources =
             AgentTools.build(builtIns, store, ToolApprovalManager({ shippedConfig }), terminalTool = "respond")
-        val compactWithSources = withSources.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384)
+        val compactWithSources = withSources.forBackend(callsToolsNatively = false, hasOwnPrompt = true, contextWindowTokens = 16_384)
 
         fun contributedOffered(tools: AgentTools): Int {
             val contributed = tools.contributedHandlers.map { it.toolName }.toSet()
@@ -136,7 +143,7 @@ class CompactToolSetTest {
     }
 
     private companion object {
-        /** The compact set measures about 1,500 characters; this leaves room for rewording, not for a new tool. */
+        /** The compact set measures about 1,560 characters; this leaves room for rewording, not for a new tool. */
         const val COMPACT_TOOL_TEXT_CEILING = 1_800
     }
 }
