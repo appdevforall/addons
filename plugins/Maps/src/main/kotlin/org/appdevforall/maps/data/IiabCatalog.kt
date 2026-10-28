@@ -1,5 +1,6 @@
 package org.appdevforall.maps.data
 
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -17,18 +18,17 @@ internal object IiabCatalog {
     /** The mirror directory every archive in the catalog lives under. */
     const val MIRROR_BASE = "https://iiab.switnet.org/maps/2/"
 
-    /**
-     * Used when the catalog cannot be read, and always for an IIAB LAN box. The catalog's z00-z14
-     * archive as of 2026-10-27.
-     */
+    /** Used when the catalog cannot be read. The catalog's z00-z14 archive as of 2026-10-27. */
     const val FALLBACK_VECTOR_ARCHIVE = "openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles"
 
     /**
-     * The archive names a LAN box may hold, newest first. A box keeps the build it was installed
-     * with, and boxes installed before IIAB's 2026-10-06 update hold the 2026-04-01 one.
+     * Every z00-z14 archive IIAB has published, newest first, probed by name when a LAN box gives
+     * no usable directory listing. A box keeps the build it was installed with.
      */
     val LAN_VECTOR_ARCHIVES =
-        listOf(FALLBACK_VECTOR_ARCHIVE, "openstreetmap-openmaptiles.2026-04-01.z00-z14.pmtiles")
+        listOf("2026-10-01", "2026-09-01", "2026-07-01", "2026-04-01").map {
+            "openstreetmap-openmaptiles.$it.z00-z14.pmtiles"
+        }
 
     private val VECTOR_ARCHIVE =
         Regex("""openstreetmap-openmaptiles\.(\d{4}-\d{2}-\d{2})\.z00-z14\.pmtiles""")
@@ -50,4 +50,24 @@ internal object IiabCatalog {
 
     /** The `yyyy-mm-dd` date in a vector archive name, or null if [archive] is not one. */
     fun dateOf(archive: String): String? = VECTOR_ARCHIVE.matchEntire(archive)?.groupValues?.get(1)
+
+    /** The file names in an nginx JSON autoindex listing, or null if [listingJson] is not one. */
+    fun listedFiles(listingJson: String): List<String>? {
+        val entries =
+            try {
+                JSONArray(listingJson)
+            } catch (e: JSONException) {
+                return null
+            }
+        return (0 until entries.length()).mapNotNull { i ->
+            entries.optJSONObject(i)?.takeIf { it.optString("type") == "file" }?.optString("name")
+        }
+    }
+
+    /**
+     * The newest dated z00-z14 archive in [names]. Exact matches only, so the `*.pmtiles.old` name
+     * IIAB gives a retired archive never wins.
+     */
+    fun newestVectorArchive(names: List<String>): String? =
+        names.mapNotNull { name -> dateOf(name)?.let { it to name } }.maxByOrNull { it.first }?.second
 }

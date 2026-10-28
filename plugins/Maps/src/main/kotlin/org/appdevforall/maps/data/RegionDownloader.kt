@@ -48,8 +48,9 @@ import org.appdevforall.maps.util.MAPS_TRAFFIC_STATS_TAG
  *  - **Internet** — `https://iiab.switnet.org/maps/2/`:
  *    - `openstreetmap-openmaptiles.<date>.z00-z14.pmtiles` (vector tiles), with the date read
  *      from IIAB's catalog by [IiabArchiveResolver]
- *  - **LAN** — `http://<host>/maps/` with the newest of [IiabCatalog.LAN_VECTOR_ARCHIVES] the box
- *    serves, probed by [resolveTilesUrl].
+ *  - **LAN** — `http://<host>/maps/` with the newest archive the box lists at `/maps/data/`, or
+ *    failing that the first of [IiabCatalog.LAN_VECTOR_ARCHIVES] it serves, found by
+ *    [resolveTilesUrl].
  *  The Natural Earth basemap is copied from the plugin bundle, not fetched.
  */
 internal object RegionDownloader {
@@ -67,6 +68,13 @@ internal object RegionDownloader {
 
     private const val INTERNET_BASE = IiabCatalog.MIRROR_BASE
     private const val LAN_PATH_SUFFIX = "/maps/"
+
+    /** IIAB's nginx JSON autoindex of `/maps/`, relative to the LAN base. */
+    private const val LAN_LISTING_PATH = "data/"
+    private const val LISTING_LABEL = "/maps/data/ listing"
+
+    /** A box's maps directory holds a few dozen entries; anything far larger is not the listing. */
+    private const val MAX_LISTING_BYTES = 1024L * 1024L
 
     // OkHttp client tuned for the IIAB use case:
     //  - Many in-flight range requests against the same host while slicing a
@@ -341,7 +349,7 @@ internal object RegionDownloader {
      * The URL a download reads: internet resolves the current archive first, and LAN probes the box
      * for the newest archive it holds.
      *
-     * @throws IOException when a LAN box answers for none of [IiabCatalog.LAN_VECTOR_ARCHIVES].
+     * @throws IOException when a LAN box lists and serves no z00-z14 archive.
      */
     internal suspend fun resolveTilesUrl(
         sourceKind: SourceKind,
@@ -360,17 +368,69 @@ internal object RegionDownloader {
     /** The archive each LAN base last answered for, so the estimate reads what the download did. */
     private val lanArchives = ConcurrentHashMap<String, String>()
 
-    /** The first of [IiabCatalog.LAN_VECTOR_ARCHIVES] that [base] serves a one-byte range of. */
+    /**
+     * The newest archive [base] holds: from the box's JSON directory listing when it has one, else
+     * the first of [IiabCatalog.LAN_VECTOR_ARCHIVES] it serves a one-byte range of.
+     */
     private suspend fun probeLanArchive(base: String): String =
         withContext(Dispatchers.IO) {
             val misses = mutableListOf<String>()
+            listedArchive(base, misses)?.let {
+                PluginLog.info("LAN archive from listing: $base$it")
+                return@withContext it
+            }
             for (name in IiabCatalog.LAN_VECTOR_ARCHIVES) {
                 val code = rangeProbe(base + name)
-                if (code == 200 || code == 206) return@withContext name
+                if (code == 200 || code == 206) {
+                    PluginLog.info("LAN archive from probe: $base$name (${misses.joinToString()})")
+                    return@withContext name
+                }
                 misses += "$name: ${code ?: "no answer"}"
             }
-            throw IOException("IIAB box at $base has no known vector archive (${misses.joinToString()})")
+            throw IOException(
+                "The IIAB box at $base has no zoom 0-14 OpenStreetMap archive (IIAB installs zoom " +
+                    "0-8 by default). Download this region from the internet source instead. " +
+                    "Tried: ${misses.joinToString()}"
+            )
         }
+
+    /**
+     * The newest archive in the listing IIAB serves at `/maps/data/`, or null with the reason added
+     * to [misses]. The listing aliases `/maps/`, and the file is read from `/maps/<name>` because
+     * only that location carries IIAB's pmtiles transfer settings.
+     */
+    private fun listedArchive(base: String, misses: MutableList<String>): String? {
+        val request = Request.Builder().url(base + LAN_LISTING_PATH).build()
+        TrafficStats.setThreadStatsTag(MAPS_TRAFFIC_STATS_TAG)
+        val listing =
+            try {
+                httpClient.newCall(request).execute().use { resp ->
+                    val source = resp.body?.source()
+                    if (resp.code != 200 || source == null) {
+                        misses += "$LISTING_LABEL: ${resp.code}"
+                        null
+                    } else if (source.request(MAX_LISTING_BYTES + 1)) {
+                        misses += "$LISTING_LABEL: too large"
+                        null
+                    } else {
+                        source.buffer.readUtf8()
+                    }
+                }
+            } catch (e: IOException) {
+                misses += "$LISTING_LABEL: no answer"
+                null
+            } finally {
+                TrafficStats.clearThreadStatsTag()
+            } ?: return null
+        val files = IiabCatalog.listedFiles(listing)
+        if (files == null) {
+            misses += "$LISTING_LABEL: not JSON"
+            return null
+        }
+        return IiabCatalog.newestVectorArchive(files).also {
+            if (it == null) misses += "$LISTING_LABEL: no z00-z14 archive"
+        }
+    }
 
     /** HTTP status of a `bytes=0-0` GET on [url], or null if the request failed. */
     private fun rangeProbe(url: String): Int? {
