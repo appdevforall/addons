@@ -35,7 +35,7 @@ internal object DownloadCompleteMessage {
     )
 
     /**
-     * Map the auto-activation [result] for [regionId] onto the Snackbar spec.
+     * Map the auto-activation [result] for the region named [displayName] onto the Snackbar spec.
      *
      * Branch behavior (mirrors [FirstRegionAutoActivator]'s decision table):
      *   - First region (no active.txt) → confirm apply + activation.
@@ -44,13 +44,13 @@ internal object DownloadCompleteMessage {
      *   - Apply-failed / region-not-found → surface the reason so the user
      *     knows why nothing happened.
      */
-    fun forResult(result: FirstRegionAutoActivator.Result, regionId: String): Spec = when (result) {
+    fun forResult(result: FirstRegionAutoActivator.Result, displayName: String): Spec = when (result) {
         is FirstRegionAutoActivator.Result.Activated ->
             Spec(R.string.maps_download_done_applied, result.displayName)
         is FirstRegionAutoActivator.Result.NoOpAlreadyActive ->
-            Spec(R.string.maps_download_done_unchanged, regionId, showApplyAction = true)
+            Spec(R.string.maps_download_done_unchanged, displayName, showApplyAction = true)
         is FirstRegionAutoActivator.Result.NoOpRegionNotFound ->
-            Spec(R.string.maps_download_done_not_found, regionId)
+            Spec(R.string.maps_download_done_not_found, displayName)
         is FirstRegionAutoActivator.Result.ApplyFailed ->
             Spec(R.string.maps_download_done_apply_failed, result.reason)
     }

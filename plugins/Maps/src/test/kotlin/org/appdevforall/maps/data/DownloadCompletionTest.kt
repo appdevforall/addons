@@ -7,7 +7,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -60,10 +59,10 @@ class DownloadCompletionTest {
     private fun active(): String? = runBlocking { project.readActiveRegionId(projectDir) }
 
     @Test
-    fun `no open project is reported and nothing is copied`() = runBlocking {
-        seed("alpha")
+    fun `no open project is reported by region name and nothing is copied`() = runBlocking {
+        seed("alpha", "Alpha Town")
         project.projectDir = null
-        assertEquals(DownloadCompletion.Outcome.NoProject, completion.complete("alpha"))
+        assertEquals(DownloadCompletion.Outcome.NoProject("Alpha Town"), completion.complete("alpha"))
         assertTrue(project.applied.isEmpty())
     }
 
@@ -75,6 +74,7 @@ class DownloadCompletionTest {
             DownloadCompletion.Outcome.Finished(
                 projectDir,
                 FirstRegionAutoActivator.Result.Activated("alpha", "Alpha Town"),
+                "Alpha Town",
             ),
             outcome,
         )
@@ -83,27 +83,49 @@ class DownloadCompletionTest {
 
     @Test
     fun `a project with a live active region keeps it`() = runBlocking {
-        seed("alpha")
+        seed("alpha", "Alpha Town")
         seed("beta")
         project.writeActiveRegionId(projectDir, "beta")
         val outcome = completion.complete("alpha") as DownloadCompletion.Outcome.Finished
         assertEquals(FirstRegionAutoActivator.Result.NoOpAlreadyActive, outcome.result)
+        assertEquals("Alpha Town", outcome.displayName)
         assertEquals("beta", active())
     }
 
     @Test
-    fun `snackbar apply copies the region in and activates it`() = runBlocking {
-        seed("alpha")
+    fun `a region missing from an unreadable cache is named by its id`() = runBlocking {
+        listFails = true
+        project.projectDir = null
+        assertEquals(DownloadCompletion.Outcome.NoProject("alpha"), completion.complete("alpha"))
+    }
+
+    @Test
+    fun `snackbar apply copies the region in, activates it and names it`() = runBlocking {
+        seed("alpha", "Alpha Town")
         project.writeActiveRegionId(projectDir, "beta")
-        assertTrue(completion.applyFromSnackbar(projectDir, "alpha"))
+        assertEquals(
+            DownloadCompletion.ApplyResult.Switched("Alpha Town"),
+            completion.applyFromSnackbar(projectDir, "alpha"),
+        )
         assertEquals(listOf("alpha"), project.applied)
         assertEquals("alpha", active())
     }
 
     @Test
+    fun `snackbar apply of the already-active region says so and refreshes its copy`() = runBlocking {
+        seed("alpha", "Alpha Town")
+        project.writeActiveRegionId(projectDir, "alpha")
+        assertEquals(
+            DownloadCompletion.ApplyResult.AlreadyActive("Alpha Town"),
+            completion.applyFromSnackbar(projectDir, "alpha"),
+        )
+        assertEquals(listOf("alpha"), project.applied)
+    }
+
+    @Test
     fun `snackbar apply of a region gone from the cache does nothing`() = runBlocking {
         seed("beta")
-        assertFalse(completion.applyFromSnackbar(projectDir, "alpha"))
+        assertEquals(DownloadCompletion.ApplyResult.Failed, completion.applyFromSnackbar(projectDir, "alpha"))
         assertTrue(project.applied.isEmpty())
     }
 
@@ -111,16 +133,16 @@ class DownloadCompletionTest {
     fun `snackbar apply with an unreadable cache does nothing`() = runBlocking {
         seed("alpha")
         listFails = true
-        assertFalse(completion.applyFromSnackbar(projectDir, "alpha"))
+        assertEquals(DownloadCompletion.ApplyResult.Failed, completion.applyFromSnackbar(projectDir, "alpha"))
         assertTrue(project.applied.isEmpty())
     }
 
     @Test
-    fun `a failed snackbar copy reports false and leaves active_txt alone`() = runBlocking {
+    fun `a failed snackbar copy reports failure and leaves active_txt alone`() = runBlocking {
         seed("alpha")
         project.writeActiveRegionId(projectDir, "beta")
         project.applyResult = false
-        assertFalse(completion.applyFromSnackbar(projectDir, "alpha"))
+        assertEquals(DownloadCompletion.ApplyResult.Failed, completion.applyFromSnackbar(projectDir, "alpha"))
         assertEquals("beta", active())
     }
 }

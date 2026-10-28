@@ -18,7 +18,7 @@ class DownloadCompleteMessageTest {
     fun `Activated - confirms the apply, no action`() {
         val spec = DownloadCompleteMessage.forResult(
             FirstRegionAutoActivator.Result.Activated(regionId = "lagos", displayName = "Lagos"),
-            regionId = "lagos",
+            displayName = "Lagos",
         )
         assertEquals(R.string.maps_download_done_applied, spec.messageRes)
         assertEquals("Lagos", spec.messageArg)
@@ -29,10 +29,10 @@ class DownloadCompleteMessageTest {
     fun `NoOpAlreadyActive - active region untouched, offers the Apply action`() {
         val spec = DownloadCompleteMessage.forResult(
             FirstRegionAutoActivator.Result.NoOpAlreadyActive,
-            regionId = "lagos",
+            displayName = "Lagos",
         )
         assertEquals(R.string.maps_download_done_unchanged, spec.messageRes)
-        assertEquals("lagos", spec.messageArg)
+        assertEquals("Lagos", spec.messageArg)
         assertTrue("the only branch with a one-tap Apply escape hatch", spec.showApplyAction)
     }
 
@@ -40,10 +40,10 @@ class DownloadCompleteMessageTest {
     fun `NoOpRegionNotFound - surfaces the cache miss, no action`() {
         val spec = DownloadCompleteMessage.forResult(
             FirstRegionAutoActivator.Result.NoOpRegionNotFound,
-            regionId = "lagos",
+            displayName = "Lagos",
         )
         assertEquals(R.string.maps_download_done_not_found, spec.messageRes)
-        assertEquals("lagos", spec.messageArg)
+        assertEquals("Lagos", spec.messageArg)
         assertFalse(spec.showApplyAction)
     }
 
@@ -51,7 +51,7 @@ class DownloadCompleteMessageTest {
     fun `ApplyFailed - surfaces the reason, no action`() {
         val spec = DownloadCompleteMessage.forResult(
             FirstRegionAutoActivator.Result.ApplyFailed(regionId = "lagos", reason = "disk full"),
-            regionId = "lagos",
+            displayName = "Lagos",
         )
         assertEquals(R.string.maps_download_done_apply_failed, spec.messageRes)
         assertEquals("disk full", spec.messageArg)
