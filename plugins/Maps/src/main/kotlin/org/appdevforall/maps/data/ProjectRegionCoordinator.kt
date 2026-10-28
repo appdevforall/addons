@@ -8,6 +8,21 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.coroutineContext
 
+/** The project-side region operations; [ProjectRegionCoordinator] is the real one, tests fake it. */
+internal interface ProjectRegions {
+    suspend fun currentProjectRoot(): File?
+
+    suspend fun readActiveRegionId(projectDir: File): String?
+
+    suspend fun writeActiveRegionId(projectDir: File, regionId: String)
+
+    suspend fun clearActiveRegionId(projectDir: File)
+
+    suspend fun applyAndActivate(info: RegionInfo, projectDir: File): Boolean
+
+    suspend fun applyRegionToProject(info: RegionInfo, projectDir: File): Boolean
+}
+
 /**
  * The project/active-region facade, extracted from `RegionManagerFragment` —
  * resolving the open project, reading/writing the per-project `active.txt`
@@ -30,7 +45,7 @@ import kotlin.coroutines.coroutineContext
 internal class ProjectRegionCoordinator(
     private val pluginContextProvider: () -> PluginContext?,
     private val mapsSubpath: String = DEFAULT_PROJECT_MAPS_SUBPATH,
-) {
+) : ProjectRegions {
 
     companion object {
         /**
@@ -46,7 +61,7 @@ internal class ProjectRegionCoordinator(
      * when no project is open or the service isn't available (running in
      * standalone test mode).
      */
-    suspend fun currentProjectRoot(): File? = withContext(Dispatchers.IO) {
+    override suspend fun currentProjectRoot(): File? = withContext(Dispatchers.IO) {
         val ctx = pluginContextProvider() ?: return@withContext null
         val project = ctx.services.get(IdeProjectService::class.java)?.getCurrentProject()
         project?.rootDir
@@ -61,14 +76,14 @@ internal class ProjectRegionCoordinator(
         return readActiveRegionId(projectDir)
     }
 
-    suspend fun readActiveRegionId(projectDir: File): String? =
+    override suspend fun readActiveRegionId(projectDir: File): String? =
         ActiveRegionStore.read(projectDir, mapsSubpath)
 
-    suspend fun writeActiveRegionId(projectDir: File, regionId: String) {
+    override suspend fun writeActiveRegionId(projectDir: File, regionId: String) {
         ActiveRegionStore.write(projectDir, mapsSubpath, regionId)
     }
 
-    suspend fun clearActiveRegionId(projectDir: File) {
+    override suspend fun clearActiveRegionId(projectDir: File) {
         ActiveRegionStore.clear(projectDir, mapsSubpath)
     }
 
@@ -77,7 +92,7 @@ internal class ProjectRegionCoordinator(
      * download-complete, snackbar-apply, and toggle-on flows all need. Consolidated here so the
      * pairing (never write active.txt unless the copy succeeded) lives in one place.
      */
-    suspend fun applyAndActivate(info: RegionInfo, projectDir: File): Boolean {
+    override suspend fun applyAndActivate(info: RegionInfo, projectDir: File): Boolean {
         val applied = applyRegionToProject(info, projectDir)
         if (applied) writeActiveRegionId(projectDir, info.regionId)
         return applied
@@ -93,7 +108,7 @@ internal class ProjectRegionCoordinator(
      * [writeActiveRegionId] so the toggle flow can decouple "copy data" from
      * "mark active".
      */
-    suspend fun applyRegionToProject(
+    override suspend fun applyRegionToProject(
         info: RegionInfo,
         projectDir: File,
     ): Boolean {
