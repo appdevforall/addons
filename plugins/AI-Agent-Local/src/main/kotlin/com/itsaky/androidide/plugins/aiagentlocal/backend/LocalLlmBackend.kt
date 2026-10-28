@@ -810,7 +810,7 @@ class LocalLlmBackend(
 
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         context.logger.info("LocalLlmBackend.generate() called with prompt: ${prompt.take(50)}...")
-        // Before the model-configured check: naming a chat needs no model, so it works without one.
+        // Before the model-configured check, so nothing here touches the model or the cache it holds.
         (config.extraParams?.get(EXTRA_PARAM_CHAT_TITLE_SOURCE) as? String)?.let { source ->
             return CompletableFuture.completedFuture(LlmResponse.success(source, 0, 0))
         }

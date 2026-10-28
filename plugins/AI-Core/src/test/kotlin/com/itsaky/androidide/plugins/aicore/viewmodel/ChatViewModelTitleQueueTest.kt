@@ -269,7 +269,7 @@ class ChatViewModelTitleQueueTest {
     }
 
     @Test
-    fun givenABackendThatEchoesTheTitleSource_whenTheTitleArrives_thenItIsTheFirstWordsAndNoModelWasAsked() {
+    fun givenABackendThatEchoesTheTitleSource_whenTheTitleArrives_thenItIsTheFirstWords() {
         val viewModel = newViewModel()
         assertTrue(viewModel.requestTitleIfUntitled(llmService, "add a dark mode toggle to the settings screen today"))
 

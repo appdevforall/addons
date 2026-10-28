@@ -203,8 +203,9 @@ class LocalLlmBackendTest {
     }
 
     @Test
-    fun givenTheChatTitleKey_whenComparedWithAiCores_thenTheTwoAgree() {
-        // The two plugins cannot share a constant; a drifted copy turns the title back into a model call.
+    fun givenTheChatTitleKey_whenRead_thenItIsTheLiteralAiCoreSends() {
+        // The two plugins cannot share a constant, so each pins its own copy (AI-Core's ChatTitleTest holds the
+        // other); a drifted copy turns the title back into a model call.
         assertEquals("chat_title_source", LocalLlmBackend.EXTRA_PARAM_CHAT_TITLE_SOURCE)
     }
 

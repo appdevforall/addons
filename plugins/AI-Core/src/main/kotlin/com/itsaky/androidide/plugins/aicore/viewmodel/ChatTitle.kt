@@ -62,6 +62,15 @@ internal object ChatTitle {
     fun excerpt(userText: String): String = userText.trim().take(EXCERPT_CHARS)
 
     /**
+     * The [excerpt] on one line, for [EXTRA_PARAM_SOURCE]. [sanitize] keeps only a reply's first line,
+     * so a message that opens "Hi,", or with a code fence, would otherwise be titled "Hi" or "kotlin".
+     *
+     * @param userText the conversation's first user message.
+     * @return the excerpt with every run of whitespace, line breaks included, as one space.
+     */
+    fun echoSource(userText: String): String = excerpt(userText).replace(WHITESPACE, " ")
+
+    /**
      * @param config the loaded prompt config.
      * @param userText the conversation's first user message.
      * @return the request's user turn, the message's [excerpt] inserted verbatim.

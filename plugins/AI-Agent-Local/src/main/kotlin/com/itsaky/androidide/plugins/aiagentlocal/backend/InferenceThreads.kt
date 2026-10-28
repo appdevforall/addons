@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentlocal.backend
 
+import android.system.Os
+import android.system.OsConstants
 import java.io.File
 
 /**
@@ -17,7 +19,8 @@ internal data class ThreadPlan(val generation: Int, val batch: Int)
  * Left alone, the engine runs both phases on `min(8, cores - 2)` threads. On a phone with slow
  * efficiency cores that puts generation threads on them, and the whole step waits for the slowest:
  * a Pixel 7 wrote 14.9 tokens/s on 6 threads and 18.3 on 4, but read a long prompt faster on 6.
- * So generation gets only the fast cores and prompt reading keeps the engine's own count.
+ * So generation gets as many threads as there are fast cores (the count only; where the scheduler puts
+ * them is its call) and prompt reading keeps the engine's own count.
  *
  * Everything it cannot tell stays as the engine would have chosen: a phone whose cores are alike,
  * or whose capacities cannot be read, gets [ThreadPlan.generation] equal to [ThreadPlan.batch].
@@ -61,8 +64,18 @@ internal object InferenceThreads {
      */
     fun read(
         cpuRoot: File = File("/sys/devices/system/cpu"),
-        onlineCores: Int = Runtime.getRuntime().availableProcessors(),
+        onlineCores: Int = onlineCores(),
     ): ThreadPlan = plan(capacitiesIn(cpuRoot), onlineCores)
+
+    /**
+     * The cores the OS is running now, counted as the engine counts them (`_SC_NPROCESSORS_ONLN`).
+     * Not `availableProcessors()`, which on Android reports the configured cores, offline ones too.
+     */
+    private fun onlineCores(): Int = try {
+        Os.sysconf(OsConstants._SC_NPROCESSORS_ONLN).toInt()
+    } catch (_: Throwable) {
+        Runtime.getRuntime().availableProcessors()
+    }
 
     /**
      * `cpu_capacity` is 1024 for the fastest core class and lower for the rest. Offline cores are
