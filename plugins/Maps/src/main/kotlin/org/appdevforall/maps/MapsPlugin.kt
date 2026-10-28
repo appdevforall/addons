@@ -221,7 +221,7 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
      */
     private fun tutorialButton(anchor: String? = null) = PluginTooltipButton(
         description = "OSM + MapLibre tutorial",
-        uri = if (anchor == null) "osm-tutorial.html" else "osm-tutorial.html#$anchor",
+        uri = if (anchor == null) "index.html" else "index.html#$anchor",
         order = 0,
     )
 
@@ -344,8 +344,8 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
      * Tier 3 docs subdirectory under `src/main/assets/`. The IDE walks this
      * tree at install time and inserts every file into the documentation DB
      * under `plugin/<pluginId>/<relative-path>` (per `Tier3AssetWalker`); a
-     * `PluginTooltipButton` with `uri = "osm-tutorial.html"` resolves to
-     * `http://localhost:6174/plugin/org.appdevforall.maps/osm-tutorial.html`.
+     * `PluginTooltipButton` with `uri = "index.html"` resolves to
+     * `http://localhost:6174/plugin/org.appdevforall.maps/index.html`.
      * The asset is HTML (not Markdown) so the host WebView renders it formatted
      * rather than as raw text.
      */

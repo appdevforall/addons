@@ -42,7 +42,7 @@ plugins/Maps/
 │   │   └── util/               # Atomic file I/O, byte-size formatting
 │   └── assets/
 │       ├── templates/region-map/      # The emitted MapLibre app (+ offline Maven repo)
-│       ├── docs/osm-tutorial.html     # In-IDE OSM + MapLibre tutorial
+│       ├── docs/index.html            # In-IDE OSM + MapLibre tutorial
 │       ├── maps/natural-earth-*.pmtiles  # Bundled world basemap
 │       ├── fonts/                     # Noto Sans label glyphs (OFL)
 │       └── icon_day.png / icon_night.png

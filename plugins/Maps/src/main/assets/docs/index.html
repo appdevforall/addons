@@ -47,6 +47,7 @@
     th { background: #f4f4f4; }
     ul, ol { padding-left: 1.4em; }
     li { margin: 0.3em 0; }
+    img { display: block; max-width: 100%; height: auto; border: 1px solid #cccccc; margin: 0.6em 0; }
   </style>
 </head>
 <body>
@@ -66,6 +67,100 @@ on the phone.</p>
 come into play: <strong>Internet in a Box</strong> (where the data lives),
 <strong>OpenStreetMap</strong> (what the data is), and
 <strong>MapLibre</strong> (what draws it).</p>
+
+<h2 id="using-the-maps-tab">Using the Maps tab</h2>
+
+<p>Open a project made from the <strong>Offline OSM Map</strong> template, then tap
+the <strong>Maps</strong> tab in the editor's bottom sheet. Long-press any button on
+these screens for a short explanation.</p>
+
+<h3 id="region-list">The region list</h3>
+
+<p>Each row is a region saved on this phone, under
+<code>/sdcard/CodeOnTheGo/maps/</code>. A saved region can be used by any number of
+projects, so you download it only once.</p>
+
+<img src="maps-region-list.png" width="480" alt="The Maps tab listing one saved region, Lalibela, marked Active in this project, with its switch on and Refresh and Delete buttons.">
+
+<ul>
+  <li>The <strong>switch</strong> on a row copies the region's files into the open
+  project's <code>app/src/main/assets/maps/</code> folder and makes it the region the
+  app shows. The row then turns green and reads <strong>&#9679; Active in this
+  project</strong>. One region is active at a time: turning on another one switches
+  to it.</li>
+  <li><strong>Refresh</strong> opens the download steps again with this region's name
+  and area already filled in, so you can download a newer copy.</li>
+  <li><strong>Delete</strong> asks first, then removes the region from the phone.
+  Projects that already copied it keep their own copy. If it was the open project's
+  region, the project no longer has a region selected.</li>
+  <li><strong>+ Download new region</strong> starts the three download steps below.</li>
+</ul>
+
+<h3 id="source">Step 1: Pick the map source</h3>
+
+<img src="maps-source.png" width="480" alt="Step 1 of 3 with Local Network selected, a hostname typed in, and the status Reachable.">
+
+<ul>
+  <li><strong>Internet</strong> downloads from the public Internet in a Box server,
+  <code>iiab.switnet.org</code>. This is always selected when the step opens.</li>
+  <li><strong>Local Network</strong> downloads from an Internet in a Box on your
+  Wi-Fi. Type its hostname; the plugin remembers it, and the screen shows whether the
+  box answers.</li>
+</ul>
+
+<h3 id="choose-region">Step 2: Choose the region</h3>
+
+<p>Drag the box to move it, and drag a corner to resize it. Pan and zoom the map to
+find your area.</p>
+
+<ul>
+  <li><strong>Where the box starts.</strong> For a new region the map opens on a
+  world view with a large box over West Africa. If Code on the Go has permission to
+  read your location, the box moves to a 50&nbsp;km &times; 50&nbsp;km square around
+  your last known location. Code on the Go does not ask for that permission today, so
+  you will usually see the default box. <strong>Refresh</strong> starts from the
+  region's saved area instead.</li>
+  <li><strong>The size estimate.</strong> The first line under the map is the download
+  size, measured from the server for the box you drew. It needs a connection to the
+  source; without one it reads <em>&ldquo;Couldn't calculate size&rdquo;</em> and
+  <strong>Next</strong> stays off. A region over 1&nbsp;GB turns the box red and
+  cannot be downloaded.</li>
+  <li><strong>The zoom limit.</strong> The second line shows the box size
+  and the most detailed zoom level the region will have, for example
+  <em>&ldquo;40km &times; 38km &mdash; max zoom level 14 (streets)&rdquo;</em>. The
+  region always starts at zoom level 6. The plugin picks the highest limit, up to 14,
+  that keeps the region under 100,000 map tiles, so a bigger box gets a lower limit.</li>
+</ul>
+
+<h3 id="save-region">Step 3: Name and save</h3>
+
+<img src="maps-save-region.png" width="480" alt="Step 3 of 3 with the region name Lalibela, a summary showing the source and the total to download, and the Back and Save buttons.">
+
+<ul>
+  <li>Type a place name, such as <em>Lalibela, Ethiopia</em>. The name is shown in the
+  region list.</li>
+  <li>The region's folder is made from the name: lowercase, with spaces and
+  punctuation turned into dashes, up to 64 characters. Letters from any language are
+  kept.</li>
+  <li><strong>Save</strong> stays off while the name is empty, or when another saved
+  region already uses the same folder name. To download that region again, use
+  <strong>Refresh</strong> on it instead.</li>
+  <li>The summary shows the source and the total to download.</li>
+</ul>
+
+<h3 id="downloading">Downloading</h3>
+
+<img src="maps-downloading.png" width="480" alt="The download screen: the Natural Earth basemap is done and the OpenStreetMap tiles are at 0 percent, with a Cancel + discard button.">
+
+<ul>
+  <li>The low-zoom world basemap is copied from the plugin, so it needs no download.
+  The map tiles for your region then download from the source.</li>
+  <li><strong>Cancel + discard</strong> stops the download and deletes what was
+  downloaded so far.</li>
+  <li>When the download finishes and the open project has no region yet, the new
+  region is used in the project straight away. If the project already has one, a
+  message offers <strong>Apply</strong> to switch.</li>
+</ul>
 
 <h2>What is Internet in a Box?</h2>
 
@@ -167,8 +262,8 @@ inside the APK. The tiles arrive from an <strong>Internet in a Box server</stron
 a region with the bbox picker, and download it &mdash; the plugin range-fetches
 the region's tiles from the IIAB server (the public <code>iiab.switnet.org</code>
 by default, or a local-LAN box) into
-<code>/sdcard/CodeOnTheGo/maps/&lt;region-id&gt;/</code>. When you tap
-<strong>Use in this project</strong>, the plugin <strong>copies that region's
+<code>/sdcard/CodeOnTheGo/maps/&lt;region-id&gt;/</code>. When you turn on a
+region's switch, the plugin <strong>copies that region's
 data files</strong> (<code>tiles.pmtiles</code>, <code>basemap.pmtiles</code>,
 <code>meta.json</code>) into the project's fixed
 <code>app/src/main/assets/maps/</code> folder, overwriting any previous region.
