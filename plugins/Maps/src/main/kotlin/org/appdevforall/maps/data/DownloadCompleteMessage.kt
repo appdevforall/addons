@@ -29,7 +29,7 @@ internal object DownloadCompleteMessage {
      *   hatch for users who wanted it applied.
      */
     data class Spec(
-        @StringRes val messageRes: Int,
+        @param:StringRes val messageRes: Int,
         val messageArg: String,
         val showApplyAction: Boolean = false,
     )
