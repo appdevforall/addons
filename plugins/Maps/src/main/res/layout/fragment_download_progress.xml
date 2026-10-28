@@ -165,7 +165,7 @@
             android:id="@+id/btn_cancel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="?attr/colorError"
+            android:textColor="@color/plugin_error_on_button"
             android:text="@string/maps_download_cancel_discard" />
     </LinearLayout>
 

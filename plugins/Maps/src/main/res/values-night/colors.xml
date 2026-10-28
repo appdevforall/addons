@@ -8,6 +8,8 @@
 
     <!-- Error — the plugin's own error text -->
     <color name="plugin_error">#FFB4AB</color>
+    <!-- 4.74:1 on the host button's #AAAAAA -->
+    <color name="plugin_error_on_button">#7F0008</color>
 
     <!-- Surface / text / outline — used by the plugin's own layouts via ?attr/* -->
     <color name="plugin_surface">#191C1A</color>
