@@ -66,6 +66,7 @@ class RegionManagerFragment : Fragment(),
         const val BBOX_PICKER_TAG = "maps_bbox_picker"
         const val STEP3_SAVE_TAG = "maps_step3_save"
         const val DOWNLOAD_PROGRESS_TAG = "maps_download_progress"
+        const val SNACK_MAX_LINES = 5
     }
 
     private var listView: RecyclerView? = null
@@ -359,8 +360,7 @@ class RegionManagerFragment : Fragment(),
             }
             val spec = DownloadCompleteMessage.forResult(outcome.result, regionId)
             // Indefinite iff there's an action to take, so the user is not racing a timeout to Apply.
-            val snackbar = Snackbar.make(
-                requireView(),
+            val snackbar = makeSnack(
                 getString(spec.messageRes, spec.messageArg),
                 if (spec.showApplyAction) Snackbar.LENGTH_INDEFINITE else Snackbar.LENGTH_LONG,
             )
@@ -396,8 +396,12 @@ class RegionManagerFragment : Fragment(),
     }
 
     private fun snack(message: String, length: Int) {
-        Snackbar.make(requireView(), message, length).show()
+        makeSnack(message, length).show()
     }
+
+    // Material's default of 2 lines cut "active region is unchanged" off at font scale 2.0.
+    private fun makeSnack(message: String, length: Int): Snackbar =
+        Snackbar.make(requireView(), message, length).setTextMaxLines(SNACK_MAX_LINES)
 
     // ----- RegionAdapter.Listener -----
 
