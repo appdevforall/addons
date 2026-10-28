@@ -38,7 +38,7 @@ import org.maplibre.android.maps.Style
  * bbox, keeps [overlay] projected through pans and zooms, and shrinks the bbox to fit after the
  * user's own pans.
  *
- * @param mapWidth the map view's current width in pixels, for fitting the first bbox
+ * @param mapSizeDp the map view's current width and height in dp, for fitting the first bbox
  * @param cacheDir where [MapFontExtractor] unpacks glyphs, or null once the fragment detaches
  * @param isViewAlive false once the picker's view is gone, so late callbacks do nothing
  * @param onBboxChanged re-renders whatever depends on the selection after the bbox changes
@@ -49,7 +49,7 @@ internal class PickerMapController(
     private val overlay: BboxOverlayView,
     private val selectionModel: BboxSelectionModel,
     private val scope: CoroutineScope,
-    private val mapWidth: () -> Int,
+    private val mapSizeDp: () -> Pair<Double, Double>,
     private val cacheDir: () -> File?,
     private val isViewAlive: () -> Boolean,
     private val onBboxChanged: () -> Unit,
@@ -91,14 +91,18 @@ internal class PickerMapController(
     }
 
     /**
-     * Sets [bbox] and moves the camera to fit it to [GPS_DEFAULT_SCREEN_FRACTION] of the map width,
+     * Sets [bbox] and moves the camera to fit it inside [GPS_DEFAULT_SCREEN_FRACTION] of the map,
      * or to [NO_GPS_WORLD_ZOOM] when [worldView] is true.
      */
     fun applyInitialBbox(bbox: Bbox, worldView: Boolean = false) {
         overlay.setBboxLatLon(bbox)
         val targetZoom =
-            if (worldView) NO_GPS_WORLD_ZOOM
-            else ZoomFit.fitZoom(bbox, mapWidth(), GPS_DEFAULT_SCREEN_FRACTION)
+            if (worldView) {
+                NO_GPS_WORLD_ZOOM
+            } else {
+                val (widthDp, heightDp) = mapSizeDp()
+                ZoomFit.fitZoom(bbox, widthDp, heightDp, GPS_DEFAULT_SCREEN_FRACTION)
+            }
         map.cameraPosition =
             CameraPosition.Builder()
                 .target(LatLng((bbox.south + bbox.north) / 2.0, (bbox.west + bbox.east) / 2.0))
