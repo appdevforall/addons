@@ -145,6 +145,8 @@ class RegionManagerFragment : Fragment(),
             it.setOnClickListener {
                 render(wizard.onEvent(Event.NewDownloadRequested))
             }
+            // The rows carry the same help, but an empty list has no rows to press.
+            it.showMapsTooltipOnLongPress(MapsPlugin.TOOLTIP_TAG_REGION_LIST)
         }
         view.findViewById<android.widget.ImageButton>(R.id.wizard_close)?.setOnClickListener {
             render(wizard.onEvent(Event.Exit))
@@ -527,6 +529,9 @@ class RegionManagerFragment : Fragment(),
             }
             .show()
     }
+
+    override fun onRegionHelpRequested(anchor: View): Boolean =
+        showMapsTooltip(anchor, MapsPlugin.TOOLTIP_TAG_REGION_LIST)
 
     override fun onRegionRedownload(info: RegionInfo) {
         // Refresh re-opens the wizard pre-filled with this region's

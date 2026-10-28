@@ -214,15 +214,55 @@ class MapsPluginCoverageTest {
     @Test
     fun `every tooltip tag the plugin attaches to UI has a registered entry`() {
         val registered = MapsPlugin().getTooltipEntries().map { it.tag }.toSet()
-        // The tab and the New Project template card each carry a tag; an unregistered tag renders n/a.
+        // The tab, the template card and each screen carry a tag; an unregistered tag renders n/a.
         assertEquals(
-            setOf(MapsPlugin.TOOLTIP_TAG_MAPS_TAB, MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE),
+            setOf(
+                MapsPlugin.TOOLTIP_TAG_MAPS_TAB,
+                MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE,
+                MapsPlugin.TOOLTIP_TAG_REGION_LIST,
+                MapsPlugin.TOOLTIP_TAG_SOURCE_PICKER,
+                MapsPlugin.TOOLTIP_TAG_BBOX_PICKER,
+                MapsPlugin.TOOLTIP_TAG_SAVE_REGION,
+                MapsPlugin.TOOLTIP_TAG_DOWNLOAD_PROGRESS,
+            ),
             registered,
         )
         val template = MapsPlugin().getTooltipEntries()
             .single { it.tag == MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE }
         assertTrue(template.summary.contains("Offline OSM Map"))
         assertEquals("osm-tutorial.html", template.buttons.single().uri)
+    }
+
+    /**
+     * The screens are not JVM-testable, so this reads their source: each of the five must wire a
+     * tag, and every tag referenced anywhere in the plugin must have an entry.
+     */
+    @Test
+    fun `every tooltip tag a screen wires has a registered entry`() {
+        val sourceRoot = File("src/main/kotlin/org/appdevforall/maps")
+        val tagRef = Regex("""MapsPlugin\.(TOOLTIP_TAG_[A-Z_]+)""")
+        fun tagsIn(file: File) = tagRef.findAll(file.readText()).map { it.groupValues[1] }.toSet()
+
+        val screens = listOf(
+            "RegionManagerFragment", "SourcePickerFragment", "BboxPickerFragment",
+            "Step3SaveFragment", "DownloadProgressFragment",
+        )
+        for (screen in screens) {
+            val file = File(sourceRoot, "ui/$screen.kt")
+            assertTrue("$file must exist", file.isFile)
+            assertTrue("$screen wires no tooltip tag", tagsIn(file).isNotEmpty())
+        }
+
+        val sources = sourceRoot.walk().filter { it.extension == "kt" }.toList()
+        assertTrue("scanned ${sources.size} files", sources.size > 20)
+        val referenced = sources.flatMap(::tagsIn).toSet()
+            .associateWith { MapsPlugin::class.java.getField(it).get(null) as String }
+        val registered = MapsPlugin().getTooltipEntries().map { it.tag }.toSet()
+        assertEquals(
+            "tags with no entry",
+            emptyMap<String, String>(),
+            referenced.filterValues { it !in registered },
+        )
     }
 
     @Test

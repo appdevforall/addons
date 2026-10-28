@@ -153,6 +153,8 @@ class SourcePickerFragment : Fragment() {
         rowInternet.setOnClickListener { selectSource(SourceKind.INTERNET) }
 
         btnNext.setOnClickListener { confirm() }
+        listOf(rowLan, rowInternet, btnNext)
+            .forEach { it.showMapsTooltipOnLongPress(MapsPlugin.TOOLTIP_TAG_SOURCE_PICKER) }
 
         renderSelection()
         refreshNextEnabled()

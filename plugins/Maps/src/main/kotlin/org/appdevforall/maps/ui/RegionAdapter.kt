@@ -42,6 +42,9 @@ class RegionAdapter(
 
         fun onRegionDelete(info: RegionInfo)
         fun onRegionRedownload(info: RegionInfo)
+
+        /** A row was long-pressed; return true if help was shown, so the press is consumed. */
+        fun onRegionHelpRequested(anchor: View): Boolean
     }
 
     private val items = mutableListOf<RegionRow>()
@@ -124,6 +127,7 @@ class RegionAdapter(
 
             redownload.setOnClickListener { listener?.onRegionRedownload(info) }
             delete.setOnClickListener { listener?.onRegionDelete(info) }
+            rowRoot.setOnLongClickListener { anchor -> listener?.onRegionHelpRequested(anchor) ?: false }
         }
     }
 

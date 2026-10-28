@@ -161,6 +161,8 @@ class Step3SaveFragment : Fragment() {
                 ?: defaultPopBack()
         }
         btnSave.setOnClickListener { save() }
+        // Not the name field: a long press there opens the text-selection menu.
+        listOf(btnSave, btnBack).forEach { it.showMapsTooltipOnLongPress(MapsPlugin.TOOLTIP_TAG_SAVE_REGION) }
 
         loadExistingRegionIds()
     }

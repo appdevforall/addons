@@ -100,6 +100,8 @@ class DownloadProgressFragment : Fragment() {
         progressBasemap = view.findViewById(R.id.progress_basemap)
         progressTiles = view.findViewById(R.id.progress_tiles)
         btnCancel = view.findViewById(R.id.btn_cancel)
+        listOf(headerLabel, btnCancel)
+            .forEach { it.showMapsTooltipOnLongPress(MapsPlugin.TOOLTIP_TAG_DOWNLOAD_PROGRESS) }
 
         val args = arguments
         val regionId = args?.getString(ARG_REGION_ID) ?: run {

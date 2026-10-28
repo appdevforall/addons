@@ -284,6 +284,9 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
         bboxOverlay.setListener { newBbox -> onBboxResized(newBbox) }
         btnBack.setOnClickListener { back() }
         btnNext.setOnClickListener { next() }
+        // The two estimate lines are what needs explaining, and they stay pressable while Next is disabled.
+        listOf(estimateFree, estimateSizeLine, btnNext)
+            .forEach { it.showMapsTooltipOnLongPress(MapsPlugin.TOOLTIP_TAG_BBOX_PICKER) }
         // 6. Paint the initial "<W>km × <H>km — max zoom N" line before the first settle.
         updateBboxDimsLabel()
     }
