@@ -106,6 +106,7 @@
     <string name="maps_download_source_lan">LAN</string>
     <string name="maps_download_source_unknown">unknown</string>
     <string name="maps_download_done_applied">Region downloaded and applied to project: %1$s</string>
+    <string name="maps_download_done_updated">Region downloaded: %1$s. The project\'s map is updated.</string>
     <string name="maps_download_done_unchanged">Region downloaded: %1$s. Project\'s active region is unchanged.</string>
     <string name="maps_download_done_not_found">Region downloaded but couldn\'t be located in cache: %1$s</string>
     <string name="maps_download_done_apply_failed">Region downloaded; apply failed: %1$s</string>

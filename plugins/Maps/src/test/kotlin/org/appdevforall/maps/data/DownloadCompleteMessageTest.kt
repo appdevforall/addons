@@ -26,6 +26,17 @@ class DownloadCompleteMessageTest {
     }
 
     @Test
+    fun `Updated - says the project's map is updated, no Apply action`() {
+        val spec = DownloadCompleteMessage.forResult(
+            FirstRegionAutoActivator.Result.Updated(regionId = "lagos", displayName = "Lagos"),
+            displayName = "lagos",
+        )
+        assertFalse("the copy is already updated, so there is nothing to apply", spec.showApplyAction)
+        assertEquals(R.string.maps_download_done_updated, spec.messageRes)
+        assertEquals("Lagos", spec.messageArg)
+    }
+
+    @Test
     fun `NoOpAlreadyActive - active region untouched, offers the Apply action`() {
         val spec = DownloadCompleteMessage.forResult(
             FirstRegionAutoActivator.Result.NoOpAlreadyActive,

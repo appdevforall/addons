@@ -39,6 +39,7 @@ internal object DownloadCompleteMessage {
      *
      * Branch behavior (mirrors [FirstRegionAutoActivator]'s decision table):
      *   - First region (no active.txt) → confirm apply + activation.
+     *   - The active region downloaded again → its copy in the project is replaced, no action.
      *   - Subsequent region (active.txt already set) → active region untouched,
      *     but surface an "Apply" action for a one-tap switch.
      *   - Apply-failed / region-not-found → surface the reason so the user
@@ -47,6 +48,8 @@ internal object DownloadCompleteMessage {
     fun forResult(result: FirstRegionAutoActivator.Result, displayName: String): Spec = when (result) {
         is FirstRegionAutoActivator.Result.Activated ->
             Spec(R.string.maps_download_done_applied, result.displayName)
+        is FirstRegionAutoActivator.Result.Updated ->
+            Spec(R.string.maps_download_done_updated, result.displayName)
         is FirstRegionAutoActivator.Result.NoOpAlreadyActive ->
             Spec(R.string.maps_download_done_unchanged, displayName, showApplyAction = true)
         is FirstRegionAutoActivator.Result.NoOpRegionNotFound ->

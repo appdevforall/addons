@@ -16,7 +16,8 @@ import org.appdevforall.maps.util.runCatchingCancellable
  * | Project state                                  | Behavior              |
  * | ---------------------------------------------- | --------------------- |
  * | No `active.txt` (or blank)                     | Apply + write active  |
- * | `active.txt` already names a region            | No-op (user's choice) |
+ * | `active.txt` already names this region         | Re-apply (new tiles)  |
+ * | `active.txt` already names another region      | No-op (user's choice) |
  * | Region missing from cache (race / corruption)  | No-op (nothing to do) |
  *
  * The file-copy + ProjectMapEmitter wiring and the active-sentinel write are
@@ -30,6 +31,9 @@ internal object FirstRegionAutoActivator {
 
         /** [downloadedRegionId] wasn't found in the cache root. */
         object NoOpRegionNotFound : Result()
+
+        /** The active region was downloaded again and its copy in the project replaced. */
+        data class Updated(val regionId: String, val displayName: String) : Result()
 
         /** First region auto-activated successfully. */
         data class Activated(val regionId: String, val displayName: String) : Result()
@@ -72,13 +76,20 @@ internal object FirstRegionAutoActivator {
             // previously-active region, the sentinel is stale — treat the project
             // as having no active region so the new download auto-activates.
             val activeStillExists = cacheEntries.any { it.regionId == existingActive }
-            if (activeStillExists) return@withContext Result.NoOpAlreadyActive
+            if (activeStillExists && existingActive != downloadedRegionId) {
+                return@withContext Result.NoOpAlreadyActive
+            }
             // else fall through — sentinel is stale.
         }
         val info = cacheEntries.firstOrNull { it.regionId == downloadedRegionId }
             ?: return@withContext Result.NoOpRegionNotFound
 
         val applied = applyRegionToProject(info, projectDir)
+        if (applied && existingActive == downloadedRegionId) {
+            // A re-download of the active region: the project now has the new tiles, and active.txt
+            // already names it.
+            return@withContext Result.Updated(info.regionId, info.displayName)
+        }
         if (!applied) {
             // Don't write active.txt if files weren't actually copied — would
             // produce a project that references a region but doesn't have its
