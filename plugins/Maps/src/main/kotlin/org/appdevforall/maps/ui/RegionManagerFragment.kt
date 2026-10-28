@@ -20,15 +20,16 @@ import org.appdevforall.maps.domain.TileEstimate
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import org.appdevforall.maps.data.DownloadCompleteMessage
-import org.appdevforall.maps.data.FirstRegionAutoActivator
+import org.appdevforall.maps.data.DownloadCompletion
 import org.appdevforall.maps.data.ProjectRegionCoordinator
 import org.appdevforall.maps.data.RegionCache
 import org.appdevforall.maps.data.RegionInfo
+import org.appdevforall.maps.data.RegionListActions
+import org.appdevforall.maps.data.RegionListActions.ToggleResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import org.appdevforall.maps.util.runCatchingCancellable
 
 /**
  * Host-resolved Fragment for the "Maps" panel. Registered as a
@@ -97,6 +98,8 @@ class RegionManagerFragment : Fragment(),
     private val projectRegions = ProjectRegionCoordinator(
         pluginContextProvider = { MapsPlugin.pluginContext },
     )
+    private val listActions = RegionListActions(projectRegions)
+    private val downloadCompletion = DownloadCompletion(projectRegions)
 
     override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater =
         themedPluginInflater(super.onGetLayoutInflater(savedInstanceState))
@@ -202,17 +205,12 @@ class RegionManagerFragment : Fragment(),
     private fun showSourcePicker(step: Step.SourcePicker) {
         val list = listContainer ?: return
         list.visibility = View.GONE
-        wizardContainer?.visibility = View.VISIBLE
-        wizardTitle?.setText(R.string.maps_wizard_title_source)
-        btnDownloadNew?.visibility = View.GONE
-        onBackPressedCallback.isEnabled = true
+        showWizardChrome(R.string.maps_wizard_title_source)
         val frag = SourcePickerFragment.newInstance(
             prefillRegionName = step.prefillRegionName,
             prefillRegionId = step.prefillRegionId,
         )
-        childFragmentManager.beginTransaction()
-            .replace(R.id.picker_container, frag, SOURCE_PICKER_TAG)
-            .commit()
+        showStepFragment(frag, SOURCE_PICKER_TAG)
     }
 
     private fun showBboxPicker(step: Step.BboxPicker) {
@@ -236,10 +234,7 @@ class RegionManagerFragment : Fragment(),
     }
 
     private fun showStep3Save(step: Step.SaveStep) {
-        wizardContainer?.visibility = View.VISIBLE
-        wizardTitle?.setText(R.string.maps_wizard_title_save)
-        btnDownloadNew?.visibility = View.GONE
-        onBackPressedCallback.isEnabled = true
+        showWizardChrome(R.string.maps_wizard_title_save)
         val bbox = step.bbox ?: return
         // estimate is null when the user tapped Next before the slicer
         // returned; Step 3 handles that as "Calculating download size…".
@@ -251,16 +246,11 @@ class RegionManagerFragment : Fragment(),
             prefillRegionId = step.prefillRegionId,
             prefillDisplayName = step.prefillRegionName,
         )
-        childFragmentManager.beginTransaction()
-            .replace(R.id.picker_container, frag, STEP3_SAVE_TAG)
-            .commit()
+        showStepFragment(frag, STEP3_SAVE_TAG)
     }
 
     private fun showDownloadProgress(step: Step.DownloadProgress) {
-        wizardContainer?.visibility = View.VISIBLE
-        wizardTitle?.setText(R.string.maps_wizard_title_download)
-        btnDownloadNew?.visibility = View.GONE
-        onBackPressedCallback.isEnabled = true
+        showWizardChrome(R.string.maps_wizard_title_download)
         val bbox = step.bbox ?: return
         val frag = DownloadProgressFragment.newInstance(
             regionId = step.regionId,
@@ -273,9 +263,19 @@ class RegionManagerFragment : Fragment(),
             zoomMin = step.zoomMin,
             zoomMax = step.zoomMax,
         )
-        childFragmentManager.beginTransaction()
-            .replace(R.id.picker_container, frag, DOWNLOAD_PROGRESS_TAG)
-            .commit()
+        showStepFragment(frag, DOWNLOAD_PROGRESS_TAG)
+    }
+
+    /** The title bar and BACK handling every in-panel wizard step shares. */
+    private fun showWizardChrome(titleRes: Int) {
+        wizardContainer?.visibility = View.VISIBLE
+        wizardTitle?.setText(titleRes)
+        btnDownloadNew?.visibility = View.GONE
+        onBackPressedCallback.isEnabled = true
+    }
+
+    private fun showStepFragment(frag: Fragment, tag: String) {
+        childFragmentManager.beginTransaction().replace(R.id.picker_container, frag, tag).commit()
     }
 
     private fun showList() {
@@ -348,153 +348,78 @@ class RegionManagerFragment : Fragment(),
     // ----- DownloadProgressFragment.Listener (download completion / cancel) -----
 
     override fun onDownloadComplete(regionId: String) {
-        // Auto-activation for the FIRST region in this project. See
-        // [FirstRegionAutoActivator] for the policy + the tested path, and
-        // [DownloadCompleteMessage] for the (also tested) result → Snackbar
-        // mapping this Fragment renders.
+        // The policy is FirstRegionAutoActivator's and the message mapping is
+        // DownloadCompleteMessage's; both are unit-tested, this only renders.
         viewLifecycleOwner.lifecycleScope.launch {
-            // currentProjectRoot() reaches IdeProjectService, which does disk I/O —
-            // keep it off the Main dispatcher (StrictMode DiskReadViolation otherwise,
-            // same root cause as the toggle/delete paths).
-            val projectDir = withContext(Dispatchers.IO) { projectRegions.currentProjectRoot() }
-            if (projectDir == null) {
-                render(wizard.onEvent(Event.DownloadDone))
-                Snackbar.make(
-                    requireView(),
-                    getString(R.string.maps_download_done_no_project, regionId),
-                    Snackbar.LENGTH_LONG,
-                ).show()
+            val outcome = downloadCompletion.complete(regionId)
+            render(wizard.onEvent(Event.DownloadDone))
+            if (outcome !is DownloadCompletion.Outcome.Finished) {
+                snack(getString(R.string.maps_download_done_no_project, regionId), Snackbar.LENGTH_LONG)
                 return@launch
             }
-            val result = withContext(Dispatchers.IO) {
-                FirstRegionAutoActivator.maybeAutoActivate(
-                    projectDir = projectDir,
-                    mapsSubpath = ProjectRegionCoordinator.DEFAULT_PROJECT_MAPS_SUBPATH,
-                    regionsCacheRoot = RegionCache.rootDir(),
-                    downloadedRegionId = regionId,
-                    applyRegionToProject = projectRegions::applyRegionToProject,
-                    writeActiveRegion = projectRegions::writeActiveRegionId,
-                )
-            }
-            render(wizard.onEvent(Event.DownloadDone))
-            val spec = DownloadCompleteMessage.forResult(result, regionId)
+            val spec = DownloadCompleteMessage.forResult(outcome.result, regionId)
+            // Indefinite iff there's an action to take, so the user is not racing a timeout to Apply.
             val snackbar = Snackbar.make(
                 requireView(),
                 getString(spec.messageRes, spec.messageArg),
-                // Indefinite iff there's an action to take — give the user time
-                // to tap "Apply" instead of racing a timeout.
                 if (spec.showApplyAction) Snackbar.LENGTH_INDEFINITE else Snackbar.LENGTH_LONG,
             )
             if (spec.showApplyAction) {
                 snackbar.setAction(R.string.maps_download_apply_action) {
-                    applyDownloadedRegionFromSnackbar(projectDir, regionId)
+                    applyDownloadedRegionFromSnackbar(outcome.projectDir, regionId)
                 }
             }
             snackbar.show()
         }
     }
 
-    /**
-     * "Apply" action on the post-download Snackbar when the project already
-     * had an active region. Mirrors the toggle-on path in
-     * [onRegionToggleActive] — copies files, writes active.txt, refreshes
-     * the list. No-op if the regionId isn't in the cache (shouldn't happen,
-     * we just downloaded it).
-     */
+    /** The post-download snackbar's "Apply", for a project that already had an active region. */
     private fun applyDownloadedRegionFromSnackbar(projectDir: File, regionId: String) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val applied = withContext(Dispatchers.IO) {
-                val info = runCatchingCancellable { RegionCache.list() }.getOrNull()
-                    ?.firstOrNull { it.regionId == regionId } ?: return@withContext false
-                projectRegions.applyAndActivate(info, projectDir)
-            }
-            if (applied) {
+            if (downloadCompletion.applyFromSnackbar(projectDir, regionId)) {
                 refresh()
-                Snackbar.make(
-                    requireView(),
-                    getString(R.string.maps_regions_switched, regionId),
-                    Snackbar.LENGTH_SHORT,
-                ).show()
+                snack(getString(R.string.maps_regions_switched, regionId), Snackbar.LENGTH_SHORT)
             } else {
-                Snackbar.make(
-                    requireView(),
-                    getString(R.string.maps_regions_apply_failed),
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                snack(getString(R.string.maps_regions_apply_failed), Snackbar.LENGTH_LONG)
             }
         }
     }
 
     override fun onDownloadCancelled() {
         render(wizard.onEvent(Event.DownloadCancelled))
-        Snackbar.make(
-            requireView(),
-            getString(R.string.maps_download_cancelled),
-            Snackbar.LENGTH_SHORT,
-        ).show()
+        snack(getString(R.string.maps_download_cancelled), Snackbar.LENGTH_SHORT)
     }
 
     override fun onDownloadFailed(message: String) {
         render(wizard.onEvent(Event.DownloadFailed))
-        Snackbar.make(
-            requireView(),
-            getString(R.string.maps_download_failed, message),
-            Snackbar.LENGTH_LONG,
-        ).show()
+        snack(getString(R.string.maps_download_failed, message), Snackbar.LENGTH_LONG)
+    }
+
+    private fun snack(message: String, length: Int) {
+        Snackbar.make(requireView(), message, length).show()
     }
 
     // ----- RegionAdapter.Listener -----
 
     override fun onRegionToggleActive(info: RegionInfo, newActive: Boolean) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val projectDir = withContext(Dispatchers.IO) { projectRegions.currentProjectRoot() }
-            if (projectDir == null) {
-                Snackbar.make(
-                    requireView(),
-                    R.string.maps_regions_no_project,
-                    Snackbar.LENGTH_LONG,
-                ).show()
-                return@launch
+            val result = listActions.toggleActive(info, newActive)
+            when (result) {
+                ToggleResult.NoProject ->
+                    snack(getString(R.string.maps_regions_no_project), Snackbar.LENGTH_LONG)
+                ToggleResult.ApplyFailed ->
+                    snack(getString(R.string.maps_regions_apply_failed), Snackbar.LENGTH_LONG)
+                is ToggleResult.Switched -> snack(
+                    getString(R.string.maps_region_switched_active, result.fromName, result.toName),
+                    Snackbar.LENGTH_SHORT,
+                )
+                is ToggleResult.Activated ->
+                    snack(getString(R.string.maps_region_activated, result.name), Snackbar.LENGTH_SHORT)
+                is ToggleResult.Deactivated ->
+                    snack(getString(R.string.maps_region_deactivated, result.name), Snackbar.LENGTH_SHORT)
             }
-            val priorActive = withContext(Dispatchers.IO) {
-                projectRegions.readActiveRegionId(projectDir)
-            }
-            val priorName = priorActive?.let { activeId ->
-                withContext(Dispatchers.IO) { runCatchingCancellable { RegionCache.list() }.getOrNull() }
-                    ?.firstOrNull { it.regionId == activeId }?.displayName
-            }
-            val ok = withContext(Dispatchers.IO) {
-                if (newActive) {
-                    // Activate this region, deactivating any previously-active one
-                    // implicitly (write-and-replace).
-                    projectRegions.applyAndActivate(info, projectDir)
-                } else {
-                    // Deactivate: clear active.txt.
-                    projectRegions.clearActiveRegionId(projectDir)
-                    true
-                }
-            }
-            if (!ok) {
-                Snackbar.make(
-                    requireView(),
-                    getString(R.string.maps_regions_apply_failed),
-                    Snackbar.LENGTH_LONG,
-                ).show()
-                refresh()
-                return@launch
-            }
-            val statusMsg = when {
-                newActive && priorActive != null && priorActive != info.regionId ->
-                    getString(
-                        R.string.maps_region_switched_active,
-                        priorName ?: priorActive,
-                        info.displayName,
-                    )
-                newActive -> getString(R.string.maps_region_activated, info.displayName)
-                else -> getString(R.string.maps_region_deactivated, info.displayName)
-            }
-            Snackbar.make(requireView(), statusMsg, Snackbar.LENGTH_SHORT).show()
-            refresh()
+            // A failed apply re-renders too, so the switch snaps back to the stored state.
+            if (result != ToggleResult.NoProject) refresh()
         }
     }
 
@@ -505,25 +430,12 @@ class RegionManagerFragment : Fragment(),
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.maps_regions_delete) { _, _ ->
                 viewLifecycleOwner.lifecycleScope.launch {
-                    val ok = withContext(Dispatchers.IO) { RegionCache.delete(info) }
-                    if (ok) {
-                        // If the deleted region is the project's active one, clear
-                        // the sentinel so a subsequent download can auto-activate
-                        // and the on-disk state stays consistent.
-                        withContext(Dispatchers.IO) {
-                            val projectDir = projectRegions.currentProjectRoot()
-                            if (projectDir != null &&
-                                projectRegions.readActiveRegionId(projectDir) == info.regionId
-                            ) {
-                                projectRegions.clearActiveRegionId(projectDir)
-                            }
-                        }
-                    }
+                    val ok = listActions.delete(info)
                     val msg = getString(
                         if (ok) R.string.maps_regions_deleted else R.string.maps_regions_delete_failed,
                         info.displayName,
                     )
-                    Snackbar.make(requireView(), msg, Snackbar.LENGTH_SHORT).show()
+                    snack(msg, Snackbar.LENGTH_SHORT)
                     refresh()
                 }
             }
@@ -534,17 +446,7 @@ class RegionManagerFragment : Fragment(),
         showMapsTooltip(anchor, MapsPlugin.TOOLTIP_TAG_REGION_LIST)
 
     override fun onRegionRedownload(info: RegionInfo) {
-        // Refresh re-opens the wizard pre-filled with this region's
-        // existing name + bbox, so the user re-picks a source. The machine
-        // parses (and validates) the raw bounds tuple.
-        render(
-            wizard.onEvent(
-                Event.RedownloadRequested(
-                    regionId = info.regionId,
-                    displayName = info.displayName,
-                    bbox = info.bbox,
-                ),
-            ),
-        )
+        // Re-opens the wizard on this region's saved name and bounds; the machine validates them.
+        render(wizard.onEvent(listActions.redownloadRequest(info)))
     }
 }
