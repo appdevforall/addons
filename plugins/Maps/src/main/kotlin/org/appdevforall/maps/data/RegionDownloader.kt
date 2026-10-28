@@ -55,6 +55,9 @@ import org.appdevforall.maps.util.MAPS_TRAFFIC_STATS_TAG
  */
 internal object RegionDownloader {
 
+    /** The archive holds no tiles inside the chosen box; the UI shows its own plain message. */
+    class NoTilesInRegionException(message: String) : IOException(message)
+
     /** Schema version. Bump when adding required fields. */
     internal const val META_SCHEMA_VERSION = 1
 
@@ -289,7 +292,7 @@ internal object RegionDownloader {
             )
             val regionTiles = PmtilesRegionSlicer.tilesInRegionImpl(fetcher, bbox, zoomMin, zoomMax)
             if (regionTiles.isEmpty()) {
-                throw IOException(
+                throw NoTilesInRegionException(
                     "No tiles intersect bbox $bbox at zoom $zoomMin..$zoomMax in $globalUrl"
                 )
             }

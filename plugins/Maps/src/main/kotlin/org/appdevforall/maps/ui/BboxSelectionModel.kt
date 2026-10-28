@@ -70,6 +70,10 @@ internal class BboxSelectionModel(initialBbox: Bbox) {
     var realEstimateFailed: Boolean = false
         private set
 
+    /** True when the last finished estimate found no tiles in [currentBbox]. */
+    var realEstimateHasNoTiles: Boolean = false
+        private set
+
     /** Source context piped in from Step 1, needed for the slicer-driven estimate. */
     var sourceKind: SourceKind = SourceKind.UNKNOWN
         private set
@@ -131,6 +135,7 @@ internal class BboxSelectionModel(initialBbox: Bbox) {
         zoomMax = ZoomCap.pickZoomMax(currentBbox, zoomMin)
         realByteEstimate = null
         realEstimateFailed = false
+        realEstimateHasNoTiles = false
     }
 
     /**
@@ -193,6 +198,7 @@ internal class BboxSelectionModel(initialBbox: Bbox) {
             RegionSizeEstimator.State.Failed -> realEstimateFailed = true
             is RegionSizeEstimator.State.Done -> {
                 realByteEstimate = PmtilesRegionSlicer.estimateRegionBytes(state.tiles)
+                realEstimateHasNoTiles = state.tiles.isEmpty()
                 realEstimateFailed = false
             }
         }

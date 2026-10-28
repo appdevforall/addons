@@ -155,6 +155,16 @@ class BboxSelectionModelTest {
         // PmtilesRegionSlicer.estimateRegionBytes = Σ byteLength + 8 KB overhead.
         assertEquals(1000L + 500L + 8L * 1024L, m.realByteEstimate)
         assertFalse(m.realEstimateFailed)
+        assertFalse(m.realEstimateHasNoTiles)
+    }
+
+    @Test
+    fun `an empty estimate is flagged until the bbox changes`() {
+        val m = newModel()
+        m.onEstimateState(RegionSizeEstimator.State.Done(emptyList()))
+        assertTrue("an empty tile list must be flagged", m.realEstimateHasNoTiles)
+        m.applyBboxChange(Bbox.aroundPoint(5.0, 5.0, 50.0))
+        assertFalse("a bbox change must clear the flag", m.realEstimateHasNoTiles)
     }
 
     @Test

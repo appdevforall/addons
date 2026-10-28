@@ -113,6 +113,7 @@
     <string name="maps_download_apply_action">Apply</string>
     <string name="maps_download_cancelled">Download cancelled — partial files removed</string>
     <string name="maps_download_failed">Download failed: %1$s</string>
+    <string name="maps_download_no_tiles">there is no map data in this area</string>
     <string name="maps_regions_switched">Switched active region to: %1$s</string>
     <string name="maps_save_total_calculating">Calculating download size…</string>
     <string name="maps_save_total_mb">%1$.1f MB</string>

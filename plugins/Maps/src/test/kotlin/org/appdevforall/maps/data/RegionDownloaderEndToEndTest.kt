@@ -138,7 +138,7 @@ class RegionDownloaderEndToEndTest {
 
         val thrown = runCatching { download(root, zoomMin = 10, zoomMax = 12) }.exceptionOrNull()
 
-        assertTrue("got $thrown", thrown is IOException)
+        assertTrue("got $thrown", thrown is RegionDownloader.NoTilesInRegionException)
         assertTrue(thrown!!.message!!.startsWith("No tiles intersect bbox"))
         assertFalse(File(root, "world").exists())
         assertFalse(File(root, "world.partial").exists())

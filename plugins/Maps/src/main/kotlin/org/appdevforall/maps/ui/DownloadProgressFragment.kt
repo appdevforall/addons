@@ -180,7 +180,12 @@ class DownloadProgressFragment : Fragment() {
                 // Re-throw to allow structured cancellation to propagate.
                 throw cancel
             } catch (t: Throwable) {
-                val msg = t.message ?: t.javaClass.simpleName
+                val msg =
+                    if (t is RegionDownloader.NoTilesInRegionException) {
+                        getString(R.string.maps_download_no_tiles)
+                    } else {
+                        t.message ?: t.javaClass.simpleName
+                    }
                 (parentFragment as? Listener)?.onDownloadFailed(msg)
             }
         }

@@ -23,6 +23,9 @@ object EstimateDisplay {
      */
     const val DEFAULT_NON_VECTOR_ALLOWANCE_BYTES: Long = 4L * 1024L * 1024L
 
+    /** The size line when the box holds no map tiles. */
+    const val NO_TILES_TEXT = "No map data in this area. Move or enlarge the box"
+
     /**
      * @param text the line to display (empty before a source is picked).
      * @param isError true when [text] should use the error color.
@@ -46,6 +49,7 @@ object EstimateDisplay {
      * @param hasSliceableSource whether a source is chosen yet — when false, nothing is shown.
      * @param nonVectorAllowanceBytes headroom added for the basemap + metadata when checking the cap.
      * @param maxDownloadBytes the hard download cap (1 GB in production).
+     * @param noTiles true when the finished estimate found no tiles in the box.
      */
     fun compute(
         realBytes: Long?,
@@ -53,10 +57,20 @@ object EstimateDisplay {
         hasSliceableSource: Boolean,
         nonVectorAllowanceBytes: Long = DEFAULT_NON_VECTOR_ALLOWANCE_BYTES,
         maxDownloadBytes: Long = DEFAULT_MAX_DOWNLOAD_BYTES,
+        noTiles: Boolean = false,
     ): State {
         if (!hasSliceableSource) {
             // No source picked yet — blank line, Next disabled.
             return State(text = "", isError = false, overBudget = false, nextEnabled = false)
+        }
+        if (realBytes != null && noTiles) {
+            // The archive has no tiles in this box (open sea, or past its zoom range).
+            return State(
+                text = NO_TILES_TEXT,
+                isError = true,
+                overBudget = false,
+                nextEnabled = false,
+            )
         }
         if (realBytes != null) {
             val totalBytes = realBytes + nonVectorAllowanceBytes
