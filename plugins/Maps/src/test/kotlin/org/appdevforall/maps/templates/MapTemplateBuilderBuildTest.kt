@@ -112,6 +112,23 @@ class MapTemplateBuilderBuildTest {
     }
 
     @Test
+    fun `the metadata declares PACKAGE_NAME, which the template's source paths use`() {
+        val svc = RecordingTemplateService(accept = true)
+        MapTemplateBuilder.buildAndRegister(
+            AssetPluginContext(TestAssetManagers.fromDirectory(assetsRoot)), svc, File(tmp.root, "out"),
+        )
+        val cgt = svc.registered.single()
+        val metadata = ZipFile(cgt).use { zip ->
+            zip.getInputStream(zip.getEntry("OfflineOSMMap/template/template.json")).reader().readText()
+        }
+        // CoGo's ZipRecipeExecutor warns when a template uses PACKAGE_NAME without declaring it.
+        assertTrue(zipEntries(cgt).any { "PACKAGE_NAME" in it })
+        val required = org.json.JSONObject(metadata).getJSONObject("parameters").getJSONObject("required")
+        assertTrue("required parameters lack packageName: $required", required.has("packageName"))
+        assertEquals("PACKAGE_NAME", required.getJSONObject("packageName").getString("identifier"))
+    }
+
+    @Test
     fun `returns zero when the host declines the registration`() {
         val svc = RecordingTemplateService(accept = false)
 

@@ -148,6 +148,9 @@ internal object MapTemplateBuilder {
             // tile renders blank. Lives beside the template dir; not emitted into projects.
             .thumbnailFromAssets("$ASSETS_REGION_MAP/thumb.png", ctx)
             .showLanguageOption()
+            // The source paths use PACKAGE_NAME, so the metadata must declare it; without it
+            // CoGo logs "Missing packageName" and shows a finished-with-warnings banner.
+            .showPackageNameOption()
             .let { populateScaffold(it, ctx) }
             .build(outputDir)
 
