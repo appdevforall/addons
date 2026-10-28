@@ -22,7 +22,7 @@
          2026-05-15: "Pick one active region to build into your app" —
          reinforces the per-project one-active-at-a-time rule (R2 scope). -->
     <string name="maps_regions_subtitle">Pick one active region to build into your app</string>
-    <string name="maps_regions_empty">No regions cached yet. Tap "+ Download new region" to add one.</string>
+    <string name="maps_regions_empty">No regions cached yet. Tap \"+ Download new region\" to add one.</string>
     <string name="maps_regions_no_project">No project open. Open a Map project to apply a region.</string>
     <string name="maps_regions_delete">Delete</string>
     <string name="maps_regions_deleted">Deleted %1$s</string>
@@ -89,7 +89,7 @@
     <string name="maps_save_summary_center">Center</string>
     <string name="maps_save_summary_extent">Extent</string>
     <string name="maps_save_summary_total">Total to download</string>
-    <string name="maps_save_collision_message">A region named &quot;%1$s&quot; already exists. Pick another name.</string>
+    <string name="maps_save_collision_message">A region named \"%1$s\" already exists. Pick another name.</string>
 
     <!-- Layer labels — human-readable, not filenames. Used by Step 2 size
          overlay, Step 3 summary card rows, and Download progress rows. -->
