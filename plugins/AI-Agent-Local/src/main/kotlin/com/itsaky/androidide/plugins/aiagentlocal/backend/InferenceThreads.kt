@@ -70,7 +70,12 @@ internal object InferenceThreads {
      */
     private fun capacitiesIn(cpuRoot: File): List<Int> = try {
         cpuRoot.listFiles { file -> CPU_DIR.matches(file.name) }.orEmpty().mapNotNull { core ->
-            File(core, "cpu_capacity").takeIf { it.isFile }?.readText()?.trim()?.toIntOrNull()
+            // Per core, so one unreadable file leaves that core out instead of the whole layout.
+            try {
+                File(core, "cpu_capacity").takeIf { it.isFile }?.readText()?.trim()?.toIntOrNull()
+            } catch (_: Exception) {
+                null
+            }
         }
     } catch (_: Exception) {
         emptyList()

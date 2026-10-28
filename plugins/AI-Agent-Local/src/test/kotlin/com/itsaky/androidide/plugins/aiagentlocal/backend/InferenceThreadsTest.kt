@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentlocal.backend
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -74,6 +75,16 @@ class InferenceThreadsTest {
     fun givenUnparseableAndMissingCapacityFiles_whenRead_thenThoseCoresAreIgnored() {
         // cpu0 holds garbage and cpu1 has no file at all; the rest still decide.
         val root = sysfs(listOf("garbage", null, "160", "160", "498", "498", "1024", "1024"))
+
+        assertEquals(ThreadPlan(4, 6), InferenceThreads.read(root, onlineCores = 8))
+    }
+
+    @Test
+    fun givenOneUnreadableCapacityFile_whenRead_thenTheOtherCoresStillDecide() {
+        val root = sysfs(pixel6Pro.map { it.toString() })
+        val unreadable = File(root, "cpu0/cpu_capacity").apply { setReadable(false) }
+        // A process that can read anything (root) never hits the failure this pins.
+        Assume.assumeFalse(unreadable.canRead())
 
         assertEquals(ThreadPlan(4, 6), InferenceThreads.read(root, onlineCores = 8))
     }

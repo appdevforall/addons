@@ -56,6 +56,13 @@ class ChatTitleTest {
     }
 
     @Test
+    fun givenTheSourceKey_whenRead_thenItMatchesTheLiteralTheLocalBackendReads() {
+        // Duplicated in AI-Agent-Local (LocalLlmBackend.EXTRA_PARAM_CHAT_TITLE_SOURCE); a rename on
+        // one side alone would silently send every title back through the model.
+        assertEquals("chat_title_source", ChatTitle.EXTRA_PARAM_SOURCE)
+    }
+
+    @Test
     fun givenAPaddedLongMessage_whenTakingItsExcerpt_thenItIsTrimmedAndCut() {
         assertEquals("fix the build", ChatTitle.excerpt("  fix the build \n"))
         assertEquals(ChatTitle.EXCERPT_CHARS, ChatTitle.excerpt("q".repeat(5_000)).length)
