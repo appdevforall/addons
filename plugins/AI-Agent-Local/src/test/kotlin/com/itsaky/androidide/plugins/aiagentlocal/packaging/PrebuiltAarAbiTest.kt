@@ -175,12 +175,15 @@ class PrebuiltAarAbiTest {
          * The libraries llama.cpp has to produce for the wrapper to load at all. The CPU backend is one
          * library per instruction-set level and the engine loads the best one the phone supports
          * (ADFA-6757). The ARMv8.0 build is the one every arm64 phone can run: a shipment without it
-         * would leave an old Cortex-A53 phone with no CPU backend and nothing but a failed load.
+         * would leave an old Cortex-A53 phone with no CPU backend and nothing but a failed load. The
+         * others are what a newer phone is faster with; `llama-android.cpp` loads all four by name.
          */
         val REQUIRED_LIBS = setOf(
             "libggml-base.so",
             "libggml-cpu-android_armv8.0_1.so",
             "libggml-cpu-android_armv8.2_1.so",
+            "libggml-cpu-android_armv8.2_2.so",
+            "libggml-cpu-android_armv8.6_1.so",
             "libggml.so",
             "libllama-android.so",
             "libllama.so",

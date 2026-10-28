@@ -147,14 +147,17 @@ normal build.
 so the AAR carries `libggml-cpu-android_armv8.0_1.so`, `_armv8.2_1` (dot-product), `_armv8.2_2`
 (dot-product and fp16) and `_armv8.6_1` (adds int8 matrix multiply) instead of one `libggml-cpu.so`. Left
 at its default, the cross-compile targets basic ARMv8 and the library contains no dot-product
-instructions at all (ADFA-6757). `llama-android.cpp` loads the best variant at start-up, looking beside
-`libllama-android.so`; each variant scores itself against the phone it runs on, and the ARMv8.0 build is
-the one every arm64 phone can run. Do not replace this with `-march=armv8.2-a+dotprod`: a Cortex-A53
+instructions at all (ADFA-6757). `llama-android.cpp` tries the variants by name at start-up, best first,
+and ggml refuses any that scores zero on the phone it runs on, so the first to load is the best supported;
+the ARMv8.0 build is the one every arm64 phone can run. Loading by name lets the linker find them both in
+the IDE's extracted plugin directory and inside an APK, which is where `connectedDebugAndroidTest` runs
+them from. A variant added to or dropped from the build has to be added to or dropped from
+`CPU_VARIANTS` in `llama-android.cpp` and `PrebuiltAarAbiTest` too. Do not replace this with `-march=armv8.2-a+dotprod`: a Cortex-A53
 phone would then crash on its first instruction.
 
 Check a rebuilt AAR with `llvm-objdump -d` on each variant: the `armv8.0_1` library must hold no `sdot`
-and the `armv8.2_1` library must. On a phone, the log line `backends: loaded CPU from ...` and the
-`System Info` line (`DOTPROD = 1`) show what was picked.
+and the `armv8.2_1` library must. On a phone, the log line `backends: loaded CPU variant ...` and the
+`System Info` line (`DOTPROD = 1`) show what was picked; a variant that failed to load logs why.
 
 > Reproducibility: the AAR is a compiled binary, so ideally regenerate it in CI
 > with a pinned NDK/CMake and record its checksum, rather than from an arbitrary
@@ -401,7 +404,7 @@ jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
 ### Size Optimization
 
 Current release sizes:
-- **ai-agent-local**: ~15 MB (includes the arm64-v8a llama.cpp native libraries)
+- **ai-agent-local**: ~17.5 MB (includes the arm64-v8a llama.cpp native libraries, four CPU variants among them)
 - **ai-assistant-plugin**: ~2 MB (UI and business logic)
 
 To reduce size further:
