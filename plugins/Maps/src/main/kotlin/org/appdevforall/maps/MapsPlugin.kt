@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
  *
  *  - **Project flow.** The user creates a project from the Offline OSM Map template, taps
  *    the **Maps** tab, downloads a region (bbox picker → background download →
- *    `/sdcard/CodeOnTheGo/maps/<id>/`), and applies it via "Use in this project", which
+ *    `/sdcard/CodeOnTheGo/maps/<id>/`), and applies it with the switch on its row, which
  *    copies the region's data files into the project. See [RegionManagerFragment.applyRegionToProject].
  */
 class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
@@ -71,6 +71,16 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         /** Tooltip tag for the Offline OSM Map card on the New Project screen. */
         const val TOOLTIP_TAG_REGION_MAP_TEMPLATE = "maps.template.region_map"
+
+        /** Tooltip tags for the region list and the four download-wizard screens. */
+        const val TOOLTIP_TAG_REGION_LIST = "maps.regions.list"
+        const val TOOLTIP_TAG_SOURCE_PICKER = "maps.wizard.source"
+        const val TOOLTIP_TAG_BBOX_PICKER = "maps.wizard.bbox"
+        const val TOOLTIP_TAG_SAVE_REGION = "maps.wizard.save"
+        const val TOOLTIP_TAG_DOWNLOAD_PROGRESS = "maps.wizard.download"
+
+        /** The host registers and looks up plugin tooltips under `plugin_<pluginId>`; any other value renders `n/a`. */
+        const val TOOLTIP_CATEGORY = "plugin_$PLUGIN_ID"
 
         @Volatile
         var pluginContext: PluginContext? = null
@@ -193,17 +203,91 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
     //  DocumentationExtension — tooltips for the bottom-sheet tab.
     // ---------------------------------------------------------------------
 
-    /** The host registers and looks up plugin tooltips under `plugin_<pluginId>`; any other value renders `n/a`. */
-    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
+    override fun getTooltipCategory(): String = TOOLTIP_CATEGORY
 
-    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(mapsTabEntry(), regionMapTemplateEntry())
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+        mapsTabEntry(),
+        regionMapTemplateEntry(),
+        regionListEntry(),
+        sourcePickerEntry(),
+        bboxPickerEntry(),
+        saveRegionEntry(),
+        downloadProgressEntry(),
+    )
 
-    private fun tutorialButton() = PluginTooltipButton(
+    /**
+     * Link to the Tier 3 page, optionally at [anchor]. HTML, not Markdown: the host renders
+     * Tier 3 in a WebView and picks the content type from the file extension.
+     */
+    private fun tutorialButton(anchor: String? = null) = PluginTooltipButton(
         description = "OSM + MapLibre tutorial",
-        // HTML, not Markdown: the host renders tier-3 docs in a WebView and picks the
-        // content type from the file extension.
-        uri = "osm-tutorial.html",
+        uri = if (anchor == null) "osm-tutorial.html" else "osm-tutorial.html#$anchor",
         order = 0,
+    )
+
+    private fun regionListEntry() = PluginTooltipEntry(
+        tag = TOOLTIP_TAG_REGION_LIST,
+        summary = "<b>Map regions</b><br>Regions saved on this phone. One can be in the open project.",
+        detail = """
+            <h3>Map regions</h3>
+            <p>Each row is a region saved under <code>/sdcard/CodeOnTheGo/maps/</code>.</p>
+            <p>The switch on a row copies that region into the open project and makes it the one
+            the app shows; the row then reads <b>Active in this project</b>. Only one region is
+            active at a time.</p>
+            <p><b>Refresh</b> opens the download steps again with the region's name and area filled in.
+            <b>Delete</b> removes it from the phone; projects that already use it keep their copy.</p>
+        """.trimIndent(),
+        buttons = listOf(tutorialButton("region-list")),
+    )
+
+    private fun sourcePickerEntry() = PluginTooltipEntry(
+        tag = TOOLTIP_TAG_SOURCE_PICKER,
+        summary = "<b>Map source</b><br>Choose the Internet in a Box server to download from.",
+        detail = """
+            <h3>Map source</h3>
+            <p><b>Internet</b> downloads from the public server <code>iiab.switnet.org</code>.</p>
+            <p><b>Local Network</b> downloads from an Internet in a Box on your Wi-Fi. Type its
+            hostname; the screen shows whether the box answers.</p>
+        """.trimIndent(),
+        buttons = listOf(tutorialButton("source")),
+    )
+
+    private fun bboxPickerEntry() = PluginTooltipEntry(
+        tag = TOOLTIP_TAG_BBOX_PICKER,
+        summary = "<b>Choose region</b><br>Move and resize the box over the area you need.",
+        detail = """
+            <h3>Choose region</h3>
+            <p>Drag the box to move it and drag a corner to resize it.</p>
+            <p>The first line is the download size. Regions over 1 GB cannot be saved.</p>
+            <p>The second line shows the box size and the most detailed zoom level the region
+            will have. A bigger box gets a lower zoom limit to keep the download small.</p>
+        """.trimIndent(),
+        buttons = listOf(tutorialButton("choose-region")),
+    )
+
+    private fun saveRegionEntry() = PluginTooltipEntry(
+        tag = TOOLTIP_TAG_SAVE_REGION,
+        summary = "<b>Save region</b><br>Name the region, check the summary, then start the download.",
+        detail = """
+            <h3>Save region</h3>
+            <p>Type a place name. It becomes the region's folder name, in lowercase with
+            spaces and punctuation turned into dashes.</p>
+            <p>A name another saved region already uses cannot be saved. Pick a new name, or use
+            <b>Refresh</b> on that region to download it again.</p>
+        """.trimIndent(),
+        buttons = listOf(tutorialButton("save-region")),
+    )
+
+    private fun downloadProgressEntry() = PluginTooltipEntry(
+        tag = TOOLTIP_TAG_DOWNLOAD_PROGRESS,
+        summary = "<b>Downloading</b><br>The region is downloading. Cancel discards it.",
+        detail = """
+            <h3>Downloading</h3>
+            <p>The map tiles for your region download from the source you picked. The
+            low-zoom world basemap is copied from the plugin, so it needs no download.</p>
+            <p><b>Cancel + discard</b> stops the download and deletes the partial region.</p>
+        """.trimIndent(),
+        buttons = listOf(tutorialButton("downloading")),
     )
 
     /**
@@ -218,8 +302,9 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
             <h3>Offline OSM Map</h3>
             <p>Creates a MapLibre map app in Kotlin or Java. It starts with no map data.</p>
             <p>After creating the project, open the <b>Maps</b> tab in the editor bottom
-            sheet, download a region, and tap <b>Use in this project</b>. The region's tiles
-            are copied into the app, which then builds and runs offline.</p>
+            sheet and download a region. The first region you download goes into the project;
+            the switch on a region's row changes which one it uses. The region's tiles are
+            copied into the app, which then builds and runs offline.</p>
         """.trimIndent(),
         buttons = listOf(tutorialButton()),
     )
@@ -234,12 +319,12 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
                 <code>/sdcard/CodeOnTheGo/maps/</code>. A region is reusable
                 across multiple projects so you don't re-download the same
                 tile pack twice.</p>
-                <p>Per region you can <b>Use in this project</b> (copies the
+                <p>Per region you can turn on its switch (copies the
                 region's data files into the open project's
                 <code>app/src/main/assets/maps/</code>; the project must come
                 from the Offline OSM Map template),
-                <b>Refresh</b> (re-download the region from source), or
-                <b>Delete</b> (free disk space).</p>
+                <b>Refresh</b> (download it again, with its name and area
+                filled in), or <b>Delete</b> (free disk space).</p>
                 <p>Tap <b>+ Download new region</b> at the bottom to launch
                 the bbox picker and create a new entry in the cache.</p>
             """.trimIndent(),
