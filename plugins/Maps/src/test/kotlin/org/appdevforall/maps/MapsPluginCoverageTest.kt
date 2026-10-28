@@ -207,7 +207,7 @@ class MapsPluginCoverageTest {
         assertEquals("one tutorial button", 1, entry.buttons.size)
         val button = entry.buttons[0]
         // Tier-3 docs render in a WebView; the asset MUST be .html, not .md.
-        assertEquals("osm-tutorial.html", button.uri)
+        assertEquals("index.html", button.uri)
         assertEquals(0, button.order)
     }
 
@@ -230,7 +230,7 @@ class MapsPluginCoverageTest {
         val template = MapsPlugin().getTooltipEntries()
             .single { it.tag == MapsPlugin.TOOLTIP_TAG_REGION_MAP_TEMPLATE }
         assertTrue(template.summary.contains("Offline OSM Map"))
-        assertEquals("osm-tutorial.html", template.buttons.single().uri)
+        assertEquals("index.html", template.buttons.single().uri)
     }
 
     /**
@@ -263,6 +263,36 @@ class MapsPluginCoverageTest {
             emptyMap<String, String>(),
             referenced.filterValues { it !in registered },
         )
+    }
+
+    @Test
+    fun `every tutorial link opens a page and anchor that ship in the docs folder`() {
+        val docsDir = File("src/main/assets/docs")
+        val buttons = MapsPlugin().getTooltipEntries().flatMap { it.buttons }
+        assertTrue("entries carry tutorial buttons", buttons.size >= 7)
+        for (button in buttons) {
+            val page = button.uri.substringBefore('#')
+            val file = File(docsDir, page)
+            assertTrue("${button.uri}: $file must exist", file.isFile)
+            val anchor = button.uri.substringAfter('#', "")
+            if (anchor.isNotEmpty()) {
+                assertTrue("${button.uri}: no id=\"$anchor\" in $page", file.readText().contains("id=\"$anchor\""))
+            }
+        }
+    }
+
+    /** The page is served from documentation.db offline, so an image must ship beside it. */
+    @Test
+    fun `every image the tutorial shows ships in the docs folder and stays small`() {
+        val docsDir = File("src/main/assets/docs")
+        val sources = Regex("""<img src="([^"]+)"""").findAll(File(docsDir, "index.html").readText())
+            .map { it.groupValues[1] }.toList()
+        assertTrue("tutorial embeds screenshots", sources.size >= 4)
+        for (src in sources) {
+            val file = File(docsDir, src)
+            assertTrue("$src: $file must exist", file.isFile)
+            assertTrue("$src is ${file.length()} bytes, over 150 KB", file.length() <= 150L * 1024)
+        }
     }
 
     @Test

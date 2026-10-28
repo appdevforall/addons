@@ -347,7 +347,7 @@ class MapTemplateAssetsTest {
     fun `generated app docs say the app runs on both 64-bit and 32-bit ARM`() {
         val docs = listOf(
             asset("README.md.peb"),
-            File("src/main/assets/docs/osm-tutorial.html"),
+            File("src/main/assets/docs/index.html"),
         )
         for (doc in docs) {
             // Collapse whitespace so a re-wrapped line in the HTML does not hide the phrase.
