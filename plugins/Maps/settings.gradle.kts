@@ -10,7 +10,6 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
     }
     dependencies {
         classpath(files("../../libs/plugin-api.jar"))
@@ -25,7 +24,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
     }
 }
 
