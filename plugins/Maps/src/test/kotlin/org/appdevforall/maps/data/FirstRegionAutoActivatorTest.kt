@@ -138,6 +138,41 @@ class FirstRegionAutoActivatorTest {
         assertEquals("lalibela", File(projectDir, "$mapsSubpath/active.txt").readText().trim())
     }
 
+    // ----- The active region downloaded again (Bryan, 2026-10-28: update the copy on its own) -----
+
+    @Test
+    fun reapplies_when_the_active_region_is_downloaded_again() = runBlocking {
+        seedCachedRegion("lalibela", "Lalibela")
+        writeActiveSentinel("lalibela")
+        val applyCalls = mutableListOf<RegionInfo>()
+        val result = FirstRegionAutoActivator.maybeAutoActivate(
+            projectDir = projectDir,
+            mapsSubpath = mapsSubpath,
+            regionsCacheRoot = cacheRoot,
+            downloadedRegionId = "lalibela",
+            applyRegionToProject = { info, _ -> applyCalls += info; true },
+            writeActiveRegion = writeActive,
+        )
+        assertEquals(FirstRegionAutoActivator.Result.Updated("lalibela", "Lalibela"), result)
+        assertEquals("the new tiles must be copied into the project", listOf("lalibela"), applyCalls.map { it.regionId })
+        assertEquals("lalibela", File(projectDir, "$mapsSubpath/active.txt").readText().trim())
+    }
+
+    @Test
+    fun reports_the_failure_when_reapplying_the_active_region_fails() = runBlocking {
+        seedCachedRegion("lalibela", "Lalibela")
+        writeActiveSentinel("lalibela")
+        val result = FirstRegionAutoActivator.maybeAutoActivate(
+            projectDir = projectDir,
+            mapsSubpath = mapsSubpath,
+            regionsCacheRoot = cacheRoot,
+            downloadedRegionId = "lalibela",
+            applyRegionToProject = applyFail,
+            writeActiveRegion = writeActive,
+        )
+        assertTrue("Expected ApplyFailed, got $result", result is FirstRegionAutoActivator.Result.ApplyFailed)
+    }
+
     /**
      * Bryan, 2026-05-26 — observed bug: deleted all regions, downloaded
      * Spain, got "active region is unchanged" because the previously-active
