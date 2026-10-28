@@ -74,6 +74,16 @@ class PromptToolBudgetTest {
     }
 
     @Test
+    fun givenALowerContributedCap_whenApplied_thenTheExcessIsDroppedAndNamed() {
+        val handlers = contributedHandlers(6)
+
+        val budgeted = PromptToolBudget.apply(handlers, maxContributed = 4)
+
+        assertEquals(4, budgeted.definitions.size)
+        assertEquals(listOf("aiagentmcp_tool_5", "aiagentmcp_tool_6"), budgeted.droppedTools)
+    }
+
+    @Test
     fun givenNoAllowlist_whenApplied_thenEveryBuiltInRemains() {
         val builtIns = listOf("read_file", "run_shell_command").map(::BuiltInHandler)
 

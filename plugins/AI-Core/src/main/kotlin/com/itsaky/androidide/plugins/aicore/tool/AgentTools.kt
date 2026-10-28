@@ -100,7 +100,15 @@ class AgentTools private constructor(
             // The grammar is built from the budgeted list, not from every handler: a name the
             // token mask permits but the prompt never mentioned is a name the model cannot use,
             // and one the prompt mentions but the mask forbids is a tool it cannot call.
-            val promptTools = PromptToolBudget.apply(handlers, builtIns)
+            val promptTools = PromptToolBudget.apply(
+                handlers,
+                builtIns,
+                maxContributed = if (builtIns == null) {
+                    PromptToolBudget.MAX_CONTRIBUTED_TOOLS
+                } else {
+                    PromptToolBudget.COMPACT_MAX_CONTRIBUTED_TOOLS
+                },
+            )
             val admitted = promptTools.definitions.mapTo(mutableSetOf()) { it.name }
             // Routing stays unbudgeted; only what a failure offers back is narrowed to that set.
             val router = ToolRouter(handlers, suggestableNames = admitted)

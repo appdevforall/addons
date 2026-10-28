@@ -31,11 +31,13 @@ object PromptToolBudget {
      * The built-in tools a small on-device model is offered: reading and navigating the project,
      * changing files, and running a Gradle task with its build output. The full list is about 4,000
      * characters, over half of the local model's opening prompt, and every token of it is read before
-     * the model answers; these eight are under a third of that (ADFA-6757).
+     * the model answers; these nine are about two-fifths of that (ADFA-6757).
      *
      * `run_gradle_task` is in because a model without any way to run a build or the tests does not say
      * so: asked to run the tests on a Pixel 6 Pro, it called `read_build_output` with an argument it
      * made up. A build is the one request a coding assistant cannot answer with its eyes alone.
+     * `list_gradle_tasks` comes with it because `run_gradle_task`'s own description tells the model to
+     * call it when unsure of a task's name, and the grammar would not let it.
      *
      * An allowlist on purpose: a tool added to the app later stays out of a small model's prompt
      * until someone decides it earns its tokens. Leaving a tool out also leaves it out of the grammar
@@ -50,7 +52,16 @@ object PromptToolBudget {
         "create_file",
         "edit_file",
         "run_gradle_task",
+        "list_gradle_tasks",
     )
+
+    /**
+     * Contributed tools admitted when the built-ins are [COMPACT_BUILT_INS], in place of
+     * [MAX_CONTRIBUTED_TOOLS]. Twelve contributed descriptions at [MAX_DESCRIPTION_CHARS] each can run
+     * to more text than the whole compact built-in list, so without this a user with several tool
+     * sources would read the saving back as prompt.
+     */
+    const val COMPACT_MAX_CONTRIBUTED_TOOLS = 4
 
     /** The largest context window, in tokens, that still gets [COMPACT_BUILT_INS]. */
     const val COMPACT_UP_TO_TOKENS = 32_768
@@ -63,6 +74,11 @@ object PromptToolBudget {
      * they point it at, and dropping that user's tools would be a surprise. And a text-protocol
      * backend with room to spare can afford the full list.
      *
+     * An unknown window (0) is not compact, on purpose: a backend that reports nothing may be one that
+     * can afford the full list. The on-device model reports 0 until its context has been sized, about a
+     * second after the chat opens, so a message sent in that second gets the full set and every later
+     * one the compact set.
+     *
      * @param callsToolsNatively whether the backend carries tool calls in its provider's own API.
      * @param contextWindowTokens the window the backend reports; 0 when it reports none.
      * @return true for a text-protocol backend whose window is known and at most [COMPACT_UP_TO_TOKENS].
@@ -73,7 +89,7 @@ object PromptToolBudget {
     /**
      * The tool list as the prompt will see it.
      * @property definitions what to hand the backend.
-     * @property droppedTools names left out by [MAX_CONTRIBUTED_TOOLS], for the caller to log.
+     * @property droppedTools contributed names left out by the cap, for the caller to log.
      * @property truncatedDescriptions how many descriptions were shortened.
      */
     data class Budgeted(
@@ -90,11 +106,16 @@ object PromptToolBudget {
      * newline is enough to forge structure.
      *
      * @param handlers the registered handlers, built-in and contributed.
-     * @param builtIns the built-in tool names to keep, or null for every one. Contributed tools are
-     *   unaffected: they are capped by [MAX_CONTRIBUTED_TOOLS] either way.
+     * @param builtIns the built-in tool names to keep, or null for every one.
+     * @param maxContributed how many contributed tools to admit; [MAX_CONTRIBUTED_TOOLS] unless the
+     *   caller is offering [COMPACT_BUILT_INS], when it is [COMPACT_MAX_CONTRIBUTED_TOOLS].
      * @return the definitions to send plus what the budget cost.
      */
-    fun apply(handlers: List<ToolHandler>, builtIns: Set<String>? = null): Budgeted {
+    fun apply(
+        handlers: List<ToolHandler>,
+        builtIns: Set<String>? = null,
+        maxContributed: Int = MAX_CONTRIBUTED_TOOLS,
+    ): Budgeted {
         val definitions = mutableListOf<LlmInferenceService.ToolDefinition>()
         val dropped = mutableListOf<String>()
         var admitted = 0
@@ -111,7 +132,7 @@ object PromptToolBudget {
                 continue
             }
 
-            if (admitted >= MAX_CONTRIBUTED_TOOLS) {
+            if (admitted >= maxContributed) {
                 dropped += handler.toolName
                 continue
             }

@@ -4,8 +4,10 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.prompt.PromptToolCatalog
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import com.itsaky.androidide.plugins.aicore.tool.sources.FakeToolSource
 import com.itsaky.androidide.plugins.aicore.tool.sources.PromptToolBudget
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
+import com.itsaky.androidide.plugins.aicore.tool.sources.contributedTool
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -98,14 +100,43 @@ class CompactToolSetTest {
     }
 
     @Test
-    fun givenTheCompactSet_whenAskedWhatItCanDo_thenItCanRunAGradleTask() {
-        // Without it a small model asked to run the tests calls another tool with an invented argument.
-        assertTrue("run_gradle_task" in namesIn(compact))
-        assertTrue(grammarAllows(compact, "run_gradle_task"))
+    fun givenTheCompactSet_whenAskedWhatItCanDo_thenItCanRunAGradleTaskAndListThem() {
+        // Without run_gradle_task a small model asked to run the tests calls another tool with an
+        // invented argument. Its description tells the model to call list_gradle_tasks when unsure of
+        // a task's name, so the grammar has to allow that too.
+        for (tool in listOf("run_gradle_task", "list_gradle_tasks")) {
+            assertTrue("$tool is missing", tool in namesIn(compact))
+            assertTrue("$tool is described but forbidden", grammarAllows(compact, tool))
+        }
+    }
+
+    @Test
+    fun givenSeveralContributedTools_whenTheCompactSetIsChosen_thenOnlyTheFirstFewAreOffered() {
+        // Twelve contributed descriptions can outweigh the whole compact built-in list.
+        val provider = "com.example.manytools"
+        val store = ToolSourceStore().apply {
+            register(FakeToolSource(provider, tools = (1..6).map { contributedTool(provider, "extra_$it") }))
+        }
+        val withSources =
+            AgentTools.build(builtIns, store, ToolApprovalManager({ shippedConfig }), terminalTool = "respond")
+        val compactWithSources = withSources.forBackend(callsToolsNatively = false, contextWindowTokens = 16_384)
+
+        fun contributedOffered(tools: AgentTools): Int {
+            val contributed = tools.contributedHandlers.map { it.toolName }.toSet()
+            return namesIn(tools).count { it in contributed }
+        }
+
+        assertEquals(6, contributedOffered(withSources))
+        assertEquals(PromptToolBudget.COMPACT_MAX_CONTRIBUTED_TOOLS, contributedOffered(compactWithSources))
+        assertEquals(
+            "what the cap left out must be nameable",
+            6 - PromptToolBudget.COMPACT_MAX_CONTRIBUTED_TOOLS,
+            compactWithSources.promptTools.droppedTools.size,
+        )
     }
 
     private companion object {
-        /** The compact set measures about 1,250 characters; this leaves room for rewording, not for a new tool. */
-        const val COMPACT_TOOL_TEXT_CEILING = 1_500
+        /** The compact set measures about 1,500 characters; this leaves room for rewording, not for a new tool. */
+        const val COMPACT_TOOL_TEXT_CEILING = 1_800
     }
 }

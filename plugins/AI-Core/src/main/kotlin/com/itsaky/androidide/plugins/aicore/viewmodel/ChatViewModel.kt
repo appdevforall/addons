@@ -1048,6 +1048,14 @@ class ChatViewModel(
             callsToolsNatively = callsToolsNatively,
             contextWindowTokens = if (callsToolsNatively) 0 else reportedContextWindow(currentBackendId),
         )
+        // Said per run, since the compact set is chosen per run: a tool left out is not a tool the
+        // user can see is missing, and the rebuild-time log above only covers the full snapshot.
+        if (tools !== agentTools && tools.promptTools.droppedTools.isNotEmpty()) {
+            AgentTrace.stage(
+                "TOOLS",
+                "compact set left out contributed tool(s): ${tools.promptTools.droppedTools.joinToString(", ")}",
+            )
+        }
         val epoch = generationEpoch.incrementAndGet()
         // Asked before the message lands, so the header never shows the raw prompt as the title.
         requestTitleIfUntitled(llmService, userMessage)
