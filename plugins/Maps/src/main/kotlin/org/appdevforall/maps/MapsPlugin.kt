@@ -162,9 +162,12 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun dispose() {
         pluginScope.cancel()
-        // The shared clients outlive this instance, so close their idle sockets on unload.
-        RegionDownloader.httpClient.connectionPool.evictAll()
-        IiabArchiveResolver.catalogClient.connectionPool.evictAll()
+        // The shared clients outlive this instance, so on unload cancel their queued and running
+        // calls (a blocking execute() does not see the scope's cancellation) and close idle sockets.
+        for (client in listOf(RegionDownloader.httpClient, IiabArchiveResolver.catalogClient)) {
+            client.dispatcher.cancelAll()
+            client.connectionPool.evictAll()
+        }
         // Clear the static plugin-context reference so a subsequent reload
         // doesn't leave Fragments resolving services from a defunct context.
         pluginContext = null
