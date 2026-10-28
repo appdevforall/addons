@@ -408,4 +408,47 @@ class MapsPluginCoverageTest {
             server.shutdown()
         }
     }
+
+    @Test
+    fun `dispose cancels calls still in flight on both shared http clients`() {
+        val server = okhttp3.mockwebserver.MockWebServer()
+        // The server never answers, so each call is still running when dispose() runs.
+        repeat(2) {
+            server.enqueue(
+                okhttp3.mockwebserver.MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE)
+            )
+        }
+        server.start()
+        try {
+            val clients = listOf(RegionDownloader.httpClient, IiabArchiveResolver.catalogClient)
+            val failures = java.util.concurrent.ConcurrentLinkedQueue<String>()
+            val done = java.util.concurrent.CountDownLatch(clients.size)
+            val calls = clients.map { client ->
+                client.newCall(okhttp3.Request.Builder().url(server.url("/")).build()).also { call ->
+                    call.enqueue(object : okhttp3.Callback {
+                        override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                            failures += e.message.orEmpty()
+                            done.countDown()
+                        }
+
+                        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                            response.close()
+                            done.countDown()
+                        }
+                    })
+                }
+            }
+            repeat(2) { server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS) }
+
+            val plugin = MapsPlugin()
+            plugin.initialize(newContext())
+            plugin.dispose()
+
+            assertTrue("both calls end well before the 5 s timeouts", done.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals(listOf(true, true), calls.map { it.isCanceled() })
+            assertEquals(listOf("Canceled", "Canceled"), failures.toList())
+        } finally {
+            server.shutdown()
+        }
+    }
 }
