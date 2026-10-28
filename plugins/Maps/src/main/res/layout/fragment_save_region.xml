@@ -85,7 +85,7 @@
                 android:textColor="?attr/colorError"
                 android:visibility="gone"
                 tools:visibility="visible"
-                tools:text="A region named 'Lalibela' already exists. Save will replace it." />
+                tools:text="A region named 'Lalibela' already exists. Pick another name." />
 
             <!-- Minimal summary card: source + total. Earlier drafts listed
                  center, extent, and a per-layer breakdown — Bryan called the

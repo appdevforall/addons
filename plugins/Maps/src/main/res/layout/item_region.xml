@@ -104,7 +104,8 @@
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_active"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/maps_regions_active_switch_description" />
     </LinearLayout>
 
     <!-- Secondary actions -->
@@ -127,6 +128,6 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
             android:text="@string/maps_regions_delete"
-            android:textColor="?attr/colorError" />
+            android:textColor="@color/plugin_error_on_button" />
     </LinearLayout>
 </LinearLayout>

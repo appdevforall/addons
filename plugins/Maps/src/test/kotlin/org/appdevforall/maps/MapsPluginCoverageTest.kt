@@ -2,7 +2,6 @@ package org.appdevforall.maps
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.res.Resources
 import com.itsaky.androidide.plugins.PluginContext
 import org.appdevforall.maps.data.IiabArchiveResolver
 import org.appdevforall.maps.data.RegionDownloader
@@ -33,9 +32,8 @@ import org.junit.Test
  *    `getTooltipCategory`, `getTier3DocsAssetPath`, `getTooltipEntries` shape,
  *    `onDocumentationInstall` / `onDocumentationUninstall`.
  *  - The [com.itsaky.androidide.plugins.extensions.UIExtension] `getEditorTabs`
- *    TabItem (id / title / order / tooltipTag / enabled / visible) — the title is
- *    resolved via `androidContext.getString`, fed through a [FakeContext] that
- *    reroutes the (final) `Context.getString(int)` to a fake `Resources`.
+ *    TabItem (id / title / order / tooltipTag / enabled / visible), built with no
+ *    resource read.
  *  - The lifecycle: `initialize` (sets the static `pluginContext`), `activate`
  *    (no template service → logs + returns true), `deactivate` (no service → no-op
  *    true), and `dispose` (cancels the scope + clears the static `pluginContext`).
@@ -100,31 +98,8 @@ class MapsPluginCoverageTest {
             throw UnsupportedOperationException("not used")
     }
 
-    /**
-     * A [Resources] subclass that reroutes string lookups to a fixed table. The
-     * (final) `Context.getString(int)` ultimately calls `getResources().getString(int)`,
-     * so overriding it here is what lets `getEditorTabs` resolve a title without a
-     * real resource table. Constructed with nulls — only `getString` is exercised.
-     */
-    private class FakeResources(private val table: Map<Int, String>) :
-        Resources(null, null, null) {
-        private fun lookup(id: Int): String =
-            table[id] ?: throw Resources.NotFoundException("no fake string for id $id")
-
-        // Different Context.getString(int) impls delegate to either getString() or
-        // getText() on Resources; override both so the lookup is robust.
-        override fun getString(id: Int): String = lookup(id)
-        override fun getText(id: Int): CharSequence = lookup(id)
-    }
-
-    /**
-     * A [Context] backed by [ContextWrapper] (concrete) with a fake [Resources].
-     * `Context.getString(int)` is final and delegates to `getResources()`, which we
-     * override — that's the only Android surface `getEditorTabs` touches.
-     */
-    private class FakeContext(private val resources: Resources) : ContextWrapper(null) {
-        override fun getResources(): Resources = resources
-    }
+    /** A [Context] with no base, so any resource read through it fails the test. */
+    private class FakeContext : ContextWrapper(null)
 
     /** PluginContext fake wiring the four sub-fakes together. */
     private class FakePluginContext(
@@ -149,7 +124,6 @@ class MapsPluginCoverageTest {
 
     private fun newContext(
         service: Any? = null,
-        strings: Map<Int, String> = mapOf(R.string.maps_tab_title to "Maps"),
         logger: FakeLogger = FakeLogger(),
     ): FakePluginContext {
         val dir = File.createTempFile("maps-plugin-test", "").let {
@@ -157,7 +131,7 @@ class MapsPluginCoverageTest {
         }
         tmpDirs += dir
         return FakePluginContext(
-            androidCtx = FakeContext(FakeResources(strings)),
+            androidCtx = FakeContext(),
             services = FakeServiceRegistry(service),
             resources = FakeResourceManager(dir),
             logger = logger,
@@ -314,14 +288,20 @@ class MapsPluginCoverageTest {
     //  UIExtension — getEditorTabs
     // ----------------------------------------------------------------------
 
-    // getEditorTabs() is intentionally NOT unit-tested. It resolves the tab title via
-    // `androidContext.getString(R.string.maps_tab_title)`, and `Context.getString(int)`
-    // is `final` — under the mockable android.jar (`returnDefaultValues = true`) it is
-    // stubbed to return null without ever calling the overridable `getResources()`, so a
-    // FakeContext/FakeResources can't intercept it. The null title then NPEs the non-null
-    // TabItem.title param. Resolving a string resource needs Robolectric (disallowed here),
-    // so getEditorTabs is covered by the android-qa device walk, not a JVM unit test.
-    // (Reported as a known coverage gap rather than suppressed.)
+    @Test
+    fun `getEditorTabs builds the Maps tab without reading a plugin resource`() {
+        val plugin = MapsPlugin()
+        // FakeContext has no resources: a getString call returns null here and fails the TabItem.
+        plugin.initialize(newContext())
+
+        val tab = plugin.getEditorTabs().single()
+
+        assertEquals("Maps", tab.title)
+        assertEquals(MapsPlugin.MAPS_BOTTOM_SHEET_TAB_ID, tab.id)
+        assertEquals(MapsPlugin.TOOLTIP_TAG_MAPS_TAB, tab.tooltipTag)
+        assertEquals(200, tab.order)
+        assertTrue(tab.isEnabled && tab.isVisible)
+    }
 
     // ----------------------------------------------------------------------
     //  Lifecycle

@@ -14,6 +14,10 @@
             accents: the bbox selection handle (BboxOverlayView) and the
             active-region badge / row highlight. Plugin-owned drawing, not Material.
           - plugin_error — error text in the plugin's own layouts.
+          - plugin_error_on_button — destructive text (Delete, Cancel + discard) on the
+            host's filled button, which is dark grey by day and light grey at night
+            (#555555 / #AAAAAA on the A06, 2026-10-27), so the light and dark values are
+            the reverse of plugin_error's. Each clears 4.5:1 on its grey.
 
         Light values here; dark in values-night/colors.xml (keep the two in sync).
     -->
@@ -23,6 +27,8 @@
 
     <!-- Error — the plugin's own error text -->
     <color name="plugin_error">#BA1A1A</color>
+    <!-- 4.79:1 on the host button's #555555 -->
+    <color name="plugin_error_on_button">#FFC0B8</color>
 
     <!-- Surface / text / outline — used by the plugin's own layouts via ?attr/* -->
     <color name="plugin_surface">#FBFDF8</color>

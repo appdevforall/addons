@@ -66,6 +66,9 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
          */
         const val MAPS_BOTTOM_SHEET_TAB_ID = "maps_maps_tab"
 
+        /** The tab pill's label; the panel's own heading is R.string.maps_regions_title. */
+        const val MAPS_TAB_TITLE = "Maps"
+
         /** Tooltip tag for the bottom-sheet "Maps" tab. */
         const val TOOLTIP_TAG_MAPS_TAB = "maps.bottom_sheet.maps_tab"
 
@@ -187,9 +190,10 @@ class MapsPlugin : IPlugin, UIExtension, DocumentationExtension {
         return listOf(
             TabItem(
                 id = MAPS_BOTTOM_SHEET_TAB_ID,
-                // The panel content's larger heading uses R.string.maps_regions_title
-                // ("Map Regions"); the tab pill itself is just "Maps".
-                title = context.androidContext.getString(R.string.maps_tab_title),
+                // A literal, not a string resource: the host calls this on the main thread, and
+                // the first plugin resource read there opens the plugin APK (StrictMode
+                // DiskReadViolation in the host's PluginResourceContext).
+                title = MAPS_TAB_TITLE,
                 fragmentFactory = { RegionManagerFragment() },
                 isEnabled = true,
                 isVisible = true,
