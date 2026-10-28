@@ -300,7 +300,10 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
             overlay = bboxOverlay,
             selectionModel = selectionModel,
             scope = viewLifecycleOwner.lifecycleScope,
-            mapWidth = { mapView.width },
+            mapSizeDp = {
+                val density = resources.displayMetrics.density
+                mapView.width / density.toDouble() to mapView.height / density.toDouble()
+            },
             cacheDir = { context?.cacheDir },
             isViewAlive = { this.view != null },
             onBboxChanged = binder::onBboxChanged,
