@@ -141,6 +141,21 @@ Then commit the refreshed `plugins/AI-Agent-Local/libs/v8/llama-v8-release.aar` 
 modules load only while the submodule is checked out, so they never affect a
 normal build.
 
+### The CPU backend ships as four libraries
+
+`llama-impl/build.gradle.kts` builds llama.cpp with `-DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON`,
+so the AAR carries `libggml-cpu-android_armv8.0_1.so`, `_armv8.2_1` (dot-product), `_armv8.2_2`
+(dot-product and fp16) and `_armv8.6_1` (adds int8 matrix multiply) instead of one `libggml-cpu.so`. Left
+at its default, the cross-compile targets basic ARMv8 and the library contains no dot-product
+instructions at all (ADFA-6757). `llama-android.cpp` loads the best variant at start-up, looking beside
+`libllama-android.so`; each variant scores itself against the phone it runs on, and the ARMv8.0 build is
+the one every arm64 phone can run. Do not replace this with `-march=armv8.2-a+dotprod`: a Cortex-A53
+phone would then crash on its first instruction.
+
+Check a rebuilt AAR with `llvm-objdump -d` on each variant: the `armv8.0_1` library must hold no `sdot`
+and the `armv8.2_1` library must. On a phone, the log line `backends: loaded CPU from ...` and the
+`System Info` line (`DOTPROD = 1`) show what was picked.
+
 > Reproducibility: the AAR is a compiled binary, so ideally regenerate it in CI
 > with a pinned NDK/CMake and record its checksum, rather than from an arbitrary
 > laptop.

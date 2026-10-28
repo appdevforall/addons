@@ -1,4 +1,5 @@
 #include <android/log.h>
+#include <dlfcn.h>
 #include <jni.h>
 #include <algorithm>
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include "llama.h"
 #include "common.h"
+#include "ggml-backend.h"
 
 #define TAG "AiAgentLocal.llama-android"
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -808,9 +810,49 @@ Java_android_llama_cpp_LLamaAndroid_free_1sampler(JNIEnv *, jobject, jlong sampl
     llama_sampler_free(reinterpret_cast<llama_sampler *>(sampler_pointer));
 }
 
+/**
+ * Loads the CPU backend variant that suits this phone (ADFA-6757).
+ *
+ * The CPU backend is built as several shared libraries, `libggml-cpu-android_armv8.0_1.so` and up, each
+ * compiled for a richer instruction set (dot-product, fp16, int8 matrix multiply). Each reports a score
+ * for the phone it is running on, and ggml loads the highest. The plain ARMv8.0 build scores above zero
+ * on every arm64 phone, so an old phone still gets a backend. Without this call there is no CPU backend
+ * at all, because none is linked in.
+ *
+ * They are looked up beside this library, wherever the plugin loader extracted it, so the directory is
+ * read from the loaded image rather than assumed. Runs once: the run loop calls backend_init every
+ * time a loop is created, and a second load would register the backend twice.
+ */
+static void load_cpu_backends() {
+    static std::once_flag loaded;
+    std::call_once(loaded, [] {
+        Dl_info info;
+        std::string dir;
+        if (dladdr(reinterpret_cast<void *>(&load_cpu_backends), &info) != 0 && info.dli_fname != nullptr) {
+            std::string path(info.dli_fname);
+            const size_t slash = path.find_last_of('/');
+            if (slash != std::string::npos) dir = path.substr(0, slash);
+        }
+        if (dir.empty()) {
+            LOGe("backends: cannot find the directory this library was loaded from");
+            return;
+        }
+        ggml_backend_load_all_from_path(dir.c_str());
+        const size_t count = ggml_backend_reg_count();
+        if (count == 0) {
+            LOGe("backends: none loaded from %s; generation will fail", dir.c_str());
+            return;
+        }
+        for (size_t i = 0; i < count; i++) {
+            LOGi("backends: loaded %s from %s", ggml_backend_reg_name(ggml_backend_reg_get(i)), dir.c_str());
+        }
+    });
+}
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_backend_1init(JNIEnv *, jobject, jboolean numa) {
+    load_cpu_backends();
     llama_backend_init();
 }
 
