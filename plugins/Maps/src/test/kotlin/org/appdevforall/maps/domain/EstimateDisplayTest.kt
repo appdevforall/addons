@@ -11,8 +11,12 @@ class EstimateDisplayTest {
     private val allowance = 5L * 1024 * 1024 // 5 MB non-vector headroom
     private val cap = 1024L * 1024 * 1024 // 1 GB
 
-    private fun compute(realBytes: Long?, failed: Boolean = false, hasSource: Boolean = true) =
-        EstimateDisplay.compute(realBytes, failed, hasSource, allowance, cap)
+    private fun compute(
+        realBytes: Long?,
+        failed: Boolean = false,
+        hasSource: Boolean = true,
+        noTiles: Boolean = false,
+    ) = EstimateDisplay.compute(realBytes, failed, hasSource, allowance, cap, noTiles)
 
     @Test
     fun `no source - blank line, Next disabled`() {
@@ -21,6 +25,23 @@ class EstimateDisplayTest {
         assertFalse(s.isError)
         assertFalse(s.overBudget)
         assertFalse(s.nextEnabled)
+    }
+
+    @Test
+    fun `no tiles - error line, Next disabled`() {
+        // An empty tile list still estimates 8 KB of header overhead, which used to read "0.0 MB".
+        val s = compute(realBytes = 8L * 1024, noTiles = true)
+        assertEquals(EstimateDisplay.NO_TILES_TEXT, s.text)
+        assertTrue(s.isError)
+        assertFalse(s.overBudget)
+        assertFalse("Next must stay off when the box holds no tiles", s.nextEnabled)
+    }
+
+    @Test
+    fun `no tiles is ignored until an estimate has finished`() {
+        val s = compute(realBytes = null, noTiles = true)
+        assertEquals("Calculating download size…", s.text)
+        assertTrue(s.nextEnabled)
     }
 
     @Test

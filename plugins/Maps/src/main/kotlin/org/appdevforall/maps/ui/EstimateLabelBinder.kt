@@ -56,6 +56,7 @@ internal class EstimateLabelBinder(
                 realBytes = selectionModel.realByteEstimate,
                 estimateFailed = selectionModel.realEstimateFailed,
                 hasSliceableSource = selectionModel.hasSliceableSource(),
+                noTiles = selectionModel.realEstimateHasNoTiles,
             )
         sizeLine.text = state.text
         // The view's own context is the themed plugin one: the host context cannot resolve plugin
