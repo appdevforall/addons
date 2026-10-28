@@ -477,7 +477,7 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // No super call: Fragment's implementation is empty (fragment 1.8.8) and deprecated.
         if (requestCode != REQUEST_LOCATION_PERMISSION) return
         val granted = grantResults.isNotEmpty() &&
             grantResults[0] == PackageManager.PERMISSION_GRANTED
