@@ -355,10 +355,13 @@ class RegionManagerFragment : Fragment(),
             val outcome = downloadCompletion.complete(regionId)
             render(wizard.onEvent(Event.DownloadDone))
             if (outcome !is DownloadCompletion.Outcome.Finished) {
-                snack(getString(R.string.maps_download_done_no_project, regionId), Snackbar.LENGTH_LONG)
+                snack(
+                    getString(R.string.maps_download_done_no_project, outcome.displayName),
+                    Snackbar.LENGTH_LONG,
+                )
                 return@launch
             }
-            val spec = DownloadCompleteMessage.forResult(outcome.result, regionId)
+            val spec = DownloadCompleteMessage.forResult(outcome.result, outcome.displayName)
             // Indefinite iff there's an action to take, so the user is not racing a timeout to Apply.
             val snackbar = makeSnack(
                 getString(spec.messageRes, spec.messageArg),
@@ -376,12 +379,18 @@ class RegionManagerFragment : Fragment(),
     /** The post-download snackbar's "Apply", for a project that already had an active region. */
     private fun applyDownloadedRegionFromSnackbar(projectDir: File, regionId: String) {
         viewLifecycleOwner.lifecycleScope.launch {
-            if (downloadCompletion.applyFromSnackbar(projectDir, regionId)) {
-                refresh()
-                snack(getString(R.string.maps_regions_switched, regionId), Snackbar.LENGTH_SHORT)
-            } else {
-                snack(getString(R.string.maps_regions_apply_failed), Snackbar.LENGTH_LONG)
+            val message = when (val result = downloadCompletion.applyFromSnackbar(projectDir, regionId)) {
+                DownloadCompletion.ApplyResult.Failed -> {
+                    snack(getString(R.string.maps_regions_apply_failed), Snackbar.LENGTH_LONG)
+                    return@launch
+                }
+                is DownloadCompletion.ApplyResult.Switched ->
+                    getString(R.string.maps_regions_switched, result.name)
+                is DownloadCompletion.ApplyResult.AlreadyActive ->
+                    getString(R.string.maps_regions_already_active, result.name)
             }
+            refresh()
+            snack(message, Snackbar.LENGTH_SHORT)
         }
     }
 
