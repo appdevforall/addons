@@ -116,16 +116,18 @@ seek into them.</p>
 
 <p><strong>Threading.</strong> All disk and network work runs off the main thread
 via <code>kotlinx.coroutines</code> (<code>Dispatchers.IO</code>); large copies are
-cancellable. The plugin holds no background threads or static references to host
-objects past its lifecycle &mdash; everything is released in
-<code>dispose()</code>.</p>
+cancellable. <code>dispose()</code> cancels the plugin's coroutines, clears
+its static references and releases its HTTP connections. One thing outlives it:
+MapLibre keeps the application-scoped context the plugin gives it for the life of
+the process, and has no teardown for it.</p>
 
 <h2>Usage</h2>
 
 <ol>
   <li>Install the Maps plugin from the Plugin Manager.</li>
-  <li>Create a new project from the <strong>Maps</strong> template (Kotlin or
-  Java), or open any existing Code on the Go project.</li>
+  <li>Create a new project from the <strong>Offline OSM Map</strong> template
+  (Kotlin or Java). Regions can only be applied to a project made from this
+  template.</li>
   <li>Open the <strong>Maps</strong> tab in the editor bottom sheet.</li>
   <li>Tap <strong>+ Download new region</strong>, draw a bounding box over the
   area you need, and confirm. The region downloads into the shared cache.</li>
