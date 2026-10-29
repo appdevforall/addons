@@ -41,6 +41,14 @@ interface ToolHandler {
         get() = false
 
     /**
+     * Whether this tool writes a file's content, which is what tells a run whether a change it set out
+     * to make was made. Narrower than [mutatesProject]: a shell command or a dependency change also
+     * changes the project, but its failure is not a failed file change, nor its success a redone one.
+     */
+    val writesFiles: Boolean
+        get() = false
+
+    /**
      * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means
      * untyped, flat string arguments, which is what the tool-call protocol supports today.
      */

@@ -959,7 +959,10 @@ class AgentLoopTest {
         unappliedWriteTurn = { UNAPPLIED },
     )
 
-    /** Runs [writingLoop] with `edit_file` as the one tool that changes files; results come from [outcomes]. */
+    /**
+     * Runs [writingLoop] with `edit_file` as the one tool that writes files and `run_shell_command` as one
+     * that changes the project without writing a file; results come from [outcomes].
+     */
     private suspend fun runWriting(
         replies: List<String>,
         outcomes: Map<String, List<ToolResult>>,
@@ -978,7 +981,9 @@ class AgentLoopTest {
                     outcomes.getValue(call.name).let { it.getOrElse(n) { _ -> it.last() } }
                 }
             },
-            changesPaths = { it.name == "edit_file" },
+            pathsOf = { call -> setOfNotNull(call.args["path"]?.toString()) },
+            changesPaths = { it.name == "edit_file" || it.name == "run_shell_command" },
+            writesFiles = { it.name == "edit_file" },
             events = object : AgentLoop.Events {
                 override suspend fun onUnappliedWriteAnswer(turn: Int) { events += "unapplied" }
                 override suspend fun onFinalAnswer(turn: Int, message: String) { events += "final" }
@@ -1050,14 +1055,82 @@ class AgentLoopTest {
     }
 
     @Test
-    fun givenAFailedEditFollowedByASuccessfulOne_whenTheModelAnswers_thenNothingIsOutstanding() = runTest {
+    fun givenAFailedEditFollowedByASuccessfulOneOnTheSameFile_whenTheModelAnswers_thenNothingIsOutstanding() = runTest {
         val (result, _, events) = runWriting(
-            listOf(toolCall("edit_file", "a"), toolCall("edit_file", "b"), respond),
+            listOf(toolCall("edit_file", "a"), toolCall("edit_file", "a"), respond),
             mapOf("edit_file" to listOf(failedEdit, appliedEdit)),
         )
 
         assertTrue(result.completed)
         assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAFailedEditAndASuccessfulOneOnAnotherFileInOneBatch_whenTheModelAnswers_thenItIsToldTheChangeWasNotMade() = runTest {
+        // One run-wide flag let the second file's success hide the first file's failure.
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file", "a") + toolCall("edit_file", "b"), respond, respond),
+            mapOf("edit_file" to listOf(failedEdit, appliedEdit)),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAWarnedFailureThatWasRedone_whenALaterEditFailsAndTheModelAnswers_thenItIsWarnedAgain() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file", "a"), respond, toolCall("edit_file", "a"), toolCall("edit_file", "b"), respond, respond),
+            mapOf("edit_file" to listOf(failedEdit, appliedEdit, failedEdit)),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAFailedEdit_whenTheModelAnswersInProse_thenItIsToldTheChangeWasNotMade() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(toolCall("edit_file", "a"), toolCall("read_file", "a"), "I renamed the app.", "I renamed the app."),
+            mapOf("edit_file" to listOf(failedEdit), "read_file" to listOf(ToolResult.success("lines"))),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+        assertEquals(1, history.count { it.content == UNAPPLIED })
+    }
+
+    @Test
+    fun givenAFailedShellCommand_whenTheModelAnswers_thenItIsNotToldAFileChangeFailed() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("run_shell_command"), respond),
+            mapOf("run_shell_command" to listOf(ToolResult.failure("command did not start"))),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAFailedEditThenADeniedRetry_whenTheModelAnswers_thenItIsNotSentBackToTheChangeTheUserDenied() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file", "a"), toolCall("edit_file", "a"), respond),
+            mapOf("edit_file" to listOf(failedEdit, ToolResult.denied("User denied permission"))),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAFailedEdit_whenTheModelOnlyReadsTheFileThroughTheShell_thenItIsStillToldTheChangeWasNotMade() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file", "a"), toolCall("run_shell_command"), respond, respond),
+            mapOf("edit_file" to listOf(failedEdit), "run_shell_command" to listOf(ToolResult.success("<strings>"))),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
     }
 
     private companion object {

@@ -49,6 +49,7 @@ class EditFileHandler(
     override val requiresApproval = true
     override val approvalPreview = ApprovalPreview.EDIT
     override val mutatesProject = true
+    override val writesFiles = true
     override val pathArgs = listOf(ARG_PATH)
     override val argAliases = mapOf(
         "old" to ARG_OLD,
