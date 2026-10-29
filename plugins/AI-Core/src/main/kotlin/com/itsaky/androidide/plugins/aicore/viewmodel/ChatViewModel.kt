@@ -1156,8 +1156,9 @@ class ChatViewModel(
                         // Keyed by the file, so a retry under the path an edit was corrected to still
                         // counts as the failed change redone.
                         writtenFilesOf = { call ->
-                            tools.router.getHandler(call.name)?.pathsIn(call.args).orEmpty()
-                                .mapTo(mutableSetOf(), PathGuard::writeKeyOf)
+                            val handler = tools.router.getHandler(call.name)
+                            handler?.pathsIn(call.args).orEmpty()
+                                .mapTo(mutableSetOf()) { PathGuard.writeKeyOf(it, handler?.correctsPaths == true) }
                         },
                         writesFiles = { call ->
                             tools.router.getHandler(call.name)?.writesFiles == true

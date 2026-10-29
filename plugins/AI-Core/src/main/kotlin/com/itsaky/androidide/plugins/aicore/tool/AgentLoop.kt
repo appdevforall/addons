@@ -165,9 +165,9 @@ class AgentLoop(
         suspend fun onRequiredToolSkipped(turn: Int, tool: String) {}
 
         /**
-         * The run answered while a file change it attempted had failed and had not been redone, so
-         * it was told the change was not made rather than being ended on a reply that probably says
-         * it was.
+         * The run tried to finish, by answering or by repeating a look it had just taken, while a
+         * file change it attempted had failed and had not been redone, so it was told the change
+         * was not made rather than being ended on a reply that probably says it was.
          *
          * @param turn 1-based turn index.
          */

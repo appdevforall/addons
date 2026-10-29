@@ -208,13 +208,18 @@ object PathGuard {
      * matched to the one that redoes it: `MainActivity.kt`, `./app/src/.../MainActivity.kt` and the
      * absolute path all give the same key.
      * @param path a path a write call named.
-     * @return the canonical path of the existing file [path] names, or of the one file an edit
-     *   would be corrected to (see [suggestPathsFor]); otherwise the bare file name.
+     * @param correctsNames whether the tool takes a path naming no file for the one project file of
+     *   that name (see [suggestPathsFor]), as `edit_file` does.
+     * @return the canonical path of the existing file [path] names, or with [correctsNames] of the
+     *   one file it would be corrected to; otherwise the bare file name, or the path itself when it
+     *   has none (`app/`).
      */
-    fun writeKeyOf(path: String): String {
+    fun writeKeyOf(path: String, correctsNames: Boolean): String {
         val named = resolveWithin(path)?.takeIf { it.isFile }
-            ?: suggestPathsFor(path).unambiguous?.let(::resolveWithin)?.takeIf { it.isFile }
-        return named?.canonicalPath ?: baseNameOf(path.trim())
+            ?: (if (correctsNames) suggestPathsFor(path).unambiguous else null)
+                ?.let(::resolveWithin)?.takeIf { it.isFile }
+        val trimmed = path.trim()
+        return named?.canonicalPath ?: baseNameOf(trimmed).ifEmpty { trimmed }
     }
 
     /**

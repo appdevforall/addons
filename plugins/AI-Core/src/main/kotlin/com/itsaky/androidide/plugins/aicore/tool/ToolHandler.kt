@@ -49,6 +49,14 @@ interface ToolHandler {
         get() = false
 
     /**
+     * Whether this tool takes a path naming no file for the one project file of that name, as
+     * `edit_file` does. A failed write is keyed the same way (see `PathGuard.writeKeyOf`), so a
+     * tool that writes exactly the path it was given is not matched to another file of that name.
+     */
+    val correctsPaths: Boolean
+        get() = false
+
+    /**
      * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means
      * untyped, flat string arguments, which is what the tool-call protocol supports today.
      */

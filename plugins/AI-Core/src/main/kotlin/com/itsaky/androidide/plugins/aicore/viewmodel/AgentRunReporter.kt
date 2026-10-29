@@ -90,7 +90,11 @@ internal class AgentRunReporter(
     }
 
     override suspend fun onUnappliedWriteAnswer(turn: Int) {
-        AgentTrace.refusal("LOOP", "turn=$turn", "answered with a failed file change outstanding; told it was not made")
+        AgentTrace.refusal(
+            "LOOP",
+            "turn=$turn",
+            "tried to finish with a failed file change outstanding; told it was not made",
+        )
     }
 
     override suspend fun onChangeNotMade(turn: Int) {

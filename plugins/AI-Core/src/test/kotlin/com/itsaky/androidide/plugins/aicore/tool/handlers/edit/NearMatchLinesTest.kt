@@ -48,6 +48,16 @@ class NearMatchLinesTest {
     }
 
     @Test
+    fun givenALongLineWithACharacterAcrossTheCut_whenFound_thenTheCharacterIsDroppedWhole() {
+        // U+1F600 is two chars; cutting between them would put a lone surrogate in the prompt.
+        val line = NearMatchLines.find("foo " + "x".repeat(195) + "😀" + "tail", "foo").single()
+
+        assertEquals(199, line.text.length)
+        assertTrue(line.cut)
+        assertTrue(!line.text.last().isSurrogate())
+    }
+
+    @Test
     fun givenAWordPastWhereALineIsCut_whenFound_thenTheLineStillMatches() {
         val text = "x".repeat(300) + " target\nother\n"
 

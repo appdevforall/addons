@@ -41,8 +41,9 @@ object NearMatchLines {
             .filter { (_, line) -> line.isNotBlank() }
             .map { (index, line) ->
                 val lower = line.lowercase()
-                Line(index + 1, line.take(MAX_LINE_CHARS), line.length > MAX_LINE_CHARS) to
-                    words.count { lower.contains(it) }
+                // One character short rather than half of one: a lone surrogate is not text.
+                val shown = line.take(MAX_LINE_CHARS).let { if (it.last().isHighSurrogate()) it.dropLast(1) else it }
+                Line(index + 1, shown, shown.length < line.length) to words.count { lower.contains(it) }
             }
             .filter { (_, score) -> score > 0 }
             .sortedByDescending { (_, score) -> score }
