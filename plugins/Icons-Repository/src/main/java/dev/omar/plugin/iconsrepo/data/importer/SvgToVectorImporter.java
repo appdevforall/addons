@@ -1,5 +1,7 @@
 package dev.omar.plugin.iconsrepo.data.importer;
 
+import dev.omar.plugin.iconsrepo.utils.Utils;
+
 import org.xmlpull.v1.XmlPullParserFactory;
 import org.xmlpull.v1.XmlSerializer;
 
@@ -53,7 +55,7 @@ public class SvgToVectorImporter implements IconImporter {
 
     private String extractPathData(InputStream svgStream) throws IOException {
         try (svgStream) {
-            String content = new String(svgStream.readAllBytes(), StandardCharsets.UTF_8);
+            String content = new String(Utils.readAllBytes(svgStream), StandardCharsets.UTF_8);
             Matcher matcher = PATH_D_PATTERN.matcher(content);
             return matcher.find() ? matcher.group(1) : null;
         }
