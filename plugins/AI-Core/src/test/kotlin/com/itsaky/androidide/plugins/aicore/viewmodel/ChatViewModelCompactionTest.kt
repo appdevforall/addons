@@ -71,6 +71,9 @@ class ChatViewModelCompactionTest {
 
     private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Every ViewModel a test made, cleared before Main is reset; see [clearAndAwait]. */
+    private val viewModels = mutableListOf<ChatViewModel>()
+
     /** The history each model turn was sent with, in order. */
     private val sentHistories = CopyOnWriteArrayList<List<LlmInferenceService.ChatMessage>>()
 
@@ -99,6 +102,7 @@ class ChatViewModelCompactionTest {
 
     @After
     fun tearDown() {
+        clearAndAwait(viewModels)
         SharedServices.clear()
         Dispatchers.resetMain()
         sharedPromptConfig.clear()
@@ -381,7 +385,7 @@ class ChatViewModelCompactionTest {
             initializeStorage(context, TEST_PROJECT_KEY)
             checkBackendAvailability()
             awaitCondition { isBackendAvailable.value }
-        }
+        }.also(viewModels::add)
         return viewModel to service
     }
 
