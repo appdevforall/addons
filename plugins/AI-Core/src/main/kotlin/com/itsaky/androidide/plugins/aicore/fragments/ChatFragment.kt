@@ -72,7 +72,7 @@ private fun String.oneLine(): String = trim().replace(WHITESPACE, " ")
  * ChatFragment for Agent chat UI.
  * Provides a full chat interface with LLM integration.
  */
-class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
+open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     private companion object {
         /** Tag the approval dialog is shown under, so it can be found again after recreation. */
@@ -87,6 +87,12 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         const val STATE_FILES_BEFORE_EDIT = "files_before_edit"
         const val STATE_EDIT_FILES = "edit_files"
     }
+
+    /**
+     * Whether this is the chat shown over the whole screen rather than the one in the bottom
+     * sheet. Both show the same conversation, since the ViewModel belongs to the plugin.
+     */
+    protected open val isFullScreen: Boolean = false
 
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
@@ -302,6 +308,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         syncStorageToCurrentProject()
         setupChatTitle()
         setupSidebar()
+        setupFullScreenToggle()
         setupRecyclerView()
         setupInputArea()
         restoreContextChips()
@@ -1063,6 +1070,39 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             AiCorePlugin.getContext()?.logger
                 ?.warn("ChatFragment: could not open the Agent settings screen")
             showInfoSnackbar(getString(R.string.msg_settings_unavailable))
+        }
+    }
+
+    /**
+     * Wires the toolbar's full-screen button: in the bottom sheet it opens this chat over the whole
+     * screen, and on that screen it closes it again.
+     */
+    private fun setupFullScreenToggle() {
+        val button = binding.btnChatFullScreen
+        if (isFullScreen) {
+            button.setImageResource(R.drawable.ic_close_fullscreen)
+            button.contentDescription = getString(R.string.desc_exit_full_screen)
+            // The host's PluginScreenActivity holds nothing but this fragment.
+            button.setOnClickListener { requireActivity().finish() }
+        } else {
+            button.setOnClickListener { openFullScreen() }
+        }
+        wireTooltip(button, AiCorePlugin.TOOLTIP_TAG_CHAT_FULL_SCREEN)
+    }
+
+    /** Opens [FullScreenChatFragment] in the host's full-screen surface. */
+    private fun openFullScreen() {
+        val opened = PluginFragmentHelper.getServiceRegistry(AiCorePlugin.PLUGIN_ID)
+            ?.get(IdeUIService::class.java)
+            ?.openPluginScreen(
+                AiCorePlugin.PLUGIN_ID,
+                FullScreenChatFragment::class.java.name,
+                binding.chatTitle.text.toString()
+            ) ?: false
+        if (!opened) {
+            AiCorePlugin.getContext()?.logger
+                ?.warn("ChatFragment: could not open the chat full screen")
+            showInfoSnackbar(getString(R.string.msg_full_screen_unavailable))
         }
     }
 
