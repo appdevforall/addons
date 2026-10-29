@@ -25,6 +25,13 @@ android {
 				arguments += "-DLLAMA_CURL=OFF"
 				arguments += "-DLLAMA_BUILD_COMMON=ON"
 				arguments += "-DGGML_LLAMAFILE=OFF"
+				// The CPU backend as one library per instruction-set level, picked at runtime by what the
+				// phone supports (ADFA-6757). Left alone, the cross-compile falls back to basic ARMv8 and
+				// the shipped library holds no dot-product instructions at all, yet the ARMv8.0 variant
+				// keeps old Cortex-A53 phones working. Hard-coding armv8.2-a+dotprod would not.
+				arguments += "-DBUILD_SHARED_LIBS=ON"
+				arguments += "-DGGML_BACKEND_DL=ON"
+				arguments += "-DGGML_CPU_ALL_VARIANTS=ON"
 				arguments += "-DCMAKE_BUILD_TYPE=Release"
 				// 16 KB page alignment, required on newer arm64 devices; PrebuiltAarAbiTest asserts it
 				// on the committed AAR, since dropping this still builds and still loads on 4 KB.
