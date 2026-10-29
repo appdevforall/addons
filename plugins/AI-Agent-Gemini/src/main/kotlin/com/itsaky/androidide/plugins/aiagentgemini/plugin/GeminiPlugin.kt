@@ -186,58 +186,75 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Sends prompts to Google's Gemini API. Needs an API key and a network connection.",
+            summary = "Sends your prompts to Google's Gemini. You need an API key to use it. (Internet access is required.)",
             detail = """
-                <p><b>AI Agent Gemini</b> adds the <code>gemini</code> backend to
-                <b>AI Core</b>, calling Google's Generative Language API over
-                HTTPS.</p>
-                <p>Install <b>AI Core</b> as well, then select the <b>gemini</b>
-                backend in <b>Agent settings</b> and enter your API key in the pane
-                this plugin adds there. Prompts and any file contents a plugin
-                sends are transmitted to Google.</p>
+                API keys are free to create in Google AI Studio.<br><br>To use this agent,
+                you must also install AI Core. Then go to <b>Preferences → Agent</b>,
+                choose <b>Gemini API</b> as the backend, and enter your API key.<br><br>Your
+                prompts, and any project files the Agent reads, are sent to Google.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "AI Agent Gemini guide",
-                    uri = "index.html",
-                    order = 0
-                )
-            )
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GEMINI_KEY,
-            summary = "Your Google AI Studio API key, checked with Google before it is stored.",
+            summary = "Your Google AI Studio API key. CoGo checks it with Google before saving it.",
             detail = """
-                <p>The key is verified against Google's model list before being
-                saved, so a mistyped key is caught here rather than mid-chat. It
-                is then encrypted with the Android Keystore and only the
-                ciphertext is written to disk.</p>
-                <p>A key that cannot be checked — no network, for instance — can
-                still be saved, but is marked unverified rather than claiming a
-                check that never happened.</p>
+                The check happens when you tap <b>Save Key</b>, so a mistyped key is caught
+                before you start a chat. CoGo then stores the key encrypted on this
+                device.<br><br>If you're offline, you can still save the key without
+                checking it. It's marked as unverified until it can be checked.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GEMINI_MODEL,
-            summary = "Which Gemini model to use. Refresh lists the models your key can reach.",
+            summary = "Which Gemini model to use. To see the models your key can use, tap <b>Refresh Models</b>.",
             detail = """
-                <p><b>Refresh Models</b> asks Google which chat-capable models the
-                saved key can actually use, so the list never offers a model that
-                would fail with a 404. Without a key, or offline, a short list of
-                current models is shown instead.</p>
+                The list shows only the models Google lets your key use.<br><br>If you
+                haven't saved a key, or you're offline, the list shows a short set of
+                current Gemini models instead.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
-            summary = "Opens Google AI Studio in your browser, where API keys are free to create.",
+            summary = "Opens Google AI Studio in your browser, where you can create an API key for free. (Internet access is required.)",
             detail = """
-                <p>Opens <code>aistudio.google.com/apikey</code> in your own
-                browser — never an embedded WebView, so you can see Google's URL
-                bar and Google's sign-in works. Sign in, create a key, copy it,
-                and paste it into the field here.</p>
-                <p>This plugin never sees your Google password and never reads
-                your clipboard.</p>
+                The page opens outside CoGo, so you can check the web address and sign in to
+                Google normally.<br><br>To get a key, sign in, create a key, and copy it.
+                Then return to this page, paste it into the API Key field, and tap <b>Save
+                Key</b>.<br><br>CoGo never sees your Google password and never reads your
+                clipboard.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
     )
 

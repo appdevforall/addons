@@ -820,31 +820,47 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_BACK,
-            summary = "Close the Agent settings and go back where you came from.",
+            summary = "Closes AI Settings.",
             detail = """
-                <p>Closes this screen, returning to Preferences or to the Agent
-                chat depending on how you opened it. Every setting here is saved as
-                you change it, so there is nothing to confirm — the Agent picks up
-                the new backend and model as soon as you return.</p>
+                Your backend choice is saved when you leave, and the Agent uses it the next
+                time you send a message. API keys and server addresses are saved only when
+                you tap their <b>Save</b> buttons, so save them before you leave.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-top.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_BACKEND,
             summary = "Choose which installed backend powers the Agent.",
             detail = """
-                <p>Lists every AI backend plugin installed and registered with
-                <b>AI Core</b>. Each names itself, says whether it runs on the
-                device or over the network, and supplies its own settings — so
-                the panel below changes with the choice.</p>
-                <p>If the list is empty, no backend is installed: add one from
-                the Plugin Manager and come back.</p>
+                Each backend is a separate add-on, and the settings below change to match
+                the one you choose.<ul><li>AI Agent Local runs a model on this device and
+                works offline.</li><li>AI Agent Claude, AI Agent Gemini, and AI Agent
+                OpenAI need an internet connection for every message.</li><li>Claude and
+                OpenAI charge for use.</li></ul>If the list is empty, no backend is
+                installed. In the Add-ons Manager, install and enable at least one AI Agent
+                add-on.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn about local models",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+                PluginTooltipButton(
+                    description = "Learn about online models",
+                    uri = "i/ai-online.html",
+                    order = 1,
+                    directPath = true,
+                ),
+            ),
         ),
     )
 
