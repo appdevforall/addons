@@ -198,6 +198,46 @@ class ExecutorTest {
         assertTrue("a deletion must reach the handler", results.single().success)
     }
 
+    private class RecordingCreateFile : ToolHandler {
+        override val toolName = "create_file"
+        override val description = "fake create"
+        override val requiresApproval = false
+        override val pathArgs = listOf("file_path")
+        var seenArgs: Map<String, Any?>? = null
+            private set
+
+        override suspend fun execute(args: Map<String, Any?>): ToolResult {
+            seenArgs = args
+            return ToolResult.success("created")
+        }
+    }
+
+    @Test
+    fun givenCreateFileWithEmptyContent_whenExecuting_thenItReachesTheHandler() = runBlocking {
+        // An empty file is a normal request, and a small model asked for one sends content = "".
+        val handler = RecordingCreateFile()
+
+        val results = executorFor(handler).execute(
+            listOf(ToolCall("create_file", mapOf("file_path" to "Util.kt", "content" to "")))
+        )
+
+        assertTrue("empty content must not read as missing: ${results.single().message}", results.single().success)
+        assertEquals("", handler.seenArgs?.get("content"))
+    }
+
+    @Test
+    fun givenCreateFileWithNoContentArgument_whenExecuting_thenItIsRejectedBeforeTheHandlerRuns() = runBlocking {
+        val handler = RecordingCreateFile()
+
+        val results = executorFor(handler).execute(
+            listOf(ToolCall("create_file", mapOf("file_path" to "Util.kt")))
+        )
+
+        assertFalse(results.single().success)
+        assertTrue(results.single().message.contains("content"))
+        assertEquals(null, handler.seenArgs)
+    }
+
     @Test
     fun givenAWhitespaceOnlyOldString_whenExecuting_thenItReachesTheHandler() = runBlocking {
         // Re-indenting is a legal edit whose old_string is whitespace, not a missing argument.
