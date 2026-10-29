@@ -1446,6 +1446,7 @@ class ChatViewModel(
                 temperature = ChatTitle.TEMPERATURE
                 maxTokens = ChatTitle.MAX_TOKENS
                 systemPrompt = ChatTitle.systemPrompt(prompts)
+                extraParams = mapOf(ChatTitle.EXTRA_PARAM_SOURCE to ChatTitle.echoSource(userText))
             }
             withTimeoutOrNull(ChatTitle.TIMEOUT_MS) {
                 llmService.generateCompletion(ChatTitle.prompt(prompts, userText), config).await()

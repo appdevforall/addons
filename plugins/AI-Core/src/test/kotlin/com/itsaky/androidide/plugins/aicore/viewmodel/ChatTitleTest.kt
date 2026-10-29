@@ -56,6 +56,39 @@ class ChatTitleTest {
     }
 
     @Test
+    fun givenAMessageThatOpensWithAShortLineOrACodeFence_whenEchoedAndSanitized_thenTheTitleIsItsFirstWords() {
+        assertEquals(
+            "Hi, my app crashes when I tap the",
+            ChatTitle.sanitize(ChatTitle.echoSource("Hi,\nmy app crashes when I tap the login button")),
+        )
+        assertEquals(
+            "kotlin fun foo() = bar!! ``` why does",
+            ChatTitle.sanitize(ChatTitle.echoSource("```kotlin\nfun foo() = bar!!\n```\nwhy does this crash?")),
+        )
+    }
+
+    @Test
+    fun givenTheSourceKey_whenRead_thenItIsTheLiteralTheLocalBackendReads() {
+        // Duplicated in AI-Agent-Local (LocalLlmBackend.EXTRA_PARAM_CHAT_TITLE_SOURCE); a rename on
+        // one side alone would silently send every title back through the model.
+        assertEquals("chat_title_source", ChatTitle.EXTRA_PARAM_SOURCE)
+    }
+
+    @Test
+    fun givenAPaddedLongMessage_whenTakingItsExcerpt_thenItIsTrimmedAndCut() {
+        assertEquals("fix the build", ChatTitle.excerpt("  fix the build \n"))
+        assertEquals(ChatTitle.EXCERPT_CHARS, ChatTitle.excerpt("q".repeat(5_000)).length)
+    }
+
+    @Test
+    fun givenABackendThatEchoesTheExcerpt_whenSanitized_thenTheTitleIsThePromptsFirstWords() {
+        // What the local backend answers: the excerpt itself, with no model call behind it.
+        val echoed = ChatTitle.echoSource("add a dark mode toggle to the settings screen and persist it\nthanks")
+
+        assertEquals("add a dark mode toggle to the settings", ChatTitle.sanitize(echoed))
+    }
+
+    @Test
     fun givenTheShippedConfig_whenChecked_thenBothTextsRender() {
         assertEquals(emptyList<String>(), ChatTitle.problems(shippedConfig))
     }
