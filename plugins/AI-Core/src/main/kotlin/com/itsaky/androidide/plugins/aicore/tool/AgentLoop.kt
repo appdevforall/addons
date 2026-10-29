@@ -15,6 +15,8 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Ro
  *   [terminalTool]; null ends the run on that reply instead.
  * @param requiredToolTurn words the turn sent when a run told to call a tool first tries to finish
  *   without it; receives the tool's name. Null never asks.
+ * @param unappliedWriteTurn words the turn sent when a run answers while its last attempt to change
+ *   a file failed and none has succeeded since; null lets that answer end the run.
  */
 class AgentLoop(
     private val formatToolResults: ToolResultsFormatter,
@@ -27,6 +29,7 @@ class AgentLoop(
     private val terminalTool: String? = null,
     private val unfinishedTurn: (suspend () -> String)? = null,
     private val requiredToolTurn: (suspend (String) -> String)? = null,
+    private val unappliedWriteTurn: (suspend () -> String)? = null,
 ) {
 
     companion object {
@@ -156,6 +159,15 @@ class AgentLoop(
          * @param tool the tool the run had to call.
          */
         suspend fun onRequiredToolSkipped(turn: Int, tool: String) {}
+
+        /**
+         * The run answered while its last attempt to change a file had failed and no change had
+         * succeeded since, so it was told the change was not made rather than being ended on a
+         * reply that probably says it was.
+         *
+         * @param turn 1-based turn index.
+         */
+        suspend fun onUnappliedWriteAnswer(turn: Int) {}
     }
 
     /** Why the loop stopped. */
@@ -227,6 +239,9 @@ class AgentLoop(
         // Once a tool has run, only the terminal tool finishes the run; see [unfinishedTurn].
         var toolsRan = false
         var askedToFinish = false
+        // True from a failed (not user-denied) file change until a later one succeeds.
+        var writeUnapplied = false
+        var warnedOfUnappliedWrite = false
         // Cleared once the tool runs or has been asked for, so a model that refuses it still stops.
         var requiredPending = requiredTool != null && requiredToolTurn != null
         while (turn < maxIterations) {
@@ -283,12 +298,21 @@ class AgentLoop(
                 askForRequiredTool(turn, requiredTool!!, history, events)
                 continue
             }
-            terminalTool?.let { tt ->
-                val terminal = calls.firstOrNull { isTerminalToolName(it.name, tt) }
-                if (terminal != null && realCalls.isEmpty()) {
-                    events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
-                    return Result(turn, StopReason.COMPLETED)
+            val terminal = terminalTool?.let { tt -> calls.firstOrNull { isTerminalToolName(it.name, tt) } }
+            if (terminal != null && realCalls.isEmpty()) {
+                if (writeUnapplied && unappliedWriteTurn != null) {
+                    if (!warnedOfUnappliedWrite) {
+                        warnedOfUnappliedWrite = true
+                        events.onUnappliedWriteAnswer(turn)
+                        history.add(ChatMessage(Role.USER, unappliedWriteTurn.invoke()))
+                        continue
+                    }
+                    // Told once and answered again: the user's change is still not made.
+                    events.onAbandonedAfterFailure(turn)
+                    return Result(turn, StopReason.ABANDONED)
                 }
+                events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
+                return Result(turn, StopReason.COMPLETED)
             }
 
             when (progress.inspect(realCalls)) {
@@ -312,6 +336,9 @@ class AgentLoop(
             toolsRan = true
             askedToFinish = false
             progress.recordResults(results)
+            realCalls.zip(results).filter { (call, _) -> changesPaths(call) }.forEach { (_, result) ->
+                if (result.success) writeUnapplied = false else if (!result.denied) writeUnapplied = true
+            }
             events.onToolResults(turn, realCalls, results)
             history.add(ChatMessage(Role.USER, formatToolResults.format(realCalls, results)))
         }

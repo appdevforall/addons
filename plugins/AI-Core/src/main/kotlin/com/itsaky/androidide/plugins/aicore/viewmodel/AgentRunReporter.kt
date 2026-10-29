@@ -86,6 +86,10 @@ internal class AgentRunReporter(
         onAskedToFinish()
     }
 
+    override suspend fun onUnappliedWriteAnswer(turn: Int) {
+        AgentTrace.refusal("LOOP", "turn=$turn", "answered with a failed file change outstanding; told it was not made")
+    }
+
     // Reaching this means the backend did not force the call; see VerificationPolicy.
     override suspend fun onRequiredToolSkipped(turn: Int, tool: String) {
         AgentTrace.stage("VERIFY", "turn=$turn asked-for=$tool (answered without it)")

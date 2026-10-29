@@ -31,6 +31,9 @@ class ToolResultsPrompt(
     /** The turn sent after a reply that ran tools and ended without the terminal tool. */
     suspend fun unfinished(): String = renderUnfinished(config.config(), terminalTool)
 
+    /** The turn sent after a reply that tried to finish while its last file change had failed. */
+    suspend fun unappliedWrite(): String = renderUnappliedWrite(config.config(), terminalTool)
+
     /** The turn sent after a reply that answered before calling [tool], which the run had to call first. */
     suspend fun requiredTool(tool: String): String = renderRequiredTool(config.config(), terminalTool, tool)
 
@@ -94,6 +97,19 @@ class ToolResultsPrompt(
             )
 
         /**
+         * Renders the turn that tells a run its last attempt to change a file failed.
+         *
+         * @param config the loaded prompt config.
+         * @param terminalTool the name of the tool that ends a run by answering the user.
+         * @return the turn to add to the transcript.
+         */
+        fun renderUnappliedWrite(config: AgentPromptConfig, terminalTool: String): String =
+            PromptTemplateEngine.render(
+                config.agentLoop.unappliedWrite,
+                mapOf(PromptVariables.TERMINAL_TOOL to terminalTool),
+            )
+
+        /**
          * Renders the turn that asks a run which answered too early to call [tool] first.
          *
          * @param config the loaded prompt config.
@@ -117,6 +133,7 @@ class ToolResultsPrompt(
             val renders: List<() -> String> = CHECK_BATCHES.map { (calls, results) ->
                 { render(config, CHECK_TERMINAL_TOOL, CHECK_CHAR_LIMIT, calls, results) }
             } + { renderUnfinished(config, CHECK_TERMINAL_TOOL) } +
+                { renderUnappliedWrite(config, CHECK_TERMINAL_TOOL) } +
                 { renderRequiredTool(config, CHECK_TERMINAL_TOOL, CHECK_REQUIRED_TOOL) }
             return renders.mapNotNull { check ->
                 try {

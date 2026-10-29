@@ -226,6 +226,7 @@ class ChatViewModel(
         terminalTool = RESPOND_TOOL,
         unfinishedTurn = toolResultsPrompt::unfinished,
         requiredToolTurn = toolResultsPrompt::requiredTool,
+        unappliedWriteTurn = toolResultsPrompt::unappliedWrite,
     )
     val toolExecutionTracker = ToolExecutionTracker()
 

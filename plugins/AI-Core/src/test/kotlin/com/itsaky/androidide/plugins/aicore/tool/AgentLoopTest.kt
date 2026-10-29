@@ -951,8 +951,105 @@ class AgentLoopTest {
         assertTrue(results.contains("THE SOURCES"))
     }
 
+    /** [finishingLoop], also telling a run that answers over a failed file change it was not made. */
+    private fun writingLoop() = AgentLoop(
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond"),
+        terminalTool = "respond",
+        unfinishedTurn = { UNFINISHED },
+        unappliedWriteTurn = { UNAPPLIED },
+    )
+
+    /** Runs [writingLoop] with `edit_file` as the one tool that changes files; results come from [outcomes]. */
+    private suspend fun runWriting(
+        replies: List<String>,
+        outcomes: Map<String, List<ToolResult>>,
+    ): Triple<AgentLoop.Result, MutableList<ChatMessage>, List<String>> {
+        val model = ScriptedModel(replies)
+        val used = mutableMapOf<String, Int>()
+        val events = mutableListOf<String>()
+        val history = mutableListOf(ChatMessage(Role.USER, "change the app name"))
+        val result = writingLoop().run(
+            history = history,
+            generate = model::generate,
+            executeTools = { calls ->
+                calls.map { call ->
+                    val n = used.getOrDefault(call.name, 0)
+                    used[call.name] = n + 1
+                    outcomes.getValue(call.name).let { it.getOrElse(n) { _ -> it.last() } }
+                }
+            },
+            changesPaths = { it.name == "edit_file" },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnappliedWriteAnswer(turn: Int) { events += "unapplied" }
+                override suspend fun onFinalAnswer(turn: Int, message: String) { events += "final" }
+                override suspend fun onAbandonedAfterFailure(turn: Int) { events += "abandoned" }
+            },
+        )
+        return Triple(result, history, events)
+    }
+
+    private val failedEdit = ToolResult.failure("old_string not found")
+    private val appliedEdit = ToolResult.success("edited")
+
+    @Test
+    fun givenAnAnswerOverAFailedEdit_whenTheModelThenEditsSuccessfully_thenItIsToldOnceAndCompletes() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(toolCall("edit_file"), respond, toolCall("edit_file"), respond),
+            mapOf("edit_file" to listOf(failedEdit, appliedEdit)),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("unapplied", "final"), events)
+        assertEquals(1, history.count { it.content == UNAPPLIED })
+    }
+
+    @Test
+    fun givenAnAnswerOverAFailedEdit_whenTheModelAnswersAgainWithoutEditing_thenTheRunIsAbandonedNotCompleted() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file"), respond, respond),
+            mapOf("edit_file" to listOf(failedEdit)),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "abandoned"), events)
+    }
+
+    @Test
+    fun givenAnEditTheUserDenied_whenTheModelAnswers_thenItIsNotToldTheChangeFailed() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file"), respond),
+            mapOf("edit_file" to listOf(ToolResult.denied("User denied permission"))),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAFailedReadOnlyCall_whenTheModelAnswers_thenItIsNotToldAChangeFailed() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("read_file"), respond),
+            mapOf("read_file" to listOf(ToolResult.failure("no such file"))),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAFailedEditFollowedByASuccessfulOne_whenTheModelAnswers_thenNothingIsOutstanding() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file", "a"), toolCall("edit_file", "b"), respond),
+            mapOf("edit_file" to listOf(failedEdit, appliedEdit)),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
     private companion object {
         const val UNFINISHED = "finish or carry on"
+        const val UNAPPLIED = "the change was not made"
         const val REQUIRED = "call first:"
     }
 }

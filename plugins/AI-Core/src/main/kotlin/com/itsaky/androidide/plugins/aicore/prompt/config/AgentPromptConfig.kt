@@ -111,6 +111,8 @@ data class AgentPromptConfig(
      * @property afterFailure what to do next otherwise.
      * @property unfinished the turn after a reply that ran tools and then ended without the
      *   terminal tool.
+     * @property unappliedWrite the turn after a reply that tried to finish while the last attempt to
+     *   change a file had failed and none had succeeded since.
      * @property requiredTool the turn after a reply that answered before calling the tool the run
      *   had to call first, such as a web search before a code review.
      */
@@ -121,6 +123,7 @@ data class AgentPromptConfig(
         val afterSuccess: PromptText,
         val afterFailure: PromptText,
         val unfinished: PromptText,
+        val unappliedWrite: PromptText,
         val requiredTool: PromptText,
     )
 

@@ -30,6 +30,13 @@ agent_loop:
     Your reply called no tool, so the run is still open. If every part of the request is now
     answered, call the "{{TERMINAL_TOOL}}" tool with a one-line summary — do not repeat what you
     already wrote. Otherwise do the next part now.
+  # Sent once when a run tries to finish while its last attempt to change a file failed and no change
+  # has succeeded since: a small model tends to answer as if the change had been made.
+  unapplied_write: >-
+    Nothing was changed: your last attempt to change a file failed, and no change has succeeded
+    since. Do not tell the user it was done. Read the file with read_file, then repeat the change
+    with the text copied exactly from it; or, if you cannot, call the "{{TERMINAL_TOOL}}" tool and
+    say plainly that the change was not made.
   # Sent once when a run that had to check the web first answered without searching; TOOL is the
   # search tool. A backend that forces the call never sends it (see VerificationPolicy).
   required_tool: >-
