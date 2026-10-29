@@ -13,8 +13,8 @@ tool_call_format:
     examples:
       - purpose: Greeting / question you can answer -> respond
         call: '<tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>'
-      - purpose: Open a file (a bare name is fine here) -> open_file
-        call: '<tool_call>{"tool":"open_file","args":{"file_path":"{{EXAMPLE_FILE_NAME}}"}}</tool_call>'
+      - purpose: Show or read a file (source, build.gradle, strings.xml; a bare name is fine) -> read_file
+        call: '<tool_call>{"tool":"read_file","args":{"file_path":"{{EXAMPLE_FILE_NAME}}"}}</tool_call>'
       - purpose: Change one line of a file -> edit_file
         call: '<tool_call>{"tool":"edit_file","args":{"file_path":"{{EXAMPLE_FILE_PATH}}","old_string":"setTitle(\"Old\")","new_string":"setTitle(\"New\")"}}</tool_call>'
       - purpose: Change two lines (note the \n, never a real line break) -> edit_file

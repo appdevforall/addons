@@ -101,6 +101,15 @@ class LocalSystemPromptTest {
     }
 
     @Test
+    fun givenTheShippedExamples_whenBuilding_thenOneShowsHowToReadAFile() {
+        // "Show me app/build.gradle" went to search_project while the prompt had no read_file example.
+        assertTrue(
+            prompt(examplePath = "src/Foo.kt")
+                .contains("""<tool_call>{"tool":"read_file","args":{"file_path":"Foo.kt"}}</tool_call>""")
+        )
+    }
+
+    @Test
     fun givenADotfileExamplePath_whenBuilding_thenTheStemIsItsWholeName() {
         assertTrue(prompt(examplePath = "app/.gitignore").contains(""""query":".gitignore""""))
     }
