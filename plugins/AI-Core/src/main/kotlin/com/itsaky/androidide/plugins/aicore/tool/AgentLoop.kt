@@ -70,6 +70,13 @@ class AgentLoop(
     /** Callbacks so the caller can drive UI/state; all no-ops by default. */
     interface Events {
         /**
+         * A model turn is about to be generated. Each turn is one step of the run's limit.
+         * @param turn 1-based turn index.
+         * @param maxTurns the turn the run stops at with tools still outstanding.
+         */
+        suspend fun onTurnStarted(turn: Int, maxTurns: Int) {}
+
+        /**
          * A model turn finished.
          * @param turn 1-based turn index.
          * @param text the model's reply, already streamed into the UI.
@@ -231,6 +238,7 @@ class AgentLoop(
         var requiredPending = requiredTool != null && requiredToolTurn != null
         while (turn < maxIterations) {
             turn++
+            events.onTurnStarted(turn, maxIterations)
 
             val reply = generate(history.toList())
             val text = reply.text

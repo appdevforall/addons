@@ -274,6 +274,37 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenARunThatReachesTheStepLimit_whenEachTurnStarts_thenItIsAnnouncedWithItsNumberAndTheLimit() = runTest {
+        // The status line counts steps the way the limit does, so the user sees the limit coming.
+        val model = ScriptedModel(
+            listOf(
+                "step1 ${toolCall("list_files")}",
+                "step2 ${toolCall("read_file")}",
+                "step3 ${toolCall("search_project")}"
+            )
+        )
+        val announced = mutableListOf<Pair<Int, Int>>()
+        val announcedBeforeEachReply = mutableListOf<Int>()
+
+        agentLoop(maxIterations = 3).run(
+            history = mutableListOf(ChatMessage(Role.USER, "keep going")),
+            generate = { turns ->
+                announcedBeforeEachReply += announced.size
+                model.generate(turns)
+            },
+            executeTools = { listOf(ToolResult.success("ok")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onTurnStarted(turn: Int, maxTurns: Int) {
+                    announced += turn to maxTurns
+                }
+            }
+        )
+
+        assertEquals(listOf(1 to 3, 2 to 3, 3 to 3), announced)
+        assertEquals(listOf(1, 2, 3), announcedBeforeEachReply)
+    }
+
+    @Test
     fun givenAModelThatKeepsCallingDistinctTools_whenTheLoopRuns_thenItStopsAtTheIterationCap() = runTest {
         // Distinct calls each turn so stuck-detection doesn't fire before the cap.
         val model = ScriptedModel(

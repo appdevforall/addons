@@ -20,6 +20,7 @@ import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
 import com.itsaky.androidide.plugins.aicore.models.HistoryCompaction
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.newestFirst
+import com.itsaky.androidide.plugins.aicore.models.RunStep
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
@@ -816,18 +817,21 @@ class ChatViewModel(
      *
      * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
+     * @param runStep the run's step these calls were made in.
      * @return the results, positionally aligned with [toolCalls].
      */
     private suspend fun executeToolCalls(
         tools: AgentTools,
         toolCalls: List<ToolCall>,
+        runStep: RunStep?,
     ): List<ToolResult> {
         if (toolCalls.isEmpty()) return emptyList()
 
         val executingState = AgentState.Executing(
             currentStepIndex = 0,
             totalSteps = toolCalls.size,
-            description = toolCalls.first().name
+            description = toolCalls.first().name,
+            runStep = runStep,
         )
         withContext(Dispatchers.Main) { setState(executingState) }
         startStateTimer(executingState)
@@ -1103,6 +1107,8 @@ class ChatViewModel(
                 }
                 requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }
                 var firstTurn = true
+                // The step the loop announced last, for the status line.
+                var runStep: RunStep? = null
                 // Whether the run's turns are dropped; only a Stop, so a failure keeps the tool calls that ran.
                 var rollBack = true
 
@@ -1119,14 +1125,14 @@ class ChatViewModel(
                         history = history,
                         generate = { turns ->
                             withContext(Dispatchers.Main) {
-                                setState(AgentState.Processing(str(R.string.msg_generating)))
+                                setState(AgentState.Processing(str(R.string.msg_generating), runStep))
                             }
                             val turnConfig = requiredTool?.takeIf { firstTurn }
                                 ?.let { VerificationPolicy.requiring(config, it) } ?: config
                             firstTurn = false
                             runModelTurn(llmService, turns, turnConfig, toolDefinitions, epoch)
                         },
-                        executeTools = { calls -> executeToolCalls(tools, calls) },
+                        executeTools = { calls -> executeToolCalls(tools, calls, runStep) },
                         // Read through the handler, so a path spelled `path` or left to a default
                         // still names the file a re-read of it should count as new again.
                         pathsOf = { call ->
@@ -1138,7 +1144,11 @@ class ChatViewModel(
                         canonicalName = { name -> tools.router.getHandler(name)?.toolName ?: name },
                         requiredTool = requiredTool,
                         // Only a prose turn that showed an answer has one a recap could repeat.
-                        events = AgentRunReporter(runNotices) { askedToFinishAfterProse = proseTurnShowedAnswer },
+                        events = AgentRunReporter(
+                            notices = runNotices,
+                            onAskedToFinish = { askedToFinishAfterProse = proseTurnShowedAnswer },
+                            onStepStarted = { runStep = it },
+                        ),
                     )
                     rollBack = false
                     if (loopResult.completed && generationEpoch.get() == epoch) {

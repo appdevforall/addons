@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.models.RunStep
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
@@ -13,10 +14,12 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
  *
  * @param notices where a user-visible stop is announced.
  * @param onAskedToFinish called when a prose answer is followed by a request to finish the run.
+ * @param onStepStarted called as each step of the run's limit starts, before its reply.
  */
 internal class AgentRunReporter(
     private val notices: Notices,
     private val onAskedToFinish: () -> Unit = {},
+    private val onStepStarted: (RunStep) -> Unit = {},
 ) : AgentLoop.Events {
 
     /**
@@ -36,6 +39,10 @@ internal class AgentRunReporter(
 
         /** The model kept circling actions it had already taken. */
         suspend fun noProgress()
+    }
+
+    override suspend fun onTurnStarted(turn: Int, maxTurns: Int) {
+        onStepStarted(RunStep(turn, maxTurns))
     }
 
     // Numbers the turn between its reply and the tools it runs, so the step budget a run spent on
