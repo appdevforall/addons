@@ -1,0 +1,212 @@
+package ${{PACKAGE_NAME}}
+
+import android.content.res.AssetManager
+import android.util.Log
+import java.io.BufferedReader
+import java.io.EOFException
+import java.io.IOException
+import java.io.InputStreamReader
+import java.io.OutputStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
+/**
+ * Tiny in-process HTTP/1.1 server (loopback only) that serves bundled APK assets
+ * with Range-request support. Used to feed bundled PMTiles into MapLibre via
+ * `pmtiles://http://127.0.0.1:PORT/...` — the only PMTiles URL scheme proven to
+ * work in MapLibre 13.1.0 OpenGL ES on Android.
+ *
+ * Requires assets to be stored uncompressed in the APK
+ * (`androidResources { noCompress.add("pmtiles") }`) so [AssetManager.openFd]
+ * returns a real seekable fd.
+ *
+ * The server has no authentication: any app on the device can connect to its port. Serve
+ * only data that is already public, like these map tiles.
+ */
+class PmtilesHttpServer(
+    private val assets: AssetManager,
+    rootPrefix: String,
+) {
+    private val rootPrefix: String = if (rootPrefix.endsWith("/")) rootPrefix else "$rootPrefix/"
+    private var socket: ServerSocket? = null
+    private var pool: ExecutorService? = null
+    var port: Int = 0
+        private set
+    @Volatile private var running = false
+
+    @Throws(IOException::class)
+    fun start(): Int {
+        val s = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+        socket = s
+        port = s.localPort
+        running = true
+        pool = Executors.newFixedThreadPool(MAX_CLIENTS)
+        val accept = Thread({
+            while (running) {
+                try {
+                    val client = s.accept()
+                    pool?.submit { handle(client) }
+                } catch (e: IOException) {
+                    if (running) Log.w(TAG, "accept: $e")
+                }
+            }
+        }, "PmtilesHttpServer-accept")
+        accept.isDaemon = true
+        accept.start()
+        Log.i(TAG, "listening on 127.0.0.1:$port serving assets/$rootPrefix")
+        return port
+    }
+
+    fun stop() {
+        running = false
+        try { socket?.close() } catch (_: IOException) {}
+        pool?.shutdownNow()
+    }
+
+    private fun handle(client: Socket) {
+        try {
+            client.use { c ->
+                c.soTimeout = READ_TIMEOUT_MS
+                val out = c.getOutputStream()
+                val r = BufferedReader(InputStreamReader(c.getInputStream()))
+                val reqLine = r.readLine() ?: return
+                val parts = reqLine.split(" ")
+                if (parts.size < 2 || !parts[0].equals("GET", ignoreCase = true)) {
+                    writeStatus(out, 405, "Method Not Allowed"); return
+                }
+                var path = parts[1]
+                if (path.startsWith("/")) path = path.substring(1)
+                val q = path.indexOf('?')
+                if (q >= 0) path = path.substring(0, q)
+                if (!path.startsWith(rootPrefix)) { writeStatus(out, 404, "Not Found"); return }
+                // Reject path-traversal segments. AssetManager already sandboxes
+                // to the APK's assets/ tree and the server is loopback-only, but a
+                // ".." in the request path has no legitimate use here.
+                if (path.contains("..")) { writeStatus(out, 404, "Not Found"); return }
+
+                var rangeSpec: String? = null
+                var line: String?
+                while (r.readLine().also { line = it } != null && !line.isNullOrEmpty()) {
+                    val l = line ?: continue
+                    if (l.regionMatches(0, "Range:", 0, 6, ignoreCase = true)) {
+                        val v = l.substring(6).trim()
+                        if (v.startsWith("bytes=")) rangeSpec = v.substring(6)
+                    }
+                }
+
+                val afd = try {
+                    assets.openFd(path)
+                } catch (e: IOException) {
+                    writeStatus(out, 404, "Not Found"); return
+                }
+                val totalLen = afd.length
+                try {
+                    val range = resolveRange(rangeSpec, totalLen)
+                    if (range == null) {
+                        writeStatus(out, 416, "Requested Range Not Satisfiable"); return
+                    }
+                    val (rangeStart, rangeEnd) = range
+                    val sliceLen = rangeEnd - rangeStart + 1
+                    val partial = rangeStart != 0L || rangeEnd != totalLen - 1
+
+                    afd.createInputStream().use { fis ->
+                        // Position the stream before any header goes out, so a failure can still
+                        // answer 500 instead of sending the wrong bytes under a 206 header.
+                        try {
+                            skipFully(fis, rangeStart)
+                        } catch (e: IOException) {
+                            writeStatus(out, 500, "Internal Server Error"); return
+                        }
+                        val hdr = StringBuilder(
+                            if (partial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
+                        )
+                        hdr.append("Content-Type: application/octet-stream\r\n")
+                        hdr.append("Accept-Ranges: bytes\r\n")
+                        hdr.append("Content-Length: ").append(sliceLen).append("\r\n")
+                        if (partial) {
+                            hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
+                                .append(rangeEnd).append('/').append(totalLen).append("\r\n")
+                        }
+                        hdr.append("Connection: close\r\n\r\n")
+                        out.write(hdr.toString().toByteArray(Charsets.US_ASCII))
+
+                        val buf = ByteArray(BUF)
+                        var remaining = sliceLen
+                        while (remaining > 0) {
+                            val want = minOf(buf.size.toLong(), remaining).toInt()
+                            val n = fis.read(buf, 0, want)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            remaining -= n
+                        }
+                        out.flush()
+                    }
+                } finally {
+                    try { afd.close() } catch (_: IOException) {}
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "handle: $e")
+        }
+    }
+
+    private fun writeStatus(out: OutputStream, code: Int, msg: String) {
+        val s = "HTTP/1.1 $code $msg\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        out.write(s.toByteArray(Charsets.US_ASCII))
+        out.flush()
+    }
+
+    private companion object {
+        const val TAG = "PmtilesHttpServer"
+        const val BUF = 64 * 1024
+
+        /** Bounds each read, not the whole request: a client that sends nothing for this long is dropped. */
+        const val READ_TIMEOUT_MS = 5_000
+
+        /** MapLibre opens a handful of connections at once; further ones wait in the queue. */
+        const val MAX_CLIENTS = 8
+
+        /**
+         * The (start, end) bytes (inclusive) a `Range: bytes=` value asks for, or null when it
+         * cannot be satisfied. Handles `a-b`, `a-` and the suffix form `-n`; a missing or
+         * malformed value (including several ranges) means the whole file.
+         */
+        fun resolveRange(spec: String?, totalLen: Long): Pair<Long, Long>? {
+            val last = totalLen - 1
+            val whole = 0L to last
+            if (spec == null) return if (totalLen > 0) whole else null
+            val dash = spec.indexOf('-')
+            if (dash < 0 || ',' in spec) return whole
+            val head = spec.substring(0, dash).trim()
+            val tail = spec.substring(dash + 1).trim()
+            if (head.isEmpty()) {
+                val suffix = tail.toLongOrNull() ?: return whole
+                if (suffix <= 0 || totalLen == 0L) return null
+                return maxOf(0L, totalLen - suffix) to last
+            }
+            val start = head.toLongOrNull() ?: return whole
+            val end = if (tail.isEmpty()) last else minOf(tail.toLongOrNull() ?: return whole, last)
+            if (start >= totalLen) return null
+            return if (end < start) whole else start to end
+        }
+
+        /**
+         * Skips exactly [n] bytes of [input]. `InputStream.skip` may return 0 before the end of
+         * the stream, so a one-byte read tells the two apart; the end throws.
+         */
+        fun skipFully(input: java.io.InputStream, n: Long) {
+            var remaining = n
+            while (remaining > 0) {
+                val skipped = input.skip(remaining)
+                when {
+                    skipped > 0 -> remaining -= skipped
+                    input.read() >= 0 -> remaining--
+                    else -> throw EOFException("stream ended with $remaining bytes left to skip")
+                }
+            }
+        }
+    }
+}

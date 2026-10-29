@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Source-kind badge for "internet" downloads (translucent material blue).
+    Pairs with badge_reachable.xml (green = LAN). Used on Region Manager
+    rows to show provenance at a glance.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="8dp" />
+    <solid android:color="#332196F3" />
+</shape>

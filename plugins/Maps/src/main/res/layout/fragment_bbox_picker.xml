@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Step 2 of the v3 wizard — "Choose Region".
+    Per docs/mockups/ADFA-2436-maps-mockup-v3.html + 2026-05-15 amendments:
+      - title heading on top (step num + title)
+      - real MapLibre+PMTiles map background filling the content area
+      - GPS marker centered (or fallback if permission denied)
+      - 20×20km bbox overlay with 4 corner handles
+      - simplified live estimate overlay at the bottom of the map (2 lines):
+          line 1: "32 MB · OpenStreetMap vector"
+          line 2: "✓ 12.4 GB free on device"
+        Per-layer breakdown moved to Step 3's summary card.
+      - Back/Next bottom buttons
+      - NO region name field (moved to Step 3)
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
+
+    <!-- Title heading -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="8dp"
+        android:background="?attr/colorSurface">
+
+        <TextView
+            style="@style/TextAppearance.Material3.LabelSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAllCaps="true"
+            android:letterSpacing="0.06"
+            android:text="@string/maps_step2_of_3" />
+
+        <TextView
+            style="@style/TextAppearance.Material3.TitleMedium"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="?attr/colorOnSurface"
+            android:text="@string/maps_step2_title" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/colorOutlineVariant" />
+
+    <!-- Map background + bbox overlay container. -->
+    <FrameLayout
+        android:id="@+id/picker_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <org.maplibre.android.maps.MapView
+            android:id="@+id/map_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:maplibre_cameraZoom="2"
+            app:maplibre_cameraTargetLat="20"
+            app:maplibre_cameraTargetLng="0" />
+
+        <org.appdevforall.maps.ui.BboxOverlayView
+            android:id="@+id/bbox_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Simplified live size estimate overlay (2 lines) -->
+        <LinearLayout
+            android:id="@+id/estimate_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="vertical"
+            android:padding="10dp"
+            android:background="@drawable/estimate_bg"
+            android:elevation="4dp">
+
+            <TextView
+                android:id="@+id/estimate_size_line"
+                style="@style/TextAppearance.Material3.TitleSmall"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="32 MB · OpenStreetMap vector" />
+
+            <TextView
+                android:id="@+id/estimate_free"
+                style="@style/TextAppearance.Material3.BodySmall"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="2220km × 2140km — max zoom level 12" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Back / Next bottom button row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:background="?attr/colorSurface">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_back"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/maps_source_back" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_next"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/maps_source_next" />
+    </LinearLayout>
+
+</LinearLayout>

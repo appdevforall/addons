@@ -1,0 +1,217 @@
+package ${{PACKAGE_NAME}};
+
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
+import android.util.Log;
+
+import java.io.BufferedReader;
+import java.io.EOFException;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Tiny in-process HTTP/1.1 server (loopback only) that serves bundled APK assets
+ * with Range-request support. Used to feed bundled PMTiles into MapLibre via
+ * {@code pmtiles://http://127.0.0.1:PORT/...} — the only PMTiles URL scheme proven
+ * to work in MapLibre 13.1.0 OpenGL ES on Android.
+ *
+ * <p>Requires assets to be stored uncompressed in the APK
+ * ({@code androidResources { noCompress.add("pmtiles") }}) so {@link
+ * AssetManager#openFd} returns a real seekable fd.
+ *
+ * <p>The server has no authentication: any app on the device can connect to its port. Serve
+ * only data that is already public, like these map tiles.
+ */
+public class PmtilesHttpServer {
+    private static final String TAG = "PmtilesHttpServer";
+    private static final int BUF = 64 * 1024;
+    /** Bounds each read, not the whole request: a client that sends nothing for this long is dropped. */
+    static final int READ_TIMEOUT_MS = 5_000;
+    /** MapLibre opens a handful of connections at once; further ones wait in the queue. */
+    private static final int MAX_CLIENTS = 8;
+
+    private final AssetManager assets;
+    private final String rootPrefix;
+    private ServerSocket socket;
+    private ExecutorService pool;
+    private int port;
+    private volatile boolean running;
+
+    public PmtilesHttpServer(AssetManager assets, String rootPrefix) {
+        this.assets = assets;
+        this.rootPrefix = rootPrefix.endsWith("/") ? rootPrefix : rootPrefix + "/";
+    }
+
+    public int start() throws IOException {
+        socket = new ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"));
+        port = socket.getLocalPort();
+        running = true;
+        pool = Executors.newFixedThreadPool(MAX_CLIENTS);
+        Thread accept = new Thread(() -> {
+            while (running) {
+                try {
+                    Socket client = socket.accept();
+                    pool.submit(() -> handle(client));
+                } catch (IOException e) {
+                    if (running) Log.w(TAG, "accept: " + e);
+                }
+            }
+        }, "PmtilesHttpServer-accept");
+        accept.setDaemon(true);
+        accept.start();
+        Log.i(TAG, "listening on 127.0.0.1:" + port + " serving assets/" + rootPrefix);
+        return port;
+    }
+
+    public int port() { return port; }
+
+    public void stop() {
+        running = false;
+        try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+        if (pool != null) pool.shutdownNow();
+    }
+
+    private void handle(Socket client) {
+        try (Socket c = client;
+             InputStream in = c.getInputStream();
+             OutputStream out = c.getOutputStream()) {
+            c.setSoTimeout(READ_TIMEOUT_MS);
+            BufferedReader r = new BufferedReader(new InputStreamReader(in));
+            String reqLine = r.readLine();
+            if (reqLine == null) return;
+            String[] parts = reqLine.split(" ");
+            if (parts.length < 2 || !parts[0].equalsIgnoreCase("GET")) {
+                writeStatus(out, 405, "Method Not Allowed"); return;
+            }
+            String path = parts[1];
+            if (path.startsWith("/")) path = path.substring(1);
+            int q = path.indexOf('?');
+            if (q >= 0) path = path.substring(0, q);
+            if (!path.startsWith(rootPrefix)) { writeStatus(out, 404, "Not Found"); return; }
+            // Reject path-traversal segments. AssetManager already sandboxes to
+            // the APK's assets/ tree and the server is loopback-only, but a ".."
+            // in the request path has no legitimate use here.
+            if (path.contains("..")) { writeStatus(out, 404, "Not Found"); return; }
+
+            String rangeSpec = null;
+            String line;
+            while ((line = r.readLine()) != null && !line.isEmpty()) {
+                if (line.regionMatches(true, 0, "Range:", 0, 6)) {
+                    String v = line.substring(6).trim();
+                    if (v.startsWith("bytes=")) rangeSpec = v.substring(6);
+                }
+            }
+
+            AssetFileDescriptor afd;
+            try { afd = assets.openFd(path); }
+            catch (IOException e) { writeStatus(out, 404, "Not Found"); return; }
+            long totalLen = afd.getLength();
+            try {
+                long[] range = resolveRange(rangeSpec, totalLen);
+                if (range == null) {
+                    writeStatus(out, 416, "Requested Range Not Satisfiable"); return;
+                }
+                long rangeStart = range[0];
+                long rangeEnd = range[1];
+                long sliceLen = rangeEnd - rangeStart + 1;
+                boolean partial = (rangeStart != 0) || (rangeEnd != totalLen - 1);
+
+                try (FileInputStream fis = afd.createInputStream()) {
+                    // Position the stream before any header goes out, so a failure can still
+                    // answer 500 instead of sending the wrong bytes under a 206 header.
+                    try {
+                        skipFully(fis, rangeStart);
+                    } catch (IOException e) {
+                        writeStatus(out, 500, "Internal Server Error"); return;
+                    }
+                    StringBuilder hdr = new StringBuilder(partial
+                        ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n");
+                    hdr.append("Content-Type: application/octet-stream\r\n");
+                    hdr.append("Accept-Ranges: bytes\r\n");
+                    hdr.append("Content-Length: ").append(sliceLen).append("\r\n");
+                    if (partial) {
+                        hdr.append("Content-Range: bytes ").append(rangeStart).append('-')
+                           .append(rangeEnd).append('/').append(totalLen).append("\r\n");
+                    }
+                    hdr.append("Connection: close\r\n\r\n");
+                    out.write(hdr.toString().getBytes("US-ASCII"));
+
+                    byte[] buf = new byte[BUF];
+                    long remaining = sliceLen;
+                    while (remaining > 0) {
+                        int want = (int) Math.min(buf.length, remaining);
+                        int n = fis.read(buf, 0, want);
+                        if (n < 0) break;
+                        out.write(buf, 0, n);
+                        remaining -= n;
+                    }
+                    out.flush();
+                }
+            } finally {
+                try { afd.close(); } catch (IOException ignored) {}
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "handle: " + e);
+        }
+    }
+
+    /**
+     * The {@code {start, end}} bytes (inclusive) a {@code Range: bytes=} value asks for, or null
+     * when it cannot be satisfied. Handles {@code a-b}, {@code a-} and the suffix form {@code -n};
+     * a missing or malformed value (including several ranges) means the whole file.
+     */
+    static long[] resolveRange(String spec, long totalLen) {
+        long last = totalLen - 1;
+        long[] whole = {0, last};
+        if (spec == null) return totalLen > 0 ? whole : null;
+        int dash = spec.indexOf('-');
+        if (dash < 0 || spec.indexOf(',') >= 0) return whole;
+        try {
+            String head = spec.substring(0, dash).trim();
+            String tail = spec.substring(dash + 1).trim();
+            if (head.isEmpty()) {
+                long suffix = Long.parseLong(tail);
+                if (suffix <= 0 || totalLen == 0) return null;
+                return new long[] {Math.max(0, totalLen - suffix), last};
+            }
+            long start = Long.parseLong(head);
+            long end = tail.isEmpty() ? last : Math.min(Long.parseLong(tail), last);
+            if (start >= totalLen) return null;
+            return end < start ? whole : new long[] {start, end};
+        } catch (NumberFormatException e) {
+            return whole;
+        }
+    }
+
+    /**
+     * Skips exactly {@code n} bytes of {@code in}. {@link InputStream#skip} may return 0 before
+     * the end of the stream, so a one-byte read tells the two apart; the end throws.
+     */
+    static void skipFully(InputStream in, long n) throws IOException {
+        long remaining = n;
+        while (remaining > 0) {
+            long skipped = in.skip(remaining);
+            if (skipped > 0) {
+                remaining -= skipped;
+            } else if (in.read() >= 0) {
+                remaining--;
+            } else {
+                throw new EOFException("stream ended with " + remaining + " bytes left to skip");
+            }
+        }
+    }
+
+    private void writeStatus(OutputStream out, int code, String msg) throws IOException {
+        String s = "HTTP/1.1 " + code + " " + msg + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        out.write(s.getBytes("US-ASCII"));
+        out.flush();
+    }
+}
