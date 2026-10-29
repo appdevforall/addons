@@ -643,6 +643,47 @@ class EditFileHandlerTest {
     }
 
     @Test
+    fun givenIdenticalStringsThatGuessAtALine_whenValidated_thenTheRejectionShowsTheRealLine() = runBlocking {
+        // The ADFA-6835 failure: the model sent its own new text as old_string and never read the file.
+        createFile("strings.xml", "<resources>\n    <string name=\"app_name\">Build Apps Anywhere </string>\n</resources>\n")
+
+        val result = rejectionOf(
+            mapOf(
+                "file_path" to "strings.xml",
+                "old_string" to "app_name = \"Block Stacker\"",
+                "new_string" to "app_name = \"Block Stacker\"",
+            )
+        )
+
+        assertTrue(result!!.message.contains("identical"))
+        assertTrue(result.message.contains("""line 2: "    <string name="app_name">Build Apps Anywhere </string>""""))
+    }
+
+    @Test
+    fun givenAGuessNotInTheFile_whenValidated_thenTheRejectionShowsTheClosestLines() = runBlocking {
+        createFile("Main.kt", "fun main() {\n    println(\"hello world\")\n}\n")
+
+        val result = rejectionOf(
+            mapOf("file_path" to "Main.kt", "old_string" to "println(\"hi\")", "new_string" to "println(\"bye\")")
+        )
+
+        assertTrue(result!!.message.contains("not found"))
+        assertTrue(result.message.contains("line 2: \"    println(\"hello world\")\""))
+    }
+
+    @Test
+    fun givenAGuessSharingNoWordWithTheFile_whenValidated_thenTheRejectionIsUnchanged() = runBlocking {
+        createFile("Main.kt", "fun main() {}\n")
+
+        val result = rejectionOf(
+            mapOf("file_path" to "Main.kt", "old_string" to "zzz_missing", "new_string" to "yyy")
+        )
+
+        assertTrue(result!!.message.contains("not found"))
+        assertTrue(!result.message.contains("Closest lines"))
+    }
+
+    @Test
     fun givenAHallucinatedPath_whenValidated_thenItIsRejectedWithoutPromptingTheUser() = runBlocking {
         val result = rejectionOf(
             mapOf("file_path" to "app/src/main/java/com/nope/Ghost.java", "old_string" to "a", "new_string" to "b")

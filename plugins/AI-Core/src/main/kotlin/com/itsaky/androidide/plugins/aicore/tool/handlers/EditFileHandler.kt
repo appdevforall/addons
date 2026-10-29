@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.AtomicFileWriter
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditTargetResolver
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditorBufferApplier
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.FileTextMatcher
+import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.NearMatchLines
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import com.itsaky.androidide.plugins.services.IdeEditorService
@@ -236,9 +237,6 @@ class EditFileHandler(
                 "$ARG_OLD/$ARG_NEW must be under $MAX_ARG_CHARS characters — edit a smaller region"
             )
         }
-        if (oldString == newString) {
-            return reject(identicalArgsRejection(oldString))
-        }
 
         val target = when (val resolution = EditTargetResolver.resolve(filePath)) {
             is EditTargetResolver.Target.Rejected -> {
@@ -281,6 +279,13 @@ class EditFileHandler(
             )
         }
 
+        // After the read, so the rejection can show the lines the model should have copied.
+        if (oldString == newString) {
+            return reject(
+                identicalArgsRejection(oldString) + NearMatchLines.render(NearMatchLines.find(original, oldString))
+            )
+        }
+
         val match = FileTextMatcher.match(original, oldString, newString)
         if (match is FileTextMatcher.Match.NotFound) {
             // The dominant local-model failure: whitespace or escaping drift from the real file.
@@ -293,7 +298,8 @@ class EditFileHandler(
             }
             return reject(
                 "$ARG_OLD not found in $resolvedPath — read the file first and copy the target " +
-                    "text exactly, including indentation and line breaks"
+                    "text exactly, including indentation and line breaks" +
+                    NearMatchLines.render(NearMatchLines.find(original, oldString))
             )
         }
         val found = match as FileTextMatcher.Match.Found
