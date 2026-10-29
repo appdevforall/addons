@@ -982,7 +982,7 @@ class AgentLoopTest {
             events = object : AgentLoop.Events {
                 override suspend fun onUnappliedWriteAnswer(turn: Int) { events += "unapplied" }
                 override suspend fun onFinalAnswer(turn: Int, message: String) { events += "final" }
-                override suspend fun onAbandonedAfterFailure(turn: Int) { events += "abandoned" }
+                override suspend fun onChangeNotMade(turn: Int) { events += "not-made" }
             },
         )
         return Triple(result, history, events)
@@ -1011,7 +1011,20 @@ class AgentLoopTest {
         )
 
         assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
-        assertEquals(listOf("unapplied", "abandoned"), events)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAnAnswerOverAFailedEdit_whenTheModelOnlyRepeatsALookAfterTheWarning_thenTheRunIsAbandonedNotAssumedComplete() = runTest {
+        // Seen on a device: told the edit failed, the model re-read the file, and the repeat-after-
+        // success rule then ended the run as COMPLETED with its false "changed" answer standing.
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file"), toolCall("read_file"), respond, toolCall("read_file")),
+            mapOf("edit_file" to listOf(failedEdit), "read_file" to listOf(ToolResult.success("lines"))),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
     }
 
     @Test

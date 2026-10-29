@@ -2036,6 +2036,9 @@ class ChatViewModel(
         override suspend fun repeatedCalls() =
             addSystemMessage(str(R.string.agent_repeated_calls), MessageStatus.SENT)
 
+        override suspend fun changeNotMade() =
+            addSystemMessage(str(R.string.agent_change_not_made), MessageStatus.SENT)
+
         override suspend fun noProgress() =
             addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)
     }

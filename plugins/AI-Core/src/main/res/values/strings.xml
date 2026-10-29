@@ -219,6 +219,7 @@
     <!-- Agent loop / chat runtime messages -->
     <string name="agent_max_steps_reached">Reached the %1$d-step limit. Ask me to continue if the task isn\'t finished.</string>
     <string name="agent_repeated_calls">Stopped: the model kept requesting the same action. Try rephrasing your request.</string>
+    <string name="agent_change_not_made">The change was not made: the file edit failed and the assistant did not manage to redo it, whatever its last message says. Try again, or ask for a smaller change.</string>
     <string name="agent_no_progress">Stopped: the model kept redoing actions it had already taken instead of making progress. Try rephrasing your request, or asking for a smaller step.</string>
     <string name="chat_compacted">Earlier messages were summarized to stay within the model\'s limit.</string>
     <string name="chat_compaction_failed">Earlier messages could not be summarized, so only the most recent ones were kept to stay within the model\'s limit.</string>

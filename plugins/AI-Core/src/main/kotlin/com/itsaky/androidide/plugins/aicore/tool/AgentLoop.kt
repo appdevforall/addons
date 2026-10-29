@@ -168,6 +168,14 @@ class AgentLoop(
          * @param turn 1-based turn index.
          */
         suspend fun onUnappliedWriteAnswer(turn: Int) {}
+
+        /**
+         * The run ended with a failed file change still outstanding after it had been told, so
+         * whatever the last reply says, the change was not made.
+         *
+         * @param turn 1-based turn index.
+         */
+        suspend fun onChangeNotMade(turn: Int) {}
     }
 
     /** Why the loop stopped. */
@@ -308,7 +316,7 @@ class AgentLoop(
                         continue
                     }
                     // Told once and answered again: the user's change is still not made.
-                    events.onAbandonedAfterFailure(turn)
+                    events.onChangeNotMade(turn)
                     return Result(turn, StopReason.ABANDONED)
                 }
                 events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
@@ -321,6 +329,11 @@ class AgentLoop(
                     return Result(turn, StopReason.CYCLING)
                 }
                 ToolCallProgressGuard.Verdict.ASSUME_COMPLETE -> {
+                    // A repeated look is not completion while the change the user asked for failed.
+                    if (writeUnapplied) {
+                        events.onChangeNotMade(turn)
+                        return Result(turn, StopReason.ABANDONED)
+                    }
                     events.onRepeatAfterSuccess(turn)
                     return Result(turn, StopReason.COMPLETED)
                 }
