@@ -17,8 +17,8 @@ android {
         applicationId = "org.appdevforall.markdownpreviewer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     buildTypes {
@@ -62,15 +62,6 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("androidx.fragment:fragment:1.8.8")
     implementation("androidx.webkit:webkit:1.9.0")
-    
-    // Markdown parsing library
-    implementation("io.noties.markwon:core:4.6.2")
-    implementation("io.noties.markwon:ext-tables:4.6.2")
-    implementation("io.noties.markwon:ext-strikethrough:4.6.2")
-    implementation("io.noties.markwon:ext-tasklist:4.6.2")
-    implementation("io.noties.markwon:html:4.6.2")
-    implementation("io.noties.markwon:image:4.6.2")
-    implementation("io.noties.markwon:linkify:4.6.2")
 }
 
 tasks.wrapper {
