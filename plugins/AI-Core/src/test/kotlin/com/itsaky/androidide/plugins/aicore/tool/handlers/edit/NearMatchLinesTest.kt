@@ -38,10 +38,44 @@ class NearMatchLinesTest {
     }
 
     @Test
-    fun givenALongLine_whenFound_thenItIsCut() {
-        val text = "foo " + "x".repeat(1_000)
+    fun givenALongLine_whenFoundAndRendered_thenItIsCutAndSaysSo() {
+        // Copied as old_string with a whole new line as new_string, an unmarked cut line leaves its tail behind.
+        val line = NearMatchLines.find("foo " + "x".repeat(1_000), "foo").single()
 
-        assertEquals(200, NearMatchLines.find(text, "foo").single().text.length)
+        assertEquals(200, line.text.length)
+        assertTrue(line.cut)
+        assertTrue(NearMatchLines.render(listOf(line)).contains("only the first 200 characters; the line goes on"))
+    }
+
+    @Test
+    fun givenAWordPastWhereALineIsCut_whenFound_thenTheLineStillMatches() {
+        val text = "x".repeat(300) + " target\nother\n"
+
+        assertEquals(listOf(1), NearMatchLines.find(text, "target").map { it.number })
+    }
+
+    @Test
+    fun givenATabIndentedLine_whenRendered_thenTheTabIsShownApartFromSpaces() {
+        val rendered = NearMatchLines.render(NearMatchLines.find("\tfoo()\n", "foo"))
+
+        assertTrue(rendered.contains("line 1: \"\\tfoo()\""))
+        assertTrue(rendered.contains("a tab is shown as \\t"))
+    }
+
+    @Test
+    fun givenAGuessInANonLatinScript_whenFound_thenTheLineHoldingItComesBack() {
+        val text = "<string name=\"app_name\">मेरा ऐप</string>\n<string name=\"title\">我的应用</string>\n"
+
+        assertEquals(1, NearMatchLines.find(text, "मेरा").single().number)
+        assertEquals(2, NearMatchLines.find(text, "我的应用").single().number)
+    }
+
+    @Test
+    fun givenAGuessOfManyWords_whenFound_thenOnlyItsFirstWordsAreMatched() {
+        // The cap bounds the cost of a huge old_string, which is words × file size.
+        val snippet = (1..32).joinToString(" ") { "filler$it" } + " target"
+
+        assertTrue(NearMatchLines.find("val target = 1\n", snippet).isEmpty())
     }
 
     @Test

@@ -47,6 +47,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.web.BackendWebSearch
 import com.itsaky.androidide.plugins.aicore.tool.web.VerificationPolicy
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
@@ -1151,6 +1152,12 @@ class ChatViewModel(
                         },
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
+                        },
+                        // Keyed by the file, so a retry under the path an edit was corrected to still
+                        // counts as the failed change redone.
+                        writtenFilesOf = { call ->
+                            tools.router.getHandler(call.name)?.pathsIn(call.args).orEmpty()
+                                .mapTo(mutableSetOf(), PathGuard::writeKeyOf)
                         },
                         writesFiles = { call ->
                             tools.router.getHandler(call.name)?.writesFiles == true

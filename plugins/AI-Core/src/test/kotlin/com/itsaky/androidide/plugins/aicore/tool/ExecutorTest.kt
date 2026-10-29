@@ -495,6 +495,7 @@ class ExecutorTest {
 
         assertFalse(result.success)
         assertFalse("Retry would rewind the run the correction steers", result.denied)
+        assertTrue("the tool never ran, so it is no failed change to redo", result.notApproved)
         assertTrue(result.message.contains("use a different file"))
     }
 

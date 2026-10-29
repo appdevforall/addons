@@ -8,13 +8,23 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers.edit
  */
 object NearMatchLines {
 
-    /** One candidate line, with its 1-based number and its exact text (no line ending). */
-    data class Line(val number: Int, val text: String)
+    /**
+     * One candidate line.
+     * @property number its 1-based line number.
+     * @property text its exact text with no line ending, or the start of it when [cut].
+     * @property cut whether the line goes on past [text].
+     */
+    data class Line(val number: Int, val text: String, val cut: Boolean = false)
 
     private const val MAX_LINES = 5
     private const val MAX_LINE_CHARS = 200
+
+    /** Words matched per snippet; a huge `old_string` would otherwise cost words × file size. */
+    private const val MAX_WORDS = 32
     private const val MIN_WORD_CHARS = 3
-    private val WORD = Regex("[A-Za-z0-9_]{$MIN_WORD_CHARS,}")
+
+    /** Letters of any script, with their combining marks, so a localized string still matches. */
+    private val WORD = Regex("[\\p{L}\\p{M}\\p{N}_]{$MIN_WORD_CHARS,}")
 
     /**
      * The lines of [text] sharing the most distinct words with [snippet].
@@ -24,14 +34,15 @@ object NearMatchLines {
      *   the snippet has no word of [MIN_WORD_CHARS] or more characters or no line shares one.
      */
     fun find(text: String, snippet: String): List<Line> {
-        val words = WORD.findAll(snippet).map { it.value.lowercase() }.distinct().toList()
+        val words = WORD.findAll(snippet).map { it.value.lowercase() }.distinct().take(MAX_WORDS).toList()
         if (words.isEmpty()) return emptyList()
         return text.lineSequence()
-            .mapIndexed { index, raw -> Line(index + 1, raw.trimEnd('\r').take(MAX_LINE_CHARS)) }
-            .filter { it.text.isNotBlank() }
-            .map { line ->
-                val lower = line.text.lowercase()
-                line to words.count { lower.contains(it) }
+            .withIndex()
+            .filter { (_, line) -> line.isNotBlank() }
+            .map { (index, line) ->
+                val lower = line.lowercase()
+                Line(index + 1, line.take(MAX_LINE_CHARS), line.length > MAX_LINE_CHARS) to
+                    words.count { lower.contains(it) }
             }
             .filter { (_, score) -> score > 0 }
             .sortedByDescending { (_, score) -> score }
@@ -41,14 +52,18 @@ object NearMatchLines {
     }
 
     /**
-     * Renders [lines] for a rejection message, keeping leading and trailing spaces visible.
+     * Renders [lines] for a rejection message, keeping leading and trailing spaces visible and a
+     * tab told apart from them.
      * @param lines the result of [find].
      * @return the text to append to a rejection, or an empty string when there are no lines.
      */
     fun render(lines: List<Line>): String {
         if (lines.isEmpty()) return ""
-        val body = lines.joinToString("\n") { "line ${it.number}: \"${it.text}\"" }
+        val body = lines.joinToString("\n") { line ->
+            val shown = "line ${line.number}: \"${line.text.replace("\t", "\\t")}\""
+            if (line.cut) "$shown (only the first $MAX_LINE_CHARS characters; the line goes on)" else shown
+        }
         return "\nClosest lines in the file (the exact text is between the outer double quotes, " +
-            "spaces included):\n$body"
+            "spaces included; a tab is shown as \\t):\n$body"
     }
 }

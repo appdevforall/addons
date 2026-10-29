@@ -31,7 +31,7 @@ class ToolResultsPrompt(
     /** The turn sent after a reply that ran tools and ended without the terminal tool. */
     suspend fun unfinished(): String = renderUnfinished(config.config(), terminalTool)
 
-    /** The turn sent after a reply that tried to finish while its last file change had failed. */
+    /** The turn sent after a reply that tried to finish while a failed file change was not redone. */
     suspend fun unappliedWrite(): String = renderUnappliedWrite(config.config(), terminalTool)
 
     /** The turn sent after a reply that answered before calling [tool], which the run had to call first. */

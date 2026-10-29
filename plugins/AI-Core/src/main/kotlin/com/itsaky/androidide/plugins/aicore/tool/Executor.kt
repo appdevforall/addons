@@ -217,7 +217,7 @@ class Executor(
             Log.i(TAG, "($executionMode): Tool '$toolName' denied. $message")
             AgentTrace.stage("APPROVAL", "$toolName approved=false waitedMs=$approvalMs", AgentTrace.preview(message))
             // Only an explicit Deny offers Retry; a correction steers the run that is still going.
-            return if (approvalResponse.deniedByUser) ToolResult.denied(message) else ToolResult.failure(message)
+            return if (approvalResponse.deniedByUser) ToolResult.denied(message) else ToolResult.notApproved(message)
         }
         AgentTrace.stage("APPROVAL", "$toolName approved=true waitedMs=$approvalMs")
 

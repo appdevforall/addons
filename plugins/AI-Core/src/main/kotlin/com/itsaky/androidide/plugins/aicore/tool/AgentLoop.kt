@@ -16,7 +16,8 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Ro
  * @param requiredToolTurn words the turn sent when a run told to call a tool first tries to finish
  *   without it; receives the tool's name. Null never asks.
  * @param unappliedWriteTurn words the turn sent when a run answers while a file change it attempted
- *   failed and has not been redone; null lets that answer end the run.
+ *   failed and has not been redone. Sent once; if the run still ends with the change outstanding,
+ *   however it ends, the user is told it was not made. Null turns the check off.
  */
 class AgentLoop(
     private val formatToolResults: ToolResultsFormatter,
@@ -53,6 +54,9 @@ class AgentLoop(
          * before it, so a rotation runs the step budget out instead.
          */
         const val DEFAULT_MAX_TURNS_WITHOUT_PROGRESS = 3
+
+        /** The key [UnappliedWrites] keeps for a failed write whose call named no file. */
+        private const val UNNAMED = ""
     }
 
     /**
@@ -170,8 +174,8 @@ class AgentLoop(
         suspend fun onUnappliedWriteAnswer(turn: Int) {}
 
         /**
-         * The run ended with a failed file change still outstanding after it had been told, so
-         * whatever the last reply says, the change was not made.
+         * The run ended with a failed file change still outstanding, so whatever the last reply
+         * says, the change was not made. Fires after the event for how the run ended, if it has one.
          *
          * @param turn 1-based turn index.
          */
@@ -223,6 +227,9 @@ class AgentLoop(
      * @param writesFiles whether a call writes a file's content. Only these calls' failures count as a
      *   change not made, and only their successes as one redone: a shell command also changes the
      *   project, but its success says nothing about a failed edit.
+     * @param writtenFilesOf the files a [writesFiles] call writes, each as one key however the call
+     *   spelled its path. A key that is a bare file name, for a path that named no existing file, is
+     *   also matched by a later write to any path ending in that name.
      * @param canonicalName the registered name a call's tool resolves to, e.g. `Run_Shell_Command` to
      *   `run_shell_command`; the name itself when none does. Everything keyed by tool name reads it.
      * @param requiredTool a tool the run must call before it may finish, e.g. a web search before a
@@ -237,6 +244,7 @@ class AgentLoop(
         pathsOf: (ToolCall) -> Set<String> = { emptySet() },
         changesPaths: (ToolCall) -> Boolean = { false },
         writesFiles: (ToolCall) -> Boolean = { false },
+        writtenFilesOf: (ToolCall) -> Set<String> = pathsOf,
         canonicalName: (String) -> String = { it },
         requiredTool: String? = null,
         events: Events = object : Events {},
@@ -274,7 +282,7 @@ class AgentLoop(
                 val unparsed = diagnoseUnparsedReply(text)
                 if (unparsed != null) {
                     events.onUnparsedReply(turn, unparsed)
-                    return Result(turn, StopReason.UNPARSABLE)
+                    return unapplied.stop(turn, StopReason.UNPARSABLE, events)
                 }
                 if (requiredPending) {
                     requiredPending = false
@@ -282,21 +290,16 @@ class AgentLoop(
                     continue
                 }
                 // A prose answer can claim a failed change as readily as a terminal-tool one.
-                if (unapplied.outstanding && unappliedWriteTurn != null) {
-                    if (unapplied.warnOnce()) {
-                        warnOfUnappliedWrite(turn, history, events)
-                        continue
-                    }
-                    events.onChangeNotMade(turn)
-                    return Result(turn, StopReason.ABANDONED)
-                }
-                // Asked once per stretch of prose, so a model that will not call it still stops.
+                if (unapplied.warn(turn, history, events)) continue
+                // Asked once per stretch of prose, so a model that will not call it still stops. Also
+                // after the warning: prose then may be the model saying how it will redo the change.
                 if (toolsRan && !askedToFinish && unfinishedTurn != null) {
                     askedToFinish = true
                     events.onUnfinishedReply(turn)
                     history.add(ChatMessage(Role.USER, unfinishedTurn.invoke()))
                     continue
                 }
+                if (unapplied.outstanding) return unapplied.stop(turn, StopReason.ABANDONED, events)
                 // Prose after a failed batch is the model giving up, not finishing: the run ends
                 // with the user's request unmet, so reporting it COMPLETED overstates the outcome.
                 if (progress.lastBatchFailed) {
@@ -319,15 +322,9 @@ class AgentLoop(
             }
             val terminal = terminalTool?.let { tt -> calls.firstOrNull { isTerminalToolName(it.name, tt) } }
             if (terminal != null && realCalls.isEmpty()) {
-                if (unapplied.outstanding && unappliedWriteTurn != null) {
-                    if (unapplied.warnOnce()) {
-                        warnOfUnappliedWrite(turn, history, events)
-                        continue
-                    }
-                    // Told once and answered again: the user's change is still not made.
-                    events.onChangeNotMade(turn)
-                    return Result(turn, StopReason.ABANDONED)
-                }
+                if (unapplied.warn(turn, history, events)) continue
+                // Told once and answered again: the user's change is still not made.
+                if (unapplied.outstanding) return unapplied.stop(turn, StopReason.ABANDONED, events)
                 events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
                 return Result(turn, StopReason.COMPLETED)
             }
@@ -335,20 +332,18 @@ class AgentLoop(
             when (progress.inspect(realCalls)) {
                 ToolCallProgressGuard.Verdict.CYCLING -> {
                     events.onNoProgressCycle(turn, progress.staleTurns)
-                    return Result(turn, StopReason.CYCLING)
+                    return unapplied.stop(turn, StopReason.CYCLING, events)
                 }
                 ToolCallProgressGuard.Verdict.ASSUME_COMPLETE -> {
                     // A repeated look is not completion while the change the user asked for failed.
-                    if (unapplied.outstanding) {
-                        events.onChangeNotMade(turn)
-                        return Result(turn, StopReason.ABANDONED)
-                    }
+                    if (unapplied.warn(turn, history, events)) continue
+                    if (unapplied.outstanding) return unapplied.stop(turn, StopReason.ABANDONED, events)
                     events.onRepeatAfterSuccess(turn)
                     return Result(turn, StopReason.COMPLETED)
                 }
                 ToolCallProgressGuard.Verdict.REPEATED -> {
                     events.onRepeatedToolCalls(turn)
-                    return Result(turn, StopReason.REPEATED)
+                    return unapplied.stop(turn, StopReason.REPEATED, events)
                 }
                 ToolCallProgressGuard.Verdict.PROCEED -> Unit
             }
@@ -358,62 +353,76 @@ class AgentLoop(
             toolsRan = true
             askedToFinish = false
             progress.recordResults(results)
-            realCalls.zip(results).filter { (call, _) -> writesFiles(call) }.forEach { (call, result) ->
-                unapplied.record(pathsOf(call), result)
-            }
+            unapplied.record(realCalls.zip(results).filter { (call, _) -> writesFiles(call) }, writtenFilesOf)
             events.onToolResults(turn, realCalls, results)
             history.add(ChatMessage(Role.USER, formatToolResults.format(realCalls, results)))
         }
 
         events.onMaxIterationsReached(turn)
-        return Result(turn, StopReason.MAX_ITERATIONS)
-    }
-
-    /** Records the answer as not finishing the run and tells it a file change it attempted was not made. */
-    private suspend fun warnOfUnappliedWrite(
-        turn: Int,
-        history: MutableList<ChatMessage>,
-        events: Events,
-    ) {
-        events.onUnappliedWriteAnswer(turn)
-        history.add(ChatMessage(Role.USER, unappliedWriteTurn!!.invoke()))
+        return unapplied.stop(turn, StopReason.MAX_ITERATIONS, events)
     }
 
     /**
-     * The file changes a run attempted that failed and have not been redone, keyed by the paths each
-     * call names, so a success on one file does not hide a failure on another. A call that names no
-     * path cannot be matched to a file, so any later successful write clears it.
+     * The file changes a run attempted that failed and have not been redone, keyed by file so a
+     * success on one file does not hide a failure on another, and what an answer or an ending does
+     * while one is outstanding. Inert when [unappliedWriteTurn] is null.
      */
-    private class UnappliedWrites {
-        private val paths = mutableSetOf<String>()
+    private inner class UnappliedWrites {
+        private val failed = mutableSetOf<String>()
         private var warned = false
 
-        val outstanding: Boolean get() = paths.isNotEmpty()
+        /** Whether a failed change is outstanding, with the check on. */
+        val outstanding: Boolean get() = unappliedWriteTurn != null && failed.isNotEmpty()
 
-        /** A denial drops the call's paths: the user has decided that change should not be made. */
-        fun record(named: Set<String>, result: ToolResult) {
-            val keys = named.ifEmpty { setOf(UNNAMED) }
-            when {
-                result.success -> {
-                    paths.removeAll(keys)
-                    paths.remove(UNNAMED)
-                }
-                result.denied -> paths.removeAll(keys)
-                else -> paths.addAll(keys)
+        /**
+         * Records one batch's file writes.
+         *
+         * A success, or a call stopped at the approval dialog, settles failures on its file from
+         * earlier batches only: the model wrote the batch before it saw any of its results, so a
+         * success beside a failure on the same file is another change, not the failed one redone.
+         * A later success on that file is taken for the redo. Which change a retry redoes cannot be
+         * read off its text, and taking it for another change would report a change that was made
+         * as not made. A call that names no file cannot be matched, so any later success settles it.
+         *
+         * @param writes the batch's file-writing calls with their results.
+         * @param filesOf the keys of the files a call writes.
+         */
+        fun record(writes: List<Pair<ToolCall, ToolResult>>, filesOf: (ToolCall) -> Set<String>) {
+            for ((call, result) in writes) {
+                if (!result.success && !result.notApproved) continue
+                val files = filesOf(call)
+                // A resolved key also settles a failure that was keyed by the file's bare name.
+                files.forEach { failed.remove(it); failed.remove(it.substringAfterLast('/')) }
+                if (files.isEmpty() || result.success) failed.remove(UNNAMED)
+            }
+            // The same call twice in one batch: the second fails because the first made the change.
+            val succeeded = writes.filter { (_, result) -> result.success }.map { (call, _) -> call }
+            for ((call, result) in writes) {
+                if (result.success || result.notApproved || call in succeeded) continue
+                failed.addAll(filesOf(call).ifEmpty { setOf(UNNAMED) })
             }
             // Re-armed once nothing is outstanding, so a later failure gets its own warning.
-            if (paths.isEmpty()) warned = false
+            if (failed.isEmpty()) warned = false
         }
 
-        /** True the first time a run answers over [outstanding] changes since it was last re-armed. */
-        fun warnOnce(): Boolean {
-            if (warned) return false
+        /**
+         * Tells a run that answers over an [outstanding] failure that the change was not made; once,
+         * until it is re-armed.
+         * @return true when the run was told and goes on; false when nothing is outstanding or the
+         *   run was told already.
+         */
+        suspend fun warn(turn: Int, history: MutableList<ChatMessage>, events: Events): Boolean {
+            if (!outstanding || warned) return false
             warned = true
+            events.onUnappliedWriteAnswer(turn)
+            history.add(ChatMessage(Role.USER, unappliedWriteTurn!!.invoke()))
             return true
         }
 
-        private companion object {
-            const val UNNAMED = ""
+        /** Ends the run for [reason], first telling the user when a failed change is [outstanding]. */
+        suspend fun stop(turn: Int, reason: StopReason, events: Events): Result {
+            if (outstanding) events.onChangeNotMade(turn)
+            return Result(turn, reason)
         }
     }
 

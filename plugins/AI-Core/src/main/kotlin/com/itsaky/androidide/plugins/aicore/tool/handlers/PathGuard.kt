@@ -204,6 +204,20 @@ object PathGuard {
     }
 
     /**
+     * One key for the file a write names, however the call spelled it, so a failed write can be
+     * matched to the one that redoes it: `MainActivity.kt`, `./app/src/.../MainActivity.kt` and the
+     * absolute path all give the same key.
+     * @param path a path a write call named.
+     * @return the canonical path of the existing file [path] names, or of the one file an edit
+     *   would be corrected to (see [suggestPathsFor]); otherwise the bare file name.
+     */
+    fun writeKeyOf(path: String): String {
+        val named = resolveWithin(path)?.takeIf { it.isFile }
+            ?: suggestPathsFor(path).unambiguous?.let(::resolveWithin)?.takeIf { it.isFile }
+        return named?.canonicalPath ?: baseNameOf(path.trim())
+    }
+
+    /**
      * Walks the project for files matching [predicate], skipping generated/hidden trees and
      * refusing to descend symlinks (which could otherwise walk outside the root).
      * @param limit maximum results.

@@ -185,6 +185,34 @@ class PathGuardTest {
         }
     }
 
+    // --- writeKeyOf() — one key per written file, however it was spelled ------
+
+    @Test
+    fun givenOneFileSpelledThreeWays_whenKeyed_thenEachGivesItsCanonicalPath() {
+        val file = File(projectRoot, "app/src/Main.kt").apply { parentFile!!.mkdirs(); writeText("") }
+
+        val keys = listOf("app/src/Main.kt", "./app/src/../src/Main.kt", file.absolutePath).map(PathGuard::writeKeyOf)
+
+        assertEquals(listOf(file.canonicalPath), keys.distinct())
+    }
+
+    @Test
+    fun givenTheBareNameOfOneProjectFile_whenKeyed_thenItGivesThatFilesCanonicalPath() {
+        // An edit of "Main.kt" is corrected to this file, so its retry under the full path must match.
+        val file = File(projectRoot, "app/src/Main.kt").apply { parentFile!!.mkdirs(); writeText("") }
+
+        assertEquals(file.canonicalPath, PathGuard.writeKeyOf("Main.kt"))
+    }
+
+    @Test
+    fun givenAPathNamingNoFileOrOneOfSeveral_whenKeyed_thenItGivesTheBareName() {
+        File(projectRoot, "a/strings.xml").apply { parentFile!!.mkdirs(); writeText("") }
+        File(projectRoot, "b/strings.xml").apply { parentFile!!.mkdirs(); writeText("") }
+
+        assertEquals("Nope.kt", PathGuard.writeKeyOf("app/Nope.kt"))
+        assertEquals("strings.xml", PathGuard.writeKeyOf("strings.xml"))
+    }
+
     // --- resolve() — the shared handler resolution policy --------------------
 
     @Test
