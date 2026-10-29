@@ -36,7 +36,10 @@ class SystemPromptFactory(
         val loaded = config.config()
         // One editor read serves both the IDE CONTEXT block and the paths in the examples.
         val context = ideContext.read()
-        val session = session().copy(canSearchWeb = tools.any { it.name == WebAccess.WEB_SEARCH_TOOL })
+        val session = session().copy(
+            canSearchWeb = tools.any { it.name == WebAccess.WEB_SEARCH_TOOL },
+            canFetchUrl = tools.any { it.name == WebAccess.FETCH_URL_TOOL },
+        )
         val request = SystemPromptRequest(
             tools,
             // Null tells the backend this side parses no envelope; see SystemPromptRequest.

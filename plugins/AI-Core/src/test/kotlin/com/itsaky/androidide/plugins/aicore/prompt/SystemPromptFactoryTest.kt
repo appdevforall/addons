@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,6 +44,20 @@ class SystemPromptFactoryTest {
             terminalTool = "respond",
             toolCallSyntax = SYNTAX,
         )
+
+    @Test
+    fun givenABackendThatAnswersTheProbe_whenAskedIfItHasItsOwnPrompt_thenOnlyAnAnswerCounts() {
+        assertTrue(FakeBackend("I am Local.").hasOwnPrompt())
+        // The short prompt turned off: null, so this plugin's full prompt and every tool apply.
+        assertFalse(FakeBackend(null).hasOwnPrompt())
+    }
+
+    @Test
+    fun givenAToolListWithoutFetchUrl_whenCreating_thenThePromptDoesNotTellTheModelToCallIt() {
+        val prompt = runBlocking { factory(FakeBackend("I am Local.")).create(tools) }
+
+        assertFalse(prompt.contains("fetch_url"))
+    }
 
     @Test
     fun givenABackendWithItsOwnPrompt_whenCreating_thenThatWordingIsUsed() {

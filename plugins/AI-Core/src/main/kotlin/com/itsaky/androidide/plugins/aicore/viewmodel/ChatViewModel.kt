@@ -1040,8 +1040,6 @@ class ChatViewModel(
         lastRunUserMessageId.value = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
         lastRunOverflowed = false
-        // Read once: prompt, grammar and executor must all describe the same tool set.
-        val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
         // Asked before the message lands, so the header never shows the raw prompt as the title.
         requestTitleIfUntitled(llmService, userMessage)
@@ -1056,6 +1054,24 @@ class ChatViewModel(
             try {
                 // The title is written first; the prompt shows as generating meanwhile.
                 awaitTitleRequest()
+
+                // Read once: prompt, grammar and executor must all describe the same tool set. Chosen
+                // per run, after the title wait, because the backend can change between messages and
+                // while that wait is on; a small on-device model gets the compact set (ADFA-6757).
+                val callsToolsNatively = backendPrompts.callsToolsNatively()
+                val tools = agentTools.forBackend(
+                    callsToolsNatively = callsToolsNatively,
+                    hasOwnPrompt = !callsToolsNatively && backendPrompts.hasOwnPrompt(),
+                    contextWindowTokens = if (callsToolsNatively) 0 else reportedContextWindow(currentBackendId),
+                )
+                // Said per run, since the compact set is chosen per run: a tool left out is not a tool the
+                // user can see is missing, and the rebuild-time log above only covers the full snapshot.
+                if (tools !== agentTools && tools.promptTools.droppedTools.isNotEmpty()) {
+                    AgentTrace.stage(
+                        "TOOLS",
+                        "compact set left out contributed tool(s): ${tools.promptTools.droppedTools.joinToString(", ")}",
+                    )
+                }
 
                 // One list for both halves of the protocol: the prompt describes it and a
                 // natively calling backend is sent it, so the two can never name different tools.
