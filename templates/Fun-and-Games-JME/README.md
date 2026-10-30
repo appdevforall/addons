@@ -67,5 +67,6 @@ See [`../README.md`](../README.md) for authoring guidance and the format referen
 
 Written by **James Turner**. Converted from the standalone
 [FunandGames-jme](https://github.com/appdevforall/FunandGames-jme) repository to a template
-bundle in this repository. The one change to the skeletons: each `app/build.gradle.peb` takes
-jME from the jars in `app/libs` instead of from Maven Central.
+bundle in this repository. Two changes to the skeletons, which a sync from upstream must keep:
+each `app/build.gradle.peb` takes jME from the jars in `app/libs` instead of from Maven Central,
+and Demo's `settings.gradle.peb` does not list the jitpack.io repository (ADFA-6865).

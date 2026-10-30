@@ -52,6 +52,8 @@ app/libs/jme3-android-native-3.6.1-stable.jar  # native .so libs for OpenGL ES
 app/libs/jme3-effects-3.6.1-stable.jar         # BloomFilter, post-processing
 ```
 
+Libraries resolve from Google and Maven Central only. For a library hosted on JitPack, add `maven { url = uri("https://jitpack.io") }` to the `repositories` block under `dependencyResolutionManagement` in `settings.gradle`.
+
 jMonkeyEngine is distributed under the BSD 3-Clause license.
 
 ## Controls
