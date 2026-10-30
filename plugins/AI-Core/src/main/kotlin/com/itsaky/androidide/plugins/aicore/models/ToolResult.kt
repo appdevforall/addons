@@ -11,8 +11,9 @@ data class ToolResult(
     /** The user refused the call at the approval dialog, so the tool never ran. */
     val denied: Boolean = false,
     /**
-     * The call stopped at the approval dialog, so the tool never ran: refused, corrected or left
-     * unanswered. True whenever [denied] is; only [denied] offers the user a Retry.
+     * The user refused or corrected the call at the approval dialog, so the tool never ran. A call
+     * left unanswered is a plain failure, since nobody decided against it. True whenever [denied]
+     * is; only [denied] offers the user a Retry.
      */
     val notApproved: Boolean = denied,
 ) {
@@ -29,7 +30,7 @@ data class ToolResult(
             return ToolResult(false, message, denied = true)
         }
 
-        /** A call the user corrected, or did not answer in time, at the approval dialog. */
+        /** A call the user corrected at the approval dialog. */
         fun notApproved(message: String): ToolResult {
             return ToolResult(false, message, notApproved = true)
         }

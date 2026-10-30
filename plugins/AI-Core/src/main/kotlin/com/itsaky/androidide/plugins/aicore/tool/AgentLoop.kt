@@ -259,7 +259,7 @@ class AgentLoop(
         // Once a tool has run, only the terminal tool finishes the run; see [unfinishedTurn].
         var toolsRan = false
         var askedToFinish = false
-        val unapplied = UnappliedWrites()
+        val unapplied = UnappliedWrites(progress)
         // Cleared once the tool runs or has been asked for, so a model that refuses it still stops.
         var requiredPending = requiredTool != null && requiredToolTurn != null
         while (turn < maxIterations) {
@@ -366,9 +366,13 @@ class AgentLoop(
      * The file changes a run attempted that failed and have not been redone, keyed by file so a
      * success on one file does not hide a failure on another, and what an answer or an ending does
      * while one is outstanding. Inert when [unappliedWriteTurn] is null.
+     *
+     * @param progress the run's guard, told when the run is sent back to look at the file again.
      */
-    private inner class UnappliedWrites {
+    private inner class UnappliedWrites(private val progress: ToolCallProgressGuard) {
         private val failed = mutableSetOf<String>()
+        // Every write that has worked this run: the same call again fails because it made the change.
+        private val applied = mutableSetOf<ToolCall>()
         private var warned = false
 
         /** Whether a failed change is outstanding, with the check on. */
@@ -377,28 +381,36 @@ class AgentLoop(
         /**
          * Records one batch's file writes.
          *
-         * A success, or a call stopped at the approval dialog, settles failures on its file from
-         * earlier batches only: the model wrote the batch before it saw any of its results, so a
-         * success beside a failure on the same file is another change, not the failed one redone.
-         * A later success on that file is taken for the redo. Which change a retry redoes cannot be
-         * read off its text, and taking it for another change would report a change that was made
-         * as not made. A call that names no file cannot be matched, so any later success settles it.
+         * A success, or a call the user refused or corrected at the approval dialog, settles
+         * failures on its file from earlier batches only: the model wrote the batch before it saw
+         * any of its results, so a success beside a failure on the same file is another change, not
+         * the failed one redone. A later success on that file is taken for the redo. Which change a
+         * retry redoes cannot be read off its text, and taking it for another change would report a
+         * change that was made as not made. A call that names no file cannot be matched, so any
+         * later success settles it. A call that already worked this run, issued again, fails
+         * because it made the change, so it is not counted.
          *
          * @param writes the batch's file-writing calls with their results.
          * @param filesOf the keys of the files a call writes.
          */
         fun record(writes: List<Pair<ToolCall, ToolResult>>, filesOf: (ToolCall) -> Set<String>) {
-            for ((call, result) in writes) {
-                if (!result.success && !result.notApproved) continue
-                val files = filesOf(call)
-                // A resolved key also settles a failure that was keyed by the file's bare name.
-                files.forEach { failed.remove(it); failed.remove(it.substringAfterLast('/')) }
-                if (files.isEmpty() || result.success) failed.remove(UNNAMED)
+            // Keys are looked up only while something is outstanding: an edit's can walk the project.
+            if (failed.isNotEmpty()) {
+                for ((call, result) in writes) {
+                    if (!result.success && !result.notApproved) continue
+                    val files = filesOf(call)
+                    // A resolved key also settles a failure keyed by the file's bare name. A key with
+                    // none (`app/`) must not settle the failure of a call that names no file.
+                    files.forEach { file ->
+                        failed.remove(file)
+                        file.substringAfterLast('/').takeIf { it.isNotEmpty() }?.let(failed::remove)
+                    }
+                    if (files.isEmpty() || result.success) failed.remove(UNNAMED)
+                }
             }
-            // The same call twice in one batch: the second fails because the first made the change.
-            val succeeded = writes.filter { (_, result) -> result.success }.map { (call, _) -> call }
+            writes.filter { (_, result) -> result.success }.mapTo(applied) { (call, _) -> call }
             for ((call, result) in writes) {
-                if (result.success || result.notApproved || call in succeeded) continue
+                if (result.success || result.notApproved || call in applied) continue
                 failed.addAll(filesOf(call).ifEmpty { setOf(UNNAMED) })
             }
             // Re-armed once nothing is outstanding, so a later failure gets its own warning.
@@ -416,6 +428,8 @@ class AgentLoop(
             warned = true
             events.onUnappliedWriteAnswer(turn)
             history.add(ChatMessage(Role.USER, unappliedWriteTurn!!.invoke()))
+            // The turn asks for a fresh read, which must not end the run as a look repeated.
+            progress.allowRepeatOfLastBatch()
             return true
         }
 

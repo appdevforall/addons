@@ -1036,11 +1036,23 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenAnAnswerOverAFailedEdit_whenTheModelRereadsTheFileItJustReadAsTold_thenItCanStillRedoTheChange() = runTest {
+        // The warning asks for a read; the same read the run had just taken must not end it as done.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "guess"), toolCall("read_file", "a"), respond, toolCall("read_file", "a"), edit("a", "real"), respond),
+            mapOf("edit_file" to listOf(failedEdit, appliedEdit), "read_file" to listOf(ToolResult.success("lines"))),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("unapplied", "final"), events)
+    }
+
+    @Test
     fun givenAnAnswerOverAFailedEdit_whenTheModelOnlyRepeatsALookAfterTheWarning_thenTheRunIsAbandonedNotAssumedComplete() = runTest {
         // Seen on a device: told the edit failed, the model re-read the file, and the repeat-after-
         // success rule then ended the run as COMPLETED with its false "changed" answer standing.
         val (result, _, events) = runWriting(
-            listOf(toolCall("edit_file"), toolCall("read_file"), respond, toolCall("read_file")),
+            listOf(edit("a", "guess"), toolCall("read_file", "a"), respond, toolCall("read_file", "a"), toolCall("read_file", "a")),
             mapOf("edit_file" to listOf(failedEdit), "read_file" to listOf(ToolResult.success("lines"))),
         )
 
@@ -1196,7 +1208,7 @@ class AgentLoopTest {
 
     @Test
     fun givenAnEditTheUserCorrected_whenTheModelWritesAnotherFileAndAnswers_thenItIsNotToldTheChangeFailed() = runTest {
-        // A correction, like an approval left to time out, never ran the tool: the user steered it.
+        // A correction never ran the tool: the user steered it. A timeout is a plain failure.
         val (result, _, events) = runWriting(
             listOf(edit("Foo.kt", "x"), edit("Bar.kt", "x"), respond),
             mapOf("edit_file" to listOf(ToolResult.notApproved("put it in Bar.kt"), appliedEdit)),
@@ -1227,6 +1239,44 @@ class AgentLoopTest {
 
         assertTrue(result.completed)
         assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAnEditThatApplied_whenTheModelIssuesItAgainAfterALook_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
+        // The repeat finds no old_string because the first call replaced it.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), toolCall("read_file", "a"), edit("a", "foo()"), respond),
+            mapOf("edit_file" to listOf(appliedEdit, failedEdit), "read_file" to listOf(ToolResult.success("lines"))),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAFailedCallNamingNoFile_whenACallOnAPathWithNoFileNameIsCorrected_thenItIsStillOutstanding() = runTest {
+        // `app/` has an empty bare name, which is the key of the call that named no file.
+        val (result, _, events) = runWriting(
+            listOf(toolCall("edit_file"), edit("app/", "x"), respond, respond),
+            mapOf("edit_file" to listOf(failedEdit, ToolResult.notApproved("revise it"))),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenNothingOutstanding_whenWritesSucceed_thenTheirFilesAreNotLookedUp() = runTest {
+        // Keying an edit given a bare name walks the whole project.
+        var lookups = 0
+        val (result, _, _) = runWriting(
+            listOf(edit("a", "x"), edit("b", "y"), respond),
+            mapOf("edit_file" to listOf(appliedEdit)),
+            writtenFilesOf = { call -> lookups++; setOf(call.args["path"].toString()) },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(0, lookups)
     }
 
     @Test

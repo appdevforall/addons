@@ -206,12 +206,32 @@ class PathGuardTest {
     }
 
     @Test
-    fun givenAMissingPathSharingTheNameOfOneProjectFile_whenKeyedForAToolThatWritesTheExactPath_thenItGivesTheBareName() {
+    fun givenAMissingPathSharingTheNameOfOneProjectFile_whenKeyedForAToolThatWritesTheExactPath_thenItGivesThatPath() {
         // create_file on build/Main.kt never meant app/src/Main.kt: keyed to that file, the retry that
         // creates lib/Main.kt would leave the failure outstanding and report a made change as not made.
         File(projectRoot, "app/src/Main.kt").apply { parentFile!!.mkdirs(); writeText("") }
 
-        assertEquals("Main.kt", PathGuard.writeKeyOf("build/Main.kt", correctsNames = false))
+        assertEquals(
+            File(projectRoot, "build/Main.kt").canonicalPath,
+            PathGuard.writeKeyOf("build/Main.kt", correctsNames = false),
+        )
+    }
+
+    @Test
+    fun givenAFileNotCreatedYet_whenKeyedForAToolThatWritesTheExactPath_thenItIsNotKeyedByItsName() {
+        // Keyed "strings.xml", a failed create of the Spanish file was settled by any write to the default one.
+        File(projectRoot, "values/strings.xml").apply { parentFile!!.mkdirs(); writeText("") }
+        val missing = File(projectRoot, "values-es/strings.xml").canonicalPath
+
+        val keys = listOf("values-es/strings.xml", "./values/../values-es/strings.xml")
+            .map { PathGuard.writeKeyOf(it, correctsNames = false) }
+
+        assertEquals(listOf(missing), keys.distinct())
+    }
+
+    @Test
+    fun givenAPathOutsideTheProject_whenKeyedForAToolThatWritesTheExactPath_thenItGivesTheBareName() {
+        assertEquals("Main.kt", PathGuard.writeKeyOf("../elsewhere/Main.kt", correctsNames = false))
     }
 
     @Test

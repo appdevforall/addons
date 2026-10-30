@@ -33,10 +33,12 @@ agent_loop:
   # Sent once when a run tries to finish while a file change it attempted failed and has not been
   # redone: a small model tends to answer as if the change had been made.
   unapplied_write: >-
-    A file change you tried failed and has not been redone, so that file is unchanged. Do not tell
-    the user it was done. Read the file with read_file, then repeat the change
-    with the text copied exactly from it; or, if you cannot, call the "{{TERMINAL_TOOL}}" tool and
-    say plainly that the change was not made.
+    A file change you tried failed and was not made. Other changes to that file may have been
+    made; do not redo those. Do not tell the user it was done. To redo the failed change: for
+    edit_file, read the file with read_file and copy the text exactly from it; if create_file said
+    the file already exists, use update_file; if update_file said the file does not exist, use
+    create_file; otherwise fix what the error said. If you cannot, call the "{{TERMINAL_TOOL}}"
+    tool and say plainly that the change was not made.
   # Sent once when a run that had to check the web first answered without searching; TOOL is the
   # search tool. A backend that forces the call never sends it (see VerificationPolicy).
   required_tool: >-

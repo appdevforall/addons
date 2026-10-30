@@ -114,6 +114,14 @@ internal class ToolCallProgressGuard(
     }
 
     /**
+     * Lets the next batch repeat the last one without it reading as the work being finished, for a
+     * run just told to look again. The limits on going round in circles still count it.
+     */
+    fun allowRepeatOfLastBatch() {
+        previousSignature = null
+    }
+
+    /**
      * The paths a batch names, blanks dropped.
      * @param calls the calls to read.
      * @return their paths, as one set.
