@@ -106,4 +106,12 @@ class NearMatchLinesTest {
 
         assertTrue(rendered.contains("line 7: \"a \""))
     }
+
+    @Test
+    fun givenAWordInsideLongerWords_whenFound_thenOnlyAWholeWordMatches() {
+        // `val` sits inside `evaluate` and `substring`, which say nothing about the line.
+        val text = "evaluate(substring)\nval target = 1\n"
+
+        assertEquals(listOf(2), NearMatchLines.find(text, "val").map { it.number })
+    }
 }

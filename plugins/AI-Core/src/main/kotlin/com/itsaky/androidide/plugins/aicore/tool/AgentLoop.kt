@@ -371,8 +371,9 @@ class AgentLoop(
      */
     private inner class UnappliedWrites(private val progress: ToolCallProgressGuard) {
         private val failed = mutableSetOf<String>()
-        // Every write that has worked this run: the same call again fails because it made the change.
-        private val applied = mutableSetOf<ToolCall>()
+        // Every write that has worked this run, in order: the same call again fails because it made
+        // the change, unless a write to its file came between.
+        private val applied = mutableListOf<ToolCall>()
         private var warned = false
 
         /** Whether a failed change is outstanding, with the check on. */
@@ -388,12 +389,14 @@ class AgentLoop(
          * retry redoes cannot be read off its text, and taking it for another change would report a
          * change that was made as not made. A call that names no file cannot be matched, so any
          * later success settles it. A call that already worked this run, issued again, fails
-         * because it made the change, so it is not counted.
+         * because it made the change, so it is not counted; unless another write to its file
+         * worked in between, which may have undone it, so then the failure counts.
          *
          * @param writes the batch's file-writing calls with their results.
          * @param filesOf the keys of the files a call writes.
          */
         fun record(writes: List<Pair<ToolCall, ToolResult>>, filesOf: (ToolCall) -> Set<String>) {
+            if (unappliedWriteTurn == null) return
             // Keys are looked up only while something is outstanding: an edit's can walk the project.
             if (failed.isNotEmpty()) {
                 for ((call, result) in writes) {
@@ -408,14 +411,35 @@ class AgentLoop(
                     if (files.isEmpty() || result.success) failed.remove(UNNAMED)
                 }
             }
+            val earlier = applied.size
             writes.filter { (_, result) -> result.success }.mapTo(applied) { (call, _) -> call }
             for ((call, result) in writes) {
-                if (result.success || result.notApproved || call in applied) continue
+                if (result.success || result.notApproved || madeTheChange(call, earlier, filesOf)) continue
                 failed.addAll(filesOf(call).ifEmpty { setOf(UNNAMED) })
             }
             // Re-armed once nothing is outstanding, so a later failure gets its own warning.
             if (failed.isEmpty()) warned = false
         }
+
+        /**
+         * Whether [call], which failed, already worked, so it fails because it made the change.
+         * Not so when a different write to its file worked after it in an earlier batch: that
+         * may have undone it. The files are looked up only then, and only for such a call.
+         *
+         * @param earlier how many of [applied] come from earlier batches.
+         */
+        private fun madeTheChange(call: ToolCall, earlier: Int, filesOf: (ToolCall) -> Set<String>): Boolean {
+            if (call !in applied) return false
+            val first = applied.subList(0, earlier).lastIndexOf(call)
+            if (first < 0) return true
+            val between = applied.subList(first + 1, earlier).filter { it != call }
+            if (between.isEmpty()) return true
+            val names = filesOf(call).withBareNames()
+            return between.none { other -> filesOf(other).withBareNames().any { it in names } }
+        }
+
+        private fun Set<String>.withBareNames(): Set<String> =
+            flatMapTo(mutableSetOf()) { listOf(it, it.substringAfterLast('/')) }
 
         /**
          * Tells a run that answers over an [outstanding] failure that the change was not made; once,

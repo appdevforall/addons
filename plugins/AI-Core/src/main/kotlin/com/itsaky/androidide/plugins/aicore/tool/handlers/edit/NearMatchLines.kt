@@ -27,7 +27,7 @@ object NearMatchLines {
     private val WORD = Regex("[\\p{L}\\p{M}\\p{N}_]{$MIN_WORD_CHARS,}")
 
     /**
-     * The lines of [text] sharing the most distinct words with [snippet].
+     * The lines of [text] sharing the most distinct whole words with [snippet].
      * @param text the file contents the edit was matched against.
      * @param snippet the `old_string` that was not found or changed nothing.
      * @return up to [MAX_LINES] lines, best match first and file order among equals; empty when
@@ -40,10 +40,10 @@ object NearMatchLines {
             .withIndex()
             .filter { (_, line) -> line.isNotBlank() }
             .map { (index, line) ->
-                val lower = line.lowercase()
+                val lineWords = WORD.findAll(line).mapTo(mutableSetOf()) { it.value.lowercase() }
                 // One character short rather than half of one: a lone surrogate is not text.
                 val shown = line.take(MAX_LINE_CHARS).let { if (it.last().isHighSurrogate()) it.dropLast(1) else it }
-                Line(index + 1, shown, shown.length < line.length) to words.count { lower.contains(it) }
+                Line(index + 1, shown, shown.length < line.length) to words.count { it in lineWords }
             }
             .filter { (_, score) -> score > 0 }
             .sortedByDescending { (_, score) -> score }

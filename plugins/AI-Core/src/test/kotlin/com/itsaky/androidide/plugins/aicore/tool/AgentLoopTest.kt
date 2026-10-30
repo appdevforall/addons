@@ -1254,6 +1254,47 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenAnEditThatApplied_whenAnotherWriteToItsFileCameAfter_thenTheRepeatFailingIsAChangeNotMade() = runTest {
+        // The second edit may have removed what the first put there, so the repeat does not
+        // fail because it made the change.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), edit("a", "bar()"), edit("a", "foo()"), respond, respond),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit)),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAnEditThatApplied_whenOnlyAnotherFileWasWrittenAfter_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), edit("b", "bar()"), edit("a", "foo()"), respond),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit)),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenTheCheckIsOff_whenAnEditFails_thenItsFileIsNotLookedUp() = runTest {
+        var lookups = 0
+        val (result, _, _) = runWriting(
+            listOf(edit("a", "x"), respond),
+            mapOf("edit_file" to listOf(failedEdit)),
+            loop = AgentLoop(
+                formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond"),
+                terminalTool = "respond",
+            ),
+            writtenFilesOf = { call -> lookups++; setOf(call.args["path"].toString()) },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(0, lookups)
+    }
+
+    @Test
     fun givenAFailedCallNamingNoFile_whenACallOnAPathWithNoFileNameIsCorrected_thenItIsStillOutstanding() = runTest {
         // `app/` has an empty bare name, which is the key of the call that named no file.
         val (result, _, events) = runWriting(
