@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -462,16 +463,18 @@ class ExecutorTest {
         assertTrue(results.single().success)
     }
 
+    /** A tool that asks before it runs, and succeeds when it does. */
+    private val gatedHandler = object : ToolHandler {
+        override val toolName = "fake_gated"
+        override val description = "fake gated"
+        override val requiresApproval = true
+        override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ran")
+    }
+
     /** Runs one approval-gated call, answering its dialog with [decision] once it is pending. */
     private fun executeAnswering(decision: ApprovalResult, correction: String? = null): ToolResult = runBlocking {
-        val handler = object : ToolHandler {
-            override val toolName = "fake_gated"
-            override val description = "fake gated"
-            override val requiresApproval = true
-            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ran")
-        }
         val approvalManager = ToolApprovalManager({ shippedConfig })
-        val executor = Executor(ToolRouter(listOf(handler)), approvalManager)
+        val executor = Executor(ToolRouter(listOf(gatedHandler)), approvalManager)
         // Dispatchers.Default: the wait below must not sit on the thread it needs to progress on.
         val pending = async(Dispatchers.Default) { executor.execute(listOf(ToolCall("fake_gated", emptyMap()))) }
         withTimeout(5_000) {
@@ -495,7 +498,20 @@ class ExecutorTest {
 
         assertFalse(result.success)
         assertFalse("Retry would rewind the run the correction steers", result.denied)
+        assertTrue("the tool never ran, so it is no failed change to redo", result.notApproved)
         assertTrue(result.message.contains("use a different file"))
+    }
+
+    @Test
+    fun givenTheDialogIsLeftUnanswered_whenExecuting_thenTheResultIsAPlainFailure() = runTest {
+        val executor = Executor(ToolRouter(listOf(gatedHandler)), ToolApprovalManager({ shippedConfig }))
+
+        // Virtual time, so the five-minute wait passes at once.
+        val result = executor.execute(listOf(ToolCall("fake_gated", emptyMap()))).single()
+
+        assertFalse(result.success)
+        assertFalse("nobody decided against it, so a failed change it redoes stays outstanding", result.notApproved)
+        assertTrue(result.message.contains("timed out"))
     }
 
     @Test

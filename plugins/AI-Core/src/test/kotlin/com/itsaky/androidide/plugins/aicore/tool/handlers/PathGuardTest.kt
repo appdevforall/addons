@@ -185,6 +185,72 @@ class PathGuardTest {
         }
     }
 
+    // --- writeKeyOf() — one key per written file, however it was spelled ------
+
+    @Test
+    fun givenOneFileSpelledThreeWays_whenKeyed_thenEachGivesItsCanonicalPath() {
+        val file = File(projectRoot, "app/src/Main.kt").apply { parentFile!!.mkdirs(); writeText("") }
+
+        val keys = listOf("app/src/Main.kt", "./app/src/../src/Main.kt", file.absolutePath)
+            .flatMap { path -> listOf(true, false).map { PathGuard.writeKeyOf(path, correctsNames = it) } }
+
+        assertEquals(listOf(file.canonicalPath), keys.distinct())
+    }
+
+    @Test
+    fun givenTheBareNameOfOneProjectFile_whenKeyedForAnEdit_thenItGivesThatFilesCanonicalPath() {
+        // An edit of "Main.kt" is corrected to this file, so its retry under the full path must match.
+        val file = File(projectRoot, "app/src/Main.kt").apply { parentFile!!.mkdirs(); writeText("") }
+
+        assertEquals(file.canonicalPath, PathGuard.writeKeyOf("Main.kt", correctsNames = true))
+    }
+
+    @Test
+    fun givenAMissingPathSharingTheNameOfOneProjectFile_whenKeyedForAToolThatWritesTheExactPath_thenItGivesThatPath() {
+        // create_file on build/Main.kt never meant app/src/Main.kt: keyed to that file, the retry that
+        // creates lib/Main.kt would leave the failure outstanding and report a made change as not made.
+        File(projectRoot, "app/src/Main.kt").apply { parentFile!!.mkdirs(); writeText("") }
+
+        assertEquals(
+            File(projectRoot, "build/Main.kt").canonicalPath,
+            PathGuard.writeKeyOf("build/Main.kt", correctsNames = false),
+        )
+    }
+
+    @Test
+    fun givenAFileNotCreatedYet_whenKeyedForAToolThatWritesTheExactPath_thenItIsNotKeyedByItsName() {
+        // Keyed "strings.xml", a failed create of the Spanish file was settled by any write to the default one.
+        File(projectRoot, "values/strings.xml").apply { parentFile!!.mkdirs(); writeText("") }
+        val missing = File(projectRoot, "values-es/strings.xml").canonicalPath
+
+        val keys = listOf("values-es/strings.xml", "./values/../values-es/strings.xml")
+            .map { PathGuard.writeKeyOf(it, correctsNames = false) }
+
+        assertEquals(listOf(missing), keys.distinct())
+    }
+
+    @Test
+    fun givenAPathOutsideTheProject_whenKeyedForAToolThatWritesTheExactPath_thenItGivesTheBareName() {
+        assertEquals("Main.kt", PathGuard.writeKeyOf("../elsewhere/Main.kt", correctsNames = false))
+    }
+
+    @Test
+    fun givenAPathNamingNoFileOrOneOfSeveral_whenKeyed_thenItGivesTheBareName() {
+        File(projectRoot, "a/strings.xml").apply { parentFile!!.mkdirs(); writeText("") }
+        File(projectRoot, "b/strings.xml").apply { parentFile!!.mkdirs(); writeText("") }
+
+        assertEquals("Nope.kt", PathGuard.writeKeyOf("app/Nope.kt", correctsNames = true))
+        assertEquals("strings.xml", PathGuard.writeKeyOf("strings.xml", correctsNames = true))
+    }
+
+    @Test
+    fun givenAPathWithNoFileName_whenKeyed_thenItKeepsThePathRatherThanAnEmptyKey() {
+        // An empty key is the one a call naming no file gets, which any later write settles.
+        File(projectRoot, "app").mkdirs()
+
+        assertEquals("app/", PathGuard.writeKeyOf("app/", correctsNames = true))
+    }
+
     // --- resolve() — the shared handler resolution policy --------------------
 
     @Test

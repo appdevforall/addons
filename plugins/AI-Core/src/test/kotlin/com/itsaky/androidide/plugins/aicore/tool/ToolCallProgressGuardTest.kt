@@ -121,6 +121,20 @@ class ToolCallProgressGuardTest {
     }
 
     @Test
+    fun givenARepeatAllowed_whenTheBatchThatJustSucceededIsReissued_thenItRunsOnceThenReadsAsComplete() {
+        // A run told its change failed is asked to read the file again, which it may just have done.
+        val guard = guard()
+        guard.inspect(call("read_file"))
+        guard.recordResults(ok)
+
+        guard.allowRepeatOfLastBatch()
+
+        assertEquals(ToolCallProgressGuard.Verdict.PROCEED, guard.inspect(call("read_file")))
+        guard.recordResults(ok)
+        assertEquals(ToolCallProgressGuard.Verdict.ASSUME_COMPLETE, guard.inspect(call("read_file")))
+    }
+
+    @Test
     fun givenOneFailingBatchRepeated_whenInspected_thenItStopsAtTheRepeatLimit() {
         val guard = guard(repeats = 2)
 

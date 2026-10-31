@@ -47,6 +47,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.web.BackendWebSearch
 import com.itsaky.androidide.plugins.aicore.tool.web.VerificationPolicy
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
@@ -226,6 +227,7 @@ class ChatViewModel(
         terminalTool = RESPOND_TOOL,
         unfinishedTurn = toolResultsPrompt::unfinished,
         requiredToolTurn = toolResultsPrompt::requiredTool,
+        unappliedWriteTurn = toolResultsPrompt::unappliedWrite,
     )
     val toolExecutionTracker = ToolExecutionTracker()
 
@@ -1151,6 +1153,19 @@ class ChatViewModel(
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
+                        // Keyed by the file, so a retry under the path an edit was corrected to still
+                        // counts as the failed change redone.
+                        writtenFilesOf = { call ->
+                            val handler = tools.router.getHandler(call.name)
+                            handler?.pathsIn(call.args).orEmpty()
+                                .mapTo(mutableSetOf()) { PathGuard.writeKeyOf(it, handler?.correctsPaths == true) }
+                        },
+                        // Read as the tool will, so a repeat that spells an argument another way is
+                        // the same change; the file comes from the tool's own result.
+                        changeOf = tools.router::changeOf,
+                        writesFiles = { call ->
+                            tools.router.getHandler(call.name)?.writesFiles == true
+                        },
                         canonicalName = { name -> tools.router.getHandler(name)?.toolName ?: name },
                         requiredTool = requiredTool,
                         // Only a prose turn that showed an answer has one a recap could repeat.
@@ -2034,6 +2049,9 @@ class ChatViewModel(
 
         override suspend fun repeatedCalls() =
             addSystemMessage(str(R.string.agent_repeated_calls), MessageStatus.SENT)
+
+        override suspend fun changeNotMade() =
+            addSystemMessage(str(R.string.agent_change_not_made), MessageStatus.SENT)
 
         override suspend fun noProgress() =
             addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)

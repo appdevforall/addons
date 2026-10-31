@@ -23,6 +23,7 @@ class UpdateFileHandler(
     )
     override val requiresApproval = true  // Requires approval for file modification
     override val mutatesProject = true
+    override val writesFiles = true
     override val pathArgs = listOf("file_path")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
@@ -59,7 +60,8 @@ class UpdateFileHandler(
 
                 ToolResult.success(
                     message = "Updated file: $filePath (${content.length} characters)",
-                    data = filePath
+                    data = filePath,
+                    file = file.canonicalPath,
                 )
             }
         } catch (e: Exception) {

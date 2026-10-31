@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -32,6 +33,27 @@ class ToolRouterTest {
     ) : ToolHandler {
         override val description = "throws"
         override suspend fun execute(args: Map<String, Any?>): ToolResult = throw error
+    }
+
+    private class NoteWriter : ToolHandler {
+        override val toolName = "write_note"
+        override val description = "writes a note"
+        override val writesFiles = true
+        override val changeArgs = listOf("text")
+        override val argAliases = mapOf("body" to "text")
+        override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("wrote")
+    }
+
+    @Test
+    fun givenAWriteSpelledTwoWays_whenItsChangeIsKeyed_thenBothAreOneChangeAndAnUnknownToolIsItsCall() {
+        // What the agent loop compares a failed repeat with: name, aliases and ignored keys don't count.
+        val notes = ToolRouter(listOf(NoteWriter()))
+        val written = notes.changeOf(ToolCall("write_note", mapOf("path" to "a.md", "text" to "hi")))
+
+        assertEquals(written, notes.changeOf(ToolCall("Write_Note", mapOf("path" to "./a.md", "body" to "hi", "why" to 1))))
+        assertNotEquals(written, notes.changeOf(ToolCall("write_note", mapOf("path" to "a.md", "text" to "bye"))))
+        val unknown = ToolCall("no_such_tool", mapOf("x" to 1))
+        assertEquals(unknown, notes.changeOf(unknown))
     }
 
     private val router = ToolRouter(
