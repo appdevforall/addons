@@ -33,6 +33,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  printf("evicted: %s\n", path);
+  // DONTNEED skips pages that are mapped or dirty, and this does not check what was dropped, so
+  // "advised" is all that can be claimed: a still-loaded model stays resident. Unload it first.
+  printf("advised DONTNEED: %s\n", path);
   return 0;
 }

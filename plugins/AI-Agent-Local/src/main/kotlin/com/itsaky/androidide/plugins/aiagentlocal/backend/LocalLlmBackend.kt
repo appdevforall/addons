@@ -31,6 +31,7 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.Closeable
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -253,12 +254,14 @@ class LocalLlmBackend(
     private val warmedUpRef = AtomicReference<String?>(null)
 
     /**
-     * The reference whose first load in this process has already been given the read-ahead hint.
+     * The reference most recently given the read-ahead hint. One slot, not a set: loading A, then
+     * B, then A again hints A's second load, since B displaced it. That is accepted — the user just
+     * switched models, which is as likely to mean a cold file as a first pick.
      * `posix_fadvise(WILLNEED)` may shorten a cold load from shared storage, but did not do so
      * reliably in interleaved measurements (ADFA-6810), and through FUSE the call itself seemed to
-     * cost ~140 ms on a warm load. A selection's first load in a process is the one likely to be
-     * cold — the app just started, or the user just picked the file — so only that load pays for
-     * the hint; a reload of the same selection is almost always warm and skips it.
+     * cost ~140 ms on a warm load. The first load after the app starts or the selection changes is
+     * the one likely to be cold, so only that load pays for the hint; a reload of the same
+     * selection is almost always warm and skips it.
      */
     private val firstLoadHintedRef = AtomicReference<String?>(null)
 
@@ -530,13 +533,14 @@ class LocalLlmBackend(
                     fallbackContextTokens = contextSize.fallbackContextTokens,
                     useWillNeedHint = useWillNeedHint,
                 )
-                // ADFA-6810: measures whether load time tracks file size (I/O-bound) or stays flat
-                // (CPU-bound repacking) -- the input the posix_fadvise/madvise investigation needs.
+                // ADFA-6810: wall time of the whole engine.load -- thread setup, mapping the file,
+                // context creation (plus the f16 retry if q8_0 is refused), batch and sampler -- so
+                // the MB/s is a lower bound on file throughput and moves with the context size.
                 val loadMillis = (System.nanoTime() - loadStartNanos) / 1_000_000
                 val sizeBytes = opened.sizeBytes
-                val throughput = if (loadMillis > 0 && sizeBytes >= 0) {
+                val throughput = if (loadMillis > 0 && sizeBytes > 0) {
                     val mbPerSecond = (sizeBytes / (1024.0 * 1024.0)) / (loadMillis / 1000.0)
-                    ", ${"%.1f".format(mbPerSecond)} MB/s (${ByteSize.format(sizeBytes)})"
+                    ", ${"%.1f".format(Locale.ROOT, mbPerSecond)} MB/s (${ByteSize.format(sizeBytes)})"
                 } else {
                     ""
                 }

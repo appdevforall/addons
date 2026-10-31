@@ -277,6 +277,28 @@ class LocalLlmBackendTest {
     }
 
     @Test
+    fun givenALoadRefusedBeforeTheEngine_whenTheSelectionLoadsLater_thenItIsStillHinted() {
+        // The hint is armed only once a load is about to reach the engine. A refusal before that
+        // (here the embedding-model guard) must not use up the one hint the selection gets.
+        val handles = mutableMapOf(
+            CONTENT_URI to handleFor(GgufTestFiles.withArchitecture("bert")),
+        )
+        val engine = FakeEngine()
+        val backend = backendWith(FakeModelSource(handles), engine)
+
+        assertThrows(IncompatibleModelException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+        assertEquals("a refused load never reaches the engine", 0, engine.loadCount)
+
+        handles[CONTENT_URI] = handleFor(chatModel())
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(1, engine.loadCount)
+        assertTrue("the refusal must not have consumed the hint", engine.lastUseWillNeedHint)
+    }
+
+    @Test
     fun givenAnEmbeddingModel_whenLoading_thenRejectedBeforeAnyNativeWork() {
         // ADFA-4388: the classify guard must still fire when the header arrives as a stream over a
         // document read in place. Reaching native code here would abort the whole IDE.
@@ -411,7 +433,7 @@ class LocalLlmBackendTest {
 
     @Test
     fun givenASelection_whenItLoadsAgainInTheSameProcess_thenOnlyTheFirstLoadGetsTheReadAheadHint() {
-        // The hint speeds a cold load and slows a warm one by about as much (ADFA-6810), and a
+        // The hint may help a cold load and seemed to cost a warm one (ADFA-6810), and a
         // selection's first load in a process is the one likely to be cold. A reload of the same
         // selection skips it; a different selection is a new first load.
         val otherUri = "content://com.example/documents/other-model.gguf"

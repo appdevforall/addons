@@ -360,17 +360,17 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 /**
  * Hints the kernel to start reading the model file before the mmap/MAP_POPULATE in
  * llama_model_load_from_file walks it page by page. On a FUSE-backed file (shared storage) a
- * cold load pays a round trip through the FUSE daemon per read-ahead window; issuing the hint
- * first lets that read-ahead run concurrently with the setup load_from_file does before it
- * touches pages. ADFA-6810 could not show a reliable cold-load gain and saw ~140 ms added to a
- * warm load through FUSE, so the Kotlin side only asks for it on a selection's first load in
- * the process.
+ * cold load pays a round trip through the FUSE daemon per read-ahead window; the hint queues
+ * read-ahead for the whole file on the calling thread before the load starts, so the I/O itself
+ * can complete while load_from_file does its setup. The call is not free: it runs synchronously
+ * and, through FUSE, seemed to add ~140 ms to a warm load. ADFA-6810 could not show a reliable
+ * cold-load gain either, so the Kotlin side only asks for it on a selection's first load.
  *
  * Uses a separate fd rather than one handed to llama.cpp: the page cache the hint populates is
  * keyed by inode, not by file descriptor, so this needs no change to llama.cpp itself.
  */
 static void fadvise_willneed(const char *path) {
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
         LOGe("fadvise_willneed: open(%s) failed: %s", path, strerror(errno));
         return;
