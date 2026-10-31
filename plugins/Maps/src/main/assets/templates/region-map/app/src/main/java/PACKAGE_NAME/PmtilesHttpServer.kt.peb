@@ -108,7 +108,11 @@ class PmtilesHttpServer(
                 val afd = try {
                     assets.openFd(path)
                 } catch (e: IOException) {
-                    writeStatus(out, 404, "Not Found"); return
+                    // A glyph range the app does not bundle. MapLibre leaves blank every tile whose
+                    // labels need a range that failed to load, so answer an empty glyph set instead.
+                    if (path.endsWith(".pbf")) writeStatus(out, 200, "OK")
+                    else writeStatus(out, 404, "Not Found")
+                    return
                 }
                 val totalLen = afd.length
                 try {

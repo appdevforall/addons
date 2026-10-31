@@ -119,7 +119,13 @@ public class PmtilesHttpServer {
 
             AssetFileDescriptor afd;
             try { afd = assets.openFd(path); }
-            catch (IOException e) { writeStatus(out, 404, "Not Found"); return; }
+            catch (IOException e) {
+                // A glyph range the app does not bundle. MapLibre leaves blank every tile whose
+                // labels need a range that failed to load, so answer an empty glyph set instead.
+                if (path.endsWith(".pbf")) writeStatus(out, 200, "OK");
+                else writeStatus(out, 404, "Not Found");
+                return;
+            }
             long totalLen = afd.getLength();
             try {
                 long[] range = resolveRange(rangeSpec, totalLen);
