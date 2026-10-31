@@ -215,6 +215,7 @@ class LocalLlmBackend(
             contextTokens: Int,
             quantizeKv: Boolean,
             fallbackContextTokens: Int,
+            useWillNeedHint: Boolean,
         ) {
             // Native reads the counts when it creates the context, so they go in before the load.
             val threads = InferenceThreads.read()
@@ -227,6 +228,7 @@ class LocalLlmBackend(
                 nCtx = contextTokens,
                 quantizeKv = quantizeKv,
                 fallbackNCtx = fallbackContextTokens,
+                useWillNeedHint = useWillNeedHint,
             )
         }
         override suspend fun unload() = llama.unload()
@@ -249,6 +251,16 @@ class LocalLlmBackend(
      * launch one doomed load per [isAvailable] call, which the chat screen makes on open.
      */
     private val warmedUpRef = AtomicReference<String?>(null)
+
+    /**
+     * The reference whose first load in this process has already been given the read-ahead hint.
+     * `posix_fadvise(WILLNEED)` may shorten a cold load from shared storage, but did not do so
+     * reliably in interleaved measurements (ADFA-6810), and through FUSE the call itself seemed to
+     * cost ~140 ms on a warm load. A selection's first load in a process is the one likely to be
+     * cold — the app just started, or the user just picked the file — so only that load pays for
+     * the hint; a reload of the same selection is almost always warm and skips it.
+     */
+    private val firstLoadHintedRef = AtomicReference<String?>(null)
 
     init {
         scope.launch { deleteLegacyModelCache() }
@@ -502,7 +514,13 @@ class LocalLlmBackend(
             // Before the load, which takes seconds: a send queued behind a warm-up is sized now.
             updateContextWindow { plannedContext = PlannedContext(modelRef, contextSize.contextTokens) }
 
-            context.logger.info("Loading model: $modelRef via ${opened.nativePath}")
+            // Armed here, after every pre-load refusal above, so a load that never reached the
+            // engine does not use up the one hint its selection gets.
+            val useWillNeedHint = firstLoadHintedRef.getAndSet(modelRef) != modelRef
+            context.logger.info(
+                "Loading model: $modelRef via ${opened.nativePath}" +
+                    if (useWillNeedHint) " (first load of this selection: read-ahead hint on)" else "",
+            )
             val loadStartNanos = System.nanoTime()
             try {
                 engine.load(
@@ -510,6 +528,7 @@ class LocalLlmBackend(
                     contextTokens = contextSize.contextTokens,
                     quantizeKv = contextSize.kvType == KvCacheType.Q8_0,
                     fallbackContextTokens = contextSize.fallbackContextTokens,
+                    useWillNeedHint = useWillNeedHint,
                 )
                 // ADFA-6810: measures whether load time tracks file size (I/O-bound) or stays flat
                 // (CPU-bound repacking) -- the input the posix_fadvise/madvise investigation needs.

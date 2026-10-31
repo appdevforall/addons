@@ -86,15 +86,20 @@ class LocalLlmBackendTest {
         /** Runs inside each load, so a test can look at the backend while the weights load. */
         var duringLoad: () -> Unit = {}
 
+        /** Whether the last load asked for the ADFA-6810 variant A fadvise hint. */
+        var lastUseWillNeedHint = false
+
         override suspend fun load(
             nativePath: String,
             contextTokens: Int,
             quantizeKv: Boolean,
             fallbackContextTokens: Int,
+            useWillNeedHint: Boolean,
         ) {
             loadCount++
             lastContextTokens = contextTokens
             lastQuantizeKv = quantizeKv
+            lastUseWillNeedHint = useWillNeedHint
             duringLoad()
         }
 
@@ -402,6 +407,37 @@ class LocalLlmBackendTest {
 
         Thread.sleep(200)
         assertEquals("an unanswered probe must not unload the model", 0, engine.unloadCount)
+    }
+
+    @Test
+    fun givenASelection_whenItLoadsAgainInTheSameProcess_thenOnlyTheFirstLoadGetsTheReadAheadHint() {
+        // The hint speeds a cold load and slows a warm one by about as much (ADFA-6810), and a
+        // selection's first load in a process is the one likely to be cold. A reload of the same
+        // selection skips it; a different selection is a new first load.
+        val otherUri = "content://com.example/documents/other-model.gguf"
+        val source = FakeModelSource(
+            mapOf(CONTENT_URI to handleFor(chatModel()), otherUri to handleFor(chatModel())),
+        )
+        val engine = FakeEngine()
+        val backend = backendWith(source, engine)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertTrue("first load of a selection is hinted", engine.lastUseWillNeedHint)
+
+        // Resident and reachable, a repeat call returns before the engine. The file going away and
+        // coming back evicts the model, so the next call is a real reload of the same selection.
+        source.reachable = false
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+        source.reachable = true
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertEquals(2, engine.loadCount)
+        assertFalse("a reload of the same selection is not hinted", engine.lastUseWillNeedHint)
+
+        runBlocking { backend.ensureModelLoaded(otherUri) }
+        assertEquals(3, engine.loadCount)
+        assertTrue("a different selection's first load is hinted", engine.lastUseWillNeedHint)
     }
 
     @Test
