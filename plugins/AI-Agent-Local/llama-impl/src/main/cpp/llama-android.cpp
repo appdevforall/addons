@@ -10,7 +10,10 @@
 #include <unordered_map>
 #include <mutex>
 #include <unistd.h>
+#include <fcntl.h>
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
 #include "llama.h"
 #include "common.h"
 #include "ggml-backend.h"
@@ -354,13 +357,44 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     return JNI_VERSION_1_6;
 }
 
+/**
+ * Hints the kernel to start reading the model file before the mmap/MAP_POPULATE in
+ * llama_model_load_from_file walks it page by page. On a FUSE-backed file (shared storage) a
+ * cold load pays a round trip through the FUSE daemon per read-ahead window; the hint queues
+ * read-ahead for the whole file on the calling thread before the load starts, so the I/O itself
+ * can complete while load_from_file does its setup. The call is not free: it runs synchronously
+ * and, through FUSE, seemed to add ~140 ms to a warm load. ADFA-6810 could not show a reliable
+ * cold-load gain either, so the Kotlin side only asks for it on a selection's first load.
+ *
+ * Uses a separate fd rather than one handed to llama.cpp: the page cache the hint populates is
+ * keyed by inode, not by file descriptor, so this needs no change to llama.cpp itself.
+ */
+static void fadvise_willneed(const char *path) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        LOGe("fadvise_willneed: open(%s) failed: %s", path, strerror(errno));
+        return;
+    }
+    int rc = posix_fadvise(fd, 0, 0, POSIX_FADV_WILLNEED);
+    if (rc != 0) {
+        LOGe("fadvise_willneed: posix_fadvise(%s) failed: %s", path, strerror(rc));
+    }
+    close(fd);
+}
+
 extern "C"
 JNIEXPORT jlong JNICALL
-Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring filename) {
+Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring filename,
+                                                 jboolean use_willneed_hint) {
     llama_model_params model_params = llama_model_default_params();
 
     auto path_to_model = env->GetStringUTFChars(filename, 0);
     LOGi("model: loading from %s", path_to_model);
+
+    if (use_willneed_hint) {
+        LOGi("model: issuing posix_fadvise(WILLNEED) before load");
+        fadvise_willneed(path_to_model);
+    }
 
     auto model = llama_model_load_from_file(path_to_model, model_params);
     env->ReleaseStringUTFChars(filename, path_to_model);
