@@ -10,8 +10,10 @@ import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /**
  * Tiny in-process HTTP/1.1 server (loopback only) that serves bundled APK assets
@@ -32,7 +34,7 @@ class PmtilesHttpServer(
 ) {
     private val rootPrefix: String = if (rootPrefix.endsWith("/")) rootPrefix else "$rootPrefix/"
     private var socket: ServerSocket? = null
-    private var pool: ExecutorService? = null
+    private var pool: ThreadPoolExecutor? = null
     var port: Int = 0
         private set
     @Volatile private var running = false
@@ -43,12 +45,18 @@ class PmtilesHttpServer(
         socket = s
         port = s.localPort
         running = true
-        pool = Executors.newFixedThreadPool(MAX_CLIENTS)
+        val workers = ThreadPoolExecutor(0, MAX_CLIENTS, 30, TimeUnit.SECONDS, SynchronousQueue())
+        pool = workers
         val accept = Thread({
             while (running) {
                 try {
                     val client = s.accept()
-                    pool?.submit { handle(client) }
+                    try {
+                        workers.execute { handle(client) }
+                    } catch (e: RejectedExecutionException) {
+                        Log.w(TAG, "all $MAX_CLIENTS threads busy, dropping a connection")
+                        try { client.close() } catch (_: IOException) {}
+                    }
                 } catch (e: IOException) {
                     if (running) Log.w(TAG, "accept: $e")
                 }
@@ -166,8 +174,8 @@ class PmtilesHttpServer(
         /** Bounds each read, not the whole request: a client that sends nothing for this long is dropped. */
         const val READ_TIMEOUT_MS = 5_000
 
-        /** MapLibre opens a handful of connections at once; further ones wait in the queue. */
-        const val MAX_CLIENTS = 8
+        /** Caps threads without queueing, since a queued tile request waits behind idle sockets and the map stays blank. */
+        const val MAX_CLIENTS = 64
 
         /**
          * The (start, end) bytes (inclusive) a `Range: bytes=` value asks for, or null when it
