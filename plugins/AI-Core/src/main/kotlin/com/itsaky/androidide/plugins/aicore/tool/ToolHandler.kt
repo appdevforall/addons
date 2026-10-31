@@ -116,6 +116,15 @@ interface ToolHandler {
         get() = emptyMap()
 
     /**
+     * The argument keys that say what a file write changes, apart from its path: two calls with the
+     * same values make the same change. Read only for a tool whose failures can be
+     * [com.itsaky.androidide.plugins.aicore.models.ToolResult.alreadyMade] or
+     * [com.itsaky.androidide.plugins.aicore.models.ToolResult.madeIfUnchanged].
+     */
+    val changeArgs: List<String>
+        get() = emptyList()
+
+    /**
      * Alternative argument names, alias → canonical. Small models reliably invent near-miss keys
      * ("old" for "old_string") and the grammar constrains none of them, so the choice is remapping
      * or burning a turn. Applied before the required-argument check; a supplied canonical key wins.

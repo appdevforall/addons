@@ -130,4 +130,27 @@ class NearMatchLinesTest {
 
         assertEquals(listOf(1), NearMatchLines.find(text, "我的应用").map { it.number })
     }
+
+    @Test
+    fun givenAWholeIdentifier_whenFound_thenALineHoldingItWholeComesBeforeOneHoldingOnlyAPart() {
+        val text = "<string name=\"app\">X</string>\nval app_name = 1\n"
+
+        assertEquals(listOf(2, 1), NearMatchLines.find(text, "app_name").map { it.number })
+    }
+
+    @Test
+    fun givenAnAcronymBeforeAWord_whenFound_thenEachIsAPartOfTheIdentifier() {
+        val text = "class HTMLParser\nother\n"
+
+        assertEquals(listOf(1), NearMatchLines.find(text, "parser").map { it.number })
+        assertEquals(listOf(1), NearMatchLines.find(text, "html").map { it.number })
+    }
+
+    @Test
+    fun givenAPartOfAPhraseInKatakana_whenFound_thenItsLineComesBack() {
+        // Japanese runs words together as Chinese does, in its own scripts.
+        val text = "<string name=\"t\">マイアプリケーション</string>\n<string name=\"o\">ほかのもの</string>\n"
+
+        assertEquals(listOf(1), NearMatchLines.find(text, "アプリ").map { it.number })
+    }
 }

@@ -60,7 +60,8 @@ class UpdateFileHandler(
 
                 ToolResult.success(
                     message = "Updated file: $filePath (${content.length} characters)",
-                    data = filePath
+                    data = filePath,
+                    file = file.canonicalPath,
                 )
             }
         } catch (e: Exception) {

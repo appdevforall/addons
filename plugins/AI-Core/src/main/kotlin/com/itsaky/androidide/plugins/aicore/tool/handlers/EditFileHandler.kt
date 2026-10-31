@@ -61,6 +61,7 @@ class EditFileHandler(
         "replace" to ARG_NEW,
         "content" to ARG_NEW,
     )
+    override val changeArgs = listOf(ARG_OLD, ARG_NEW)
 
     companion object {
         const val TOOL_NAME = "edit_file"
@@ -298,11 +299,11 @@ class EditFileHandler(
                     "old_string not found — ${AgentTrace.preview(oldString, 80)}",
                 )
             }
-            return reject(
-                "$ARG_OLD not found in $resolvedPath — read the file first and copy the target " +
-                    "text exactly, including indentation and line breaks" +
-                    NearMatchLines.render(NearMatchLines.find(original, oldString))
-            )
+            val message = "$ARG_OLD not found in $resolvedPath — read the file first and copy the " +
+                "target text exactly, including indentation and line breaks" +
+                NearMatchLines.render(NearMatchLines.find(original, oldString))
+            // What a repeat of this edit gives once it is made; the agent loop tells which it is.
+            return Analysis.Rejected(ToolResult.madeIfUnchanged(message, file = file.canonicalPath))
         }
         val found = match as FileTextMatcher.Match.Found
         if (found.occurrences > 1 && !replaceAll) {
@@ -336,6 +337,7 @@ class EditFileHandler(
     }
 
     private fun reject(message: String): Analysis = Analysis.Rejected(ToolResult.failure(message))
+
 
     /**
      * Rejection for an edit whose old and new text are the same, naming the corrected pair when the
@@ -445,7 +447,8 @@ class EditFileHandler(
                 ToolResult.success(
                     message = "Edited ${ready.filePath} in the editor ($summary); $savedNote. " +
                         "The change can be undone with Ctrl+Z.",
-                    data = ready.filePath
+                    data = ready.filePath,
+                    file = ready.file.canonicalPath,
                 )
             }
         }
@@ -466,7 +469,8 @@ class EditFileHandler(
                 )
                 ToolResult.success(
                     message = "Edited ${ready.filePath} ($summary)",
-                    data = ready.filePath
+                    data = ready.filePath,
+                    file = ready.file.canonicalPath,
                 )
             }
         }

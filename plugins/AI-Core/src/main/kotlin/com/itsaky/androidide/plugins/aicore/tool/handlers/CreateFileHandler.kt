@@ -25,6 +25,7 @@ class CreateFileHandler(
     override val mutatesProject = true
     override val writesFiles = true
     override val pathArgs = listOf("file_path")
+    override val changeArgs = listOf("content")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         var filePath = args["file_path"]?.toString()?.trim()
@@ -51,6 +52,11 @@ class CreateFileHandler(
 
             if (file.exists()) {
                 Log.w(TAG, "File already exists: ${file.absolutePath}")
+                // No write tool deletes a file, so a repeat of a create that worked fails here
+                // whatever was written to the file since: the loop takes that repeat for made.
+                if (file.isFile) {
+                    return ToolResult.alreadyMade("File already exists: $filePath", file = file.canonicalPath)
+                }
                 return ToolResult.failure("File already exists: $filePath")
             }
 
@@ -70,7 +76,8 @@ class CreateFileHandler(
 
             ToolResult.success(
                 message = "Created file: $filePath (${content.length} characters)",
-                data = file.absolutePath
+                data = file.absolutePath,
+                file = file.canonicalPath,
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error creating file at $filePath", e)

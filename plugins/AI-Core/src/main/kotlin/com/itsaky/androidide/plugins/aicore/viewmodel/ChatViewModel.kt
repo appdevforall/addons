@@ -1160,6 +1160,9 @@ class ChatViewModel(
                             handler?.pathsIn(call.args).orEmpty()
                                 .mapTo(mutableSetOf()) { PathGuard.writeKeyOf(it, handler?.correctsPaths == true) }
                         },
+                        // Read as the tool will, so a repeat that spells an argument another way is
+                        // the same change; the file comes from the tool's own result.
+                        changeOf = tools.router::changeOf,
                         writesFiles = { call ->
                             tools.router.getHandler(call.name)?.writesFiles == true
                         },

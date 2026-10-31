@@ -963,13 +963,17 @@ class AgentLoopTest {
     /**
      * Runs [loop] with `edit_file` as the one tool that writes files and `run_shell_command` as one
      * that changes the project without writing a file; results come from [outcomes]. A call's file
-     * is its `path` argument unless [writtenFilesOf] says otherwise.
+     * is its `path` argument unless [writtenFilesOf] says otherwise, and its change is the call
+     * itself unless [changeOf] says otherwise. A success, or a failure that may be a made repeat,
+     * reports the file [resolvedFileOf] resolves its call to, as the real file-writing tools do.
      */
     private suspend fun runWriting(
         replies: List<String>,
         outcomes: Map<String, List<ToolResult>>,
         loop: AgentLoop = writingLoop(),
         writtenFilesOf: ((ToolCall) -> Set<String>)? = null,
+        changeOf: (ToolCall) -> Any = { it },
+        resolvedFileOf: (ToolCall) -> String? = { it.args["path"]?.toString() },
     ): Triple<AgentLoop.Result, MutableList<ChatMessage>, List<String>> {
         val model = ScriptedModel(replies)
         val used = mutableMapOf<String, Int>()
@@ -984,12 +988,14 @@ class AgentLoopTest {
                     val n = used.getOrDefault(call.name, 0)
                     used[call.name] = n + 1
                     outcomes.getValue(call.name).let { it.getOrElse(n) { _ -> it.last() } }
+                        .let { if (it.success || it.alreadyMade || it.madeIfUnchanged) it.copy(file = resolvedFileOf(call)) else it }
                 }
             },
             pathsOf = pathsOf,
             changesPaths = { it.name == "edit_file" || it.name == "run_shell_command" },
             writesFiles = { it.name == "edit_file" },
             writtenFilesOf = writtenFilesOf ?: pathsOf,
+            changeOf = changeOf,
             events = object : AgentLoop.Events {
                 override suspend fun onUnappliedWriteAnswer(turn: Int) { events += "unapplied" }
                 override suspend fun onFinalAnswer(turn: Int, message: String) { events += "final" }
@@ -1011,6 +1017,7 @@ class AgentLoopTest {
 
     private val failedEdit = ToolResult.failure("old_string not found")
     private val appliedEdit = ToolResult.success("edited")
+    private val madeEdit = ToolResult(false, "old_string not found", madeIfUnchanged = true)
 
     @Test
     fun givenAnAnswerOverAFailedEdit_whenTheModelThenEditsSuccessfully_thenItIsToldOnceAndCompletes() = runTest {
@@ -1234,7 +1241,7 @@ class AgentLoopTest {
     fun givenTheSameEditTwiceInOneBatch_whenTheSecondFailsBecauseTheFirstApplied_thenNothingIsOutstanding() = runTest {
         val (result, _, events) = runWriting(
             listOf(edit("a", "foo()") + edit("a", "foo()"), respond),
-            mapOf("edit_file" to listOf(appliedEdit, failedEdit)),
+            mapOf("edit_file" to listOf(appliedEdit, madeEdit)),
         )
 
         assertTrue(result.completed)
@@ -1243,10 +1250,10 @@ class AgentLoopTest {
 
     @Test
     fun givenAnEditThatApplied_whenTheModelIssuesItAgainAfterALook_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
-        // The repeat finds no old_string because the first call replaced it.
+        // The repeat finds no old_string because the first call replaced it, and finds new_string.
         val (result, _, events) = runWriting(
             listOf(edit("a", "foo()"), toolCall("read_file", "a"), edit("a", "foo()"), respond),
-            mapOf("edit_file" to listOf(appliedEdit, failedEdit), "read_file" to listOf(ToolResult.success("lines"))),
+            mapOf("edit_file" to listOf(appliedEdit, madeEdit), "read_file" to listOf(ToolResult.success("lines"))),
         )
 
         assertTrue(result.completed)
@@ -1254,16 +1261,135 @@ class AgentLoopTest {
     }
 
     @Test
-    fun givenAnEditThatApplied_whenAnotherWriteToItsFileCameAfter_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
-        // Had the second edit undone the first, the repeat would have succeeded. It failed, so the
-        // first change is in place or was changed again by the model's own second edit.
+    fun givenAnEditThatApplied_whenAnotherWriteToItsFileCameAfter_thenTheRepeatFailingIsAChangeNotMade() = runTest {
+        // The second write may have put foo() back in a form the repeat cannot find, or changed what
+        // foo() became; the file cannot tell which, so the run is sent to look.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), edit("a", "bar()"), edit("a", "foo()"), respond, respond),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, madeEdit)),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAnEditThatApplied_whenAShellCommandRanAfter_thenTheRepeatFailingIsAChangeNotMade() = runTest {
+        // A command can write any file.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), toolCall("run_shell_command"), edit("a", "foo()"), respond, respond),
+            mapOf("edit_file" to listOf(appliedEdit, madeEdit), "run_shell_command" to listOf(ToolResult.success("ok"))),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAWriteThatNamedNoFile_whenARepeatFailsAfterIt_thenTheRepeatIsAChangeNotMade() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), edit("b", "x"), edit("a", "foo()"), respond, respond),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, madeEdit)),
+            resolvedFileOf = { call -> call.args["path"]?.toString()?.takeIf { it != "b" } },
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAnEditThatApplied_whenItsRepeatFailsForAnotherReason_thenItIsAChangeNotMade() = runTest {
+        // Only a look came between, but an unreadable file is not a change in place.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), toolCall("read_file", "a"), edit("a", "foo()"), respond, respond),
+            mapOf(
+                "edit_file" to listOf(appliedEdit, ToolResult.failure("Cannot read file: a").copy(file = "a")),
+                "read_file" to listOf(ToolResult.success("lines")),
+            ),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAWriteWhoseChangeStaysWhateverCameAfter_whenItsRepeatFails_thenItIsNotAChangeNotMade() = runTest {
+        // A create's file, once made, is there whatever is written to it since.
         val (result, _, events) = runWriting(
             listOf(edit("a", "foo()"), edit("a", "bar()"), edit("a", "foo()"), respond),
-            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit)),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, ToolResult(false, "exists", alreadyMade = true))),
         )
 
         assertTrue(result.completed)
         assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenAnEditThatApplied_whenALaterWritePutItsOldTextBackInAnotherForm_thenTheRepeatFailingIsAChangeNotMade() = runTest {
+        // Hello became Hi; a rewrite from a stale read put Hello back with other indentation, so the
+        // repeat finds neither its old_string nor its new_string. The title still says Hello. Even
+        // naming its file, a failure the tool did not mark already made counts.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "Hello"), edit("a", "subtitle"), edit("a", "Hello"), respond, respond),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit.copy(file = "a"))),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAFirstEditFailing_whenTheFileHappensToShowItsNewText_thenItIsAChangeNotMade() = runTest {
+        // Only a repeat of a change that worked can have failed because it was made.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "guess"), respond, respond),
+            mapOf("edit_file" to listOf(madeEdit)),
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenAnEditThatApplied_whenItsRepeatSpellsThePathAnotherWay_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
+        // The tool resolves both spellings to one file and reports it; the change is the rest of the call.
+        val files = mapOf("strings.xml" to "/p/values/strings.xml", "app/values/strings.xml" to "/p/values/strings.xml")
+        val (result, _, events) = runWriting(
+            listOf(edit("strings.xml", "Old"), edit("app/values/strings.xml", "Old"), respond),
+            mapOf("edit_file" to listOf(appliedEdit, madeEdit)),
+            changeOf = { call -> call.args - "path" },
+            resolvedFileOf = { call -> files[call.args["path"]] },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenTheSameChangeMadeToAnotherFile_whenItsRepeatFailsAsAlreadyMade_thenItIsAChangeNotMade() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(edit("values/strings.xml", "Old"), edit("values-es/strings.xml", "Old"), respond, respond),
+            mapOf("edit_file" to listOf(appliedEdit, madeEdit)),
+            changeOf = { call -> call.args - "path" },
+        )
+
+        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+        assertEquals(listOf("unapplied", "not-made"), events)
+    }
+
+    @Test
+    fun givenEditsThatApplied_whenRepeatsFailAsAlreadyMade_thenEachChangeIsKeyedOnceWhenItWorked() = runTest {
+        // Keying a success can walk the project; keyed again at every later failure, it was once a
+        // walk per earlier success per failure, and its file could have changed meaning meanwhile.
+        var keyed = 0
+        val (result, _, _) = runWriting(
+            listOf(edit("a", "1"), edit("b", "2"), edit("c", "3"), edit("a", "1"), edit("b", "2"), respond),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, appliedEdit, madeEdit, madeEdit)),
+            changeOf = { call -> keyed++; call },
+        )
+
+        assertTrue(result.completed)
+        assertEquals(5, keyed)
     }
 
     @Test
@@ -1276,7 +1402,7 @@ class AgentLoopTest {
                 edit("app/src/main/res/values/strings.xml", "Old"),
                 respond,
             ),
-            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit)),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, madeEdit)),
         )
 
         assertTrue(result.completed)

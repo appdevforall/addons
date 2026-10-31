@@ -223,13 +223,17 @@ class AgentLoop(
      * @param executeTools runs a batch of tool calls.
      * @param pathsOf the project paths a call names; the progress guard counts an earlier look at
      *   one a later call rewrote as a new action again rather than as a repeat.
-     * @param changesPaths whether a call rewrites what it names.
+     * @param changesPaths whether a call rewrites what it names. One that succeeds without writing a
+     *   file, such as a shell command, is taken to have touched every file.
      * @param writesFiles whether a call writes a file's content. Only these calls' failures count as a
      *   change not made, and only their successes as one redone: a shell command also changes the
      *   project, but its success says nothing about a failed edit.
      * @param writtenFilesOf the files a [writesFiles] call writes, each as one key however the call
      *   spelled its path. A key that is a bare file name, for a path that named no existing file, is
      *   also matched by a later write to any path ending in that name.
+     * @param changeOf what a [writesFiles] call changes apart from its file, equal for two calls that
+     *   make the same change however they spell their arguments; the call itself by default. The
+     *   file is the one the tool reports in [ToolResult.file].
      * @param canonicalName the registered name a call's tool resolves to, e.g. `Run_Shell_Command` to
      *   `run_shell_command`; the name itself when none does. Everything keyed by tool name reads it.
      * @param requiredTool a tool the run must call before it may finish, e.g. a web search before a
@@ -245,6 +249,7 @@ class AgentLoop(
         changesPaths: (ToolCall) -> Boolean = { false },
         writesFiles: (ToolCall) -> Boolean = { false },
         writtenFilesOf: (ToolCall) -> Set<String> = pathsOf,
+        changeOf: (ToolCall) -> Any = { it },
         canonicalName: (String) -> String = { it },
         requiredTool: String? = null,
         events: Events = object : Events {},
@@ -353,7 +358,7 @@ class AgentLoop(
             toolsRan = true
             askedToFinish = false
             progress.recordResults(results)
-            unapplied.record(realCalls.zip(results).filter { (call, _) -> writesFiles(call) }, writtenFilesOf)
+            unapplied.record(realCalls.zip(results), writesFiles, changesPaths, writtenFilesOf, changeOf)
             events.onToolResults(turn, realCalls, results)
             history.add(ChatMessage(Role.USER, formatToolResults.format(realCalls, results)))
         }
@@ -371,15 +376,19 @@ class AgentLoop(
      */
     private inner class UnappliedWrites(private val progress: ToolCallProgressGuard) {
         private val failed = mutableSetOf<String>()
-        // Every write that has worked this run: the same call again fails because it made the change.
-        private val applied = mutableSetOf<ToolCall>()
+        // Each change that has worked this run, with its file, and the write count it left the file at.
+        private val applied = mutableMapOf<Pair<Any, String>, Int>()
+        // Successful writes and project changes so far, the last to each file, and the last to any file.
+        private var writes = 0
+        private val lastWriteTo = mutableMapOf<String, Int>()
+        private var lastWriteAnywhere = 0
         private var warned = false
 
         /** Whether a failed change is outstanding, with the check on. */
         val outstanding: Boolean get() = unappliedWriteTurn != null && failed.isNotEmpty()
 
         /**
-         * Records one batch's file writes.
+         * Records one batch: its file writes, and the calls that changed the project otherwise.
          *
          * A success, or a call the user refused or corrected at the approval dialog, settles
          * failures on its file from earlier batches only: the model wrote the batch before it saw
@@ -387,17 +396,34 @@ class AgentLoop(
          * the failed one redone. A later success on that file is taken for the redo. Which change a
          * retry redoes cannot be read off its text, and taking it for another change would report a
          * change that was made as not made. A call that names no file cannot be matched, so any
-         * later success settles it. A call that already worked this run, issued again, fails
-         * because it made the change, so it is not counted, even after another write to its file:
-         * no write tool deletes a file, so a write that undid the change would let the call
-         * succeed again, and one that changed the same text is the model's own later edit, which
-         * redoing the first would overwrite.
+         * later success settles it.
          *
-         * @param writes the batch's file-writing calls with their results.
+         * A failure is not counted when it repeats a change that worked this run, the same change
+         * to the same file as the tool resolved it ([ToolResult.file]), and failed as that repeat
+         * does once the change is made: [ToolResult.alreadyMade] whatever came between, or
+         * [ToolResult.madeIfUnchanged] when nothing has written the file since the change worked.
+         * Nothing is read off the file's text: after another write to it, a rewrite from a stale read
+         * may have put the old text back in a form the repeat cannot find, or the model may have
+         * changed the text again, and the two look alike. Such a repeat counts, and the run is sent to
+         * look. A write that names no file, and any other call that changes the project, such as a
+         * shell command, count as a write to every file.
+         *
+         * @param batch the batch's calls with their results, in the order they ran.
+         * @param writesFiles whether a call writes a file.
+         * @param changesProject whether a call changes the project.
          * @param filesOf the keys of the files a call writes.
+         * @param changeOf what a call changes apart from its file, compared to tell a repeat from
+         *   another change.
          */
-        fun record(writes: List<Pair<ToolCall, ToolResult>>, filesOf: (ToolCall) -> Set<String>) {
+        fun record(
+            batch: List<Pair<ToolCall, ToolResult>>,
+            writesFiles: (ToolCall) -> Boolean,
+            changesProject: (ToolCall) -> Boolean,
+            filesOf: (ToolCall) -> Set<String>,
+            changeOf: (ToolCall) -> Any,
+        ) {
             if (unappliedWriteTurn == null) return
+            val writes = batch.filter { (call, _) -> writesFiles(call) }
             // Keys are looked up only while something is outstanding: an edit's can walk the project.
             if (failed.isNotEmpty()) {
                 for ((call, result) in writes) {
@@ -412,13 +438,31 @@ class AgentLoop(
                     if (files.isEmpty() || result.success) failed.remove(UNNAMED)
                 }
             }
-            writes.filter { (_, result) -> result.success }.mapTo(applied) { (call, _) -> call }
-            for ((call, result) in writes) {
-                if (result.success || result.notApproved || call in applied) continue
+            for ((call, result) in batch) {
+                val write = writesFiles(call)
+                val file = result.file
+                if (result.success) {
+                    if (write && file != null) {
+                        lastWriteTo[file] = ++this.writes
+                        applied[changeOf(call) to file] = this.writes
+                    } else if (write || changesProject(call)) {
+                        lastWriteAnywhere = ++this.writes
+                    }
+                    continue
+                }
+                if (!write || result.notApproved || isMadeRepeat(call, result, changeOf)) continue
                 failed.addAll(filesOf(call).ifEmpty { setOf(UNNAMED) })
             }
             // Re-armed once nothing is outstanding, so a later failure gets its own warning.
             if (failed.isEmpty()) warned = false
+        }
+
+        /** Whether a failed [call] repeats a change that worked and failed only because it is made. */
+        private fun isMadeRepeat(call: ToolCall, result: ToolResult, changeOf: (ToolCall) -> Any): Boolean {
+            val file = result.file ?: return false
+            if (!result.alreadyMade && !result.madeIfUnchanged) return false
+            val madeAt = applied[changeOf(call) to file] ?: return false
+            return result.alreadyMade || (lastWriteTo[file] == madeAt && lastWriteAnywhere < madeAt)
         }
 
         /**
