@@ -1254,22 +1254,28 @@ class AgentLoopTest {
     }
 
     @Test
-    fun givenAnEditThatApplied_whenAnotherWriteToItsFileCameAfter_thenTheRepeatFailingIsAChangeNotMade() = runTest {
-        // The second edit may have removed what the first put there, so the repeat does not
-        // fail because it made the change.
+    fun givenAnEditThatApplied_whenAnotherWriteToItsFileCameAfter_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
+        // Had the second edit undone the first, the repeat would have succeeded. It failed, so the
+        // first change is in place or was changed again by the model's own second edit.
         val (result, _, events) = runWriting(
-            listOf(edit("a", "foo()"), edit("a", "bar()"), edit("a", "foo()"), respond, respond),
+            listOf(edit("a", "foo()"), edit("a", "bar()"), edit("a", "foo()"), respond),
             mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit)),
         )
 
-        assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
-        assertEquals(listOf("unapplied", "not-made"), events)
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
     }
 
     @Test
-    fun givenAnEditThatApplied_whenOnlyAnotherFileWasWrittenAfter_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
+    fun givenAnEditThatApplied_whenAFileOfTheSameNameElsewhereWasWrittenAfter_thenTheRepeatFailingIsNotAChangeNotMade() = runTest {
+        // Two files share a bare name; neither is the other, whatever the second write did.
         val (result, _, events) = runWriting(
-            listOf(edit("a", "foo()"), edit("b", "bar()"), edit("a", "foo()"), respond),
+            listOf(
+                edit("app/src/main/res/values/strings.xml", "Old"),
+                edit("app/src/main/res/values-es/strings.xml", "Viejo"),
+                edit("app/src/main/res/values/strings.xml", "Old"),
+                respond,
+            ),
             mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit)),
         )
 

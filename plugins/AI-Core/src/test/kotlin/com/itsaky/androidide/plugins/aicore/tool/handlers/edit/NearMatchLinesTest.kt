@@ -114,4 +114,20 @@ class NearMatchLinesTest {
 
         assertEquals(listOf(2), NearMatchLines.find(text, "val").map { it.number })
     }
+
+    @Test
+    fun givenAPartOfAnIdentifier_whenFound_thenTheLinesHoldingItComeBackWholeIdentifierFirst() {
+        val text = "my_name = 1\nother = 2\nappName = 3\n"
+
+        assertEquals(listOf(1, 3), NearMatchLines.find(text, "name").map { it.number })
+        assertEquals(listOf(3, 1), NearMatchLines.find(text, "appName").map { it.number })
+    }
+
+    @Test
+    fun givenAPartOfAPhraseInAScriptWithoutSpaces_whenFound_thenItsLineComesBack() {
+        // Chinese runs a sentence together, so the guess is a part of the line's one long run.
+        val text = "<string name=\"title\">我的应用程序</string>\n<string name=\"other\">你好</string>\n"
+
+        assertEquals(listOf(1), NearMatchLines.find(text, "我的应用").map { it.number })
+    }
 }

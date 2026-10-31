@@ -24,26 +24,41 @@ object NearMatchLines {
     private const val MIN_WORD_CHARS = 3
 
     /** Letters of any script, with their combining marks, so a localized string still matches. */
-    private val WORD = Regex("[\\p{L}\\p{M}\\p{N}_]{$MIN_WORD_CHARS,}")
+    private val WORD = Regex("[\\p{L}\\p{M}\\p{N}_]+")
+
+    /** Where an identifier such as `app_name` or `appName` splits into its parts. */
+    private val PART_BREAK = Regex("_+|(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})")
+
+    /** Scripts written without spaces, where a run of letters is a phrase rather than a word. */
+    private val UNSPACED = setOf(
+        Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA,
+        Character.UnicodeScript.THAI, Character.UnicodeScript.LAO, Character.UnicodeScript.KHMER,
+        Character.UnicodeScript.MYANMAR,
+    )
 
     /**
-     * The lines of [text] sharing the most distinct whole words with [snippet].
+     * The lines of [text] sharing the most distinct words with [snippet]. A word matches a whole
+     * word or a part of an identifier, so `val` misses `evaluate` but `name` finds `app_name`; a
+     * word in a script written without spaces matches anywhere in the line, as a part of a phrase.
      * @param text the file contents the edit was matched against.
      * @param snippet the `old_string` that was not found or changed nothing.
      * @return up to [MAX_LINES] lines, best match first and file order among equals; empty when
      *   the snippet has no word of [MIN_WORD_CHARS] or more characters or no line shares one.
      */
     fun find(text: String, snippet: String): List<Line> {
-        val words = WORD.findAll(snippet).map { it.value.lowercase() }.distinct().take(MAX_WORDS).toList()
+        val words = wordsOf(snippet).distinct().take(MAX_WORDS).toList()
         if (words.isEmpty()) return emptyList()
+        val unspaced = words.filterTo(mutableSetOf(), ::isUnspaced)
         return text.lineSequence()
             .withIndex()
             .filter { (_, line) -> line.isNotBlank() }
             .map { (index, line) ->
-                val lineWords = WORD.findAll(line).mapTo(mutableSetOf()) { it.value.lowercase() }
+                val lineWords = wordsOf(line).toSet()
+                val lower = if (unspaced.isEmpty()) "" else line.lowercase()
                 // One character short rather than half of one: a lone surrogate is not text.
                 val shown = line.take(MAX_LINE_CHARS).let { if (it.last().isHighSurrogate()) it.dropLast(1) else it }
-                Line(index + 1, shown, shown.length < line.length) to words.count { it in lineWords }
+                val score = words.count { if (it in unspaced) lower.contains(it) else it in lineWords }
+                Line(index + 1, shown, shown.length < line.length) to score
             }
             .filter { (_, score) -> score > 0 }
             .sortedByDescending { (_, score) -> score }
@@ -51,6 +66,16 @@ object NearMatchLines {
             .map { (line, _) -> line }
             .toList()
     }
+
+    /** Each word of [text] and each part of an identifier, lowercased, of [MIN_WORD_CHARS] or more characters. */
+    private fun wordsOf(text: String): Sequence<String> =
+        WORD.findAll(text)
+            .flatMap { word -> sequenceOf(word.value) + word.value.split(PART_BREAK) }
+            .filter { it.length >= MIN_WORD_CHARS }
+            .map { it.lowercase() }
+
+    private fun isUnspaced(word: String): Boolean =
+        word.codePoints().anyMatch { Character.UnicodeScript.of(it) in UNSPACED }
 
     /**
      * Renders [lines] for a rejection message, keeping leading and trailing spaces visible and a
