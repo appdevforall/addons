@@ -102,7 +102,7 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
 
         /**
          * Inset the auto-shrunk bbox by this fraction of the viewport on each side.
-         * 0.35 leaves the selection at ~30%×30% of the visible area so the user has
+         * 0.35 leaves the selection at most ~30%×30% of the visible area so the user has
          * a comfortable grab-margin to pan with — a bbox that fills the viewport
          * intercepts every pan gesture as a drag-bbox.
          */

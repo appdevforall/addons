@@ -1,14 +1,16 @@
 package org.appdevforall.maps.domain
 
+import kotlin.math.min
+
 /**
  * Pure math behind the bbox picker's "shrink bbox to fit viewport" behavior.
  * No Android / MapLibre dependencies.
  *
  * Mirrors Google Maps' selection-tracks-viewport behavior:
- *  - Triggered ~1s after the camera goes idle (debounced inside the picker).
+ *  - Triggered shortly after the camera goes idle (debounced inside the picker).
  *  - Acts ONLY when the bbox has any edge outside the current viewport.
  *  - On act, returns a new bbox filling the viewport minus a `margin` inset on
- *    every side.
+ *    every side, capped at the old bbox's span on each axis so it never grows.
  *
  * The "is bbox fully inside viewport" check naturally no-ops the cases that
  * shouldn't change the selection:
@@ -58,6 +60,16 @@ internal object AutoShrinkBbox {
         val newE = (viewE - padLon).coerceIn(-180.0, 180.0)
         // Defensive: numeric precision could collapse the box near the poles.
         if (newN <= newS || newE <= newW) return null
-        return Bbox(south = newS, west = newW, north = newN, east = newE)
+        // In a view much wider than the box, the inset alone would enlarge the selection.
+        val halfLat = min(newN - newS, bbox.north - bbox.south) / 2
+        val halfLon = min(newE - newW, bbox.east - bbox.west) / 2
+        val midLat = (newN + newS) / 2
+        val midLon = (newE + newW) / 2
+        return Bbox(
+            south = midLat - halfLat,
+            west = midLon - halfLon,
+            north = midLat + halfLat,
+            east = midLon + halfLon,
+        )
     }
 }
