@@ -132,6 +132,32 @@ class PmtilesHttpServerTemplateTest {
         }
     }
 
+    @Test
+    fun `a tile request is answered at once while idle connections hold workers`() {
+        val data = File(outDir, "tiles.pmtiles").apply { writeBytes(ByteArray(100) { it.toByte() }) }
+        val server = serverClass.getDeclaredConstructor(android.content.res.AssetManager::class.java, String::class.java)
+            .newInstance(ShortAssetManager.create(data, claimedLength = 100), "maps")
+        val port = serverClass.getMethod("start").invoke(server) as Int
+        // MapLibre keeps several sockets open without sending on them; each holds a worker until the read timeout.
+        val idle = List(8) { Socket(InetAddress.getLoopbackAddress(), port) }
+        try {
+            Thread.sleep(200)
+            Socket(InetAddress.getLoopbackAddress(), port).use { client ->
+                client.soTimeout = 2_000
+                client.getOutputStream().write("GET /maps/tiles.pmtiles HTTP/1.1\r\nRange: bytes=10-19\r\n\r\n".toByteArray())
+                val statusLine = try {
+                    client.getInputStream().bufferedReader().readLine()
+                } catch (e: java.net.SocketTimeoutException) {
+                    "no response within 2 s"
+                }
+                assertEquals("HTTP/1.1 206 Partial Content", statusLine)
+            }
+        } finally {
+            idle.forEach { it.close() }
+            serverClass.getMethod("stop").invoke(server)
+        }
+    }
+
     private fun invokeOn(method: Method, target: Any, vararg args: Any?): Any? =
         try {
             method.invoke(target, *args)
