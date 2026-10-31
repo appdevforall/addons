@@ -405,8 +405,10 @@ class AgentLoop(
          * Nothing is read off the file's text: after another write to it, a rewrite from a stale read
          * may have put the old text back in a form the repeat cannot find, or the model may have
          * changed the text again, and the two look alike. Such a repeat counts, and the run is sent to
-         * look. A write that names no file, and any other call that changes the project, such as a
-         * shell command, count as a write to every file.
+         * look. A write that names no file, and any other call that changes the project, count as a
+         * write to every file: a shell command or an MCP tool may write any, so even one that only
+         * read (`cat`) makes a later made repeat count. A create's repeat is taken for made whatever
+         * came between: the file it made is still there, though what it holds may have changed.
          *
          * @param batch the batch's calls with their results, in the order they ran.
          * @param writesFiles whether a call writes a file.

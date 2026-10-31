@@ -47,7 +47,7 @@ class CreateFileHandlerTest {
         // made; the edit since is the model's own, and must not be overwritten with the old content.
         val file = File(projectRoot, "Notes.md").apply { writeText("# Edit\n") }
 
-        val result = create("Notes.md", "# Note\n")
+        val result = create("./Notes.md", "# Note\n")
 
         assertFalse(result.success)
         assertTrue(result.alreadyMade)

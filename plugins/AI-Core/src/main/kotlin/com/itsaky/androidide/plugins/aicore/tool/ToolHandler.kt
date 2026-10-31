@@ -117,7 +117,7 @@ interface ToolHandler {
 
     /**
      * The argument keys that say what a file write changes, apart from its path: two calls with the
-     * same values make the same change. Read only for a tool whose failures can be
+     * same values make the same change. Matters only for a tool whose failures can be
      * [com.itsaky.androidide.plugins.aicore.models.ToolResult.alreadyMade] or
      * [com.itsaky.androidide.plugins.aicore.models.ToolResult.madeIfUnchanged].
      */

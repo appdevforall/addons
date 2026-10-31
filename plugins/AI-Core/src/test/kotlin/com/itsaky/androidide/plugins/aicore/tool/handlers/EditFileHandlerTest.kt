@@ -151,7 +151,7 @@ class EditFileHandlerTest {
         val file = createFile("Main.kt", original)
 
         val result = edit(
-            "file_path" to "Main.kt",
+            "file_path" to "./Main.kt",
             "old_string" to "val zzz = 9",
             "new_string" to "whatever",
         )

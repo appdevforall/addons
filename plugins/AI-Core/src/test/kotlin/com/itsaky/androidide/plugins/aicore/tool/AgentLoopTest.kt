@@ -1274,6 +1274,21 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenAnEditRedoneAfterAnotherWriteToItsFile_whenItIsRepeatedAfterALook_thenTheRepeatIsTakenForMade() = runTest {
+        // The redo is the change's latest success; only writes since that one count.
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "foo()"), edit("a", "bar()"), edit("a", "foo()"), toolCall("read_file", "a"), edit("a", "foo()"), respond),
+            mapOf(
+                "edit_file" to listOf(appliedEdit, appliedEdit, appliedEdit, madeEdit),
+                "read_file" to listOf(ToolResult.success("lines")),
+            ),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
     fun givenAnEditThatApplied_whenAShellCommandRanAfter_thenTheRepeatFailingIsAChangeNotMade() = runTest {
         // A command can write any file.
         val (result, _, events) = runWriting(
@@ -1327,11 +1342,10 @@ class AgentLoopTest {
     @Test
     fun givenAnEditThatApplied_whenALaterWritePutItsOldTextBackInAnotherForm_thenTheRepeatFailingIsAChangeNotMade() = runTest {
         // Hello became Hi; a rewrite from a stale read put Hello back with other indentation, so the
-        // repeat finds neither its old_string nor its new_string. The title still says Hello. Even
-        // naming its file, a failure the tool did not mark already made counts.
+        // repeat finds neither its old_string nor its new_string. The title still says Hello.
         val (result, _, events) = runWriting(
             listOf(edit("a", "Hello"), edit("a", "subtitle"), edit("a", "Hello"), respond, respond),
-            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, failedEdit.copy(file = "a"))),
+            mapOf("edit_file" to listOf(appliedEdit, appliedEdit, madeEdit)),
         )
 
         assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
