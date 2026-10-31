@@ -91,6 +91,23 @@ class AutoShrinkBboxTest {
     }
 
     @Test
+    fun `pan a small box past the edge of a wide view — recentres without growing`() {
+        // A06 device repro, 2026-10-30: a 1669x2223 km box panned past the right edge of a much
+        // wider view came back as 3131x4873 km, because the inset viewport was bigger than the box.
+        val bbox = box(s = -0.5, w = 9.5, n = 0.5, e = 10.5)
+        val result = AutoShrinkBbox.computeShrunkBbox(
+            bbox = bbox,
+            viewN = 10.0, viewS = -10.0, viewE = 10.0, viewW = -10.0,
+            margin = M,
+        )
+        assertNotNull("partial offscreen should still recentre", result)
+        assertEquals("lat span must not grow", 1.0, result!!.north - result.south, 1e-9)
+        assertEquals("lon span must not grow", 1.0, result.east - result.west, 1e-9)
+        assertEquals("recentred on the view", 0.0, (result.north + result.south) / 2, 1e-9)
+        assertEquals("recentred on the view", 0.0, (result.east + result.west) / 2, 1e-9)
+    }
+
+    @Test
     fun `bbox exactly at viewport edge — counts as inside, no shrink`() {
         // Boundary-inclusive: bbox edges touch viewport edges exactly. Should
         // NOT trigger (no overflow). Matches Bbox.contains semantics.

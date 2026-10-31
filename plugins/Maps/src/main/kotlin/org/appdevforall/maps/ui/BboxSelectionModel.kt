@@ -141,7 +141,8 @@ internal class BboxSelectionModel(initialBbox: Bbox) {
     /**
      * The state half of the auto-shrink check: if the current bbox has an edge
      * outside the viewport ([viewN]/[viewS]/[viewE]/[viewW]), shrink it to the
-     * viewport inset by [margin] and apply that as a normal bbox change.
+     * viewport inset by [margin], no larger than it was, and apply that as a
+     * normal bbox change.
      * Returns the new bbox for the Fragment to push onto the overlay, or null
      * when nothing changed (bbox already fully visible / degenerate viewport).
      *
