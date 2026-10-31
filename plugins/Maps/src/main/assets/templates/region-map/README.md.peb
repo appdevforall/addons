@@ -74,7 +74,7 @@ its on-map attribution control):
   — the full license ships in the app at `app/src/main/assets/maps/fonts/notosans/OFL.txt`
   (OFL §2 requires it to travel with the fonts).
 
-> Labels currently bundle **Latin** glyph ranges only. Regions whose names are in a
-> non-Latin script (Cyrillic, Arabic, CJK, etc.) and lack a `name:latin` value will
-> render without those labels. Add the matching Noto glyph ranges under
-> `fonts/notosans/` if you target a non-Latin region.
+> Labels currently bundle **Latin** glyph ranges only. Characters outside them (for example
+> Yoruba tone marks, Cyrillic, Arabic or CJK) are left out of the label, because the tile
+> server answers any range it does not bundle with an empty glyph set. Add the matching Noto
+> glyph ranges under `fonts/notosans/` if you target a region that uses them.

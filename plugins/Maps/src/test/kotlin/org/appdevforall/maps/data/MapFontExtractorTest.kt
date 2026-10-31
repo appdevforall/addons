@@ -59,6 +59,22 @@ class MapFontExtractorTest {
     }
 
     @Test
+    fun `every unbundled range gets an empty file and bundled ranges keep their bytes`() {
+        val root = MapFontExtractor.extract(FakeAssets(), tmp.root)!!
+
+        for (stack in stacks) {
+            val dir = File(root, stack)
+            // MapLibre leaves a tile blank when a range its labels need fails to load.
+            val combining = File(dir, "768-1023.pbf")
+            assertTrue("$combining was not written", combining.isFile)
+            assertEquals(0L, combining.length())
+            assertTrue(File(dir, "65280-65535.pbf").isFile)
+            assertEquals(256, dir.listFiles()!!.size)
+            assertArrayEquals("fonts/$stack/0-255.pbf".toByteArray(), File(dir, "0-255.pbf").readBytes())
+        }
+    }
+
+    @Test
     fun `a second run reuses cached files but re-extracts an empty one`() {
         val root = MapFontExtractor.extract(FakeAssets(), tmp.root)!!
         val emptied = fontFile(root, allAssets[3])

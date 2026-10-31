@@ -10,6 +10,7 @@ import javax.tools.ToolProvider
 /**
  * An [AssetManager] whose `openFd` claims a length the file behind it does not have, and whose
  * stream's `skip` always returns 0. Drives the template server's failed-skip path on a plain JVM.
+ * [missing] instead has no assets at all, for the server's not-found paths.
  */
 object ShortAssetManager {
 
@@ -34,7 +35,10 @@ object ShortAssetManager {
             private final java.io.File file;
             private final long claimed;
             public MapsShortAssetManager(java.io.File file, long claimed) { this.file = file; this.claimed = claimed; }
-            @Override public AssetFileDescriptor openFd(String path) { return new MapsShortFd(file, claimed); }
+            @Override public AssetFileDescriptor openFd(String path) throws java.io.IOException {
+                if (file == null) throw new java.io.FileNotFoundException(path);
+                return new MapsShortFd(file, claimed);
+            }
         }
     """.trimIndent()
 
@@ -44,6 +48,11 @@ object ShortAssetManager {
     fun create(file: File, claimedLength: Long): AssetManager =
         managerClass.getConstructor(File::class.java, Long::class.javaPrimitiveType)
             .newInstance(file, claimedLength) as AssetManager
+
+    /** An [AssetManager] whose `openFd` throws for every path, as for an asset the APK lacks. */
+    fun missing(): AssetManager =
+        managerClass.getConstructor(File::class.java, Long::class.javaPrimitiveType)
+            .newInstance(null, 0L) as AssetManager
 
     private fun compileAndDefine(): Class<*> {
         val compiler = checkNotNull(ToolProvider.getSystemJavaCompiler()) { "needs a JDK compiler" }

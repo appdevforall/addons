@@ -110,7 +110,8 @@ internal object MapTemplateBuilder {
         "app/src/main/assets/maps/style.json",
         "app/src/main/assets/maps/meta.json",
         // Glyph fonts for place/street labels — served by the loopback HTTP
-        // server (style `glyphs` points at it). Latin-covering Noto Sans ranges;
+        // server (style `glyphs` points at it), which answers any other range with
+        // an empty glyph set. Latin-covering Noto Sans ranges;
         // the dir name `notosans` (no space) is the symbol layers' text-font and
         // avoids URL-encoding in the glyph path.
         "app/src/main/assets/maps/fonts/notosans/0-255.pbf",

@@ -19,7 +19,7 @@ object IiabStyleBuilder {
      *
      * @param pmtilesHttpUrl in-process pmtiles HTTP URL, or null when tiles aren't available yet.
      * @param fontsRoot absolute filesystem path of the extracted glyph PBFs, or null — when
-     *   null, labels render as tofu (MapLibre logs a benign style error) but geometry still draws.
+     *   null, glyph loads fail and MapLibre leaves blank every tile that has labels.
      */
     fun buildStyle(pmtilesHttpUrl: String?, fontsRoot: String?): String {
         if (pmtilesHttpUrl == null) return BACKGROUND_ONLY_STYLE
@@ -30,8 +30,8 @@ object IiabStyleBuilder {
         val glyphsUrl = if (fontsRoot != null) {
             "file://$fontsRoot/{fontstack}/{range}.pbf"
         } else {
-            // Fonts unavailable → labels render as tofu, but polygons/lines still render. Pick an
-            // asset:// URL the host can't fulfil; MapLibre logs a benign Style error and proceeds.
+            // Fonts unavailable: an asset:// URL the host can't fulfil. Glyph loads fail, so tiles
+            // with labels stay blank; this only happens when the cache dir can't be created.
             "asset://fonts/{fontstack}/{range}.pbf"
         }
         return """

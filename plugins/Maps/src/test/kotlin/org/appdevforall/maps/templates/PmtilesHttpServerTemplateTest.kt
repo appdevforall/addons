@@ -132,6 +132,32 @@ class PmtilesHttpServerTemplateTest {
         }
     }
 
+    private fun statusFor(request: String): String? {
+        val server = serverClass.getDeclaredConstructor(android.content.res.AssetManager::class.java, String::class.java)
+            .newInstance(ShortAssetManager.missing(), "maps")
+        val handle = serverClass.getDeclaredMethod("handle", Socket::class.java).apply { isAccessible = true }
+        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { listener ->
+            Socket(listener.inetAddress, listener.localPort).use { client ->
+                val accepted = listener.accept()
+                client.getOutputStream().write("GET $request HTTP/1.1\r\n\r\n".toByteArray())
+                invokeOn(handle, server, accepted)
+                client.soTimeout = 2_000
+                return client.getInputStream().bufferedReader().readLine()
+            }
+        }
+    }
+
+    @Test
+    fun `an unbundled glyph range answers an empty 200 so MapLibre still draws the tile`() {
+        // A 404 here makes MapLibre leave blank every tile whose labels need this range.
+        assertEquals("HTTP/1.1 200 OK", statusFor("/maps/fonts/notosans/768-1023.pbf"))
+    }
+
+    @Test
+    fun `a missing file that is not a glyph range is still a 404`() {
+        assertEquals("HTTP/1.1 404 Not Found", statusFor("/maps/tiles.pmtiles"))
+    }
+
     @Test
     fun `a tile request is answered at once while idle connections hold workers`() {
         val data = File(outDir, "tiles.pmtiles").apply { writeBytes(ByteArray(100) { it.toByte() }) }

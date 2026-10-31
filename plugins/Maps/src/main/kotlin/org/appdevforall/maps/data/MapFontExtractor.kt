@@ -13,25 +13,30 @@ import org.appdevforall.maps.PluginLog
  * into a cache directory, then have `style.json` reference them via `file://` at the
  * cache path.
  *
- * Latin coverage only; non-Latin scripts render as tofu boxes until those ranges are
- * added to [BUNDLED_FONT_STACKS].
+ * Only Latin ranges are bundled. Every other range gets an empty file, because MapLibre
+ * leaves blank every tile whose labels need a range that failed to load.
  */
 object MapFontExtractor {
 
     /**
      * Glyph PBFs bundled in plugin assets under `assets/fonts/{stack}/{range}.pbf`.
-     * Latin coverage only; non-Latin scripts render as tofu boxes until those ranges
-     * are added.
+     * Latin coverage only.
      */
     private val BUNDLED_FONT_STACKS: Map<String, List<String>> = mapOf(
         "Noto Sans Regular" to listOf("0-255", "256-511", "512-767", "7680-7935", "8192-8447"),
         "Noto Sans Italic" to listOf("0-255", "256-511", "512-767", "7680-7935", "8192-8447"),
     )
 
+    /** Every range name MapLibre can request, "0-255" through "65280-65535". */
+    private val ALL_RANGES: List<String> = (0 until 256).map { "${it * 256}-${it * 256 + 255}" }
+
     /**
      * Extract bundled glyph PBFs from plugin assets to filesystem cache on first
      * picker open. Copies each PBF once via [ResourceManager.openPluginAsset]; style.json
      * then references them via `file://` at the cache path.
+     *
+     * Writes an empty glyph file for every range not bundled, so a label outside the
+     * bundled ranges drops those characters instead of blanking its tile.
      *
      * Idempotent — skips files that already exist with non-zero size. Must be called
      * off the main thread (it copies ~10 PBFs out of plugin assets on a cold cache);
@@ -70,6 +75,12 @@ object MapFontExtractor {
                     PluginLog.warn("Font cache: extract failed for $stack/$range.pbf", it)
                     dest.delete()
                 }
+            }
+            for (range in ALL_RANGES - ranges.toSet()) {
+                val stub = File(stackDir, "$range.pbf")
+                if (stub.exists()) continue
+                runCatching { stub.createNewFile() }
+                    .onFailure { PluginLog.warn("Font cache: empty range failed for $stack/$range.pbf", it) }
             }
         }
         return root
