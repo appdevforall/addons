@@ -53,8 +53,10 @@ class RegionAdapter(
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = items.size
             override fun getNewListSize() = newItems.size
+            // The folder, not the meta.json id: two folders can carry the same id, and delete is
+            // keyed on the folder too.
             override fun areItemsTheSame(oldPos: Int, newPos: Int) =
-                items[oldPos].info.regionId == newItems[newPos].info.regionId
+                items[oldPos].info.directory == newItems[newPos].info.directory
             override fun areContentsTheSame(oldPos: Int, newPos: Int) =
                 items[oldPos] == newItems[newPos]
         })
