@@ -4,7 +4,6 @@ import android.graphics.PointF
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,8 +61,20 @@ internal class PickerMapController(
     private var cameraIdleListener: MapLibreMap.OnCameraIdleListener? = null
     private var cameraMoveStartedListener: MapLibreMap.OnCameraMoveStartedListener? = null
 
-    /** The pending auto-shrink check, restarted on every camera idle so only the last one runs. */
-    private var autoShrinkJob: Job? = null
+    private val autoShrinkScheduler =
+        AutoShrinkScheduler(
+            delayMs = AUTO_SHRINK_DEBOUNCE_MS,
+            postDelayed = { delayMs, action ->
+                val job =
+                    scope.launch {
+                        delay(delayMs)
+                        if (isViewAlive()) action()
+                    }
+                val cancel: () -> Unit = { job.cancel() }
+                cancel
+            },
+            shrink = ::maybeShrinkBboxToFit,
+        )
 
     /** Loads the style, then wires gestures, camera listeners and projection. */
     fun start(prefillBbox: DoubleArray?) {
@@ -79,7 +90,7 @@ internal class PickerMapController(
 
     /** Cancels the auto-shrink check and unregisters the camera listeners. */
     fun release() {
-        autoShrinkJob?.cancel()
+        autoShrinkScheduler.cancel()
         runCatching {
             cameraMoveListener?.let { map.removeOnCameraMoveListener(it) }
             cameraIdleListener?.let { map.removeOnCameraIdleListener(it) }
@@ -175,12 +186,13 @@ internal class PickerMapController(
                 val center = map.cameraPosition.target ?: return@OnCameraIdleListener
                 selectionModel.updateAnchor(center.latitude, center.longitude)
                 overlay.recomputePixelRect()
-                scheduleAutoShrinkBbox()
+                autoShrinkScheduler.onCameraIdle()
             }
         // Only a REASON_API_GESTURE move is the user driving the viewport. Without this gate the idle
         // after the Refresh flow's own saved-bounds fit collapsed a 1054x1047 km region to 98x160 km.
         val moveStartedListener =
             MapLibreMap.OnCameraMoveStartedListener { reason ->
+                autoShrinkScheduler.onCameraMoveStarted()
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                     selectionModel.noteUserCameraGesture()
                 }
@@ -227,19 +239,9 @@ internal class PickerMapController(
             .getOrNull()
 
     /**
-     * Shrinks the bbox to the viewport [AUTO_SHRINK_DEBOUNCE_MS] after the camera settles, if an
-     * edge left the view. The model ignores idles before the user's first gesture.
+     * Shrinks the bbox to the viewport if an edge left the view. The model ignores idles before the
+     * user's first gesture.
      */
-    private fun scheduleAutoShrinkBbox() {
-        autoShrinkJob?.cancel()
-        autoShrinkJob =
-            scope.launch {
-                delay(AUTO_SHRINK_DEBOUNCE_MS)
-                if (!isViewAlive()) return@launch
-                maybeShrinkBboxToFit()
-            }
-    }
-
     private fun maybeShrinkBboxToFit() {
         val bounds = runCatching { map.projection.visibleRegion.latLngBounds }.getOrNull() ?: return
         // Null means the bbox was already fully visible, or the viewport was degenerate.

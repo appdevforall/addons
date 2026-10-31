@@ -94,11 +94,11 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
         internal const val GPS_DEFAULT_SCREEN_FRACTION = 0.5
 
         /**
-         * Wait this long after the camera goes idle before deciding to shrink
-         * the bbox to fit the new viewport — gives the user time to finish a
-         * multi-step pan/zoom gesture without thrashing the selection.
+         * Wait this long after the camera goes idle before shrinking the bbox to the viewport. Idle
+         * already follows the fling, and a new gesture cancels the wait, so this only covers the
+         * finger lift between two pans.
          */
-        internal const val AUTO_SHRINK_DEBOUNCE_MS = 1_000L
+        internal const val AUTO_SHRINK_DEBOUNCE_MS = 250L
 
         /**
          * Inset the auto-shrunk bbox by this fraction of the viewport on each side.
