@@ -37,6 +37,9 @@ import kotlin.math.sqrt
  *    shifts to a new geographic patch.
  *  - All other touches (outside the box entirely): returned `false` so the
  *    [MapView] underneath receives them and handles pan/pinch-zoom naturally.
+ *  - A second finger during a box drag: the box goes back to where the drag
+ *    started and the gesture is handed to [setMultiTouchTarget], so a pinch
+ *    that starts on the box zooms the map.
  *
  * The opposite corner stays anchored; the two adjacent corners each share one
  * coordinate with the dragged corner. Result is always a valid axis-aligned
@@ -102,6 +105,10 @@ class BboxOverlayView @JvmOverloads constructor(
 
     private var listener: Listener? = null
     private var dragMode: DragMode = DragMode.NONE
+    /** The box when the current drag began, restored if the drag turns into a pinch. */
+    private var dragStartBbox: Bbox? = null
+    /** Receives a gesture the overlay gives up; wired to the map view. */
+    private var multiTouchTarget: ((MotionEvent) -> Boolean)? = null
     /** Last touch position during a TRANSLATE drag. Pixel-deltas between
      *  successive ACTION_MOVE events get projected to lat/lon-deltas. Null
      *  outside an active translate. */
@@ -181,6 +188,11 @@ class BboxOverlayView @JvmOverloads constructor(
         listener = l
     }
 
+    /** Sets the view that takes over a gesture once a second finger lands during a box drag. */
+    fun setMultiTouchTarget(target: ((MotionEvent) -> Boolean)?) {
+        multiTouchTarget = target
+    }
+
     /** Current pixel-projected rect. Mostly used for hit-tests + tests. */
     fun currentBboxPx(): RectF = RectF(rect)
 
@@ -221,6 +233,7 @@ class BboxOverlayView @JvmOverloads constructor(
                 val mode = hitTest(event.x, event.y)
                 if (mode == DragMode.NONE) return false
                 dragMode = mode
+                dragStartBbox = geoBbox
                 if (mode == DragMode.TRANSLATE) {
                     lastTouchPx = PointF(event.x, event.y)
                 }
@@ -228,8 +241,21 @@ class BboxOverlayView @JvmOverloads constructor(
                 return true
             }
 
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (dragMode == DragMode.NONE) return false
+                if (dragMode == DragMode.FORWARD) return forward(event)
+                handOffToMap(event)
+                return true
+            }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (dragMode == DragMode.FORWARD) forward(event)
+                return dragMode != DragMode.NONE
+            }
+
             MotionEvent.ACTION_MOVE -> {
                 if (dragMode == DragMode.NONE) return false
+                if (dragMode == DragMode.FORWARD) return forward(event)
                 if (dragMode == DragMode.TRANSLATE) {
                     handleTranslateMove(event.x, event.y)
                 } else {
@@ -239,20 +265,49 @@ class BboxOverlayView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (dragMode == DragMode.FORWARD) {
+                    forward(event)
+                    endDrag()
+                    return true
+                }
                 if (dragMode != DragMode.NONE) {
                     // Fire ONE listener event at drag-end (with the final
                     // geo bbox). Per-frame fires during drag would re-trigger
                     // the slicer on every pixel, which is wasteful.
                     geoBbox?.let { listener?.onBboxChanged(it) }
-                    dragMode = DragMode.NONE
-                    lastTouchPx = null
-                    parent?.requestDisallowInterceptTouchEvent(false)
+                    endDrag()
                     return true
                 }
                 return false
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    /**
+     * Puts the box back where the drag started and replays the gesture to [multiTouchTarget]: a
+     * synthetic down for the first finger, then the real second-finger down.
+     */
+    private fun handOffToMap(event: MotionEvent) {
+        dragStartBbox?.let { setBboxLatLon(it) }
+        lastTouchPx = null
+        dragMode = DragMode.FORWARD
+        val first = if (event.actionIndex == 0) 1 else 0
+        val down = MotionEvent.obtain(
+            event.downTime, event.eventTime, MotionEvent.ACTION_DOWN, event.getX(first), event.getY(first), 0,
+        )
+        forward(down)
+        down.recycle()
+        forward(event)
+    }
+
+    private fun forward(event: MotionEvent): Boolean = multiTouchTarget?.invoke(event) ?: false
+
+    private fun endDrag() {
+        dragMode = DragMode.NONE
+        dragStartBbox = null
+        lastTouchPx = null
+        parent?.requestDisallowInterceptTouchEvent(false)
     }
 
     /**
@@ -391,7 +446,7 @@ class BboxOverlayView @JvmOverloads constructor(
                     Bbox(south = newSouth, west = current.west, north = current.north, east = newEast)
                 }.getOrNull()
             }
-            DragMode.NONE, DragMode.TRANSLATE -> null
+            DragMode.NONE, DragMode.TRANSLATE, DragMode.FORWARD -> null
         } ?: return
         geoBbox = updated
         recomputePixelRect()
@@ -403,5 +458,5 @@ class BboxOverlayView @JvmOverloads constructor(
     private fun distance(x1: Float, y1: Float, x2: Float, y2: Float): Float =
         sqrt((x1 - x2).pow(2) + (y1 - y2).pow(2))
 
-    private enum class DragMode { NONE, RESIZE_TL, RESIZE_TR, RESIZE_BL, RESIZE_BR, TRANSLATE }
+    private enum class DragMode { NONE, RESIZE_TL, RESIZE_TR, RESIZE_BL, RESIZE_BR, TRANSLATE, FORWARD }
 }
