@@ -54,12 +54,14 @@
         android:layout_height="1dp"
         android:background="?attr/colorOutlineVariant" />
 
-    <!-- Map background + bbox overlay container. -->
+    <!-- Map background + bbox overlay container. Unsplit touch keeps both pinch fingers on one view,
+         so a finger landing on the box cannot drag it while the other pans the map. -->
     <FrameLayout
         android:id="@+id/picker_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:splitMotionEvents="false">
 
         <org.maplibre.android.maps.MapView
             android:id="@+id/map_view"

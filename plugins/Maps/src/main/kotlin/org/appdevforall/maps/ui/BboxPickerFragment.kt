@@ -255,6 +255,7 @@ class BboxPickerFragment : androidx.fragment.app.DialogFragment() {
         //    the selection (onBboxResized); camera pan/zoom just re-projects the fixed
         //    lat/lon bbox to new pixels, it never mutates the selection.
         bboxOverlay.setListener { newBbox -> onBboxResized(newBbox) }
+        bboxOverlay.setMultiTouchTarget { event -> mapView.dispatchTouchEvent(event) }
         btnBack.setOnClickListener { back() }
         btnNext.setOnClickListener { next() }
         // The two estimate lines are what needs explaining, and they stay pressable while Next is disabled.
