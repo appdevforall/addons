@@ -503,6 +503,7 @@ class LocalLlmBackend(
             updateContextWindow { plannedContext = PlannedContext(modelRef, contextSize.contextTokens) }
 
             context.logger.info("Loading model: $modelRef via ${opened.nativePath}")
+            val loadStartNanos = System.nanoTime()
             try {
                 engine.load(
                     nativePath = opened.nativePath,
@@ -510,6 +511,17 @@ class LocalLlmBackend(
                     quantizeKv = contextSize.kvType == KvCacheType.Q8_0,
                     fallbackContextTokens = contextSize.fallbackContextTokens,
                 )
+                // ADFA-6810: measures whether load time tracks file size (I/O-bound) or stays flat
+                // (CPU-bound repacking) -- the input the posix_fadvise/madvise investigation needs.
+                val loadMillis = (System.nanoTime() - loadStartNanos) / 1_000_000
+                val sizeBytes = opened.sizeBytes
+                val throughput = if (loadMillis > 0 && sizeBytes >= 0) {
+                    val mbPerSecond = (sizeBytes / (1024.0 * 1024.0)) / (loadMillis / 1000.0)
+                    ", ${"%.1f".format(mbPerSecond)} MB/s (${ByteSize.format(sizeBytes)})"
+                } else {
+                    ""
+                }
+                context.logger.info("Model load: $loadMillis ms$throughput")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
