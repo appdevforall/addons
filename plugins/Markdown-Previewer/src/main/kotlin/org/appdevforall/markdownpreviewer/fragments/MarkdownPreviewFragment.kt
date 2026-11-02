@@ -1,6 +1,7 @@
 package org.appdevforall.markdownpreviewer.fragments
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -8,6 +9,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -34,6 +38,7 @@ import com.itsaky.androidide.plugins.services.IdeProjectService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.File
 
 class MarkdownPreviewFragment : Fragment() {
@@ -156,8 +161,31 @@ class MarkdownPreviewFragment : Fragment() {
             displayZoomControls = false
             setSupportZoom(true)
             cacheMode = WebSettings.LOAD_NO_CACHE
+            // The preview is built in memory, so nothing it shows needs the network.
+            // ponytail: WebSockets bypass both this and shouldInterceptRequest; ADFA-6793.
+            blockNetworkLoads = true
+            safeBrowsingEnabled = false
         }
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest
+            ): WebResourceResponse? {
+                if (isOnDevice(request.url)) return null
+                val accept = request.requestHeaders["Accept"].orEmpty()
+                return if (accept.startsWith("image/")) blockedImage() else noContent()
+            }
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView,
+                request: WebResourceRequest
+            ): Boolean {
+                if (isOnDevice(request.url)) return false
+                // Only a tap gets a prompt; a script redirecting the page is just blocked.
+                if (request.isForMainFrame && request.hasGesture()) confirmOpenExternally(request.url)
+                return true
+            }
+        }
         webView.setBackgroundColor(
             if (isNightMode()) Color.parseColor("#000000") else Color.WHITE
         )
@@ -482,6 +510,39 @@ class MarkdownPreviewFragment : Fragment() {
                 html.replace(Regex("<html>", RegexOption.IGNORE_CASE)) { "<html><head>$darkModeStyle</head>" }
             else -> "$darkModeStyle$html"
         }
+    }
+
+    // Schemes that never leave the device; about: covers #anchors on about:blank.
+    private fun isOnDevice(uri: Uri): Boolean =
+        uri.scheme?.lowercase() in setOf("data", "about", "blob", "javascript")
+
+    private fun noContent() = WebResourceResponse(
+        "text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0))
+    )
+
+    private fun blockedImage(): WebResourceResponse {
+        val label = getString(R.string.remote_image_blocked)
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        val svg = """<svg xmlns="http://www.w3.org/2000/svg" width="240" height="48">""" +
+            """<rect width="240" height="48" rx="6" fill="#80808033" stroke="#808080"/>""" +
+            """<text x="120" y="29" font-family="sans-serif" font-size="14" fill="#808080" text-anchor="middle">$label</text></svg>"""
+        return WebResourceResponse("image/svg+xml", "utf-8", ByteArrayInputStream(svg.toByteArray()))
+    }
+
+    private fun confirmOpenExternally(uri: Uri) {
+        val ctx = context ?: return
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.open_link_title)
+            .setMessage(getString(R.string.open_link_message, uri.toString()))
+            .setPositiveButton(R.string.open_link_proceed) { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(ctx, R.string.open_link_no_app, Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun isNightMode(): Boolean =

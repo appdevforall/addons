@@ -1,4 +1,5 @@
 #include <android/log.h>
+#include <dlfcn.h>
 #include <jni.h>
 #include <algorithm>
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include "llama.h"
 #include "common.h"
+#include "ggml-backend.h"
 
 #define TAG "AiAgentLocal.llama-android"
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -808,9 +810,52 @@ Java_android_llama_cpp_LLamaAndroid_free_1sampler(JNIEnv *, jobject, jlong sampl
     llama_sampler_free(reinterpret_cast<llama_sampler *>(sampler_pointer));
 }
 
+/**
+ * The CPU backend variants the build ships, best first (ADFA-6757). Each needs every feature of the
+ * one after it plus more, so the first that loads is the best this phone can run. The ARMv8.0 build
+ * runs on every arm64 phone. Must match the variants ggml builds for Android, which
+ * PrebuiltAarAbiTest pins.
+ */
+static const char * const CPU_VARIANTS[] = {
+    "libggml-cpu-android_armv8.6_1.so",  // + int8 matrix multiply
+    "libggml-cpu-android_armv8.2_2.so",  // + fp16 arithmetic
+    "libggml-cpu-android_armv8.2_1.so",  // dot-product
+    "libggml-cpu-android_armv8.0_1.so",  // every arm64 phone
+};
+
+/**
+ * Loads the CPU backend variant that suits this phone.
+ *
+ * Each variant reports a score for the phone it is running on, and ggml refuses one that scores zero,
+ * so trying them best first stops at the best supported. Loaded by bare name, not from a directory:
+ * the linker then searches wherever this library came from, which is a real directory when the IDE's
+ * plugin loader extracted it and the inside of an APK when it was not (a device test). Without this
+ * call there is no CPU backend at all, because none is linked in.
+ *
+ * Runs once: the run loop calls backend_init every time a loop is created, and a second load would
+ * register the backend twice.
+ */
+static void load_cpu_backend() {
+    static std::once_flag loaded;
+    std::call_once(loaded, [] {
+        for (const char * variant : CPU_VARIANTS) {
+            if (ggml_backend_load(variant) != nullptr) {
+                LOGi("backends: loaded CPU variant %s", variant);
+                return;
+            }
+            // ggml logs that it failed but not why; dlerror still holds the reason, or is null when
+            // the variant loaded and declined this CPU.
+            const char * reason = dlerror();
+            if (reason != nullptr) LOGe("backends: %s did not load: %s", variant, reason);
+        }
+        LOGe("backends: no CPU variant loaded; generation will fail");
+    });
+}
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_backend_1init(JNIEnv *, jobject, jboolean numa) {
+    load_cpu_backend();
     llama_backend_init();
 }
 

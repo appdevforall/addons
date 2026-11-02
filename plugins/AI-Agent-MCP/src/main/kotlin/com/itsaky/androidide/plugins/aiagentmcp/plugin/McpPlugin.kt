@@ -399,258 +399,284 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Lets the Agent use tools from remote MCP servers you configure. Needs a network connection.",
+            summary = "Lets the Agent use tools from MCP servers that you add. (Internet access is required.)",
             detail = """
-                <p><b>AI Agent MCP</b> connects the Agent to
-                <b>Model Context Protocol</b> servers — issue trackers,
-                documentation indexes, internal APIs — so their tools appear
-                alongside the Agent's own.</p>
-                <p>Install <b>AI Core</b> as well, then add a server under
-                <b>Preferences &rarr; Configuration &rarr; MCP servers</b>. Tools
-                are off until you switch them on, and every remote tool asks for
-                your approval before it runs.</p>
+                MCP (Model Context Protocol) servers give the Agent extra tools, such as
+                access to an issue tracker or a documentation site.<br><br>To use this
+                add-on, you must also install AI Core. Then go to <b>Preferences → MCP
+                servers</b> and add a server. Each tool stays off until you turn it on, and
+                the Agent asks for your approval every time it uses one.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_ADD_SERVER,
-            summary = "Add an MCP server by URL, with an optional access token.",
+            summary = "Adds an MCP server so the Agent can use its tools.",
             detail = """
-                <p>Asks for a name, the server's MCP endpoint URL and, when the
-                server needs one, a token.</p>
-                <p>The name is only a label, but it also prefixes that server's
-                tool names so the Agent can tell two servers apart. The token is
-                encrypted with the Android Keystore; only the ciphertext is
-                written to disk.</p>
+                In the dialog, enter a name and the server's endpoint URL. If the server
+                requires a token, enter that too.<br><br>The Agent puts the name in front of
+                each of this server's tool names so it can tell servers apart. CoGo stores
+                the token encrypted on this device.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SERVER_ROW,
-            summary = "Tap to edit this server, its token and which of its tools the Agent may use.",
+            summary = "Tap to edit this server, its token, and which of its tools the Agent can use.",
             detail = """
-                <p>Opens the server's details: name, URL, token, and the list of
-                tools it advertises with a switch for each.</p>
-                <p>The tool list comes from the last successful connection. If it is
-                empty, tap <b>Connect</b> — the server may have been
-                unreachable when the IDE started.</p>
+                Each tool has its own switch. The tool list comes from the last time CoGo
+                connected to the server. If the list is empty, tap <b>Connect</b>. The
+                server may not have been reachable when CoGo started.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SERVER_ENABLED,
-            summary = "Switch the whole server off without deleting it or losing your tool choices.",
+            summary = "Turns this server on or off without deleting it.",
             detail = """
-                <p>A disabled server contributes no tools to the Agent and is not
-                contacted. Its URL, token and per-tool switches are kept, so
-                turning it back on restores exactly what you had.</p>
+                While the server is off, CoGo doesn't connect to it and the Agent can't use
+                its tools. When you turn it back on, its URL, token, and tool switches are as
+                you left them.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SERVER_NAME,
-            summary = "Your label for this server. It also prefixes the tool names the Agent sees.",
+            summary = "A name that tells you which server this is. The Agent also uses it to tell this server's tools apart from other servers' tools.",
             detail = """
-                <p>Only a label, so name it whatever tells you which server this
-                is — <b>Company GitHub</b>, <b>Staging</b>, <b>Docs</b>.</p>
-                <p>It is also how the Agent tells two servers' tools apart: the
-                first few characters, lowercased and reduced to letters, digits
-                and <code>_</code>, are prefixed to every tool this server
-                offers. Renaming the server therefore renames its tools, so a
-                chat already open needs a <b>Connect</b> to see them.</p>
+                Use any name that helps you recognize the server, such as Company GitHub,
+                Staging, or Docs.<br><br>If you rename the server, its tool names change
+                too. To see the new names in a chat that's already open, tap <b>Connect</b>.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SERVER_URL,
-            summary = "The server's MCP endpoint, usually an https:// URL ending in /mcp.",
+            summary = "The address of the server's MCP endpoint. It usually starts with <code>https://</code> and ends with <code>/mcp</code>.",
             detail = """
-                <p>This plugin speaks MCP's <b>Streamable HTTP</b> transport: one
-                POST per call, answered with JSON or with a stream of it.</p>
-                <p>A server that offers only the older stdio transport cannot be
-                used from a phone at all, and one that offers the deprecated
-                HTTP+SSE transport is not supported here.</p>
-                <p>Use <code>https://</code>. Plain <code>http://</code> is
-                accepted only for a server on this device —
-                <code>localhost</code>, <code>127.0.0.1</code> or
-                <code>[::1]</code>, such as one started in the Terminal — whose
-                traffic never leaves the phone. Anywhere else, the home network
-                included, Save refuses it.</p>
+                CoGo works with servers that support the Streamable HTTP connection type. If
+                the server's documentation lists more than one address, use the one for
+                Streamable HTTP.<br><br>Servers that provide only a command to run, with no
+                web address (stdio), or that support only the older HTTP+SSE type, won't
+                work.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SERVER_TOKEN,
-            summary = "Optional bearer token, encrypted on this device and sent only to this server.",
+            summary = "The access token for this server. If the server doesn't require one, leave this empty.",
             detail = """
-                <p>Sent as an <code>Authorization: Bearer</code> header, never in
-                the URL — query strings leak into logs and proxies.</p>
-                <p>It is encrypted with a key held in the Android Keystore, so a
-                copy of the settings file is useless on another device. Leave it
-                empty for a server that needs no token.</p>
-                <p>It is never sent in the clear over a network: a server off
-                this device needs an <code>https://</code> URL, and only a
-                server on this device may use <code>http://</code>.</p>
+                CoGo stores the token encrypted on this device.<br><br>A token works only
+                with an endpoint URL that starts with <code>https://</code>. If the URL
+                starts with <code>http://</code>, CoGo won't save the server, because the
+                token would be sent unencrypted.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_CLEAR_CREDENTIAL,
-            summary = "Forget the token and headers stored for this server.",
+            summary = "Deletes the token and any extra headers saved for this server. (Emptying the token field doesn't delete a saved token.)",
             detail = """
-                <p>The token field never shows what is stored, and leaving it
-                empty means "keep it" — so this is the way back to a server
-                that needs no credential at all.</p>
-                <p>It removes the stored token <em>and</em> every extra header,
-                and drops the open connection that was using them. Use it after
-                pasting the wrong token, when a server stops requiring auth, or
-                when the stored value can no longer be decrypted on this
-                device.</p>
+                Use this if you saved the wrong token, if the server no longer requires a
+                token, or if CoGo can no longer read the saved token. CoGo also closes the
+                server's current connection.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_ADD_HEADER,
-            summary = "Send an extra header with every request, for a server that needs more than a token.",
+            summary = "Adds an extra header that CoGo sends with every request to this server. Use it if the server requires more than a token.",
             detail = """
-                <p>Some servers route on something the URL and the token do
-                not carry — an API key, an environment, a client id. Add the
-                header's name and value here and every request to this server
-                carries it.</p>
-                <p>Values are encrypted with the token, since a header is as
-                often a credential. Names this plugin sets itself
-                (<code>Accept</code>, <code>Content-Type</code> and the two
-                <code>Mcp-</code> headers) are refused — overriding them would
-                break the protocol.</p>
+                Some servers require extra information that isn't part of the URL or the
+                token, such as an API key, an environment name, or a client ID. The server's
+                documentation tells you the header name and value to use.<br><br>CoGo stores
+                header values encrypted, like the token. You can't use the names CoGo sets
+                itself: <code>Accept</code>, <code>Content-Type</code>, and the two names
+                that start with <code>Mcp-</code>.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_HEADER_NAME,
-            summary = "The header's name, such as X-Api-Key. Letters, digits and - _ . only.",
+            summary = "The header's name, such as <code>X-Api-Key</code>. Use only letters, digits, and the symbols <code>-</code>, <code>_</code>, and <code>.</code>.",
             detail = """
-                <p>Must be a real header name: letters, digits and the
-                punctuation HTTP allows in one. A space or a colon is refused as
-                you save, with the reason shown under the row.</p>
-                <p>The four names this plugin sets itself — <code>Accept</code>,
-                <code>Content-Type</code> and the two <code>Mcp-</code> headers —
-                are refused too, because overriding them would break the protocol
-                and the failure would look like a broken server.</p>
+                When you tap <b>Save</b>, CoGo checks the name. If there's a problem, the
+                reason is displayed under the header.<br><br>You can't use
+                <code>Accept</code>, <code>Content-Type</code>, or the two
+                <code>Mcp-</code> headers, because CoGo sets those itself.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_HEADER_VALUE,
-            summary = "What to send for this header. Encrypted on this device, like the token.",
+            summary = "The value to send for this header. CoGo stores it encrypted on this device.",
             detail = """
-                <p>Sent verbatim with every request to this server. An empty
-                value is allowed, since an empty header is occasionally
-                meaningful, but a line break is not — one would forge a second
-                header at the socket.</p>
-                <p>Stored encrypted with the token rather than beside the URL: a
-                header is as often a credential as the token is, and nothing here
-                can tell which is which.</p>
+                CoGo sends the value exactly as you type it, so include everything the
+                server's documentation shows. For example, some values start with a word
+                such as <code>Bearer</code> or <code>Basic</code>. The value can be empty,
+                but it can't contain a line break.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_HEADER_REMOVE,
-            summary = "Drop this header. It is forgotten once you save.",
+            summary = "Removes this header. CoGo deletes it when you tap <b>Save</b>.",
             detail = """
-                <p>Takes the row off the screen; the stored header goes when you
-                save, so leaving by <b>Cancel</b> keeps it.</p>
-                <p>A row left completely blank needs no removing — it is ignored
-                on save rather than stored empty.</p>
+                If a header's name and value are both empty, you don't need to remove it.
+                CoGo ignores it when you save.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_BACK,
-            summary = "Return to Preferences. Your servers and switches are already saved.",
-            detail = """
-                <p>Nothing on this screen is held until you leave it: adding a
-                server, switching one on and switching a tool on each save as
-                you do them.</p>
-            """.trimIndent(),
+            summary = "Returns to Preferences. Your changes on this screen are automatically saved.",
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_CONNECT,
-            summary = "Save this server, connect to it, and list the tools it offers below.",
+            summary = "Saves this server, connects to it, and lists its tools below.",
             detail = """
-                <p>Saves what you typed, performs the MCP handshake and reads the
-                server's tool catalogue, then reports what happened in one
-                sentence. Tools that disappeared are removed along with their
-                switches; new ones arrive switched <b>off</b>.</p>
-                <p>A server that completes the handshake but offers no tool
-                catalogue is still reported as reachable — some servers expose
-                only prompts or resources, which this plugin does not use.</p>
-                <p>The Agent reads this list from memory, so connecting again is
-                also what makes a newly added tool visible to a chat that is
-                already open.</p>
+                New tools are off until you turn them on. Tools the server no longer offers
+                are removed.<br><br>If CoGo connects but no tools are listed, the server may
+                offer only features CoGo doesn't use, such as prompts.<br><br>To use a newly
+                added tool in a chat that's already open, tap <b>Connect</b> again.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SHOW_DETAILS,
-            summary = "See exactly what was sent to the server and what it answered.",
+            summary = "Shows exactly what CoGo sent to the server and how the server answered.",
             detail = """
-                <p>Appears under a Connect that failed. It lists every request
-                the attempt made — method, URL, headers and body — and the
-                server's status line, headers and body for each, in the order
-                they happened.</p>
-                <p>The token and the values of your extra headers are hidden,
-                keeping only the scheme in front (such as <code>Bearer</code>)
-                and their length, and are masked wherever the server echoes
-                them back. <b>Copy</b> puts the whole transcript on the
-                clipboard, ready to paste into a bug report.</p>
+                This button is displayed only after a connection attempt fails. The log
+                lists each request and the server's response, in order.<br><br>Your token
+                and header values are hidden in the log. To paste the log into a bug report,
+                tap <b>Copy</b>.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_TOOL_TOGGLE,
-            summary = "Let the Agent use this one tool. Off by default — pick only what you need.",
+            summary = "Lets the Agent use this tool. Each tool is off until you turn it on.",
             detail = """
-                <p>Every switched-on tool costs prompt space on every message, and
-                a large server can advertise ninety of them, so they start off and
-                the Agent only ever sees the ones you chose.</p>
-                <p>Switching one on does not let it run unattended: a remote tool
-                asks for approval on every call, showing the arguments it would
-                send.</p>
+                Turn on only the tools you need. Each tool you turn on takes up space in
+                every message the Agent sends, which leaves less room for your
+                conversation.<br><br>Turning a tool on doesn't let it run on its own. Every
+                time the Agent wants to use the tool, it asks for your approval and shows
+                what it will send.
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
     )
 
