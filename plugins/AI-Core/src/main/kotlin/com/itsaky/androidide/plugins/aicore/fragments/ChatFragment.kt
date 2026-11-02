@@ -18,6 +18,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -86,11 +87,13 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         const val STATE_DRAFT_BEFORE_EDIT = "draft_before_edit"
         const val STATE_FILES_BEFORE_EDIT = "files_before_edit"
         const val STATE_EDIT_FILES = "edit_files"
+        const val STATE_VIEW_MODEL_TOKEN = "view_model_token"
     }
 
     /**
      * Whether this is the chat shown over the whole screen rather than the one in the bottom
-     * sheet. Both show the same conversation, since the ViewModel belongs to the plugin.
+     * sheet. Both show the same conversation, composer and edit, since the ViewModel belongs to
+     * the plugin and holds them.
      */
     protected open val isFullScreen: Boolean = false
 
@@ -100,7 +103,9 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private lateinit var viewModel: ChatViewModel
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var markwon: Markwon
-    private val contextFiles = mutableListOf<File>()
+
+    /** Set from the full-screen tap until this chat stops, so a double tap opens one screen. */
+    private var fullScreenLaunchPending = false
 
     private var composer: ComposerAutoHideController? = null
     private var sidebar: ChatSidebarController? = null
@@ -141,16 +146,6 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     ) { uri ->
         if (uri != null) readImport(uri)
     }
-
-    /**
-     * The sent prompt loaded back into the composer for editing, or null outside edit mode. Send
-     * then replaces that prompt instead of adding a new one.
-     */
-    private var editingMessageId: String? = null
-
-    /** What the composer held before Edit borrowed it, put back when the edit ends either way. */
-    private var draftBeforeEdit: String = ""
-    private var filesBeforeEdit: List<File> = emptyList()
 
     /** The message list's layout-declared padding, before any cutout inset is added. */
     private val basePadding = Rect()
@@ -221,11 +216,6 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         if (::chatAdapter.isInitialized) {
             chatAdapter.stopAllAnimations()
         }
-        // The composer goes with the view, so the next prompt must carry the draft's files again.
-        if (editingMessageId != null) viewModel.setContextFiles(filesBeforeEdit)
-        editingMessageId = null
-        draftBeforeEdit = ""
-        filesBeforeEdit = emptyList()
         super.onDestroyView()
         // runInFlight=true here, followed by that run still reporting, is the tab-switch fix
         // working; the run being gone from the trace after it is the bug coming back. Guarded
@@ -252,6 +242,7 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
      */
     override fun onStop() {
         super.onStop()
+        fullScreenLaunchPending = false
         if (::viewModel.isInitialized) {
             viewModel.persistState()
         }
@@ -263,12 +254,14 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         composer?.saveState(outState)
         // The same holds while the export picker is up, which is exactly when the IDE is backgrounded.
         outState.putString(STATE_PENDING_EXPORT, pendingExportSessionId)
-        // A tab switch rebuilds this fragment and restores the edited text, so edit mode must follow.
-        val editingId = editingMessageId ?: return
-        outState.putString(STATE_EDITING_ID, editingId)
-        outState.putString(STATE_DRAFT_BEFORE_EDIT, draftBeforeEdit)
-        outState.putStringArrayList(STATE_FILES_BEFORE_EDIT, ArrayList(filesBeforeEdit.map { it.path }))
-        outState.putStringArrayList(STATE_EDIT_FILES, ArrayList(contextFiles.map { it.path }))
+        // The ViewModel keeps an edit across tab switches, but not across a killed process.
+        if (!::viewModel.isInitialized) return
+        val edit = viewModel.editInProgress.value ?: return
+        outState.putString(STATE_VIEW_MODEL_TOKEN, viewModel.instanceToken)
+        outState.putString(STATE_EDITING_ID, edit.messageId)
+        outState.putString(STATE_DRAFT_BEFORE_EDIT, edit.draftBefore)
+        outState.putStringArrayList(STATE_FILES_BEFORE_EDIT, ArrayList(edit.filesBefore.map { it.path }))
+        outState.putStringArrayList(STATE_EDIT_FILES, ArrayList(viewModel.contextFiles.value.map { it.path }))
     }
 
     override fun onViewStateRestored(savedInstanceState: Bundle?) {
@@ -277,22 +270,25 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     }
 
     /**
-     * Re-enters the edit a tab switch interrupted, keeping the edited text the view just restored;
-     * ends it instead, draft back in place, when that prompt is gone or can no longer change.
+     * Re-enters the edit a killed process interrupted, keeping the edited text the view just
+     * restored; ends it instead, draft back in place, when that prompt is gone or can no longer
+     * change. A ViewModel that outlived the saved state is already right, edit ended or not.
      */
     private fun restoreEdit(state: Bundle) {
+        if (state.getString(STATE_VIEW_MODEL_TOKEN) == viewModel.instanceToken) return
         val id = state.getString(STATE_EDITING_ID) ?: return
-        val edited = binding.promptInputEdittext.text?.toString().orEmpty()
-        val editFiles = state.getStringArrayList(STATE_EDIT_FILES).orEmpty().map(::File)
-        editingMessageId = id
-        draftBeforeEdit = state.getString(STATE_DRAFT_BEFORE_EDIT).orEmpty()
-        filesBeforeEdit = state.getStringArrayList(STATE_FILES_BEFORE_EDIT).orEmpty().map(::File)
+        val edit = ChatViewModel.EditInProgress(
+            messageId = id,
+            draftBefore = state.getString(STATE_DRAFT_BEFORE_EDIT).orEmpty(),
+            filesBefore = state.getStringArrayList(STATE_FILES_BEFORE_EDIT).orEmpty().map(::File),
+        )
         val message = viewModel.messages.value.firstOrNull { it.id == id }
-        if (message == null || !viewModel.canChangePrompts.value) return endEdit()
-        beginEdit(message)
-        binding.promptInputEdittext.setText(edited)
-        binding.promptInputEdittext.setSelection(edited.length)
-        replaceContextFiles(editFiles)
+        if (message == null || !viewModel.canChangePrompts.value) {
+            viewModel.setComposerDraft(edit.draftBefore)
+            viewModel.setContextFiles(edit.filesBefore)
+            return
+        }
+        viewModel.restoreEdit(edit, state.getStringArrayList(STATE_EDIT_FILES).orEmpty().map(::File))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -311,7 +307,6 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         setupFullScreenToggle()
         setupRecyclerView()
         setupInputArea()
-        restoreContextChips()
         setupCutoutPadding()
         setupComposer(savedInstanceState)
         setupStatusBar()
@@ -323,7 +318,7 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             "chat view created runInFlight=${viewModel.agentState.value.isRunning} " +
                 "state=${viewModel.agentState.value.traceLabel} " +
                 "messages=${viewModel.messages.value.size} " +
-                "contextFiles=${contextFiles.size} " +
+                "contextFiles=${viewModel.contextFiles.value.size} " +
                 "pendingApproval=${viewModel.pendingApprovalRequest.value?.toolName}"
         )
 
@@ -613,11 +608,12 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             binding.root,
         )
         binding.promptInputEdittext.bindShortcuts(ChatShortcuts.SEND_MESSAGE runs ::sendPrompt)
+        binding.promptInputEdittext.doAfterTextChanged { viewModel.setComposerDraft(it?.toString().orEmpty()) }
 
         binding.btnAddContext.setOnClickListener {
             showFilePicker()
         }
-        binding.btnCancelEdit.setOnClickListener { endEdit() }
+        binding.btnCancelEdit.setOnClickListener { viewModel.endEdit() }
 
         // Anchored on the bar, not promptInputEdittext: long-press there is the paste menu.
         wireTooltip(binding.btnAddContext, AiCorePlugin.TOOLTIP_TAG_CONTEXT_FILES)
@@ -636,8 +632,8 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private fun sendPrompt() {
         val message = binding.promptInputEdittext.text?.toString() ?: return
         if (message.isBlank()) return
-        editingMessageId?.let { id ->
-            sendEdit(id, message)
+        viewModel.editInProgress.value?.let { edit ->
+            sendEdit(edit.messageId, message)
             return
         }
         if (!viewModel.sendMessage(message)) return
@@ -653,11 +649,11 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         when (viewModel.editPrompt(messageId, text)) {
             ChatViewModel.EditResult.STARTED -> {
                 composer?.hideKeyboard()
-                endEdit()
+                viewModel.endEdit()
             }
             ChatViewModel.EditResult.BUSY -> showInfoSnackbar(getString(R.string.msg_edit_stop_first))
             ChatViewModel.EditResult.NOT_EDITABLE -> {
-                endEdit()
+                viewModel.endEdit()
                 showInfoSnackbar(getString(R.string.msg_edit_unavailable))
             }
             ChatViewModel.EditResult.REFUSED -> Unit
@@ -669,44 +665,34 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
      * until Send; the draft the composer held is kept aside and comes back when the edit ends.
      */
     private fun beginEdit(message: ChatMessage) {
-        val binding = _binding ?: return
         if (!viewModel.canChangePrompts.value) {
             showInfoSnackbar(getString(R.string.msg_edit_stop_first))
             return
         }
-        // Moving the edit to another prompt keeps the draft from before the first one.
-        if (editingMessageId == null) {
-            draftBeforeEdit = binding.promptInputEdittext.text?.toString().orEmpty()
-            filesBeforeEdit = contextFiles.toList()
-        }
-        editingMessageId = message.id
-        chatAdapter.editingMessageId = message.id
         AgentTrace.detail("UI", "edit started files=${message.contextFiles?.size ?: 0}")
-        // Files deleted since the prompt was sent are left out rather than attached as empty.
-        replaceContextFiles(message.contextFiles.orEmpty().map(::File).filter { it.isFile })
-        binding.promptInputEdittext.setText(message.text)
-        binding.promptInputEdittext.setSelection(binding.promptInputEdittext.length())
-        // Only an older prompt forks, so only there does Send keep the original.
-        binding.editBannerText.setText(
-            if (viewModel.editForks(message.id)) R.string.chat_editing_message_fork
-            else R.string.chat_editing_message
-        )
-        binding.editBanner.isVisible = true
+        viewModel.beginEdit(message)
         composer?.focusInput()
     }
 
-    /** Leaves edit mode, putting back the draft and files the composer held before it began. */
-    private fun endEdit() {
-        if (editingMessageId == null) return
-        editingMessageId = null
-        if (::chatAdapter.isInitialized) chatAdapter.editingMessageId = null
+    /** Shows [edit]'s banner and marks its prompt, or clears both outside edit mode. */
+    private fun renderEdit(edit: ChatViewModel.EditInProgress?) {
         val binding = _binding ?: return
-        binding.editBanner.isVisible = false
-        binding.promptInputEdittext.setText(draftBeforeEdit)
-        binding.promptInputEdittext.setSelection(binding.promptInputEdittext.length())
-        replaceContextFiles(filesBeforeEdit)
-        draftBeforeEdit = ""
-        filesBeforeEdit = emptyList()
+        chatAdapter.editingMessageId = edit?.messageId
+        binding.editBanner.isVisible = edit != null
+        if (edit == null) return
+        // Only an older prompt forks, so only there does Send keep the original.
+        binding.editBannerText.setText(
+            if (viewModel.editForks(edit.messageId)) R.string.chat_editing_message_fork
+            else R.string.chat_editing_message
+        )
+    }
+
+    /** Puts [draft] in the composer unless it already holds it, so typing keeps its caret. */
+    private fun renderComposerDraft(draft: String) {
+        val input = _binding?.promptInputEdittext ?: return
+        if (input.text?.toString() == draft) return
+        input.setText(draft)
+        input.setSelection(draft.length)
     }
 
     /**
@@ -803,6 +789,9 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 launch { observePendingApprovalRequest() }
                 launch { observeEditableMessage() }
                 launch { viewModel.retryableErrorIds.collect { chatAdapter.retryableErrorIds = it } }
+                launch { viewModel.contextFiles.collect(::renderContextChips) }
+                launch { viewModel.composerDraft.collect(::renderComposerDraft) }
+                launch { viewModel.editInProgress.collect(::renderEdit) }
             }
         }
     }
@@ -846,8 +835,8 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         ).collect { (canChange, versions, messages) ->
             chatAdapter.canChangePrompts = canChange
             chatAdapter.promptVersions = versions
-            val editing = editingMessageId ?: return@collect
-            if (messages.none { it.id == editing }) endEdit()
+            val editing = viewModel.editInProgress.value?.messageId ?: return@collect
+            if (messages.none { it.id == editing }) viewModel.endEdit()
         }
     }
 
@@ -968,54 +957,25 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         }
 
         val dialog = FilePickerDialogFragment.newInstance(startPath) { files ->
-            addContextFiles(files)
+            viewModel.addContextFiles(files)
         }
         composer?.pauseUntilClosed(dialog.lifecycle)
         dialog.show(parentFragmentManager, "file_picker")
     }
 
-    /**
-     * Rebuilds the attached-file chips from the ViewModel. It keeps the attachments across a tab
-     * switch, so without this they would still go into the next prompt with nothing on screen
-     * naming them.
-     */
-    private fun restoreContextChips() {
-        contextFiles.clear()
-        contextFiles.addAll(viewModel.contextFiles)
-        contextFiles.forEach(::addChipForFile)
-    }
-
-    /** Swaps every attached-file chip for [files], and hands the ViewModel the same list. */
-    private fun replaceContextFiles(files: List<File>) {
+    /** Shows one chip per attached file; closing a chip detaches its file. */
+    private fun renderContextChips(files: List<File>) {
         val binding = _binding ?: return
-        contextFiles.clear()
         binding.contextChipGroup.removeAllViews()
-        updateContextChipVisibility()
-        addContextFiles(files)
-    }
-
-    private fun addContextFiles(files: List<File>) {
         files.forEach { file ->
-            if (!contextFiles.contains(file)) {
-                contextFiles.add(file)
-                addChipForFile(file)
-            }
+            binding.contextChipGroup.addView(
+                Chip(requireContext()).apply {
+                    text = file.name
+                    isCloseIconVisible = true
+                    setOnCloseIconClickListener { viewModel.removeContextFile(file) }
+                }
+            )
         }
-        viewModel.setContextFiles(contextFiles)
-    }
-
-    private fun addChipForFile(file: File) {
-        val chip = Chip(requireContext()).apply {
-            text = file.name
-            isCloseIconVisible = true
-            setOnCloseIconClickListener {
-                contextFiles.remove(file)
-                binding.contextChipGroup.removeView(this)
-                viewModel.setContextFiles(contextFiles)
-                updateContextChipVisibility()
-            }
-        }
-        binding.contextChipGroup.addView(chip)
         updateContextChipVisibility()
     }
 
@@ -1031,7 +991,7 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         when (action) {
             ChatAdapter.ACTION_RETRY -> {
                 // First, so the retried prompt carries the draft's files and not the edit's.
-                endEdit()
+                viewModel.endEdit()
                 // The prompt behind this row, not its text: the row may be a tool failure.
                 viewModel.retryLastRun()
             }
@@ -1092,6 +1052,8 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     /** Opens [FullScreenChatFragment] in the host's full-screen surface. */
     private fun openFullScreen() {
+        if (fullScreenLaunchPending) return
+        fullScreenLaunchPending = true
         val opened = PluginFragmentHelper.getServiceRegistry(AiCorePlugin.PLUGIN_ID)
             ?.get(IdeUIService::class.java)
             ?.openPluginScreen(
@@ -1100,6 +1062,7 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 binding.chatTitle.text.toString()
             ) ?: false
         if (!opened) {
+            fullScreenLaunchPending = false
             AiCorePlugin.getContext()?.logger
                 ?.warn("ChatFragment: could not open the chat full screen")
             showInfoSnackbar(getString(R.string.msg_full_screen_unavailable))

@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
@@ -428,10 +429,36 @@ class ChatViewModel(
     private fun isBusy(): Boolean =
         !isIdle(isGenerating.value, _agentState.value, pendingApprovalRequest.value)
 
-    private var _contextFiles = listOf<File>()
+    private val _contextFiles = MutableStateFlow<List<File>>(emptyList())
 
-    /** Files the user attached; read back by the fragment to rebuild its chips on re-attach. */
-    val contextFiles: List<File> get() = _contextFiles
+    /** Files attached to the next prompt, shown as chips by every chat screen. */
+    val contextFiles: StateFlow<List<File>> = _contextFiles.asStateFlow()
+
+    private val _composerDraft = MutableStateFlow("")
+
+    /** The text in the composer, shared by the bottom-sheet chat and the full-screen one. */
+    val composerDraft: StateFlow<String> = _composerDraft.asStateFlow()
+
+    /**
+     * A sent prompt loaded back into the composer for editing.
+     *
+     * @property messageId the prompt Send replaces or forks.
+     * @property draftBefore the composer text put back when the edit ends.
+     * @property filesBefore the attached files put back when the edit ends.
+     */
+    data class EditInProgress(
+        val messageId: String,
+        val draftBefore: String,
+        val filesBefore: List<File>,
+    )
+
+    private val _editInProgress = MutableStateFlow<EditInProgress?>(null)
+
+    /** The edit every chat screen shows, or null outside edit mode. */
+    val editInProgress: StateFlow<EditInProgress?> = _editInProgress.asStateFlow()
+
+    /** Unique to this instance, so saved UI state can tell whether this ViewModel outlived it. */
+    val instanceToken: String = UUID.randomUUID().toString()
 
     private var stateUpdateJob: Job? = null
 
@@ -642,8 +669,54 @@ class ChatViewModel(
      * Set context files to include in prompts.
      */
     fun setContextFiles(files: List<File>) {
-        // Copied: the caller passes its own mutable list, which it keeps editing.
-        _contextFiles = files.toList()
+        _contextFiles.value = files.distinct()
+    }
+
+    /** Attaches [files] to the next prompt, skipping any already attached. */
+    fun addContextFiles(files: List<File>) {
+        _contextFiles.update { (it + files).distinct() }
+    }
+
+    /** Detaches [file] from the next prompt. */
+    fun removeContextFile(file: File) {
+        _contextFiles.update { it - file }
+    }
+
+    /** Records [text] as what the composer holds. */
+    fun setComposerDraft(text: String) {
+        _composerDraft.value = text
+    }
+
+    /**
+     * Loads [message] and its files into the composer for editing. Moving an edit to another
+     * prompt keeps the draft and files from before the first one.
+     */
+    fun beginEdit(message: ChatMessage) {
+        val previous = _editInProgress.value
+        _editInProgress.value = EditInProgress(
+            messageId = message.id,
+            draftBefore = previous?.draftBefore ?: _composerDraft.value,
+            filesBefore = previous?.filesBefore ?: _contextFiles.value,
+        )
+        _contextFiles.value = message.contextFiles.orEmpty().map(::File).filter { it.isFile }
+        _composerDraft.value = message.text
+    }
+
+    /** Leaves edit mode, putting back the draft and files the composer held before it began. */
+    fun endEdit() {
+        val edit = _editInProgress.value ?: return
+        _editInProgress.value = null
+        _composerDraft.value = edit.draftBefore
+        _contextFiles.value = edit.filesBefore
+    }
+
+    /**
+     * Re-enters [edit] after the process was killed, with [editFiles] attached; the composer
+     * restores the edited text itself.
+     */
+    fun restoreEdit(edit: EditInProgress, editFiles: List<File>) {
+        _editInProgress.value = edit
+        _contextFiles.value = editFiles
     }
 
     /**
@@ -966,7 +1039,7 @@ class ChatViewModel(
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) return false
         // An overflow's turns are still in the history, and the estimate that let it through missed.
-        launchRun(llmService, userMessage, contextFiles, forceCompaction = lastRunOverflowed)
+        launchRun(llmService, userMessage, contextFiles.value, forceCompaction = lastRunOverflowed)
         return true
     }
 
@@ -1519,7 +1592,7 @@ class ChatViewModel(
             return EditResult.NOT_EDITABLE
         }
         // Read before the cut: the composer leaves edit mode on it, handing back the draft's files.
-        val runFiles = contextFiles
+        val runFiles = contextFiles.value
         // Checked before the rewind, so a refused send changes nothing.
         val llmService = passPreflight(newText) ?: return EditResult.REFUSED
         // Claimed before the cut too, so a chat is never cut for a run that then cannot start.
