@@ -113,6 +113,9 @@ object PromptVariables {
     /** Whether this run offers web_search; see [SessionContext]. */
     const val CAN_SEARCH_WEB = "CAN_SEARCH_WEB"
 
+    /** Whether this run offers fetch_url; see [SessionContext]. */
+    const val CAN_FETCH_URL = "CAN_FETCH_URL"
+
     /** Whether the IDE has anything open or any module worth stating. */
     const val HAS_IDE_CONTEXT = "HAS_IDE_CONTEXT"
 
@@ -231,6 +234,7 @@ object PromptVariables {
             SESSION_WEB_SEARCH to config.session.webSearch,
             SESSION_WEB_ACCESS to config.session.webAccess,
             CAN_SEARCH_WEB to session.canSearchWeb,
+            CAN_FETCH_URL to session.canFetchUrl,
             CURRENT_TIME to session.currentTime,
             IDE_CONTEXT_HEADING to text.heading,
             IDE_CONTEXT_CURRENT_FILE to text.currentFile,

@@ -189,6 +189,27 @@ class LocalLlmBackendTest {
     }
 
     @Test
+    fun givenAChatTitleRequest_whenGenerating_thenItIsAnsweredFromTheSourceWithoutTheModel() {
+        // No model is configured here, so reaching the model would fail with "No model configured":
+        // an answer proves the request never got that far, and so never touched the cached prompt.
+        val config = LlmConfig("local").apply {
+            extraParams = mapOf(LocalLlmBackend.EXTRA_PARAM_CHAT_TITLE_SOURCE to "add a dark mode toggle")
+        }
+
+        val response = backend.generate("Developer: add a dark mode toggle\n\nTitle:", config).get()
+
+        assertTrue(response.success)
+        assertEquals("add a dark mode toggle", response.text)
+    }
+
+    @Test
+    fun givenTheChatTitleKey_whenRead_thenItIsTheLiteralAiCoreSends() {
+        // The two plugins cannot share a constant, so each pins its own copy (AI-Core's ChatTitleTest holds the
+        // other); a drifted copy turns the title back into a model call.
+        assertEquals("chat_title_source", LocalLlmBackend.EXTRA_PARAM_CHAT_TITLE_SOURCE)
+    }
+
+    @Test
     fun givenAContentUriThatCannotBeOpened_whenLoading_thenFailsAsSourceUnavailable() {
         // The model is read in place now, so a revoked grant or a deleted document is the most
         // likely failure of all — and must not surface as "your model is corrupt".

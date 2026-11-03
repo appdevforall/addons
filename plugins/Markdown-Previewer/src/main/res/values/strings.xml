@@ -27,4 +27,11 @@
     <string name="preview_file">Preview File</string>
     <string name="preview_markdown">Preview Markdown</string>
     <string name="preview_html">Preview HTML</string>
+
+    <!-- Off-device content -->
+    <string name="remote_image_blocked">Remote image not loaded</string>
+    <string name="open_link_title">Open link outside Code on the Go?</string>
+    <string name="open_link_message">This link leaves your device:\n\n%1$s</string>
+    <string name="open_link_proceed">Open</string>
+    <string name="open_link_no_app">No app can open this link</string>
 </resources>
