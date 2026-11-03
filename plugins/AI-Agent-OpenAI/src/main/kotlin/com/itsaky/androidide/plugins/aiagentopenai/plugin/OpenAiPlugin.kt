@@ -195,132 +195,169 @@ class OpenAiPlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Sends prompts to OpenAI, or to any server that speaks the same protocol. Needs a network connection.",
+            summary = "Sends your prompts to OpenAI, or to another server that works the same way, such as Ollama. (A network connection is required.)",
             detail = """
-                <p><b>AI Agent OpenAI</b> is a headless plugin that adds the
-                <code>openai</code> backend to <b>AI Core</b>, calling
-                <code>chat/completions</code> over HTTP.</p>
-                <p>It defaults to OpenAI's own API, but the server URL is a
-                setting — point it at Ollama or LM Studio on your PC, at a
-                <code>llama-server</code>, or at OpenRouter, and the same backend
-                talks to all of them.</p>
-                <p>Install <b>AI Core</b> as well, then configure the server in
-                <b>AI Core → Agent settings</b>. Prompts and any file contents a
-                plugin sends are transmitted to whichever server you configure.</p>
+                OpenAI itself needs a paid API key and internet access. A server you run
+                yourself, such as Ollama or LM Studio, is free. If it runs on this device or
+                on a computer on the same Wi-Fi network, it works without internet
+                access.<br><br>To use this agent, you must also install AI Core. Then go to
+                <b>Preferences → Agent</b>, choose <b>OpenAI</b> as the backend, and choose a
+                server.<br><br>Your prompts, and any project files the Agent reads, are sent
+                to the server you choose.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "AI Agent OpenAI guide",
-                    uri = "index.html",
-                    order = 0
-                )
-            )
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_SERVER,
-            summary = "The server to send prompts to. Defaults to OpenAI; change it to use your own.",
+            summary = "The server to send your prompts to. The default is OpenAI.",
             detail = """
-                <p>Must end at the API root — <code>https://api.openai.com/v1</code>,
-                not the <code>/chat/completions</code> path. If you paste the full
-                endpoint URL, the extra path is removed for you.</p>
-                <p>Plain <code>http://</code> is accepted only for your own device
-                or a private network address, which is the Ollama-on-my-PC case. A
-                cleartext address on the open internet is refused, because your
-                project's source would travel unencrypted.</p>
+                Enter the address up to <code>/v1</code>, for example
+                <code>https://api.openai.com/v1</code>. If you paste a longer address, CoGo
+                removes the extra part. To keep your change, tap <b>Save Server</b>.<br><br>An
+                address that starts with <code>http://</code> is allowed only for a server
+                on this device or on your own network, such as Ollama on your computer. A
+                server on the internet must use <code>https://</code>, so your code isn't
+                sent unencrypted.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_PRESET,
-            summary = "Fills the server URL for a known server. Nothing is saved until you tap Save.",
+            summary = "Fills in the server address for a common server. Nothing is saved until you tap <b>Save Server</b>.",
             detail = """
-                <p>Each preset is only a URL: OpenAI, Ollama, LM Studio,
-                <code>llama-server</code> and OpenRouter all speak the same
-                protocol, so one backend reaches all of them.</p>
-                <p>The local presets use <code>localhost</code>. To reach a server
-                on another machine, pick the preset and then edit the host — for
-                example <code>http://192.168.1.50:11434/v1</code>.</p>
+                The presets are OpenAI, Ollama, LM Studio, llama-server, and OpenRouter. To
+                enter any other address, choose <b>Custom…</b>.<br><br>The Ollama, LM
+                Studio, and llama-server presets point to this device. If the server runs on
+                your computer, choose the preset, then replace <code>localhost</code> with
+                your computer's network address, for example
+                <code>http://192.168.1.50:11434/v1</code>.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_KEY,
-            summary = "Your API key. Optional — a local Ollama or LM Studio server needs none.",
+            summary = "Your API key for this server. OpenAI and OpenRouter require one.",
             detail = """
-                <p>Required for OpenAI itself and for OpenRouter; left blank for a
-                local server, where no credential is sent at all. This whole
-                section disappears when the server URL points at your own device or
-                network, because there is no key to enter.</p>
-                <p>The key is checked against the server before being saved, then
-                encrypted with the Android Keystore — only the ciphertext is
-                written to disk. A key that cannot be checked, because the server
-                is offline, can still be saved but is marked unverified rather
-                than claiming a check that never happened.</p>
+                If the server is on this device or your own network, this field is hidden,
+                because no key is needed.<br><br>When you tap <b>Save Key</b>, CoGo checks
+                the key with the server, then stores it encrypted on this device. If the
+                server can't be reached, you can still save the key without checking it.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_MODEL,
-            summary = "Which model to request. Type any name, or tap to pick one the server reported.",
+            summary = "Which model to use. Type a model name, or tap the field to pick one the server listed.",
             detail = """
-                <p>One field, and it accepts both: type a name, or tap it to choose
-                from the list <b>Test Connection &amp; List Models</b> fetched.
-                Typing is saved as soon as you leave the field.</p>
-                <p>Free text always works, which matters for a local server: the
-                model is whatever you pulled, such as
-                <code>qwen2.5-coder</code>. A server that does not implement a
-                model list is normal — just type the name.</p>
-                <p>Unlike Google's catalog, this list carries no "can chat" flag,
-                so obvious non-chat models (embeddings, audio, images) are filtered
-                out and anything unrecognised is kept.</p>
+                To fill the list, tap <b>Test Connection &amp; List Models</b>. A name you
+                type is saved when you leave the field.<br><br>For a server you run yourself,
+                type the name of the model you downloaded, such as
+                <code>qwen2.5-coder</code>. Some servers don't provide a list, so typing the
+                name is the only way to choose a model.<br><br>The list may include a few
+                models that can't chat. If a model doesn't answer, choose another one.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_CONTEXT_WINDOW,
-            summary = "How many tokens the model can take at once. Leave blank to detect it automatically.",
+            summary = "How much text, in tokens, the model can read at once. To detect it automatically, leave this blank.",
             detail = """
-                <p>Set this to the context size the <b>server</b> runs the model
-                with, not the model's advertised maximum. Local servers often run
-                with only a few thousand tokens: Ollama uses a small default unless
-                <code>num_ctx</code> or <code>OLLAMA_CONTEXT_LENGTH</code> is raised,
-                LM Studio uses the length chosen when the model was loaded, and
-                <code>llama-server</code> uses its <code>-c</code> flag.</p>
-                <p>Left blank, the window is taken from the server's model list
-                when it reports one (OpenRouter, LM Studio), or from OpenAI's
-                published figures on OpenAI's own API. Otherwise AI Core uses its
-                own default. The value is kept for the server it was entered for,
-                so switching servers goes back to automatic.</p>
-                <p>AI Core keeps the conversation under this size, so a value
-                larger than the server's real context leads to "conversation is
-                too long" errors.</p>
+                Enter the context size your server is set to use. This may be smaller than
+                the largest size the model supports. Servers you run yourself often use only
+                a few thousand tokens:<ul><li>Ollama uses a small default unless you raise
+                <code>num_ctx</code> or <code>OLLAMA_CONTEXT_LENGTH</code>.</li><li>LM
+                Studio uses the length you chose when you loaded the model.</li><li>llama-server
+                uses the value of its <code>-c</code> option.</li></ul>If you leave this
+                blank, CoGo uses the size the server reports, or OpenAI's published size.
+                Otherwise, it uses a default. The number you enter applies only to the
+                current server.<br><br>If the number is larger than the server's real size,
+                <i>This conversation is longer than the model can read</i> is displayed.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_TEST,
-            summary = "Checks the server and key, and fills the model list — both are the same request.",
+            summary = "Checks the server address and API key, and fills the model list.",
             detail = """
-                <p>Tests the URL and the key together, without saving either, so a
-                typo is caught here rather than mid-chat. When the server answers
-                with a catalog, that same answer fills the <b>Model</b> list.</p>
-                <p><b>404</b> almost always means the URL is missing its
-                <code>/v1</code> suffix. <b>Nothing answered</b> means the server
-                is not running or is not reachable from this device — check that
-                Ollama is started and that the phone is on the same network.</p>
+                If the server address or API key has a typo, the test fails, so you can fix
+                it before you start a chat. The test doesn't save anything. If it fails, one
+                of these messages is displayed:<ul><li><i>The server answered 404</i>: add
+                <code>/v1</code> to the end of the server address.</li><li><i>Nothing
+                answered</i>: make sure the server is running, and that this device is on the
+                same network as the server.</li><li><i>The server answered but has no models
+                loaded</i>: download a model on the server first.</li></ul>
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
-            summary = "Opens OpenAI's API keys page in your browser. OpenAI keys are not free.",
+            summary = "Opens OpenAI's API keys page in your browser, where you can create a key. OpenAI keys aren't free. (Internet access is required.)",
             detail = """
-                <p>Opens <code>platform.openai.com/api-keys</code> in your own
-                browser — never an embedded WebView, so you can see OpenAI's URL
-                bar and sign-in works. Sign in, create a key, copy it, and paste
-                it into the field here.</p>
-                <p>OpenAI has no free tier: an API key needs a prepaid balance,
-                separate from a ChatGPT subscription. For a free option, run a
-                model on your own machine and point the server URL at it, or use
-                the <b>AI Agent Local</b> or <b>AI Agent Gemini</b> plugin
-                instead.</p>
-                <p>This plugin never sees your password and never reads your
-                clipboard.</p>
+                The page opens outside CoGo, so you can check the web address and sign in
+                normally.<br><br>To get a key, sign in, create a key, and copy it. Then
+                return to this page, paste it into the API Key field, and tap <b>Save
+                Key</b>.<br><br>An OpenAI key needs a prepaid balance, separate from a
+                ChatGPT subscription. For a free option, run a model on your own computer
+                and choose it in the Server field, or use AI Agent Local or AI Agent
+                Gemini.<br><br>CoGo never sees your password and never reads your clipboard.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
     )
 

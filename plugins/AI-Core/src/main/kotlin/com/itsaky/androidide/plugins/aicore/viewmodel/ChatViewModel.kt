@@ -47,6 +47,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.web.BackendWebSearch
 import com.itsaky.androidide.plugins.aicore.tool.web.VerificationPolicy
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
@@ -226,6 +227,7 @@ class ChatViewModel(
         terminalTool = RESPOND_TOOL,
         unfinishedTurn = toolResultsPrompt::unfinished,
         requiredToolTurn = toolResultsPrompt::requiredTool,
+        unappliedWriteTurn = toolResultsPrompt::unappliedWrite,
     )
     val toolExecutionTracker = ToolExecutionTracker()
 
@@ -1040,8 +1042,6 @@ class ChatViewModel(
         lastRunUserMessageId.value = userChatMessage.id
         historySizeBeforeLastRun = _history.value.size
         lastRunOverflowed = false
-        // Read once: prompt, grammar and executor must all describe the same tool set.
-        val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
         // Asked before the message lands, so the header never shows the raw prompt as the title.
         requestTitleIfUntitled(llmService, userMessage)
@@ -1056,6 +1056,24 @@ class ChatViewModel(
             try {
                 // The title is written first; the prompt shows as generating meanwhile.
                 awaitTitleRequest()
+
+                // Read once: prompt, grammar and executor must all describe the same tool set. Chosen
+                // per run, after the title wait, because the backend can change between messages and
+                // while that wait is on; a small on-device model gets the compact set (ADFA-6757).
+                val callsToolsNatively = backendPrompts.callsToolsNatively()
+                val tools = agentTools.forBackend(
+                    callsToolsNatively = callsToolsNatively,
+                    hasOwnPrompt = !callsToolsNatively && backendPrompts.hasOwnPrompt(),
+                    contextWindowTokens = if (callsToolsNatively) 0 else reportedContextWindow(currentBackendId),
+                )
+                // Said per run, since the compact set is chosen per run: a tool left out is not a tool the
+                // user can see is missing, and the rebuild-time log above only covers the full snapshot.
+                if (tools !== agentTools && tools.promptTools.droppedTools.isNotEmpty()) {
+                    AgentTrace.stage(
+                        "TOOLS",
+                        "compact set left out contributed tool(s): ${tools.promptTools.droppedTools.joinToString(", ")}",
+                    )
+                }
 
                 // One list for both halves of the protocol: the prompt describes it and a
                 // natively calling backend is sent it, so the two can never name different tools.
@@ -1134,6 +1152,19 @@ class ChatViewModel(
                         },
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
+                        },
+                        // Keyed by the file, so a retry under the path an edit was corrected to still
+                        // counts as the failed change redone.
+                        writtenFilesOf = { call ->
+                            val handler = tools.router.getHandler(call.name)
+                            handler?.pathsIn(call.args).orEmpty()
+                                .mapTo(mutableSetOf()) { PathGuard.writeKeyOf(it, handler?.correctsPaths == true) }
+                        },
+                        // Read as the tool will, so a repeat that spells an argument another way is
+                        // the same change; the file comes from the tool's own result.
+                        changeOf = tools.router::changeOf,
+                        writesFiles = { call ->
+                            tools.router.getHandler(call.name)?.writesFiles == true
                         },
                         canonicalName = { name -> tools.router.getHandler(name)?.toolName ?: name },
                         requiredTool = requiredTool,
@@ -1430,6 +1461,7 @@ class ChatViewModel(
                 temperature = ChatTitle.TEMPERATURE
                 maxTokens = ChatTitle.MAX_TOKENS
                 systemPrompt = ChatTitle.systemPrompt(prompts)
+                extraParams = mapOf(ChatTitle.EXTRA_PARAM_SOURCE to ChatTitle.echoSource(userText))
             }
             withTimeoutOrNull(ChatTitle.TIMEOUT_MS) {
                 llmService.generateCompletion(ChatTitle.prompt(prompts, userText), config).await()
@@ -2017,6 +2049,9 @@ class ChatViewModel(
 
         override suspend fun repeatedCalls() =
             addSystemMessage(str(R.string.agent_repeated_calls), MessageStatus.SENT)
+
+        override suspend fun changeNotMade() =
+            addSystemMessage(str(R.string.agent_change_not_made), MessageStatus.SENT)
 
         override suspend fun noProgress() =
             addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)

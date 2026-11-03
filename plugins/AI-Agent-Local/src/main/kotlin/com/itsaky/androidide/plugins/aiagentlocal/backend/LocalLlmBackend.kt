@@ -72,6 +72,15 @@ class LocalLlmBackend(
         const val EXTRA_PARAM_GRAMMAR = "grammar"
 
         /**
+         * [LlmConfig.extraParams] key ai-core sets on the request that names a chat, holding the
+         * text to name it from; must match ai-core's `ChatTitle.EXTRA_PARAM_SOURCE`. It is answered
+         * with that text rather than generated: the native context keeps one cached prompt, and a
+         * title request would replace the agent's, so the next reply would read it all again
+         * (ADFA-6757).
+         */
+        const val EXTRA_PARAM_CHAT_TITLE_SOURCE = "chat_title_source"
+
+        /**
          * [FailureKind.CONFIGURATION] when only picking another model fixes [e]; a load that failed
          * for memory or a busy run loop stays [FailureKind.OTHER], since freeing it and retrying works.
          */
@@ -206,12 +215,20 @@ class LocalLlmBackend(
             contextTokens: Int,
             quantizeKv: Boolean,
             fallbackContextTokens: Int,
-        ) = llama.load(
-            pathToModel = nativePath,
-            nCtx = contextTokens,
-            quantizeKv = quantizeKv,
-            fallbackNCtx = fallbackContextTokens,
-        )
+        ) {
+            // Native reads the counts when it creates the context, so they go in before the load.
+            val threads = InferenceThreads.read()
+            context.logger.info(
+                "LocalLlmBackend: threads generation=${threads.generation} batch=${threads.batch}",
+            )
+            LLamaAndroid.configureThreads(threads.generation, threads.batch)
+            llama.load(
+                pathToModel = nativePath,
+                nCtx = contextTokens,
+                quantizeKv = quantizeKv,
+                fallbackNCtx = fallbackContextTokens,
+            )
+        }
         override suspend fun unload() = llama.unload()
         override suspend fun contextSize() = llama.getContextSize()
     }
@@ -793,6 +810,10 @@ class LocalLlmBackend(
 
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         context.logger.info("LocalLlmBackend.generate() called with prompt: ${prompt.take(50)}...")
+        // Before the model-configured check, so nothing here touches the model or the cache it holds.
+        (config.extraParams?.get(EXTRA_PARAM_CHAT_TITLE_SOURCE) as? String)?.let { source ->
+            return CompletableFuture.completedFuture(LlmResponse.success(source, 0, 0))
+        }
         // Refused, not answered: a search reply made up from the model's memory reads as found fact.
         if (config.extraParams?.get(WebSearchBackend.EXTRA_PARAM_WEB_SEARCH) == true) {
             return CompletableFuture.completedFuture(LlmResponse.failure(WEB_SEARCH_UNSUPPORTED))
