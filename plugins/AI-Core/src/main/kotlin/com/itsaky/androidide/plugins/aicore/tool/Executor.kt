@@ -58,13 +58,22 @@ class Executor(
         private val VERBATIM_TEXT_ARGS = setOf("old_string")
 
         /**
-         * Whether [value] fails the required-argument check for [key].
+         * Required args where an empty string is a legal value, so only an absent argument is
+         * missing: `create_file` with `content = ""` is an empty file, and a small model asked for
+         * one sends exactly that.
+         */
+        private val EMPTY_ALLOWED_ARGS = setOf("create_file" to "content")
+
+        /**
+         * Whether [value] fails the required-argument check for [key] of [toolName].
+         * @param toolName the tool being dispatched.
          * @param key the required argument's name.
          * @param value the supplied value, or null when absent.
          * @return true when the argument must be reported missing.
          */
-        private fun isMissing(key: String, value: Any?): Boolean {
+        private fun isMissing(toolName: String, key: String, value: Any?): Boolean {
             val text = value?.toString()
+            if ((toolName to key) in EMPTY_ALLOWED_ARGS) return text == null
             return if (key in VERBATIM_TEXT_ARGS) text.isNullOrEmpty() else text?.trim().isNullOrEmpty()
         }
     }
@@ -163,7 +172,7 @@ class Executor(
 
         // Check required arguments
         val missingArgs = requiredArgsForTool(toolName).filter { key ->
-            isMissing(key, normalizedArgs[key])
+            isMissing(toolName, key, normalizedArgs[key])
         }
         if (missingArgs.isNotEmpty()) {
             val message = "Missing required argument(s): ${missingArgs.joinToString(", ")}"
