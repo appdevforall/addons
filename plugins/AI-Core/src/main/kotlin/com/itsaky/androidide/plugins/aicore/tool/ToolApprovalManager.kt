@@ -156,7 +156,7 @@ class ToolApprovalManager(
             Log.d(TAG, "User requested a correction for $toolName")
             // Only this attempt is denied; a tool failure is the channel the loop re-feeds.
             val message = ApprovalPrompt.corrected(config.config(), toolName, decision.correction.orEmpty())
-            ApprovalResponse(approved = false, denialMessage = message)
+            ApprovalResponse(approved = false, denialMessage = message, corrected = true)
         }
         ApprovalResult.DENIED -> {
             Log.d(TAG, "Approval denied for $toolName")
@@ -218,11 +218,13 @@ class ToolApprovalManager(
 /**
  * Result of an approval request.
  * @property deniedByUser the user chose Deny; not set for a correction or a timeout.
+ * @property corrected the user asked for the call to be revised; not set for a timeout.
  */
 data class ApprovalResponse(
     val approved: Boolean,
     val denialMessage: String? = null,
-    val deniedByUser: Boolean = false
+    val deniedByUser: Boolean = false,
+    val corrected: Boolean = false,
 )
 
 /**
