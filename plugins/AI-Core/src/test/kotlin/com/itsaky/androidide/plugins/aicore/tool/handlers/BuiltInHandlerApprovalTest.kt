@@ -115,4 +115,15 @@ class BuiltInHandlerApprovalTest {
             builtIns.filter { it.mutatesProject }.mapTo(mutableSetOf()) { it.toolName },
         )
     }
+
+    @Test
+    fun givenEveryBuiltIn_whenItIsRegistered_thenOnlyTheFileWritersCountForAChangeNotMadeAndOnlyAnEditCorrectsItsPath() {
+        // A failed write is keyed as its tool resolves the path; keyed as an edit, a failed create
+        // would be matched to another file of the same name.
+        assertEquals(
+            setOf("create_file", "update_file", "edit_file"),
+            builtIns.filter { it.writesFiles }.mapTo(mutableSetOf()) { it.toolName },
+        )
+        assertEquals(setOf("edit_file"), builtIns.filter { it.correctsPaths }.mapTo(mutableSetOf()) { it.toolName })
+    }
 }

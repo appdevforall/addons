@@ -34,6 +34,9 @@ internal class AgentRunReporter(
         /** The model kept re-issuing one batch that was not working. */
         suspend fun repeatedCalls()
 
+        /** The run ended with a failed file change never redone, whatever the last reply says. */
+        suspend fun changeNotMade()
+
         /** The model kept circling actions it had already taken. */
         suspend fun noProgress()
     }
@@ -84,6 +87,19 @@ internal class AgentRunReporter(
     override suspend fun onUnfinishedReply(turn: Int) {
         AgentTrace.stage("LOOP", "turn=$turn asked-to-finish=no-terminal-tool")
         onAskedToFinish()
+    }
+
+    override suspend fun onUnappliedWriteAnswer(turn: Int) {
+        AgentTrace.refusal(
+            "LOOP",
+            "turn=$turn",
+            "tried to finish with a failed file change outstanding; told it was not made",
+        )
+    }
+
+    override suspend fun onChangeNotMade(turn: Int) {
+        AgentTrace.refusal("LOOP", "turn=$turn", "ended with a failed file change never redone")
+        notices.changeNotMade()
     }
 
     // Reaching this means the backend did not force the call; see VerificationPolicy.
