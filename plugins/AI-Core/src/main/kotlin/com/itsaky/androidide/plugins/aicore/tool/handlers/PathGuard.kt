@@ -204,6 +204,30 @@ object PathGuard {
     }
 
     /**
+     * One key for the file a write names, however the call spelled it, so a failed write can be
+     * matched to the one that redoes it: `MainActivity.kt`, `./app/src/.../MainActivity.kt` and the
+     * absolute path all give the same key.
+     * @param path a path a write call named.
+     * @param correctsNames whether the tool takes a path naming no file for the one project file of
+     *   that name (see [suggestPathsFor]), as `edit_file` does.
+     * @return the canonical path of the project file [path] names: for a tool that writes exactly
+     *   the path it is given, whether or not that file exists yet; with [correctsNames], of the
+     *   existing file or of the one file it would be corrected to. Otherwise the bare file name, or
+     *   the path itself when it has none (`app/`).
+     */
+    fun writeKeyOf(path: String, correctsNames: Boolean): String {
+        // Keyed by its name alone, a failed create would be settled by any other file of that name.
+        val named = if (correctsNames) {
+            resolveWithin(path)?.takeIf { it.isFile }
+                ?: suggestPathsFor(path).unambiguous?.let(::resolveWithin)?.takeIf { it.isFile }
+        } else {
+            resolveWithin(path)
+        }
+        val trimmed = path.trim()
+        return named?.canonicalPath ?: baseNameOf(trimmed).ifEmpty { trimmed }
+    }
+
+    /**
      * Walks the project for files matching [predicate], skipping generated/hidden trees and
      * refusing to descend symlinks (which could otherwise walk outside the root).
      * @param limit maximum results.

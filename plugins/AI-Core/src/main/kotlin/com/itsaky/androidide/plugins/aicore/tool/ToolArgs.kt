@@ -74,6 +74,18 @@ fun normalizeToolArgs(handler: ToolHandler, args: Map<String, Any?>): Map<String
 }
 
 /**
+ * What a file write changes, apart from its file: the tool and its [ToolHandler.changeArgs] as the
+ * tool will read them, so a retry that spells an argument another way, or adds one the tool
+ * ignores, is still the same change.
+ * @param args the call's raw arguments.
+ * @return a value equal for two calls that make the same change to the same file.
+ */
+fun ToolHandler.changeOf(args: Map<String, Any?>): Any {
+    val normalized = normalizeToolArgs(this, args)
+    return toolName to changeArgs.associateWith { normalized[it]?.toString() }
+}
+
+/**
  * The project paths a call reads or writes, as the tool will see them: normalized keys first, then
  * [ToolHandler.pathDefaults] for a path the call left the handler to fill in.
  * @param args the call's raw arguments.
