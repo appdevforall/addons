@@ -41,6 +41,22 @@ interface ToolHandler {
         get() = false
 
     /**
+     * Whether this tool writes a file's content, which is what tells a run whether a change it set out
+     * to make was made. Narrower than [mutatesProject]: a shell command or a dependency change also
+     * changes the project, but its failure is not a failed file change, nor its success a redone one.
+     */
+    val writesFiles: Boolean
+        get() = false
+
+    /**
+     * Whether this tool takes a path naming no file for the one project file of that name, as
+     * `edit_file` does. A failed write is keyed the same way (see `PathGuard.writeKeyOf`), so a
+     * tool that writes exactly the path it was given is not matched to another file of that name.
+     */
+    val correctsPaths: Boolean
+        get() = false
+
+    /**
      * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means
      * untyped, flat string arguments, which is what the tool-call protocol supports today.
      */
@@ -98,6 +114,15 @@ interface ToolHandler {
      */
     val pathDefaults: Map<String, String>
         get() = emptyMap()
+
+    /**
+     * The argument keys that say what a file write changes, apart from its path: two calls with the
+     * same values make the same change. Matters only for a tool whose failures can be
+     * [com.itsaky.androidide.plugins.aicore.models.ToolResult.alreadyMade] or
+     * [com.itsaky.androidide.plugins.aicore.models.ToolResult.madeIfUnchanged].
+     */
+    val changeArgs: List<String>
+        get() = emptyList()
 
     /**
      * Alternative argument names, alias → canonical. Small models reliably invent near-miss keys
