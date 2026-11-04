@@ -62,6 +62,9 @@ class ChatViewModelTitleQueueTest {
     /** Runs the prompt config load that activation starts on device; the title is worded from it. */
     private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Every ViewModel a test made, cleared before Main is reset; see [clearAndAwait]. */
+    private val viewModels = mutableListOf<ChatViewModel>()
+
     @Before
     fun setUp() {
         // ChatViewModel's stateIn() calls run on viewModelScope, i.e. Dispatchers.Main.
@@ -90,6 +93,7 @@ class ChatViewModelTitleQueueTest {
 
     @After
     fun tearDown() {
+        clearAndAwait(viewModels)
         Dispatchers.resetMain()
         SharedServices.clear()
         sharedPromptConfig.clear()
@@ -98,7 +102,7 @@ class ChatViewModelTitleQueueTest {
 
     private fun newViewModel() = ChatViewModel { null }.apply {
         initializeStorage(context, TEST_PROJECT_KEY)
-    }
+    }.also(viewModels::add)
 
     /** A ViewModel whose selected backend is ready; its chat turns never answer. */
     private fun newViewModelWithBackend(): ChatViewModel {

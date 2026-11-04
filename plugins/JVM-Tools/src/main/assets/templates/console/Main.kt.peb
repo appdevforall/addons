@@ -1,0 +1,4 @@
+fun main(args: Array<String>) {
+    val name = if (args.isNotEmpty()) args.joinToString(" ") else "world"
+    println(Greeter.greet(name))
+}
