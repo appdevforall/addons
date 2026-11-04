@@ -1,0 +1,972 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.annotation",
+    "module": "annotation",
+    "version": "1.8.2",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.7"
+    }
+  },
+  "variants": [
+    {
+      "name": "androidxSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "androidx-multiplatform-docs"
+      },
+      "files": [
+        {
+          "name": "annotation-1.8.2-multiplatform-sources.jar",
+          "url": "annotation-1.8.2-multiplatform-sources.jar",
+          "size": 69602,
+          "sha512": "12ea3f038dbfb20d06e53d5852903113784e4d203a355d2fc84d919dbe8edb10ae740f50d57f514c7b4938530aef76e5036072f17a5bf05c2ffa85779a311065",
+          "sha256": "3ac90d9021e4c527e941c4648f94290e6ed14928ac9814cffde72c8071ea4b51",
+          "sha1": "a4fb71cd0ad88bcf7026457d9f052b2c6aa2c71c",
+          "md5": "4ed1d1b930b51e111ea3f3b48fc0b7cf"
+        }
+      ]
+    },
+    {
+      "name": "libraryVersionMetadata",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.usage": "library-version-metadata"
+      },
+      "files": [
+        {
+          "name": "apiLevels.json",
+          "url": "annotation-1.8.2-versionMetadata.json",
+          "size": 10678,
+          "sha512": "99317b84c5acfaf2472fd39244b7bff04a6e3ba4a9e97c141631ef6cdc8ca4acd6fc8ab1cff199497bcc7206c9c4fddfc7db10063ccc09c679a2b619979f4cef",
+          "sha256": "732043522ddc150650c1b32d017c6c9c221a792a3ea0fbcf229485ce9556a870",
+          "sha1": "85a5ac3e1ed88b0153a23ec19097e15de1a622a3",
+          "md5": "f7baf19515fb1f3672635f5af567492b"
+        }
+      ]
+    },
+    {
+      "name": "metadataApiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.7.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "annotation-metadata-1.8.2.jar",
+          "url": "annotation-1.8.2.jar",
+          "size": 8296,
+          "sha512": "269466254a24da771da3269a91c63e2ca5a030c56b09591d3e912126bff720b4dc9eeac68cb7fdb3f7df7c408de690a2698f5096e5b17ffb3496d08a0468c5c2",
+          "sha256": "a1e8c624de166680b9bebe70057f1e13f4d1753de3efd20a9a66f1154c8ff868",
+          "sha1": "223c68a95a700e6fd7c25c40acd11328f45bcd4e",
+          "md5": "d26361a11ea271445c9d5241788cb005"
+        }
+      ]
+    },
+    {
+      "name": "metadataSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "files": [
+        {
+          "name": "annotation-kotlin-1.8.2-sources.jar",
+          "url": "annotation-1.8.2-sources.jar",
+          "size": 25046,
+          "sha512": "b6bc5c54cb62943ea645bbc272e279fc9a5c09a069eb5bfaae4f618ef20debabccec9354b4bed5c0527935c22f1f8b459e73544b2a9112fa72e37df3b1742022",
+          "sha256": "706eb1c09bbc2ad74bf0f173e1fe77ac46fd7945efd9b6409053fb3f8763eff2",
+          "sha1": "6e41c5bab9458ad24f11b7b58c54fbe17d9fc1b2",
+          "md5": "d7b2ae4b5a2a3e3b353c1b8db09fab45"
+        }
+      ]
+    },
+    {
+      "name": "androidNativeArm32ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "android_arm32",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativearm32/1.8.2/annotation-androidnativearm32-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativearm32",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeArm32SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "android_arm32",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativearm32/1.8.2/annotation-androidnativearm32-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativearm32",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "android_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativearm64/1.8.2/annotation-androidnativearm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativearm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "android_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativearm64/1.8.2/annotation-androidnativearm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativearm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "android_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativex64/1.8.2/annotation-androidnativex64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativex64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "android_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativex64/1.8.2/annotation-androidnativex64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativex64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeX86ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "android_x86",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativex86/1.8.2/annotation-androidnativex86-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativex86",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "androidNativeX86SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "android_x86",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-androidnativex86/1.8.2/annotation-androidnativex86-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-androidnativex86",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iosarm64/1.8.2/annotation-iosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iosarm64/1.8.2/annotation-iosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iosarm64/1.8.2/annotation-iosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iossimulatorarm64/1.8.2/annotation-iossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iossimulatorarm64/1.8.2/annotation-iossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iossimulatorarm64/1.8.2/annotation-iossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iosx64/1.8.2/annotation-iosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iosx64/1.8.2/annotation-iosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "iosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-iosx64/1.8.2/annotation-iosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-iosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "jvmApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../annotation-jvm/1.8.2/annotation-jvm-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-jvm",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "jvmRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../annotation-jvm/1.8.2/annotation-jvm-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-jvm",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "jvmSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../annotation-jvm/1.8.2/annotation-jvm-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-jvm",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "linuxArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "linux_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-linuxarm64/1.8.2/annotation-linuxarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-linuxarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "linuxArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "linux_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-linuxarm64/1.8.2/annotation-linuxarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-linuxarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "linuxX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "linux_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-linuxx64/1.8.2/annotation-linuxx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-linuxx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "linuxX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "linux_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-linuxx64/1.8.2/annotation-linuxx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-linuxx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "macosArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-macosarm64/1.8.2/annotation-macosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-macosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "macosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-macosarm64/1.8.2/annotation-macosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-macosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "macosArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-macosarm64/1.8.2/annotation-macosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-macosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "macosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-macosx64/1.8.2/annotation-macosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-macosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "macosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-macosx64/1.8.2/annotation-macosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-macosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "macosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-macosx64/1.8.2/annotation-macosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-macosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "mingwX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "mingw_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-mingwx64/1.8.2/annotation-mingwx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-mingwx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "mingwX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "mingw_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-mingwx64/1.8.2/annotation-mingwx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-mingwx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "tvos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvosarm64/1.8.2/annotation-tvosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "tvos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvosarm64/1.8.2/annotation-tvosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "tvos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvosarm64/1.8.2/annotation-tvosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosSimulatorArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "tvos_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvossimulatorarm64/1.8.2/annotation-tvossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosSimulatorArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "tvos_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvossimulatorarm64/1.8.2/annotation-tvossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosSimulatorArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "tvos_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvossimulatorarm64/1.8.2/annotation-tvossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "tvos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvosx64/1.8.2/annotation-tvosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "tvos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvosx64/1.8.2/annotation-tvosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "tvosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "tvos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-tvosx64/1.8.2/annotation-tvosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-tvosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosArm32ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "watchos_arm32",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosarm32/1.8.2/annotation-watchosarm32-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosarm32",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosArm32SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "watchos_arm32",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosarm32/1.8.2/annotation-watchosarm32-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosarm32",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosArm32MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "watchos_arm32",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosarm32/1.8.2/annotation-watchosarm32-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosarm32",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "watchos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosarm64/1.8.2/annotation-watchosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "watchos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosarm64/1.8.2/annotation-watchosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "watchos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosarm64/1.8.2/annotation-watchosarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosSimulatorArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "watchos_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchossimulatorarm64/1.8.2/annotation-watchossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosSimulatorArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "watchos_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchossimulatorarm64/1.8.2/annotation-watchossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosSimulatorArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "watchos_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchossimulatorarm64/1.8.2/annotation-watchossimulatorarm64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchossimulatorarm64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "watchos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosx64/1.8.2/annotation-watchosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "watchos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosx64/1.8.2/annotation-watchosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosx64",
+        "version": "1.8.2"
+      }
+    },
+    {
+      "name": "watchosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "watchos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../annotation-watchosx64/1.8.2/annotation-watchosx64-1.8.2.module",
+        "group": "androidx.annotation",
+        "module": "annotation-watchosx64",
+        "version": "1.8.2"
+      }
+    }
+  ]
+}

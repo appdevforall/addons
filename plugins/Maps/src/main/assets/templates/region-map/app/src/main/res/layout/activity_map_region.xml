@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <org.maplibre.android.maps.MapView
+        android:id="@+id/mapView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Empty-state banner: visible until a region is applied. The activity
+         hides it once the bundled region's maps/tiles.pmtiles is present. -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/empty_state_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_margin="16dp"
+        app:cardElevation="6dp"
+        app:cardCornerRadius="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No region configured"
+                android:textStyle="bold"
+                android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Open the Maps tab in your IDE to download a region and apply it to this project."
+                android:textSize="14sp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Recenter-on-me button. Plain ImageButton (no Material dep); system
+         crosshair icon. Bottom-end over the map. The activity adds the system
+         nav-bar inset to this 16dp bottom margin at runtime so it clears the
+         bottom bar (see applyBottomInsets). -->
+    <ImageButton
+        android:id="@+id/recenterButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="@android:drawable/dialog_holo_light_frame"
+        android:contentDescription="Center on my location"
+        android:src="@android:drawable/ic_menu_mylocation" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
