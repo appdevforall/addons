@@ -27,6 +27,8 @@
     <!-- What a screen reader says for that label. -->
     <string name="desc_message_version">Version %1$d of %2$d</string>
     <string name="desc_chat_sidebar">Chats, settings and a new chat</string>
+    <string name="desc_enter_full_screen">Show the chat full screen</string>
+    <string name="desc_exit_full_screen">Back to the editor</string>
 
     <!-- Sidebar actions -->
     <string name="menu_settings">Settings</string>
@@ -186,6 +188,7 @@
     <string name="pref_agent_title">Agent</string>
     <string name="pref_agent_summary">AI backend, model and API key</string>
     <string name="msg_settings_unavailable">Couldn\'t open Agent settings. Open them from Preferences → Configuration → Agent.</string>
+    <string name="msg_full_screen_unavailable">Couldn\'t open the chat full screen.</string>
     <!-- Matches the MCP plugin's own Preferences row, which opens the same screen -->
     <string name="pref_mcp_title">MCP servers</string>
     <string name="msg_plugin_settings_unavailable">Couldn\'t open %1$s. Open it from Preferences → Configuration → %1$s.</string>
