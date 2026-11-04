@@ -1,0 +1,15 @@
+{
+  "summary": "Runs Java and Kotlin programs, with a main-class picker and program arguments.",
+  "description": "Compiles a folder of Java and Kotlin files on the device and runs the main class you choose, with the arguments you give it. Output appears in Build Output. Adds a Java/Kotlin Program template.",
+  "tags": [
+    "java",
+    "kotlin",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
