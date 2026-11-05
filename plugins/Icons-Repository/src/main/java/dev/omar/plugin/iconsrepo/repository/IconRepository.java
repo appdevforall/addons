@@ -13,7 +13,6 @@ import com.caverock.androidsvg.SVG;
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper;
 import dev.omar.plugin.iconsrepo.Main;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -25,6 +24,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import dev.omar.plugin.iconsrepo.models.IconModel;
+import dev.omar.plugin.iconsrepo.utils.Utils;
 
 public class IconRepository {
 
@@ -104,7 +104,7 @@ public class IconRepository {
                 String iconName = extractIconName(fullName);
 
                 // قراءة بيانات SVG إلى مصفوفة بايتات
-                byte[] iconData = readEntryBytes(zipIn);
+                byte[] iconData = Utils.readAllBytes(zipIn);
 
                 // تجاهل الأيقونات الفارغة
                 if (iconData != null && iconData.length > 0) {
@@ -130,16 +130,5 @@ public class IconRepository {
             return fileName.substring(0, dotIndex);
         }
         return fileName;
-    }
-
-    @NonNull
-    private byte[] readEntryBytes(@NonNull ZipInputStream zipIn) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int len;
-        while ((len = zipIn.read(buffer)) != -1) {
-            baos.write(buffer, 0, len);
-        }
-        return baos.toByteArray();
     }
 }

@@ -20,6 +20,7 @@ import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
 import com.itsaky.androidide.plugins.aicore.models.HistoryCompaction
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.newestFirst
+import com.itsaky.androidide.plugins.aicore.models.RunStep
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
@@ -47,6 +48,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolOutputBudget
 import com.itsaky.androidide.plugins.aicore.tool.pathsIn
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.BuiltInToolHandlers
+import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.web.BackendWebSearch
 import com.itsaky.androidide.plugins.aicore.tool.web.VerificationPolicy
 import com.itsaky.androidide.plugins.aicore.tool.web.WebAccess
@@ -226,6 +228,7 @@ class ChatViewModel(
         terminalTool = RESPOND_TOOL,
         unfinishedTurn = toolResultsPrompt::unfinished,
         requiredToolTurn = toolResultsPrompt::requiredTool,
+        unappliedWriteTurn = toolResultsPrompt::unappliedWrite,
     )
     val toolExecutionTracker = ToolExecutionTracker()
 
@@ -816,18 +819,21 @@ class ChatViewModel(
      *
      * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
+     * @param runStep the run's step these calls were made in.
      * @return the results, positionally aligned with [toolCalls].
      */
     private suspend fun executeToolCalls(
         tools: AgentTools,
         toolCalls: List<ToolCall>,
+        runStep: RunStep?,
     ): List<ToolResult> {
         if (toolCalls.isEmpty()) return emptyList()
 
         val executingState = AgentState.Executing(
             currentStepIndex = 0,
             totalSteps = toolCalls.size,
-            description = toolCalls.first().name
+            description = toolCalls.first().name,
+            runStep = runStep,
         )
         withContext(Dispatchers.Main) { setState(executingState) }
         startStateTimer(executingState)
@@ -1119,6 +1125,8 @@ class ChatViewModel(
                 }
                 requiredTool?.let { AgentTrace.stage("VERIFY", "required=$it on the first turn") }
                 var firstTurn = true
+                // The step the loop announced last, for the status line.
+                var runStep: RunStep? = null
                 // Whether the run's turns are dropped; only a Stop, so a failure keeps the tool calls that ran.
                 var rollBack = true
 
@@ -1135,14 +1143,14 @@ class ChatViewModel(
                         history = history,
                         generate = { turns ->
                             withContext(Dispatchers.Main) {
-                                setState(AgentState.Processing(str(R.string.msg_generating)))
+                                setState(AgentState.Processing(str(R.string.msg_generating), runStep))
                             }
                             val turnConfig = requiredTool?.takeIf { firstTurn }
                                 ?.let { VerificationPolicy.requiring(config, it) } ?: config
                             firstTurn = false
                             runModelTurn(llmService, turns, turnConfig, toolDefinitions, epoch)
                         },
-                        executeTools = { calls -> executeToolCalls(tools, calls) },
+                        executeTools = { calls -> executeToolCalls(tools, calls, runStep) },
                         // Read through the handler, so a path spelled `path` or left to a default
                         // still names the file a re-read of it should count as new again.
                         pathsOf = { call ->
@@ -1151,10 +1159,27 @@ class ChatViewModel(
                         changesPaths = { call ->
                             tools.router.getHandler(call.name)?.mutatesProject == true
                         },
+                        // Keyed by the file, so a retry under the path an edit was corrected to still
+                        // counts as the failed change redone.
+                        writtenFilesOf = { call ->
+                            val handler = tools.router.getHandler(call.name)
+                            handler?.pathsIn(call.args).orEmpty()
+                                .mapTo(mutableSetOf()) { PathGuard.writeKeyOf(it, handler?.correctsPaths == true) }
+                        },
+                        // Read as the tool will, so a repeat that spells an argument another way is
+                        // the same change; the file comes from the tool's own result.
+                        changeOf = tools.router::changeOf,
+                        writesFiles = { call ->
+                            tools.router.getHandler(call.name)?.writesFiles == true
+                        },
                         canonicalName = { name -> tools.router.getHandler(name)?.toolName ?: name },
                         requiredTool = requiredTool,
                         // Only a prose turn that showed an answer has one a recap could repeat.
-                        events = AgentRunReporter(runNotices) { askedToFinishAfterProse = proseTurnShowedAnswer },
+                        events = AgentRunReporter(
+                            notices = runNotices,
+                            onAskedToFinish = { askedToFinishAfterProse = proseTurnShowedAnswer },
+                            onStepStarted = { runStep = it },
+                        ),
                     )
                     rollBack = false
                     if (loopResult.completed && generationEpoch.get() == epoch) {
@@ -2034,6 +2059,9 @@ class ChatViewModel(
 
         override suspend fun repeatedCalls() =
             addSystemMessage(str(R.string.agent_repeated_calls), MessageStatus.SENT)
+
+        override suspend fun changeNotMade() =
+            addSystemMessage(str(R.string.agent_change_not_made), MessageStatus.SENT)
 
         override suspend fun noProgress() =
             addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)

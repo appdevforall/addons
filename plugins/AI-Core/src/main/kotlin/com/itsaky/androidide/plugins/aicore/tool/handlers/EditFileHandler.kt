@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.AtomicFileWriter
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditTargetResolver
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditorBufferApplier
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.FileTextMatcher
+import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.NearMatchLines
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import com.itsaky.androidide.plugins.services.IdeEditorService
@@ -48,6 +49,8 @@ class EditFileHandler(
     override val requiresApproval = true
     override val approvalPreview = ApprovalPreview.EDIT
     override val mutatesProject = true
+    override val writesFiles = true
+    override val correctsPaths = true
     override val pathArgs = listOf(ARG_PATH)
     override val argAliases = mapOf(
         "old" to ARG_OLD,
@@ -58,6 +61,7 @@ class EditFileHandler(
         "replace" to ARG_NEW,
         "content" to ARG_NEW,
     )
+    override val changeArgs = listOf(ARG_OLD, ARG_NEW)
 
     companion object {
         const val TOOL_NAME = "edit_file"
@@ -236,9 +240,6 @@ class EditFileHandler(
                 "$ARG_OLD/$ARG_NEW must be under $MAX_ARG_CHARS characters — edit a smaller region"
             )
         }
-        if (oldString == newString) {
-            return reject(identicalArgsRejection(oldString))
-        }
 
         val target = when (val resolution = EditTargetResolver.resolve(filePath)) {
             is EditTargetResolver.Target.Rejected -> {
@@ -281,6 +282,13 @@ class EditFileHandler(
             )
         }
 
+        // After the read, so the rejection can show the lines the model should have copied.
+        if (oldString == newString) {
+            return reject(
+                identicalArgsRejection(oldString) + NearMatchLines.render(NearMatchLines.find(original, oldString))
+            )
+        }
+
         val match = FileTextMatcher.match(original, oldString, newString)
         if (match is FileTextMatcher.Match.NotFound) {
             // The dominant local-model failure: whitespace or escaping drift from the real file.
@@ -291,10 +299,11 @@ class EditFileHandler(
                     "old_string not found — ${AgentTrace.preview(oldString, 80)}",
                 )
             }
-            return reject(
-                "$ARG_OLD not found in $resolvedPath — read the file first and copy the target " +
-                    "text exactly, including indentation and line breaks"
-            )
+            val message = "$ARG_OLD not found in $resolvedPath — read the file first and copy the " +
+                "target text exactly, including indentation and line breaks" +
+                NearMatchLines.render(NearMatchLines.find(original, oldString))
+            // What a repeat of this edit gives once it is made; the agent loop tells which it is.
+            return Analysis.Rejected(ToolResult.madeIfUnchanged(message, file = file.canonicalPath))
         }
         val found = match as FileTextMatcher.Match.Found
         if (found.occurrences > 1 && !replaceAll) {
@@ -328,6 +337,7 @@ class EditFileHandler(
     }
 
     private fun reject(message: String): Analysis = Analysis.Rejected(ToolResult.failure(message))
+
 
     /**
      * Rejection for an edit whose old and new text are the same, naming the corrected pair when the
@@ -437,7 +447,8 @@ class EditFileHandler(
                 ToolResult.success(
                     message = "Edited ${ready.filePath} in the editor ($summary); $savedNote. " +
                         "The change can be undone with Ctrl+Z.",
-                    data = ready.filePath
+                    data = ready.filePath,
+                    file = ready.file.canonicalPath,
                 )
             }
         }
@@ -458,7 +469,8 @@ class EditFileHandler(
                 )
                 ToolResult.success(
                     message = "Edited ${ready.filePath} ($summary)",
-                    data = ready.filePath
+                    data = ready.filePath,
+                    file = ready.file.canonicalPath,
                 )
             }
         }

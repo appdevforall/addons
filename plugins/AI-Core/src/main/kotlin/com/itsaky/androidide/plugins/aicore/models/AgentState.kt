@@ -21,20 +21,25 @@ sealed class AgentState {
 
     /**
      * Agent is executing a tool or action.
+     *
+     * @property currentStepIndex the running call's position in its batch, from 0.
+     * @property totalSteps the calls in the batch.
+     * @property runStep the run's step the batch belongs to; null outside a run's tool loop.
      */
     data class Executing(
         val currentStepIndex: Int,
         val totalSteps: Int,
         val description: String,
         val startTime: Long = System.currentTimeMillis(),
-        val elapsedMillis: Long = 0
+        val elapsedMillis: Long = 0,
+        val runStep: RunStep? = null,
     ) : AgentState() {
-        /** Step number as the status line counts it, from 1. */
+        /** The running call's position in its batch, from 1. */
         val stepNumber: Int
             get() = currentStepIndex + 1
 
         /**
-         * Projected duration of the whole run, from the average time per step so far. The words
+         * Projected duration of the whole batch, from the average time per call so far. The words
          * around these figures are resources, so the rendering itself belongs to the UI layer.
          */
         val estimatedTotalMillis: Long
@@ -47,8 +52,11 @@ sealed class AgentState {
 
     /**
      * Agent is processing/generating a response.
+     *
+     * @property runStep the run's step being generated; null before the first step, e.g. while
+     *   compacting, and after the last, while reviewing the answer.
      */
-    data class Processing(val message: String) : AgentState()
+    data class Processing(val message: String, val runStep: RunStep? = null) : AgentState()
 
     /**
      * A cancellation has been requested.
@@ -60,6 +68,15 @@ sealed class AgentState {
      */
     data class Error(val message: String) : AgentState()
 }
+
+/**
+ * How far a run has got through its step limit, counted the way the limit counts: one step per
+ * model turn, from 1.
+ *
+ * @property number the step in progress.
+ * @property limit the step the run stops at with tools still outstanding.
+ */
+data class RunStep(val number: Int, val limit: Int)
 
 /**
  * Short name for the trace log: the state and what it is doing, without a data class's field dump
