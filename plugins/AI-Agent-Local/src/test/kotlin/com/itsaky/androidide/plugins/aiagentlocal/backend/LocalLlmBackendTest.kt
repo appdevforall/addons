@@ -86,15 +86,20 @@ class LocalLlmBackendTest {
         /** Runs inside each load, so a test can look at the backend while the weights load. */
         var duringLoad: () -> Unit = {}
 
+        /** Whether the last load asked for the ADFA-6810 variant A fadvise hint. */
+        var lastUseWillNeedHint = false
+
         override suspend fun load(
             nativePath: String,
             contextTokens: Int,
             quantizeKv: Boolean,
             fallbackContextTokens: Int,
+            useWillNeedHint: Boolean,
         ) {
             loadCount++
             lastContextTokens = contextTokens
             lastQuantizeKv = quantizeKv
+            lastUseWillNeedHint = useWillNeedHint
             duringLoad()
         }
 
@@ -272,6 +277,28 @@ class LocalLlmBackendTest {
     }
 
     @Test
+    fun givenALoadRefusedBeforeTheEngine_whenTheSelectionLoadsLater_thenItIsStillHinted() {
+        // The hint is armed only once a load is about to reach the engine. A refusal before that
+        // (here the embedding-model guard) must not use up the one hint the selection gets.
+        val handles = mutableMapOf(
+            CONTENT_URI to handleFor(GgufTestFiles.withArchitecture("bert")),
+        )
+        val engine = FakeEngine()
+        val backend = backendWith(FakeModelSource(handles), engine)
+
+        assertThrows(IncompatibleModelException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+        assertEquals("a refused load never reaches the engine", 0, engine.loadCount)
+
+        handles[CONTENT_URI] = handleFor(chatModel())
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(1, engine.loadCount)
+        assertTrue("the refusal must not have consumed the hint", engine.lastUseWillNeedHint)
+    }
+
+    @Test
     fun givenAnEmbeddingModel_whenLoading_thenRejectedBeforeAnyNativeWork() {
         // ADFA-4388: the classify guard must still fire when the header arrives as a stream over a
         // document read in place. Reaching native code here would abort the whole IDE.
@@ -402,6 +429,37 @@ class LocalLlmBackendTest {
 
         Thread.sleep(200)
         assertEquals("an unanswered probe must not unload the model", 0, engine.unloadCount)
+    }
+
+    @Test
+    fun givenASelection_whenItLoadsAgainInTheSameProcess_thenOnlyTheFirstLoadGetsTheReadAheadHint() {
+        // The hint may help a cold load and seemed to cost a warm one (ADFA-6810), and a
+        // selection's first load in a process is the one likely to be cold. A reload of the same
+        // selection skips it; a different selection is a new first load.
+        val otherUri = "content://com.example/documents/other-model.gguf"
+        val source = FakeModelSource(
+            mapOf(CONTENT_URI to handleFor(chatModel()), otherUri to handleFor(chatModel())),
+        )
+        val engine = FakeEngine()
+        val backend = backendWith(source, engine)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertTrue("first load of a selection is hinted", engine.lastUseWillNeedHint)
+
+        // Resident and reachable, a repeat call returns before the engine. The file going away and
+        // coming back evicts the model, so the next call is a real reload of the same selection.
+        source.reachable = false
+        assertThrows(ModelLoadException::class.java) {
+            runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+        source.reachable = true
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertEquals(2, engine.loadCount)
+        assertFalse("a reload of the same selection is not hinted", engine.lastUseWillNeedHint)
+
+        runBlocking { backend.ensureModelLoaded(otherUri) }
+        assertEquals(3, engine.loadCount)
+        assertTrue("a different selection's first load is hinted", engine.lastUseWillNeedHint)
     }
 
     @Test

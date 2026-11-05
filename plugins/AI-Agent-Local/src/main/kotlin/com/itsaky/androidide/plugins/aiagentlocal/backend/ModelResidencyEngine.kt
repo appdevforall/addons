@@ -20,12 +20,16 @@ interface ModelResidencyEngine {
      *   which case it falls back to f16 at [fallbackContextTokens]
      * @param fallbackContextTokens the context that f16 fallback gets, sized against f16's own
      *   per-token cost
+     * @param useWillNeedHint true to issue `posix_fadvise(WILLNEED)` on the model file before the
+     *   native load maps it. The caller decides per load: it may help a cold load and seemed to
+     *   tax a warm one, so it is meant for a selection's first load in a process (ADFA-6810).
      */
     suspend fun load(
         nativePath: String,
         contextTokens: Int,
         quantizeKv: Boolean,
         fallbackContextTokens: Int,
+        useWillNeedHint: Boolean = false,
     )
 
     /** Frees the model's mapped pages and the buffers around them. */
