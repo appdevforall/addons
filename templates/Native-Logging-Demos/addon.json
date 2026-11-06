@@ -1,0 +1,22 @@
+{
+  "summary": "Adds two projects that show how to write to the App Logs window from C and from C++.",
+  "description": "Installs two small native Android projects on the New Project screen. Each has one button that writes a series of lines to the Android log from native code, which Code on the Go shows in its App Logs window: one line at each priority, formatted values, a failed system call, and a line from a second thread. The C project uses C11 and the liblog calls directly; the C++ project uses C++17 with a type-safe stream logger and an RAII timer. Both need the NDK-Installer plugin, which provides the NDK and CMake.",
+  "tags": [
+    "ndk",
+    "c",
+    "cpp",
+    "logging",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "James Turner",
+    "url": ""
+  },
+  "template": {
+    "id": "org.appdevforall.nativeloggingdemos",
+    "version": "1.0.0",
+    "minAppVersion": "26.40"
+  }
+}
