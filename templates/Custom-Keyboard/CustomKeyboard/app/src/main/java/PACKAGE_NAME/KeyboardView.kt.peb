@@ -1,0 +1,376 @@
+package ${{PACKAGE_NAME}}
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import android.os.Bundle
+import android.util.TypedValue
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.View
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.customview.widget.ExploreByTouchHelper
+
+/**
+ * Draws one layer of a [KeyboardLayout] and reports key presses to a [Listener].
+ * It holds no typing state of its own; [KeyboardService] decides what to show.
+ */
+@SuppressLint("ViewConstructor")
+class KeyboardView(context: Context, private val listener: Listener) : View(context) {
+
+    interface Listener {
+        /** [output] is the key's own text, or the alternative picked on long-press. */
+        fun onKey(key: Key, output: String)
+
+        fun onKeyLongPress(key: Key)
+    }
+
+    enum class Shift { OFF, ONCE, LOCKED }
+
+    private class KeyBox(val key: Key, val rect: RectF)
+
+    private var rows: List<Row> = emptyList()
+    private var heightInRows = 1
+    // Room left under the keys for the navigation bar.
+    private var bottomInset = 0
+    private var boxes: List<KeyBox> = emptyList()
+    private var shift = Shift.OFF
+    private var enterLabel = ""
+    private var layoutName = ""
+    private var nextLayoutName = ""
+
+    private var pressed: KeyBox? = null
+    private var activePointer = -1
+    private var lastX = 0f
+    private var longPressFired = false
+    private var popupOptions: List<String> = emptyList()
+    private var popupRect = RectF()
+    private var popupSelection = 0
+
+    private val gap = dp(3f)
+    private val radius = dp(6f)
+
+    // Text sizes are in sp so they follow the system font size, and the keys grow with them.
+    private val labelPaint = textPaint(sp(22f), R.color.key_text)
+    private val smallPaint = textPaint(sp(14f), R.color.key_text)
+    // Hints stay small at large font sizes, where a growing hint would cover the label.
+    private val hintPaint = textPaint(minOf(sp(11f), dp(14f)), R.color.key_hint)
+
+    private val keyPaint = fillPaint(R.color.key_background)
+    private val specialPaint = fillPaint(R.color.key_special_background)
+    private val pressedPaint = fillPaint(R.color.key_pressed)
+    private val accentPaint = fillPaint(R.color.key_accent)
+    private val popupPaint = fillPaint(R.color.popup_background)
+
+    private val longPress = Runnable { onLongPressTimeout() }
+    private val repeat = object : Runnable {
+        override fun run() {
+            pressed?.let { listener.onKey(it.key, it.key.output) }
+            postDelayed(this, REPEAT_INTERVAL_MS)
+        }
+    }
+
+    private val accessibility = KeyAccessibility()
+
+    init {
+        setBackgroundColor(ContextCompat.getColor(context, R.color.keyboard_background))
+        ViewCompat.setAccessibilityDelegate(this, accessibility)
+        // From Android 15 a keyboard window is drawn edge to edge, behind the navigation
+        // bar. Keep the keys above it; the background still fills the space below.
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            if (bottom != bottomInset) {
+                bottomInset = bottom
+                requestLayout()
+            }
+            insets
+        }
+    }
+
+    fun show(
+        rows: List<Row>,
+        heightInRows: Int,
+        shift: Shift,
+        enterLabel: String,
+        layoutName: String,
+        nextLayoutName: String,
+    ) {
+        this.rows = rows
+        this.heightInRows = maxOf(heightInRows, rows.size)
+        this.shift = shift
+        this.enterLabel = enterLabel
+        this.layoutName = layoutName
+        this.nextLayoutName = nextLayoutName
+        // Lay out now for the next frame; requestLayout() re-measures if the height changed.
+        if (width > 0) layoutKeys(width, height)
+        requestLayout()
+        accessibility.invalidateRoot()
+        invalidate()
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        // The listener below can run after the first measure of a new view, so read the
+        // inset here too.
+        ViewCompat.getRootWindowInsets(this)?.let {
+            bottomInset = it.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+        }
+        val rowHeight = maxOf(dp(48f), labelPaint.textSize * 2.2f)
+        // At very large font sizes, stop before the keyboard hides the app entirely.
+        val maxHeight = resources.displayMetrics.heightPixels * 0.5f
+        val height = minOf(rowHeight * heightInRows, maxHeight) + gap * 2
+        setMeasuredDimension(width, height.toInt() + bottomInset)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        layoutKeys(right - left, bottom - top)
+    }
+
+    private fun layoutKeys(w: Int, h: Int) {
+        if (rows.isEmpty()) return
+        val rowHeight = (h - bottomInset - gap * 2) / rows.size
+        // One width unit for the whole layer, so keys line up from row to row.
+        // A row with less total width than the widest is centred.
+        val unit = (w - gap * 2) / rows.maxOf { row -> row.sumOf { it.width.toDouble() } }.toFloat()
+        val result = mutableListOf<KeyBox>()
+        rows.forEachIndexed { r, row ->
+            val rowWidth = row.sumOf { it.width.toDouble() }.toFloat() * unit
+            var x = (w - rowWidth) / 2
+            val top = gap + r * rowHeight
+            for (key in row) {
+                val keyWidth = key.width * unit
+                result += KeyBox(key, RectF(x, top, x + keyWidth, top + rowHeight))
+                x += keyWidth
+            }
+        }
+        boxes = result
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        for (box in boxes) drawKey(canvas, box)
+        if (popupOptions.isNotEmpty()) drawPopup(canvas)
+    }
+
+    private fun drawKey(canvas: Canvas, box: KeyBox) {
+        val key = box.key
+        val r = RectF(box.rect).apply { inset(gap, gap) }
+        val fill = when {
+            box === pressed && popupOptions.isEmpty() -> pressedPaint
+            key.type == KeyType.SHIFT && shift == Shift.LOCKED -> accentPaint
+            key.type == KeyType.SHIFT && shift == Shift.ONCE -> pressedPaint
+            key.type == KeyType.CHARACTER || key.type == KeyType.SPACE -> keyPaint
+            else -> specialPaint
+        }
+        canvas.drawRoundRect(r, radius, radius, fill)
+
+        val (text, paint) = when (key.type) {
+            KeyType.SPACE -> layoutName to smallPaint
+            KeyType.LANGUAGE -> nextLayoutName to smallPaint
+            KeyType.ENTER -> enterLabel to (if (enterLabel.length > 2) smallPaint else labelPaint)
+            KeyType.SYMBOLS, KeyType.LETTERS -> key.label to smallPaint
+            else -> key.label to labelPaint
+        }
+        drawCentred(canvas, text, paint, r)
+
+        // A small mark in the corner shows that a key has alternatives.
+        key.popup.firstOrNull()?.let {
+            val x = r.right - hintPaint.measureText(it) / 2 - gap
+            canvas.drawText(it, x, r.top + hintPaint.textSize * 1.1f, hintPaint)
+        }
+    }
+
+    private fun drawPopup(canvas: Canvas) {
+        canvas.drawRoundRect(popupRect, radius, radius, popupPaint)
+        val cell = popupRect.width() / popupOptions.size
+        popupOptions.forEachIndexed { i, option ->
+            val r = RectF(popupRect.left + i * cell, popupRect.top, popupRect.left + (i + 1) * cell, popupRect.bottom)
+            if (i == popupSelection) canvas.drawRoundRect(RectF(r).apply { inset(gap, gap) }, radius, radius, accentPaint)
+            drawCentred(canvas, option, labelPaint, r)
+        }
+    }
+
+    // Shrinks a label that is too wide for its key rather than letting it spill over.
+    private fun drawCentred(canvas: Canvas, text: String, paint: Paint, r: RectF) {
+        if (text.isEmpty()) return
+        val size = paint.textSize
+        val width = paint.measureText(text)
+        val room = r.width() * 0.85f
+        if (width > room) paint.textSize = size * room / width
+        val y = r.centerY() - (paint.descent() + paint.ascent()) / 2
+        canvas.drawText(text, r.centerX(), y, paint)
+        paint.textSize = size
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> press(event.getPointerId(0), event.x, event.y)
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // A fast typist presses the next key before lifting the last one.
+                // Finish the first key now, then follow the new finger.
+                release()
+                val i = event.actionIndex
+                press(event.getPointerId(i), event.getX(i), event.getY(i))
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val i = event.findPointerIndex(activePointer)
+                if (i >= 0) move(event.getX(i), event.getY(i))
+            }
+            MotionEvent.ACTION_UP -> release()
+            MotionEvent.ACTION_POINTER_UP ->
+                if (event.getPointerId(event.actionIndex) == activePointer) release()
+            MotionEvent.ACTION_CANCEL -> cancel()
+        }
+        return true
+    }
+
+    private fun press(pointer: Int, x: Float, y: Float) {
+        val box = boxAt(x, y) ?: return
+        activePointer = pointer
+        pressed = box
+        lastX = x
+        longPressFired = false
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        if (box.key.type == KeyType.BACKSPACE) {
+            listener.onKey(box.key, box.key.output)
+            postDelayed(repeat, REPEAT_DELAY_MS)
+        } else if (box.key.popup.isNotEmpty() || box.key.type == KeyType.LANGUAGE) {
+            postDelayed(longPress, LONG_PRESS_MS)
+        }
+        invalidate()
+    }
+
+    private fun move(x: Float, y: Float) {
+        lastX = x
+        if (popupOptions.isNotEmpty()) {
+            selectPopupOptionAt(x)
+            return
+        }
+        // Sliding onto another key moves the press there, as on a physical keyboard.
+        val box = boxAt(x, y)
+        if (box != null && box !== pressed && pressed?.key?.type != KeyType.BACKSPACE) {
+            removeCallbacks(longPress)
+            pressed = box
+            if (box.key.popup.isNotEmpty() || box.key.type == KeyType.LANGUAGE) postDelayed(longPress, LONG_PRESS_MS)
+            invalidate()
+        }
+    }
+
+    private fun release() {
+        val box = pressed
+        when {
+            box == null -> Unit
+            popupOptions.isNotEmpty() -> listener.onKey(box.key, popupOptions[popupSelection])
+            longPressFired || box.key.type == KeyType.BACKSPACE -> Unit
+            else -> listener.onKey(box.key, box.key.output)
+        }
+        cancel()
+    }
+
+    private fun cancel() {
+        removeCallbacks(longPress)
+        removeCallbacks(repeat)
+        pressed = null
+        activePointer = -1
+        popupOptions = emptyList()
+        invalidate()
+    }
+
+    private fun onLongPressTimeout() {
+        val box = pressed ?: return
+        longPressFired = true
+        if (box.key.popup.isEmpty()) {
+            listener.onKeyLongPress(box.key)
+            return
+        }
+        popupOptions = box.key.popup
+        // Above the key, the same height, kept inside the view.
+        val cell = box.rect.width()
+        val popupWidth = minOf(cell * popupOptions.size, width.toFloat())
+        val left = (box.rect.centerX() - cell / 2).coerceIn(0f, width - popupWidth)
+        val top = (box.rect.top - box.rect.height()).coerceAtLeast(0f)
+        popupRect = RectF(left, top, left + popupWidth, top + box.rect.height())
+        // Near the edge the popup shifts sideways, so the finger may already be over a
+        // later option. Select whatever is under it, as a move would.
+        selectPopupOptionAt(lastX)
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    private fun selectPopupOptionAt(x: Float) {
+        val cell = popupRect.width() / popupOptions.size
+        popupSelection = ((x - popupRect.left) / cell).toInt().coerceIn(0, popupOptions.lastIndex)
+        invalidate()
+    }
+
+    private fun boxAt(x: Float, y: Float): KeyBox? = boxes.firstOrNull { it.rect.contains(x, y) }
+
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean =
+        accessibility.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
+
+    /** Exposes each key to TalkBack, which a custom-drawn view does not do by itself. */
+    private inner class KeyAccessibility : ExploreByTouchHelper(this) {
+        override fun getVirtualViewAt(x: Float, y: Float): Int =
+            boxes.indexOfFirst { it.rect.contains(x, y) }.takeIf { it >= 0 } ?: INVALID_ID
+
+        override fun getVisibleVirtualViews(ids: MutableList<Int>) {
+            boxes.indices.forEach { ids += it }
+        }
+
+        override fun onPopulateNodeForVirtualView(id: Int, node: AccessibilityNodeInfoCompat) {
+            val box = boxes.getOrNull(id)
+            if (box == null) {
+                // A stale id after a layer change; give it an empty, valid node.
+                node.contentDescription = ""
+                node.setBoundsInParent(Rect())
+                return
+            }
+            node.contentDescription = describe(box.key)
+            node.setBoundsInParent(Rect().also { box.rect.roundOut(it) })
+            node.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
+        }
+
+        override fun onPerformActionForVirtualView(id: Int, action: Int, arguments: Bundle?): Boolean {
+            val box = boxes.getOrNull(id) ?: return false
+            if (action != AccessibilityNodeInfoCompat.ACTION_CLICK) return false
+            listener.onKey(box.key, box.key.output)
+            return true
+        }
+
+        private fun describe(key: Key): String = when (key.type) {
+            KeyType.CHARACTER -> key.output
+            KeyType.SHIFT -> context.getString(R.string.key_shift)
+            KeyType.BACKSPACE -> context.getString(R.string.key_backspace)
+            KeyType.ENTER -> context.getString(R.string.key_enter)
+            KeyType.SPACE -> context.getString(R.string.key_space)
+            KeyType.SYMBOLS -> context.getString(R.string.key_symbols)
+            KeyType.LETTERS -> context.getString(R.string.key_letters)
+            KeyType.LANGUAGE -> context.getString(R.string.key_language, nextLayoutName)
+        }
+    }
+
+    private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)
+
+    private fun sp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
+
+    private fun textPaint(size: Float, color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = size
+        textAlign = Paint.Align.CENTER
+        this.color = ContextCompat.getColor(context, color)
+    }
+
+    private fun fillPaint(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = ContextCompat.getColor(context, color)
+    }
+
+    private companion object {
+        const val LONG_PRESS_MS = 350L
+        const val REPEAT_DELAY_MS = 400L
+        const val REPEAT_INTERVAL_MS = 50L
+    }
+}

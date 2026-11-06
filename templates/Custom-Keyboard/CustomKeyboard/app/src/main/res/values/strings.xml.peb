@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">${{APP_NAME}}</string>
+
+    <string name="setup_intro">This app is a keyboard. Turn it on once in Settings, then choose it whenever you type.</string>
+    <string name="step_enable">1. Turn on the keyboard</string>
+    <string name="step_enable_detail">Opens Settings. Find this app in the list and switch it on. Android warns that a keyboard can read what you type; that is true of every keyboard.</string>
+    <string name="button_enable">Open keyboard settings</string>
+    <string name="step_choose">2. Choose it</string>
+    <string name="button_choose">Choose keyboard</string>
+    <string name="step_try">3. Try it</string>
+    <string name="try_hint">Type here</string>
+    <string name="status_disabled">Not turned on yet.</string>
+    <string name="status_enabled">Turned on. Choose it in step 2.</string>
+    <string name="status_selected">Ready. This is your current keyboard.</string>
+    <string name="layouts_note">Each language is a file in app/src/main/assets/layouts. Tap the key beside the symbols key to change language. Hold it to switch to another keyboard.</string>
+
+    <!-- Read aloud by TalkBack for keys that have no text of their own. -->
+    <string name="key_shift">Shift</string>
+    <string name="key_backspace">Delete</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_space">Space</string>
+    <string name="key_symbols">Symbols</string>
+    <string name="key_letters">Letters</string>
+    <string name="key_language">Switch to %1$s</string>
+
+    <!-- The enter key shows what it will do in the current text field. -->
+    <string name="action_go">Go</string>
+    <string name="action_search">Search</string>
+    <string name="action_send">Send</string>
+    <string name="action_next">Next</string>
+    <string name="action_previous">Prev</string>
+    <string name="action_done">Done</string>
+</resources>

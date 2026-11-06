@@ -1,0 +1,22 @@
+{
+  "summary": "Adds a starter project for building an Android keyboard in your own language.",
+  "description": "Installs a Custom Keyboard template on the New Project screen. It creates a working Android keyboard: the input method service, a key view with long-press alternatives, shift and symbols pages, and a setup screen that walks the user through turning it on. Each language is a JSON file you edit, with no code changes, so a keyboard for a language Android does not cover is a matter of writing its layout. It ships with English and Hindi layouts, and every key can type several code points, which scripts such as Devanagari need for conjuncts.",
+  "tags": [
+    "keyboard",
+    "input-method",
+    "languages",
+    "kotlin",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "James Turner",
+    "url": ""
+  },
+  "template": {
+    "id": "org.appdevforall.customkeyboard",
+    "version": "1.0.0",
+    "minAppVersion": "26.40"
+  }
+}
