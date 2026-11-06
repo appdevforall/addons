@@ -1,0 +1,15 @@
+{
+  "summary": "Animates a toolbar icon while your app builds.",
+  "description": "A wrench rocks on the editor toolbar while Gradle works, then a tick or a cross shows whether the build passed. When nothing is building the icon is greyed out.",
+  "tags": [
+    "build",
+    "fun",
+    "notification"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

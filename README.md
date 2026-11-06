@@ -24,6 +24,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/AI-Agent-OpenAI/`](plugins/AI-Agent-OpenAI/) | Adds OpenAI-compatible servers as an inference backend for AI Core. |
 | [`plugins/APK-Analyzer/`](plugins/APK-Analyzer/) | Inspects the structure of an APK file inside the editor. |
 | [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
+| [`plugins/Build-Animation/`](plugins/Build-Animation/) | Animates a toolbar icon while your app builds. |
 | [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
 | [`plugins/AI-Code-Suggestions/`](plugins/AI-Code-Suggestions/) | Shows inline code completions as you type. |
 | [`plugins/AI-Literacy-Course/`](plugins/AI-Literacy-Course/) | An offline "Introduction to AI" course with lesson videos and activities. |
