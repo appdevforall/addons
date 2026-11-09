@@ -39,6 +39,7 @@ import com.itsaky.androidide.plugins.aicore.managers.ProjectKey
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatTranscript
+import com.itsaky.androidide.plugins.aicore.models.RunStep
 import com.itsaky.androidide.plugins.aicore.models.SessionRow
 import com.itsaky.androidide.plugins.aicore.models.isRunning
 import com.itsaky.androidide.plugins.aicore.models.traceLabel
@@ -863,12 +864,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 is AgentState.Idle -> binding.agentStatusContainer.isVisible = false
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
-                    binding.agentStatusMessage.text = getString(
-                        R.string.state_executing,
-                        state.stepNumber,
-                        state.totalSteps,
-                        state.description,
-                    )
+                    binding.agentStatusMessage.text = statusLine(state.runStep, state.description)
                     binding.agentStatusTimer.text = getString(
                         R.string.state_executing_timing,
                         formatDuration(state.elapsedMillis),
@@ -878,7 +874,8 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 }
                 is AgentState.Processing -> {
                     binding.agentStatusContainer.isVisible = true
-                    binding.agentStatusMessage.text = getString(R.string.generating_response)
+                    binding.agentStatusMessage.text =
+                        statusLine(state.runStep, getString(R.string.generating_response))
                     binding.agentStatusTimer.text = ""
                 }
                 is AgentState.Error -> {
@@ -895,6 +892,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             composer?.onAgentRunningChanged(state.isRunning)
         }
     }
+
+    /**
+     * Puts the run's step ahead of [activity], so the user sees the step limit coming.
+     *
+     * @param runStep the run's step; null outside the run's tool loop, where [activity] stands alone.
+     * @param activity what the run is doing.
+     */
+    private fun statusLine(runStep: RunStep?, activity: String): String =
+        runStep?.let { getString(R.string.state_run_step, it.number, it.limit, activity) } ?: activity
 
     /**
      * Renders a duration the way the status timer reads it: `4.5s`, or `1m 4.5s` past the minute.
