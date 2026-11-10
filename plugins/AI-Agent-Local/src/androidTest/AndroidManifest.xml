@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- A plain empty activity that the instrumented Part 1 tests keep resumed, so that the process is in /top-app (F01). Test APK only. -->
+    <application>
+        <activity
+            android:name="com.itsaky.androidide.plugins.aiagentlocal.device.TestHostActivity"
+            android:exported="false" />
+    </application>
+</manifest>

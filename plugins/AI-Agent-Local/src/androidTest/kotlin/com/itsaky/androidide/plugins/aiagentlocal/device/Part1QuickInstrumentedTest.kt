@@ -7,9 +7,9 @@ import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineRunner
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.JvmProcessLauncher
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.NativeLibEngineLocator
 import com.itsaky.androidide.plugins.aiagentlocal.device.match.DeviceIndex
+import com.itsaky.androidide.plugins.aiagentlocal.device.quick.AndroidForegroundGate
 import com.itsaky.androidide.plugins.aiagentlocal.device.quick.Clock
 import com.itsaky.androidide.plugins.aiagentlocal.device.quick.ConditionsProvider
-import com.itsaky.androidide.plugins.aiagentlocal.device.quick.ForegroundGate
 import com.itsaky.androidide.plugins.aiagentlocal.device.quick.ProcMemoryProbe
 import com.itsaky.androidide.plugins.aiagentlocal.device.quick.Progress
 import com.itsaky.androidide.plugins.aiagentlocal.device.quick.QuickAnswer
@@ -45,14 +45,16 @@ import org.junit.runner.RunWith
  * P1-04A2 and compiled there; **not run** (it needs a phone, with the plugin's test APK installed and the app on screen). It fails, it does
  * not skip, when the programs are not extracted or the pass does not complete: the message names the result and the reason.
  *
- * Fakes: the dialog (answers Run now), the foreground gate (an instrumentation process has no activity of the IDE; the engine still checks
- * its own `/top-app` cpuset and refuses with exit 97, which ends the pass with `not_foreground`), the IDE gate (idle) and the screen flag.
- * Everything else is real. The work directory is under the target context's files directory; the programs are those of the test APK.
+ * The test starts a plain empty activity ([TestHostActivity], test APK only, `FLAG_KEEP_SCREEN_ON`), keeps it resumed for the whole test and
+ * finishes it in `finally`, so the process is in `/top-app`. The foreground gate is the real [AndroidForegroundGate] on that activity (the
+ * engine checks its own cpuset as well, exit 97).
+ * Fakes: the dialog (answers Run now), the IDE gate (idle) and the screen flag. Everything else is real. The work directory is under the target context's files directory; the programs are those of the test APK.
  */
 @RunWith(AndroidJUnit4::class)
 class Part1QuickInstrumentedTest {
 
-    private val test = InstrumentationRegistry.getInstrumentation().context
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val test = instrumentation.context
     private val target = InstrumentationRegistry.getInstrumentation().targetContext
 
     private class RunNowUi : QuickTierUi {
@@ -66,6 +68,15 @@ class Part1QuickInstrumentedTest {
 
     @Test
     fun givenTheRealRunnerAndAFakeDialogThatSaysRunNow_whenAWholeT1PassRuns_thenItCompletesAndTheDescriptorHasMeasuredLeaves() {
+        val host = TestHostActivity.start(instrumentation)
+        try {
+            wholePass(host)
+        } finally {
+            TestHostActivity.finishAndWait(instrumentation, host)
+        }
+    }
+
+    private fun wholePass(host: TestHostActivity) {
         val locator = NativeLibEngineLocator(
             findLibrary = { name -> File(test.applicationInfo.nativeLibraryDir, "lib$name.so").takeIf { it.isFile }?.path },
             dataDir = File(test.applicationInfo.dataDir), pluginId = test.packageName,
@@ -83,7 +94,7 @@ class Part1QuickInstrumentedTest {
         val ui = RunNowUi()
         val tier = QuickTier(
             engine = runner, store = store, index = { DeviceIndex.loadFromAssets { target.assets.open(it) } },
-            foreground = ForegroundGate { true }, ide = object : QuietIdeGate { override fun isBusy() = false; override fun startsSeen() = 0L },
+            foreground = AndroidForegroundGate { host }, ide = object : QuietIdeGate { override fun isBusy() = false; override fun startsSeen() = 0L },
             conditions = ConditionsProvider { conditions.read() }, memory = ProcMemoryProbe(files),
             screen = object : ScreenKeeper { override fun keepOn() {}; override fun release() {} },
             ui = ui, clock = SystemClockImpl as Clock, watchdog = ThreadWatchdog(), pluginVersion = "test",
