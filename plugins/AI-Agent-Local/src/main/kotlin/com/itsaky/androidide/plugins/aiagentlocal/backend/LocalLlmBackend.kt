@@ -60,6 +60,12 @@ class LocalLlmBackend(
     private val modelSourceOverride: NativeModelSource? = null,
     private val engineOverride: ModelResidencyEngine? = null,
     private val watcherOverride: ModelSourceWatcher? = null,
+    /**
+     * Called under [generationMutex] when a model is about to be loaded (not when it is already resident), before anything is opened
+     * or loaded. Part 1's quick measurement (tier T1) runs here when its switch is on; the default `null` does nothing. A failure in
+     * the hook is logged and the load goes on; it never fails or hangs the load.
+     */
+    private val beforeModelLoad: (suspend () -> Unit)? = null,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ActiveModelReportingBackend,
     ContextWindowReportingBackend {
 
@@ -437,6 +443,16 @@ class LocalLlmBackend(
             // given back — without it the list grows one entry per refusal until the next start.
             releaseSupersededGrants(modelRef)
             return
+        }
+
+        beforeModelLoad?.let { hook ->
+            try {
+                hook()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                context.logger.warn("Part 1 hook failed (${e.javaClass.simpleName}); the model load goes on")
+            }
         }
 
         val opened = modelSource.open(modelRef) ?: throw unopenable(modelRef)

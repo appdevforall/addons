@@ -5,6 +5,8 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.ai.LlmBackendRegistration
 import com.itsaky.androidide.plugins.ai.prompt.AssetPromptConfigSource
 import com.itsaky.androidide.plugins.aiagentlocal.backend.LocalLlmBackend
+import com.itsaky.androidide.plugins.aiagentlocal.device.quick.AndroidPart1Runtime
+import com.itsaky.androidide.plugins.aiagentlocal.device.quick.Part1Controller
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
 import com.itsaky.androidide.plugins.aiagentlocal.prompt.LocalSystemPrompt
 import com.itsaky.androidide.plugins.aiagentlocal.prompt.config.LocalPromptConfig
@@ -26,6 +28,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
 
     /** The live backend, from [activate] until [deactivate] releases it. */
     @Volatile private var backend: LocalLlmBackend? = null
+
+    /** Part 1 (device characterization): inert unless Experiments and the plugin preference are both on. Built per activation. */
+    @Volatile private var part1: Part1Controller? = null
 
     /** Keeps [backend] registered with AI Core across its restarts, and reports setting changes. */
     private lateinit var registration: LlmBackendRegistration
@@ -98,9 +103,18 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
             releaseBackend()
             preloadPromptConfig()
 
-            val local = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded)
+            val controller = Part1Controller(
+                switch = AndroidPart1Runtime.switchOf(context) { LocalLlmPreferences.deviceCharacterization(context) },
+                runtimeFactory = { AndroidPart1Runtime.create(context) },
+                background = { r -> Thread(r, "part1-t0").apply { isDaemon = true }.start() },
+                log = { context.logger.info("Part1: $it") },
+            )
+            part1 = controller
+            val local = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded, beforeModelLoad = controller::beforeModelLoad)
             backend = local
             registration.start(local)
+            // Tier T0 in the background, only with the switch on; it never delays or fails the activation
+            controller.onActivated()
 
             true
         } catch (e: Exception) {
@@ -154,6 +168,8 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
      */
     private fun releaseBackend() {
         if (::registration.isInitialized) registration.stop()
+        part1?.close()
+        part1 = null
         backend?.close()
         backend = null
     }

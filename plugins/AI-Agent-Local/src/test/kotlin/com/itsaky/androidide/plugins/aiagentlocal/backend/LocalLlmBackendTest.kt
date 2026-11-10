@@ -732,4 +732,60 @@ class LocalLlmBackendTest {
         const val OTHER_CONTENT_URI = "content://com.android.externalstorage.documents/document/other.gguf"
         const val KEY_SUPERSEDED = "local_llm_superseded_models"
     }
+
+    // ---- the Part 1 hook (P1-04A2) -------------------------------------------------------------------------------------
+
+    private fun backendWithHook(source: NativeModelSource, engine: ModelResidencyEngine, hook: suspend () -> Unit) =
+        LocalLlmBackend(pluginContext, { null }, source, engine, FakeWatcher(), beforeModelLoad = hook)
+
+    @Test
+    fun givenAHook_whenAModelLoadsAndLoadsAgain_thenItRunsOnceBeforeTheOpenAndNotForAResidentModel() {
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val order = ArrayList<String>()
+        val backend = backendWithHook(source, FakeEngine()) { order.add("hook openCount=${source.openCount}") }
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI); backend.ensureModelLoaded(CONTENT_URI) }
+        assertEquals(listOf("hook openCount=0"), order) // before anything was opened, once
+        assertEquals(1, source.openCount)
+    }
+
+    @Test
+    fun givenAHookThatThrows_whenAModelLoads_thenTheLoadGoesOnAndNothingIsRaised() {
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        val backend = backendWithHook(source, engine) { throw IllegalStateException("part 1 bug") }
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertEquals(1, engine.loadCount)
+    }
+
+    @Test
+    fun givenAHookThatIsCancelled_whenAModelLoads_thenTheCancellationIsPassedOnAndNothingIsLoaded() {
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        val backend = backendWithHook(source, engine) { throw kotlinx.coroutines.CancellationException("cancelled") }
+        assertThrows(kotlinx.coroutines.CancellationException::class.java) { runBlocking { backend.ensureModelLoaded(CONTENT_URI) } }
+        assertEquals(0, engine.loadCount)
+        assertEquals(0, source.openCount)
+    }
+
+    @Test
+    fun givenAHookOfAnOffController_whenAModelLoads_thenNothingOfPart1RunsAndTheLoadIsTheSame() {
+        val boom = { throw AssertionError("Part 1 touched something while it is off") }
+        val controller = com.itsaky.androidide.plugins.aiagentlocal.device.quick.Part1Controller(
+            switch = com.itsaky.androidide.plugins.aiagentlocal.device.quick.Part1Switch.of({ false }, { boom() }),
+            runtimeFactory = { boom() }, background = { boom() }, log = { boom() },
+        )
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        val backend = backendWithHook(source, engine, controller::beforeModelLoad)
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertEquals(1, engine.loadCount)
+    }
+
+    @Test
+    fun givenNoHook_whenAModelLoads_thenTheLoadIsUnchanged() {
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        runBlocking { backendWith(source, engine).ensureModelLoaded(CONTENT_URI) }
+        assertEquals(1, engine.loadCount)
+    }
 }

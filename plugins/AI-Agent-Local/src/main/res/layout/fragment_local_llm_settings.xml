@@ -79,4 +79,27 @@
         android:checked="true"
         android:layout_marginTop="16dp" />
 
+    <!-- Part 1: shown only while the host's Experiments switch is on (see LocalLlmSettingsFragment) -->
+    <LinearLayout
+        android:id="@+id/device_characterization_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <CheckBox
+            android:id="@+id/switch_device_characterization"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_device_characterization" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/desc_device_characterization"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textColor="?android:attr/textColorSecondary" />
+    </LinearLayout>
+
 </LinearLayout>

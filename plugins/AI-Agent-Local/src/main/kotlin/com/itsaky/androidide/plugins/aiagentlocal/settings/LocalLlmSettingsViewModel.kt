@@ -443,6 +443,13 @@ class LocalLlmSettingsViewModel(
         prefs()?.edit()?.putBoolean(KEY_SIMPLE_PROMPT, enabled)?.apply()
     }
 
+    fun setDeviceCharacterization(enabled: Boolean) {
+        prefs()?.edit()?.putBoolean(LocalLlmPreferences.KEY_DEVICE_CHARACTERIZATION, enabled)?.apply()
+    }
+
+    fun isDeviceCharacterizationEnabled(): Boolean =
+        prefs()?.getBoolean(LocalLlmPreferences.KEY_DEVICE_CHARACTERIZATION, false) ?: false
+
     fun isUseSimpleLocalPromptEnabled(): Boolean =
         prefs()?.getBoolean(KEY_SIMPLE_PROMPT, true) ?: true
 

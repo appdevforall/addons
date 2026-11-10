@@ -22,6 +22,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentlocal.plugin.LocalLlmPlugin
 import com.itsaky.androidide.plugins.aiagentlocal.R
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.services.IdeFeatureFlagService
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
 
@@ -151,6 +152,8 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
             wireTooltip(this, LocalLlmPlugin.TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT)
         }
 
+        setupDeviceCharacterization(view)
+
         // All three lines describe the same model, so they are drawn from one state in one pass:
         // an unreachable model must not read as ready on one line and missing on another.
         viewModel.state.observe(viewLifecycleOwner) { state ->
@@ -202,12 +205,37 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
     }
 
     /**
+     * The Part 1 switch, shown only while the host's Experiments switch is on (it does nothing otherwise). Read again on every resume, so
+     * turning Experiments on or off shows or hides it without leaving the pane.
+     */
+    private fun setupDeviceCharacterization(view: View) {
+        val group = view.findViewById<View>(R.id.device_characterization_group) ?: return
+        val box = view.findViewById<CheckBox>(R.id.switch_device_characterization)
+        box?.apply {
+            isChecked = viewModel.isDeviceCharacterizationEnabled()
+            setOnCheckedChangeListener { _, isChecked -> viewModel.setDeviceCharacterization(isChecked) }
+        }
+        group.visibility = if (experimentsEnabled()) View.VISIBLE else View.GONE
+        deviceCharacterizationGroup = group
+    }
+
+    private var deviceCharacterizationGroup: View? = null
+
+    private fun experimentsEnabled(): Boolean = try {
+        PluginFragmentHelper.getServiceRegistry(LocalLlmPlugin.PLUGIN_ID)
+            ?.get(IdeFeatureFlagService::class.java)?.isExperimentsEnabled() == true
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
      * The model file lives outside the IDE and can be deleted or unmounted while this screen is
      * away, so its availability is re-checked on every return rather than only at first load.
      */
     override fun onResume() {
         super.onResume()
         viewModel.refreshSavedModelAvailability()
+        deviceCharacterizationGroup?.visibility = if (experimentsEnabled()) View.VISIBLE else View.GONE
     }
 
     /**

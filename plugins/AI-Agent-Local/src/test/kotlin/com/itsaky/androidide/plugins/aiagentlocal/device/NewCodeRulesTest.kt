@@ -6,11 +6,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Source-level rules of the engine, staticread and store packages (P1-04A1): not wired in, nothing forbidden, nothing logged. */
+/**
+ * Source-level rules of the Part 1 packages: engine, staticread and store (P1-04A1: nothing forbidden, nothing logged) and quick (P1-04A2: the
+ * only package the plugin reaches, no network, no identifier in a log line).
+ */
 class NewCodeRulesTest {
 
     private val srcRoot = File(System.getProperty("part1MainSrcDir") ?: "src/main/kotlin")
-    private val newPackages = listOf("engine", "staticread", "store")
+    private val newPackages = listOf("engine", "staticread", "store", "quick")
+    private val part1Packages = listOf("engine", "staticread", "store", "quick", "descriptor", "match")
     private val base = "com/itsaky/androidide/plugins/aiagentlocal"
 
     private fun newFiles(): List<File> =
@@ -18,18 +22,18 @@ class NewCodeRulesTest {
 
     private fun existingFiles(): List<File> =
         srcRoot.walkTopDown().filter { it.isFile && it.name.endsWith(".kt") }.filter { f ->
-            newPackages.none { p -> f.path.replace('\\', '/').contains("$base/device/$p/") }
+            part1Packages.none { p -> f.path.replace('\\', '/').contains("$base/device/$p/") }
         }.toList()
 
     @Test
-    fun givenTheExistingSources_whenScanned_thenNoneReferencesTheNewPackages() {
+    fun givenTheExistingSources_whenScanned_thenOnlyThePluginAndTheBackendReachPart1AndOnlyThroughTheQuickPackage() {
         val existing = existingFiles()
         assertTrue("existing sources found: ${existing.size}", existing.size > 20)
-        val pattern = Regex("aiagentlocal\\.device\\.(engine|staticread|store)\\b")
-        val bad = existing.filter { f -> pattern.containsMatchIn(f.readText()) }.map { it.name }
-        assertEquals(emptyList<String>(), bad)
-        // the plugin class itself does not mention them either
-        assertTrue(existing.any { it.name == "LocalLlmPlugin.kt" })
+        val inner = Regex("aiagentlocal\\.device\\.(engine|staticread|store|descriptor|match)\\b")
+        assertEquals(emptyList<String>(), existing.filter { f -> inner.containsMatchIn(f.readText()) }.map { it.name })
+        val quick = Regex("aiagentlocal\\.device\\.quick\\b")
+        // the plugin class builds the controller; nothing else outside the device packages names the package
+        assertEquals(listOf("LocalLlmPlugin.kt"), existing.filter { f -> quick.containsMatchIn(f.readText()) }.map { it.name }.sorted())
     }
 
     @Test
@@ -51,8 +55,32 @@ class NewCodeRulesTest {
     fun givenTheNewSources_whenScanned_thenNothingIsLoggedOrPrinted() {
         val bad = ArrayList<String>()
         val loggers = listOf(Regex("\\bLog\\.[a-z]\\("), Regex("println\\("), Regex("\\bprint\\("), Regex("Timber"), Regex("\\blogger\\b", RegexOption.IGNORE_CASE), Regex("System\\.(out|err)"), Regex("printStackTrace"), Regex("android\\.util\\.Log"))
-        for (f in newFiles()) for (r in loggers) if (r.containsMatchIn(f.readText())) bad.add("${f.name}: ${r.pattern}")
+        // the quick package logs only through an injected log function; the one class that holds the plugin logger is AndroidQuick.kt
+        for (f in newFiles()) for (r in loggers) {
+            if (f.name == "AndroidQuick.kt" && r.pattern.contains("logger")) continue
+            if (r.containsMatchIn(f.readText())) bad.add("${f.name}: ${r.pattern}")
+        }
         assertEquals(emptyList<String>(), bad)
+    }
+
+    @Test
+    fun givenTheQuickSources_whenScanned_thenNoNetworkApiIsUsedAndNoLogLineInterpolatesAFingerprintOrKey() {
+        val network = listOf("java." + "net.", "android." + "net.", "Http" + "URLConnection", "okhttp", "Sock" + "et(", "URL" + "(", "Retrofit", "WebView")
+        val bad = ArrayList<String>()
+        val quick = File(srcRoot, "$base/device/quick").walkTopDown().filter { it.isFile && it.name.endsWith(".kt") }.toList()
+        assertTrue(quick.size >= 6)
+        for (f in quick) {
+            val text = f.readText()
+            for (w in network) if (text.contains(w)) bad.add("${f.name}: $w")
+            // no string resource and no log text may carry an identifier either: log( and logger calls
+            for ((i, line) in text.lines().withIndex()) {
+                if (Regex("\\blog\\(|logger\\.").containsMatchIn(line) && Regex("\\$\\{?[A-Za-z_.()]*([Ff]ingerprint|[Kk]ey)").containsMatchIn(line)) bad.add("${f.name}:${i + 1} logs a fingerprint or key")
+            }
+        }
+        assertEquals(emptyList<String>(), bad)
+        // every string resource of Part 1 is free of identifiers and addresses
+        val strings = File(srcRoot.parentFile, "res/values/strings.xml").readText()
+        assertTrue(!strings.contains("fingerprint", ignoreCase = true) && !strings.contains("device key", ignoreCase = true))
     }
 
     @Test

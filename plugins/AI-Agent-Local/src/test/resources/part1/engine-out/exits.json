@@ -1,5 +1,5 @@
 {
- "note": "Recorded engine output (stdout) of the D5 phone from P1-03S (engine 0.2.1) and P1-03P (engine 0.2.3), copied unchanged. Values are the exit codes of those runs. They hold hardware names (board, SoC, GPU) and no fingerprint, serial, address or lab path.",
+ "note": "Recorded engine output (stdout) of the D5 phone and (the d1-* files) of the D1 phone, from P1-03S (engine 0.2.1) and P1-03P (engine 0.2.3), copied unchanged. Values are the exit codes of those runs. They hold hardware names (board, SoC, GPU) and no fingerprint, serial, address or lab path.",
  "d5-row-c2-ok-v0.2.1.out": 0,
  "d5-row-c3-ok.out": 0,
  "d5-row-c4-ok.out": 0,
@@ -13,5 +13,14 @@
  "d5-gpuprobe-v0.2.3.out": 0,
  "d5-row-c2-fast-ok-v0.2.1.out": 0,
  "d5-row-c5-write-ok.out": 0,
- "d5-row-c6-copy-ok.out": 0
+ "d5-row-c6-copy-ok.out": 0,
+ "d1-staticprobe-v0.2.3.out": 0,
+ "d1-gpuprobe-v0.2.3.out": 0,
+ "d1-pinprobe-v0.2.3.out": 0,
+ "d1-gpu-row-unstable-v0.2.3.out": 0,
+ "d1-row-c2-k0-v0.2.1.out": 0,
+ "d1-row-c2-k4-v0.2.1.out": 0,
+ "d1-row-c2-k6-v0.2.1.out": 0,
+ "d1-row-c3-v0.2.1.out": 0,
+ "d1-row-c4-v0.2.1.out": 0
 }

@@ -21,6 +21,9 @@ internal object LocalLlmPreferences {
     const val KEY_MODEL_SHA256 = "local_llm_model_sha256"
     const val KEY_SIMPLE_PROMPT = "use_simple_local_prompt"
 
+    /** Part 1 (device characterization): off by default; it only has an effect while the host's Experiments switch is on. */
+    const val KEY_DEVICE_CHARACTERIZATION = "deviceCharacterization"
+
     /**
      * Models a later selection replaced, whose persisted read grant is still held. Written by the
      * settings pane at selection time and cleared by the first load that actually succeeds, so a
@@ -75,6 +78,10 @@ internal object LocalLlmPreferences {
      */
     fun useSimplePrompt(context: PluginContext): Boolean =
         of(context).getBoolean(KEY_SIMPLE_PROMPT, true)
+
+    /** Whether the user switched Part 1 on. Default **false**. */
+    fun deviceCharacterization(context: PluginContext): Boolean =
+        of(context).getBoolean(KEY_DEVICE_CHARACTERIZATION, false)
 
     /**
      * The models whose read grants are held for a selection that has not been loaded yet. Not one

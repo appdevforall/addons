@@ -42,4 +42,22 @@
     <string name="llm_memory_warning_cancel">Cancel</string>
     <string name="llm_memory_warning_declined">Model not selected. The previously selected model, if any, is unchanged.</string>
     <string name="error_model_save_failed">Failed to save the model path: %1$s</string>
+    <!-- Device characterization (Part 1): the setting, the one question, the progress -->
+    <string name="label_device_characterization">Measure this device for local AI (experimental)</string>
+    <string name="desc_device_characterization">When the local model is first loaded in a session, measure this phone\'s memory speed once. It takes about one minute and keeps the screen on. You can skip it. Nothing leaves the phone.</string>
+    <string name="part1_dialog_title">Measure this phone?</string>
+    <string name="part1_dialog_message">Code on the Go can measure how fast this phone reads memory, so the on-device AI can choose good settings. It takes about one minute and works the processor and graphics chip hard for a few seconds at a time. Keep this screen open while it runs. Nothing leaves the phone. If you skip it, you will be asked again the next time a model loads in a new session.</string>
+    <string name="part1_dialog_run">Run now</string>
+    <string name="part1_dialog_skip">Skip</string>
+    <string name="part1_progress_title">Measuring this phone</string>
+    <string name="part1_progress_row">Step %1$d of %2$d: %3$s</string>
+    <string name="part1_row_pin_probe">checking which processor cores can be used</string>
+    <string name="part1_row_cluster_read">memory read speed of core group %1$d</string>
+    <string name="part1_row_two_fast">memory read speed of the two fastest cores</string>
+    <string name="part1_row_all">memory read speed of all cores together</string>
+    <string name="part1_row_gpu">memory read speed of the graphics chip</string>
+    <string name="part1_waiting_ide">Waiting for the IDE to finish its build or sync…</string>
+    <string name="part1_waiting_thermal">Waiting for the phone to cool down…</string>
+    <string name="part1_waiting_rest">Resting between steps…</string>
+    <string name="part1_cancel">Cancel</string>
 </resources>
