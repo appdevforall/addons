@@ -70,17 +70,22 @@ class GeneratorBehaviourTest {
     }
 
     @Test
-    fun givenWordsBelowAndAtTwoToThe53_whenGenerated_thenTheDescriptorHoldsAnIntegerBelowAndAHexStringAtOrAbove() {
+    fun givenWordsBelowAndAtTwoToThe53_whenGenerated_thenTheDescriptorAlwaysHoldsALowerCaseHexString() {
         val s = staticOf("t0-no-rows-no-record")
         fun words(hw: Any?, hw2: Any?): Map<*, *> {
             val feats = Json.obj(s["features"], "f") + ("hwcap" to hw) + ("hwcap2" to hw2)
             return (Json.fromOrg(gen(s + ("features" to feats))) as Map<*, *>)["capabilities"] as Map<*, *>
         }
         val c = words((1L shl 53) - 1, "0x20000000000000")
-        assertEquals((1L shl 53) - 1, (c["hwcap"] as Map<*, *>)["value"])
+        assertEquals("0x1fffffffffffff", (c["hwcap"] as Map<*, *>)["value"]) // an integer input below 2^53 is still accepted; the leaf is a string
         assertEquals("0x20000000000000", (c["hwcap2"] as Map<*, *>)["value"])
-        val u = words("0x1FFFFFFFFFFFFF", "0x1") // upper-case hex digits are allowed
-        assertEquals((1L shl 53) - 1, (u["hwcap"] as Map<*, *>)["value"])
+        val u = words("0x1FFFFFFFFFFFFF", "0x1") // upper-case hex digits are allowed; the descriptor is lower-case
+        assertEquals("0x1fffffffffffff", (u["hwcap"] as Map<*, *>)["value"])
+        assertEquals("0x1", (u["hwcap2"] as Map<*, *>)["value"])
+        val z = words(0L, "0x0")
+        assertEquals("0x0", (z["hwcap"] as Map<*, *>)["value"])
+        assertEquals("0x0", (z["hwcap2"] as Map<*, *>)["value"])
+        for (k in listOf("hwcap", "hwcap2")) assertTrue((z[k] as Map<*, *>)["value"] is String)
     }
 
     @Test

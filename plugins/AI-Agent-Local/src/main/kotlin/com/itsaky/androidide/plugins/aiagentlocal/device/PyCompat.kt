@@ -108,44 +108,23 @@ internal object PyCompat {
     fun format1(x: Double): String = BigDecimal(x).setScale(1, RoundingMode.HALF_EVEN).toPlainString()
 
     /**
-     * CPython 3.12 `sum()` over numbers (`builtin_sum_impl`), step for step:
-     *  1. while the items are integers they are added exactly (an `int` result when all are);
-     *  2. the first float is added to the integer total with a plain add (`PyNumber_Add`), which starts the float
-     *     phase with a compensation term of 0;
-     *  3. in the float phase a float item is added with Neumaier compensation, but an integer item is added with
-     *     a plain `f += (double) value` that does not touch the compensation term;
-     *  4. at the end the compensation is added when it is non-zero and finite.
-     * Returns Long (all integers) or Double. Integers are Long here because the JSON reader turns every integral
-     * number (also `8.0`) into an integer, which CPython would keep a float in step 3: see the KDoc of [Json].
+     * Python `math.fsum` over numbers: an exactly rounded sum (P1-04D, planner decision on P1-04C F02). Every item is
+     * added as the exact decimal value of its double, and the total is rounded once to the nearest double, ties to
+     * even, so the spelling (`8` or `8.0`) and the order of the items cannot change the result. An empty list gives
+     * 0.0; negative zero is kept only when every item is negative zero (as `math.fsum` does). A total outside the
+     * double range raises, as `math.fsum` raises OverflowError. Items are Long or Double (see [num]).
      */
-    fun sum(values: List<Any?>): Number {
-        var iResult = 0L
-        var i = 0
-        while (i < values.size && values[i] is Long) {
-            iResult = Math.addExact(iResult, values[i] as Long)
-            i++
+    fun fsum(values: List<Any?>): Double {
+        var exact = BigDecimal.ZERO
+        for (v in values) {
+            val d = num(v)
+            require(!d.isNaN() && !d.isInfinite()) { "fsum: a non-finite value" }
+            exact = exact.add(BigDecimal(d))
         }
-        if (i == values.size) return iResult
-        var f = iResult.toDouble() + num(values[i]) // step 2
-        i++
-        var c = 0.0
-        while (i < values.size) {
-            val item = values[i]
-            if (item is Double) { // step 3, Neumaier
-                val t = f + item
-                c += if (Math.abs(f) >= Math.abs(item)) (f - t) + item else (item - t) + f
-                f = t
-            } else {
-                f += num(item) // an integer item: plain add, no compensation
-            }
-            i++
-        }
-        if (c != 0.0 && !c.isNaN() && !c.isInfinite()) f += c // step 4
-        return f
+        val r = exact.toDouble()
+        if (r.isInfinite()) throw ArithmeticException("intermediate overflow in fsum")
+        return if (r == 0.0) 0.0 else r // BigDecimal has no negative zero; Python's fsum returns 0.0 for a zero total
     }
-
-    /** `round(sum, 1)` as Python returns it: an int stays an int. */
-    fun round1(x: Number): Number = if (x is Long) x else round1(x as Double)
 
     fun isSpace(c: Char): Boolean = c.isWhitespace() || c == ' ' || c == '\u001c' || c == '\u001d' || c == '\u001e' || c == '\u001f' || c == '\u0085'
 

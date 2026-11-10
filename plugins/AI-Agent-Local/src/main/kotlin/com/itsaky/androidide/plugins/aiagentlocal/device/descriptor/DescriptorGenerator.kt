@@ -570,8 +570,8 @@ object DescriptorGenerator {
         else -> throw JsonException(path, "expected a hex string such as 0x119fff, got ${Json.describe(x)}")
     }
 
-    /** The JSON value of a decoded word in the descriptor: an integer below 2^53, else a lower-case hex string (`part1lib.word_json`). */
-    private fun wordJson(x: Any?): Any? = (x as BigInteger?)?.let { if (it.bitLength() <= 53) it.toLong() else "0x" + it.toString(16) }
+    /** The JSON value of a decoded word in the descriptor: always a lower-case hex string, whatever its size (`part1lib.word_json`, P1-04D). */
+    private fun wordJson(x: Any?): Any? = (x as BigInteger?)?.let { "0x" + it.toString(16) }
 
     private fun buildCapabilities(cx: Ctx): Obj {
         val f = orEmpty(cx.static["features"], "static.features")
@@ -739,7 +739,7 @@ object DescriptorGenerator {
             if (missing.isNotEmpty()) {
                 note += "; ${missing.size} of ${rows.size} rows have no duration and are not counted (${missing.joinToString(", ")})"
             }
-            leaf(PyCompat.round1(PyCompat.sum(have)), "inferred", emptyMap(), unit = "s", source = "sum of row duration_s", note = note)
+            leaf(PyCompat.round1(PyCompat.fsum(have)), "inferred", emptyMap(), unit = "s", source = "sum of row duration_s", note = note)
         } else if (cx.static["duration_s"] != null && rows.isEmpty()) {
             leaf(cx.static["duration_s"], "static_read", STATIC_COND, unit = "s", source = cx.source("run"))
         } else {

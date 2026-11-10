@@ -18,39 +18,55 @@ class PyCompatTest {
     }
 
     @Test
-    fun givenFloats_whenSummed_thenTheSumIsCompensatedLikePython312() {
-        assertEquals(1.0, PyCompat.sum(List(10) { 0.1 }) as Double, 0.0) // naive addition gives 0.9999999999999999
-        assertEquals(0.6, PyCompat.sum(listOf(0.1, 0.2, 0.3)) as Double, 0.0) // naive: 0.6000000000000001
-        assertEquals(4.8, PyCompat.sum(listOf(1L, 2L, 0.5, 0.1, 0.2, 1e100, 1.0, -1e100)) as Double, 0.0)
-        assertEquals(6L, PyCompat.sum(listOf(1L, 2L, 3L)))
-        assertEquals(1.3, PyCompat.round1(PyCompat.sum(listOf(0.1, 0.2, 0.3, 0.7))) as Double, 0.0)
-        assertEquals(6L, PyCompat.round1(6L))
+    fun givenFloats_whenSummed_thenTheSumIsExactlyRoundedLikeMathFsum() {
+        assertEquals(1.0, PyCompat.fsum(List(10) { 0.1 }), 0.0) // naive addition gives 0.9999999999999999
+        assertEquals(0.6, PyCompat.fsum(listOf(0.1, 0.2, 0.3)), 0.0) // naive: 0.6000000000000001
+        assertEquals(4.8, PyCompat.fsum(listOf(1L, 2L, 0.5, 0.1, 0.2, 1e100, 1.0, -1e100)), 0.0) // 1e100 cancels exactly
+        assertEquals(6.0, PyCompat.fsum(listOf(1L, 2L, 3L)), 0.0)
+        assertEquals(1.3, PyCompat.round1(PyCompat.fsum(listOf(0.1, 0.2, 0.3, 0.7))), 0.0)
+        assertEquals(0.0, PyCompat.fsum(emptyList()), 0.0)
+        assertEquals(java.lang.Double.doubleToRawLongBits(0.0), java.lang.Double.doubleToRawLongBits(PyCompat.fsum(listOf(1.0, -1.0))))
     }
 
     @Test
-    fun givenTheReviewsMixedList_whenSummedAndRounded_thenItIsCPythonsEightyFourPointOne() {
+    fun givenTheReviewsMixedList_whenSummedAndRounded_thenItIsMathFsumsEightyFour() {
         val items = listOf(12L, 9.6, 23.25, 8L, 7.2, 24L)
-        assertEquals(84.1, PyCompat.round1(PyCompat.sum(items)) as Double, 0.0) // the earlier port gave 84
+        assertEquals(84.0, PyCompat.round1(PyCompat.fsum(items)), 0.0) // exact sum 84.04999...; the CPython sum() port gave 84.1
+        assertEquals(PyCompat.fsum(items), PyCompat.fsum(listOf(12.0, 9.6, 23.25, 8.0, 7.2, 24.0)), 0.0) // spelling does not matter
+        assertEquals(PyCompat.fsum(items), PyCompat.fsum(items.reversed()), 0.0) // order does not matter
     }
 
     @Test
-    fun givenMixedIntAndFloatLists_whenSummed_thenEveryResultEqualsPython312Exactly() {
-        val cases = Json.arr(Part1TestResources.tree("part1/pycompat-sum.json"), "sum")
-        assertTrue(cases.size >= 2000)
+    fun givenAHugeTotal_whenSummed_thenItOverflowsLikeMathFsum() {
+        try {
+            PyCompat.fsum(listOf(1e308, 1e308))
+            org.junit.Assert.fail("expected an overflow")
+        } catch (e: ArithmeticException) {
+            assertTrue(e.message!!.contains("overflow"))
+        }
+    }
+
+    private fun checkSumResource(name: String, min: Int) {
+        val cases = Json.arr(Part1TestResources.tree(name), "sum")
+        assertTrue("$name has ${cases.size} cases", cases.size >= min)
         val bad = ArrayList<String>()
         for ((i, c0) in cases.withIndex()) {
             val c = Json.obj(c0, "case")
             val items = Json.arr(c["items"], "items")
-            val got = PyCompat.sum(items)
+            val got = PyCompat.fsum(items)
             val want = (c["sum"] as Number).toDouble()
-            val kind = c["kind"] as String
-            val r1 = PyCompat.round1(got)
-            val ok = (if (kind == "int") got is Long && got.toDouble() == want else got is Double && got.toDouble() == want) &&
-                r1.toDouble() == (c["round1"] as Number).toDouble()
-            if (!ok) bad.add("#$i $items: got $got want ${c["sum"]} ($kind)")
+            val ok = got == want && PyCompat.round1(got) == (c["round1"] as Number).toDouble()
+            if (!ok) bad.add("#$i $items: got $got want ${c["sum"]}")
         }
         assertEquals(emptyList<String>(), bad)
     }
+
+    @Test
+    fun givenTheTwoThousandMixedLists_whenSummed_thenEveryResultEqualsMathFsumExactly() = checkSumResource("part1/pycompat-sum.json", 2011)
+
+    @Test
+    fun givenIntegralFloatsNegativeZeroCancellingValuesAndPermutations_whenSummed_thenEveryResultEqualsMathFsum() =
+        checkSumResource("part1/pycompat-fsum.json", 2000)
 
     @Test
     fun givenStringsWithNonPrintableCharacters_whenReprIsTaken_thenItEqualsPythonRepr() {
