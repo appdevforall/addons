@@ -44,29 +44,74 @@ class NewCodeRulesTest {
         assertEquals(emptyList<String>(), promisingStrings(strings.map { it.readText() }))
     }
 
+    private fun res(body: String) = "<resources>$body</resources>"
+
     @Test
-    fun givenStringsThatPromiseThatResultsStayOnThePhone_whenScanned_thenEveryOneIsFound() {
-        // the scan itself must be able to fail (mutant: "Your results stay on this phone.")
-        for (text in listOf("Your results stay on this phone.", "It leaves your phone.", "Data is kept on the device.", "Results remain on this device", "stored only on your phone",
-            "Never sent anywhere", "Nothing is shared.", "NOTHING IS UPLOADED")) {
-            assertEquals(text, 1, promisingStrings(listOf("""<resources><string name="x">$text</string></resources>""")).size)
-        }
-        assertEquals(emptyList<String>(), promisingStrings(listOf("""<resources><string name="x">Measure this device for local AI.</string></resources>""")))
+    fun givenStringsThatPromiseThatResultsStayOnThePhone_whenScanned_thenEveryAlternativeOfEveryPatternIsFound() {
+        // the scan itself must be able to fail; every alternative of every pattern is used at least once
+        val promises = listOf(
+            "It leaves the phone.", "It leaves your device.", "It leaves this phone.", "It will leave the device.", "Does not leave your phone.", "Does not leave this device.",
+            "Your results stay on this phone.", "Your results stays on the device.", "Results remain on your phone.", "The data remains on this device.",
+            "Data is kept on the device.", "It is stored only on your phone.", "Results stay on the phone.", "Results stay on your device.",
+            "Never sent anywhere", "Never shared.", "Never uploaded.", "never SENT",
+            "Nothing is sent.", "Nothing is shared.", "NOTHING IS UPLOADED",
+        )
+        for (text in promises) assertEquals(text, 1, promisingStrings(listOf(res("""<string name="x">$text</string>"""))).size)
+        assertEquals(emptyList<String>(), promisingStrings(listOf(res("""<string name="x">Measure this device for local AI.</string>"""))))
     }
 
-    /** `name: text` of every string that matches one of the promise patterns (case-insensitive), except the names in [excluded]. */
+    @Test
+    fun givenAPromiseInAStringArrayItem_whenScanned_thenItIsFoundUnderTheNameOfTheArray() {
+        val hits = promisingStrings(listOf(res("""<string-array name="tips"><item>Fine.</item><item>Your results stay on this phone.</item></string-array>""")))
+        assertEquals(listOf("tips: Your results stay on this phone."), hits)
+    }
+
+    @Test
+    fun givenAPromiseInAPluralsItem_whenScanned_thenItIsFoundUnderTheNameOfThePlurals() {
+        val hits = promisingStrings(listOf(res("""<plurals name="rows"><item quantity="one">One row stays on the device.</item><item quantity="other">Rows are fine.</item></plurals>""")))
+        assertEquals(listOf("rows: One row stays on the device."), hits)
+    }
+
+    @Test
+    fun givenAPromiseInAStringWhoseNameIsNotTheFirstAttribute_whenScanned_thenItIsFound() {
+        assertEquals(1, promisingStrings(listOf(res("""<string translatable="false" name="x">Your results stay on this phone.</string>"""))).size)
+        assertEquals(1, promisingStrings(listOf(res("""<string formatted="false" translatable="false" name="y">Nothing is shared.</string>"""))).size)
+    }
+
+    @Test
+    fun givenAPromiseWrappedOverTwoLines_whenScanned_thenItIsFound() {
+        assertEquals(1, promisingStrings(listOf(res("<string name=\"x\">Your results stay\n        on this phone.</string>"))).size)
+        assertEquals(1, promisingStrings(listOf(res("<string name=\"y\">Nothing   is\n\tshared.</string>"))).size)
+        assertEquals(1, promisingStrings(listOf(res("<string name=\"z\"><![CDATA[It leaves\nyour phone]]></string>"))).size)
+    }
+
+    private val promisePatterns = listOf(
+        "leaves? (the|your|this) (phone|device)",
+        "(stay|stays|remain|remains|kept|stored only) on (the|your|this) (phone|device)",
+        "never (sent|shared|uploaded)",
+        "nothing is (sent|shared|uploaded)",
+    ).map { Regex(it, RegexOption.IGNORE_CASE) }
+
+    /** `name: text` of every `string` and of every `item` of a `string-array` or `plurals` that matches a promise pattern (case-insensitive), except the names in [excludedFromPromiseScan]. */
     private fun promisingStrings(files: List<String>): List<String> {
-        val patterns = listOf(
-            "leaves? (the|your|this) (phone|device)",
-            "(stay|stays|remain|remains|kept|stored only) on (the|your|this) (phone|device)",
-            "never (sent|shared|uploaded)",
-            "nothing is (sent|shared|uploaded)",
-        ).map { Regex(it, RegexOption.IGNORE_CASE) }
         val hits = ArrayList<String>()
-        for (xml in files) for (m in Regex("""<string\s+name="([^"]+)"[^>]*>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL).findAll(xml)) {
-            val name = m.groupValues[1]; val text = m.groupValues[2]
-            if (name in excludedFromPromiseScan) continue
-            if (patterns.any { it.containsMatchIn(text) }) hits.add("$name: $text")
+        for (xml in files) {
+            val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true)
+            val doc = factory.newDocumentBuilder().parse(org.xml.sax.InputSource(java.io.StringReader(xml)))
+            val elements = doc.getElementsByTagName("*")
+            for (i in 0 until elements.length) {
+                val e = elements.item(i) as org.w3c.dom.Element
+                val owner = when (e.tagName) {
+                    "string" -> e
+                    "item" -> (e.parentNode as? org.w3c.dom.Element)?.takeIf { it.tagName == "string-array" || it.tagName == "plurals" } ?: continue
+                    else -> continue
+                }
+                val name = owner.getAttribute("name")
+                if (name in excludedFromPromiseScan) continue
+                val text = e.textContent.replace(Regex("""\s+"""), " ").trim() // Android collapses whitespace runs
+                if (promisePatterns.any { it.containsMatchIn(text) }) hits.add("$name: $text")
+            }
         }
         return hits
     }
