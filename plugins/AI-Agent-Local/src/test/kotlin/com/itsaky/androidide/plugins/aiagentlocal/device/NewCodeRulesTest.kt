@@ -38,14 +38,41 @@ class NewCodeRulesTest {
 
     @Test
     fun givenTheStringResources_whenScanned_thenNoStringPromisesThatResultsStayOnThePhone() {
-        // addendum 1: users who opt in to telemetry will later contribute results, so no text may promise that
+        // addendum 1 and R-F08: users who opt in to telemetry will later contribute results, so no text may promise that
         val strings = File(System.getProperty("part1MainResDir") ?: "src/main/res").walkTopDown().filter { it.isFile && it.name == "strings.xml" }.toList()
         assertTrue("strings.xml found", strings.isNotEmpty())
-        val phrases = listOf("leaves the phone", "leave the phone", "stay on the phone")
-        val hits = ArrayList<String>()
-        for (f in strings) for (p in phrases) if (f.readText().contains(p, ignoreCase = true)) hits.add("${f.parentFile.name}/${f.name}: $p")
-        assertEquals(emptyList<String>(), hits)
+        assertEquals(emptyList<String>(), promisingStrings(strings.map { it.readText() }))
     }
+
+    @Test
+    fun givenStringsThatPromiseThatResultsStayOnThePhone_whenScanned_thenEveryOneIsFound() {
+        // the scan itself must be able to fail (mutant: "Your results stay on this phone.")
+        for (text in listOf("Your results stay on this phone.", "It leaves your phone.", "Data is kept on the device.", "Results remain on this device", "stored only on your phone",
+            "Never sent anywhere", "Nothing is shared.", "NOTHING IS UPLOADED")) {
+            assertEquals(text, 1, promisingStrings(listOf("""<resources><string name="x">$text</string></resources>""")).size)
+        }
+        assertEquals(emptyList<String>(), promisingStrings(listOf("""<resources><string name="x">Measure this device for local AI.</string></resources>""")))
+    }
+
+    /** `name: text` of every string that matches one of the promise patterns (case-insensitive), except the names in [excluded]. */
+    private fun promisingStrings(files: List<String>): List<String> {
+        val patterns = listOf(
+            "leaves? (the|your|this) (phone|device)",
+            "(stay|stays|remain|remains|kept|stored only) on (the|your|this) (phone|device)",
+            "never (sent|shared|uploaded)",
+            "nothing is (sent|shared|uploaded)",
+        ).map { Regex(it, RegexOption.IGNORE_CASE) }
+        val hits = ArrayList<String>()
+        for (xml in files) for (m in Regex("""<string\s+name="([^"]+)"[^>]*>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL).findAll(xml)) {
+            val name = m.groupValues[1]; val text = m.groupValues[2]
+            if (name in excludedFromPromiseScan) continue
+            if (patterns.any { it.containsMatchIn(text) }) hits.add("$name: $text")
+        }
+        return hits
+    }
+
+    /** Strings of the plugin outside Part 1 that match a pattern and are not changed by this job: excluded by resource name, with the reason. */
+    private val excludedFromPromiseScan: Set<String> = emptySet()
 
     @Test
     fun givenTheNewSources_whenScanned_thenNoForbiddenApiOrFieldAppears() {
