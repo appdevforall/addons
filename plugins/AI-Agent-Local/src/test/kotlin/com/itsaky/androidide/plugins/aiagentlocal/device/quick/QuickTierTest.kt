@@ -828,6 +828,25 @@ class QuickTierTest {
     }
 
     @Test
+    fun givenTheTierIsDeactivatedWhileRunResetsTheEngineCancelStateAndTheGatesWouldFail_whenRunContinues_thenItIsDeactivatedNotDeferredAndNoGateIsRead() {
+        val r = rig()
+        val tier = r.tier()
+        var ideRead = false
+        r.fg.fg = { false }
+        r.ide.busy = { ideRead = true; true }
+        r.engine.onReset = {
+            File(r.dir, "static.json").delete() // a read of the store would now give "static_missing"
+            tier.cancel(StopReason.PLUGIN_DEACTIVATED)
+        }
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason); assertEquals(QuickStatus.CANCELLED, res.status)
+        assertTrue(r.logs.none { it.startsWith("T1 deferred") })
+        assertEquals(1, r.logs.count { it == "T1 stopped: plugin_deactivated" })
+        assertEquals(0, r.fg.calls); assertEquals(0, r.cond.reads); assertFalse(ideRead)
+        assertEquals(0, r.ui.asked)
+    }
+
+    @Test
     fun givenTheTierIsDeactivatedWhileTheGatesBeforeTheQuestionRun_whenRunReachesTheQuestion_thenNoQuestionIsAsked() {
         val r = rig()
         val tier = r.tier()
@@ -836,6 +855,26 @@ class QuickTierTest {
         assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason); assertEquals(QuickStatus.CANCELLED, res.status)
         assertEquals(0, r.ui.asked); assertTrue(r.engine.commands.isEmpty())
         assertNull(r.store.readPassRecord())
+    }
+
+    @Test
+    fun givenTheTierIsDeactivatedWhileTheDescriptorIsRegenerated_whenThePassEnds_thenNoPassRecordIsWrittenAndTheResultIsCancelled() {
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "j${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        lateinit var tier: com.itsaky.androidide.plugins.aiagentlocal.device.quick.QuickTier
+        tier = com.itsaky.androidide.plugins.aiagentlocal.device.quick.QuickTier(
+            engine = r.engine, store = r.store, index = { tier.cancel(StopReason.PLUGIN_DEACTIVATED); r.index }, foreground = r.fg, ide = r.ide,
+            conditions = r.cond, memory = r.mem, screen = r.screen, ui = r.ui, clock = r.clock, watchdog = r.wd, pluginVersion = "1.1.0",
+            epochMs = { 1_700_000_000_000L }, log = { r.logs.add(it) }, handOff = { it.run() },
+        )
+        val res = tier.run()
+        assertEquals(QuickStatus.CANCELLED, res.status); assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason)
+        assertFalse(res.recorded)
+        assertFalse("t1-pass.json must not be written", r.dir.walkTopDown().any { it.name == "t1-pass.json" })
+        assertFalse(ops.replaced.contains("t1-pass.json"))
+        assertTrue("the rows stored before stay", File(r.dir, "rows.jsonl").readText().contains("C2-read-k0"))
+        assertEquals(1, r.logs.count { it == "T1 stopped: plugin_deactivated" })
+        assertTrue(r.logs.none { it.startsWith("T1 completed") })
     }
 
     // ---- G3: a load cancelled while the question is up ------------------------------------------------------------

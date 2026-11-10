@@ -87,7 +87,9 @@ class QuickTier(
     /**
      * Set by `cancel(PLUGIN_DEACTIVATED)` and **never reset**: a deactivation is permanent for this tier. [run] does not clear it, and once it is set
      * the pass thread makes no further store write (no row, no static input, no descriptor, no pass record). Rows stored before it stay.
-     * A write that is already inside the store when the flag is set cannot be taken back.
+     * A write that is already inside the store when the flag is set cannot be taken back; a regenerate under way when the flag arrives is allowed to
+     * finish. The flag is read again after the regenerate step, so the pass record is not written and the result is `CANCELLED` / `plugin_deactivated`;
+     * the remaining window is the few instructions between that last read and the record write.
      */
     @Volatile private var deactivated = false
 
@@ -424,15 +426,7 @@ class QuickTier(
     // ---- the end -------------------------------------------------------------------------------------------------
 
     private fun finish(p: Pass, stop: Stop?): QuickResult {
-        val dead = deactivated // read once: from here on a deactivated pass writes nothing
-        val reason = if (dead) StopReason.PLUGIN_DEACTIVATED else stop?.reason ?: if (p.incomplete) StopReason.ENGINE_RECORD_INVALID else StopReason.NONE
-        val status = when {
-            dead -> QuickStatus.CANCELLED
-            stop == null && !p.incomplete -> QuickStatus.COMPLETED
-            stop == null -> QuickStatus.ENDED_EARLY
-            else -> statusFor(stop.reason, p)
-        }
-        val elapsed = clock.nowMs() - p.startMs
+        var dead = deactivated // a deactivated pass writes no descriptor and no pass record
         var regenerated = true
         if (!dead && (p.rowsStored > 0 || p.pinFolded)) {
             regenerated = try {
@@ -442,6 +436,15 @@ class QuickTier(
             }
             if (!regenerated) log("T1: the descriptor could not be regenerated")
         }
+        dead = deactivated // read again after the regenerate step, which can take a while: the flag may have come during it
+        val reason = if (dead) StopReason.PLUGIN_DEACTIVATED else stop?.reason ?: if (p.incomplete) StopReason.ENGINE_RECORD_INVALID else StopReason.NONE
+        val status = when {
+            dead -> QuickStatus.CANCELLED
+            stop == null && !p.incomplete -> QuickStatus.COMPLETED
+            stop == null -> QuickStatus.ENDED_EARLY
+            else -> statusFor(stop.reason, p)
+        }
+        val elapsed = clock.nowMs() - p.startMs
         var recorded = false
         if (!dead && p.engineStarted) {
             recorded = store.writePassRecord(passRecord(p, status, reason, elapsed, regenerated), epochMs())
