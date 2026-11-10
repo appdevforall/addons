@@ -59,7 +59,7 @@ class StoredRows(val lines: List<String>, val skipped: Int)
 /**
  * The plugin's Part 1 files under `<plugin data dir>/part1/`: `static.json`, `rows.jsonl`, `dbrecord.json`,
  * `device-descriptor-v0.2.json`, `probe-facts.json`, `t1-pass.json` (the record of the last T1 pass), and `key.txt` (the device key, one line);
- * plus `bind-failed.marker` while a key change has failed, and `old/<id>/` archives.
+ * plus the `old/<id>/` archives.
  *
  * - **Atomic writes:** every write goes to a temporary file and is renamed over the target ([AtomicWriter]).
  * - **Corruption:** a file that does not parse, or whose `format` is wrong, reads as absent. In `rows.jsonl` a line that is
@@ -71,16 +71,15 @@ class StoredRows(val lines: List<String>, val skipped: Int)
  *   cannot fit **even with every archive gone** is refused (a file) or rejected (a row) **before** any archive is deleted.
  *   **Worst-case disk use:** a write is charged for what it adds, a key change is not: it moves the old files into an archive
  *   and writes a new 65-byte `key.txt`, and up to [maxArchives] archives keep their old files. So at rest the store holds at most
- *   `maxTotalBytes + 65 * maxArchives` bytes (the key files of the key changes since the last write), plus the 2-byte
- *   `bind-failed.marker` while a bind has failed. While one atomic write is under way the old file and its temporary copy
+ *   `maxTotalBytes + 65 * maxArchives` bytes (the key files of the key changes since the last write). While one atomic write is under way the old file and its temporary copy
  *   coexist, so at most `2 * maxTotalBytes + 65 * maxArchives` (with the default 1 MiB and 3 archives: 2 MiB + 195 bytes).
  * - **Device key:** [bindDevice] compares the key of this device and engine with `key.txt`. A change is **all or nothing**:
  *   it archives every file under `old/<first 12 hex of the old key>/` and starts fresh; at most [maxArchives] archives are
  *   kept. If the files cannot be archived the new key is not written ([BindResult.IoFailed]); if `old/<id>` cannot even be
  *   created the old live files are deleted ([BindResult.Discarded]). Data of another key never stays live under a new key.
  *   **Nothing is read and nothing is written until [bindDevice] has succeeded in this instance** (a fresh instance is unbound,
- *   so a new process cannot see another key's files either). A failed key change also leaves the file `bind-failed.marker`;
- *   a bind that succeeds removes it.
+ *   so a new process cannot see another key's files either). What really blocks is that state of the instance, not a file: a failed
+ *   key change leaves the instance unbound, and the next bind (the next activation of the plugin) tries the key change again.
  * - **Temporary files:** `*.tmp` left by a crash are removed by every [bindDevice] (start-up) and are never archived; a key
  *   change that cannot remove them fails.
  *
@@ -99,7 +98,6 @@ class Part1Store(
         const val DESCRIPTOR = "device-descriptor-v0.2.json"
         const val KEY = "key.txt"
         const val PROBE_FACTS = "probe-facts.json"
-        const val MARKER = "bind-failed.marker"
         const val PROBE_FACTS_FORMAT = "part1-probe-facts-v1"
         const val PASS = "t1-pass.json"
         const val PASS_FORMAT = "part1-pass-v1"
@@ -129,10 +127,8 @@ class Part1Store(
         return try {
             val r = bind(key)
             this.engineId = engineId
-            runCatching { ops.delete(file(MARKER)) }
             r
         } catch (e: IOException) {
-            runCatching { writer.write(file(MARKER), "1\n".toByteArray()) }
             BindResult.IoFailed("the files could not be moved, deleted or written (${e.javaClass.simpleName})")
         }
     }

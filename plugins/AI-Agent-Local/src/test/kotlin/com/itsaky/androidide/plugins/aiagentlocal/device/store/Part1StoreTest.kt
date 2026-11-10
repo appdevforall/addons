@@ -543,7 +543,7 @@ class Part1StoreTest {
     }
 
     @Test
-    fun givenAFreshInstanceAndAFailedKeyChange_whenReadOrWritten_thenNothingIsReturnedUntilABindSucceedsAndTheMarkerSurvivesARestart() {
+    fun givenAFreshInstanceAndAFailedKeyChange_whenReadOrWritten_thenNothingIsReturnedUntilABindSucceedsAndTheNextBindRetries() {
         // F10
         filled()
         val unbound = store()
@@ -554,23 +554,22 @@ class Part1StoreTest {
         assertFalse(unbound.writeDescriptor(mapOf("schema_version" to "0.2")))
         assertTrue(unbound.appendRow(row()) is AppendResult.Rejected)
         assertTrue(unbound.regenerate(Part1TestResources.realIndex()) is RegenerateResult.Failed)
-        // a failed key change leaves a marker; a new instance (a restart) is blocked too, and the old data is not returned
+        // a failed key change leaves the instance unbound; a new instance (a restart) is unbound too, and the old data is not returned
         val movesFail = object : FileOps {
             override fun writeAndSync(file: File, bytes: ByteArray) = FileOps.Real.writeAndSync(file, bytes)
-            override fun moveReplacing(from: File, to: File) { if (from.name != "bind-failed.marker.tmp") throw IOException("busy"); FileOps.Real.moveReplacing(from, to) }
+            override fun moveReplacing(from: File, to: File) { throw IOException("busy") }
             override fun delete(file: File) = FileOps.Real.delete(file)
         }
         assertTrue(store(movesFail).bindDevice("$fp-B", engine) is BindResult.IoFailed)
-        assertTrue(File(dir(), Part1Store.MARKER).isFile)
+        assertNull(File(dir(), "bind-failed.marker").takeIf { it.exists() }) // no marker file is written
         val restarted = store()
         assertNull(restarted.readStatic()); assertEquals(0, restarted.readRows().lines.size)
         assertFalse(restarted.writeStatic(staticTree()))
         // an unkeyed bind does not unblock
         assertTrue(restarted.bindDevice(null, engine) is BindResult.Unkeyed)
         assertNull(restarted.readStatic())
-        // a successful bind clears the marker
+        // the next bind retries the key change and, when it succeeds, unblocks
         assertTrue(restarted.bindDevice("$fp-B", engine) is BindResult.Changed)
-        assertFalse(File(dir(), Part1Store.MARKER).exists())
         assertNull(restarted.readStatic())
         assertTrue(restarted.writeStatic(staticTree()))
     }
