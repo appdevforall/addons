@@ -53,6 +53,9 @@ android {
     sourceSets {
         // The golden set is committed once, under src/test/resources, and also ships in the test APK.
         getByName("androidTest").assets.srcDir("src/test/resources")
+        // The instrumented tests of the real runner start the two engine programs from the test APK's own native library
+        // directory: the same committed files, packaged into the test APK only (see androidComponents below).
+        getByName("androidTest").jniLibs.srcDir("src/main/jniLibs")
     }
 
     packaging {
@@ -71,6 +74,15 @@ android {
                 "META-INF/INDEX.LIST"
             )
         }
+    }
+}
+
+// Test APK only: extract its native libraries to disk (legacy packaging), so that `applicationInfo.nativeLibraryDir` of the
+// test APK holds the engine programs as executable files. The app variants, and therefore the .cgp, keep the default packaging
+// (stored, not extracted); the .cgp byte-identity check in assemblePlugin* is unchanged. See NATIVE-BUILD.md, "Part 1 engine".
+androidComponents {
+    onVariants { variant ->
+        variant.androidTest?.packaging?.jniLibs?.useLegacyPackaging?.set(true)
     }
 }
 
@@ -131,6 +143,7 @@ tasks.withType<Test>().configureEach {
     systemProperty("part1EngineDir", file("part1-engine").absolutePath)
     systemProperty("builtPluginDir", layout.buildDirectory.dir("plugin").get().asFile.absolutePath)
     // Lab examples are never committed; the lab-set test runs only when this is given on the command line.
+    System.getProperty("part1.requireCgp")?.let { systemProperty("part1.requireCgp", it) }
     System.getProperty("part1.labExamplesDir")?.let { systemProperty("part1.labExamplesDir", it) }
     // The main sources of the three new Part 1 packages (engine, staticread, store): a test scans them.
     systemProperty("part1MainSrcDir", file("src/main/kotlin").absolutePath)
@@ -155,7 +168,7 @@ afterEvaluate {
         val pluginDir = layout.buildDirectory.dir("plugin")
         val abi = expectedAbi
 
-        // The unit tests open the debug .cgp. They do not depend on building it (plugin-builder moves the APK into the
+        // The unit tests open the debug .cgp. (With -Dpart1.requireCgp=true a missing .cgp fails them instead of skipping.) They do not depend on building it (plugin-builder moves the APK into the
         // .cgp, so a second assemble with nothing changed produces none), but when both are asked for in one
         // invocation the assemble runs first.
         if (isDebug) tasks.withType<Test>().configureEach { mustRunAfter(assembleTaskName) }

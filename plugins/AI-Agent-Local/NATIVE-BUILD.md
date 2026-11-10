@@ -453,10 +453,14 @@ them as separate processes. Gradle never compiles them.
 
 - **Source:** `part1-engine/` (engine version in `part1-engine/VERSION`, currently 0.2.4): `src/` (C), `build.sh`,
   `tools/`, `tests/`, the documents `ENGINE.md`, `EXIT-CODES.md`, `DIFF-FROM-KIT.md` and the four JSON schemas.
-  It is a copy of the engine's own repository folder; the lab folders `history/`, `raw/` and `out/` are not
-  included. The only edits are the lab paths in documents, comments and path constants of the Python tools
-  and tests, which now read as relative names (the tests need the kit sources and the rows schema from the
-  lab and are not run from here).
+  The repository copy is **the master of the engine source** from P1-04A1F on: edit it here, not in the lab
+  folder stays as the frozen 0.2.4 lab copy. The lab folders `history/`, `raw/` and
+  `out/` are not part of it. It works from the repository alone: `schemas/part1-rows-v1.schema.json` (a copy of
+  the rows schema) is found by a path relative to `tests/test_engine.py` and `tools/validate_captured.py`; the
+  checks that need the kit (`tools/kernel_identity.py`, the kit-oracle tests) read the kit's `intake` directory
+  from the environment variable `PART1_KIT_DIR` and skip with a message when it is unset. Run the suite with
+  `cd part1-engine && python3 -I -B -m unittest discover -s tests` (host build; the NDK checks need an NDK and
+  `out/arm64-v8a/`, which the repository does not hold).
 - **Rebuild:** `cd part1-engine && ./build.sh [OUTDIR]` with an Android NDK r26 or later (`NDK`, `ANDROID_NDK_HOME`
   or `$ANDROID_HOME/ndk/*`); it writes `libpart1_membw.so` and `libpart1_gpubw.so` and prints their sha256. Copy
   the two files to `src/main/jniLibs/arm64-v8a/` and update the two sha256 constants in
@@ -470,12 +474,18 @@ them as separate processes. Gradle never compiles them.
   2. the last action of `assemblePlugin` and `assemblePluginDebug` opens the built `.cgp` and fails the build if
      `lib/arm64-v8a/libpart1_*.so` differs by one byte from the committed file;
   3. `EnginePackagingTest` repeats that comparison on the debug `.cgp` (property `builtPluginDir`); it is skipped when no
-     `.cgp` exists, so run `../../gradlew cleanPackageDebug assemblePluginDebug testDebugUnitTest`. The
+     `.cgp` exists, unless `-Dpart1.requireCgp=true` is given, which makes a missing `.cgp` a failure; run
+     `../../gradlew cleanPackageDebug assemblePluginDebug testDebugUnitTest -Dpart1.requireCgp=true`. The
      `cleanPackageDebug` is needed only when nothing changed since the last assemble: plugin-builder moves the APK
      into the `.cgp`, so a second assemble with no new APK finds nothing to package (this was already so before).
 - **No rewriting:** `packaging.jniLibs.keepDebugSymbols` names the two files so that AGP never strips them (stripping
   needs an NDK; without one AGP packages "as they are", with one it would change the bytes). Native files are
   stored uncompressed in the `.cgp`, and the bytes are unchanged by the alignment.
+- **Instrumented tests:** the app variants (and so the `.cgp`) keep the default packaging above. The test APK
+  packages the same committed files (`androidTest` `jniLibs.srcDir("src/main/jniLibs")`) with
+  `useLegacyPackaging` for the androidTest component only (`androidComponents` block), so its manifest has
+  `extractNativeLibs="true"` and the system extracts the two programs to the test APK's `nativeLibraryDir`, where
+  `Part1EngineInstrumentedTest` finds and starts them; it fails, not skips, when they are missing.
 - **Host reuse:** the host reuses an existing `app_plugin_native_libs/<pluginId>/` directory without extracting again,
   so after an engine update on a phone the files there may be the old ones. The runner checks the engine version
   (`--static-probe --json`) before its first row and reports a mismatch; it does not repair the directory.

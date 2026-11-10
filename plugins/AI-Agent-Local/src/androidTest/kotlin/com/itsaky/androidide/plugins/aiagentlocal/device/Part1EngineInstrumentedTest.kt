@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentlocal.device
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineCommands
+import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineProgram
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineResult
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineRunner
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.JvmProcessLauncher
@@ -20,20 +21,22 @@ import com.itsaky.androidide.plugins.aiagentlocal.device.staticread.isMainThread
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Runs the engine through the real runner and the real T0 sources on a device. Compiled in P1-04A1, not run there (it needs
- * a phone). The programs are executed from the app's native library directory: they are found there only when the
- * installed APK extracted its native libraries; otherwise the tests skip (`assumeTrue`) and say why. The foreground
+ * Runs the engine through the real runner and the real T0 sources on a device. Compiled in P1-04A1F, not run there (it needs
+ * a phone). The two programs are packaged into the **test APK** (`build.gradle.kts`: the committed `jniLibs`, with
+ * `useLegacyPackaging` for the androidTest component only), so the system extracts them to the test APK's
+ * `nativeLibraryDir`. The tests **fail** with a clear message when they are not there; they do not skip. The foreground
  * gate (exit 97) is a legitimate answer for a row when the test activity is not on top.
  */
 @RunWith(AndroidJUnit4::class)
 class Part1EngineInstrumentedTest {
 
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    /** The test APK's own context: its `nativeLibraryDir` holds the extracted engine programs. */
+    private val context = InstrumentationRegistry.getInstrumentation().context
     private val work = File(context.filesDir, "part1/work")
 
     private fun runner(): EngineRunner {
@@ -42,7 +45,13 @@ class Part1EngineInstrumentedTest {
             dataDir = File(context.applicationInfo.dataDir),
             pluginId = context.packageName,
         )
-        assumeTrue("the engine programs are not extracted next to the app", locator.locate(com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineProgram.MEMBW) != null)
+        for (program in EngineProgram.values()) {
+            assertNotNull(
+                "${program.fileName} is not in ${context.applicationInfo.nativeLibraryDir}: the test APK must package the engine programs " +
+                    "(androidTest jniLibs with useLegacyPackaging) and the system must extract them",
+                locator.locate(program),
+            )
+        }
         return EngineRunner(locator, JvmProcessLauncher(), work, onMainThread = ::isMainThread)
     }
 

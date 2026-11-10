@@ -12,7 +12,11 @@ import org.junit.Test
 /**
  * The two prebuilt Part 1 engine programs (`part1-engine/`, built once with the NDK, never rebuilt by Gradle):
  * their bytes are pinned here, and the built `.cgp` must hold exactly those bytes (no strip, no re-alignment that
- * changes them). Gradle passes the paths; unit tests depend on `assemblePluginDebug`, so the `.cgp` is fresh.
+ * changes them). Gradle passes the paths. The unit tests do **not** depend on `assemblePluginDebug` (they only run after it
+ * when both are asked for in one invocation, see `build.gradle.kts`), so a `.cgp` left by an earlier build may be what they read.
+ * The two `.cgp` tests **skip** when there is no `.cgp`, unless the system property `part1.requireCgp` is set
+ * (`-Dpart1.requireCgp=true`, as CI and the proof runs do): then a missing `.cgp` is a **failure**. The assemble task's own
+ * last action checks the same bytes on every build and fails it, so a skip never hides a difference in a shipped build.
  */
 class EnginePackagingTest {
 
@@ -64,7 +68,8 @@ class EnginePackagingTest {
     fun givenThePackagedEngineSource_whenItsVersionIsRead_thenItIsTheExpectedOne() {
         assertEquals("0.2.4", File(engineDir, "VERSION").readText().trim())
         for (doc in listOf("ENGINE.md", "EXIT-CODES.md", "build.sh", "src/membw.c", "src/gpubw/gpubw.c",
-            "part1-staticprobe-v1.schema.json", "part1-pinprobe-v1.schema.json", "part1-gpuprobe-v1.schema.json")) {
+            "part1-staticprobe-v1.schema.json", "part1-pinprobe-v1.schema.json", "part1-gpuprobe-v1.schema.json",
+            "schemas/part1-rows-v1.schema.json")) {
             assertTrue("part1-engine/$doc is missing", File(engineDir, doc).isFile)
         }
     }
@@ -82,9 +87,9 @@ class EnginePackagingTest {
 
     private fun builtCgp(): File {
         val cgps = pluginDir.listFiles { f -> f.name.endsWith("-debug.cgp") }.orEmpty()
-        // No .cgp is built by the unit-test task itself (see build.gradle.kts); the assemble task's own last action
-        // also checks these bytes and fails the build, so a skip here never hides a difference in a shipped build.
-        Assume.assumeTrue("no debug .cgp under ${pluginDir.absolutePath}; run assemblePluginDebug first", cgps.isNotEmpty())
+        // No .cgp is built by the unit-test task itself (see build.gradle.kts and the class comment).
+        val message = "no debug .cgp under ${pluginDir.absolutePath}; run assemblePluginDebug first"
+        if (System.getProperty("part1.requireCgp") == "true") assertTrue(message, cgps.isNotEmpty()) else Assume.assumeTrue(message, cgps.isNotEmpty())
         assertEquals("one debug .cgp under ${pluginDir.absolutePath}", 1, cgps.size)
         return cgps[0]
     }
