@@ -50,6 +50,11 @@ android {
         }
     }
 
+    sourceSets {
+        // The golden set is committed once, under src/test/resources, and also ships in the test APK.
+        getByName("androidTest").assets.srcDir("src/test/resources")
+    }
+
     packaging {
         resources {
             excludes += setOf(
@@ -84,6 +89,8 @@ dependencies {
     testImplementation("org.snakeyaml:snakeyaml-engine:2.10")
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
+    // Production code uses Android's built-in org.json; the JVM has none, so unit tests bring the same API.
+    testImplementation("org.json:json:20250517")
     // LiveData's postValue needs the arch-core executor swapped for a synchronous one; the
     // settings pane publishes its state through it, so its tests cannot run without this.
     testImplementation("androidx.arch.core:core-testing:2.2.0")
@@ -110,6 +117,12 @@ tasks.withType<Test>().configureEach {
     val wrapperSource = file("llama-impl/src/main/cpp/llama-android.cpp")
     inputs.file(wrapperSource)
     systemProperty("llamaAndroidSourcePath", wrapperSource.absolutePath)
+    // The Part 1 index asset the device-match tests read straight from the source tree.
+    val part1Index = file("src/main/assets/part1/part1-dbindex-v1.json.gz")
+    inputs.file(part1Index)
+    systemProperty("part1IndexAssetPath", part1Index.absolutePath)
+    // Lab examples are never committed; the lab-set test runs only when this is given on the command line.
+    System.getProperty("part1.labExamplesDir")?.let { systemProperty("part1.labExamplesDir", it) }
 }
 
 // Guards the abiFilters above: a regenerated AAR or a dropped filter would silently re-inflate the .cgp.
