@@ -221,9 +221,21 @@ class EngineRunnerTest {
 
     @Test
     fun givenALastLineNestedTooDeeply_whenRun_thenItIsNoJsonAndOtherErrorsAreNotCaught() {
+        // the JVM's org.json limits nesting; Android's tokener recurses, so the overflow is injected here
+        val line = Recorded.lastLine("d5-row-c2-ok-v0.2.1.out").toByteArray()
+        val overflow = EngineRunner(FakeLocator(), FakeLauncher { FakeProcess(stdout = line) }, work(), parseObject = { _, _ -> throw StackOverflowError() })
+        val r1 = overflow.run(EngineCommands.staticProbe())
+        assertTrue("result: $r1", r1 is EngineResult.NoJson)
         val deep = "{\"a\":" + "[".repeat(200_000) + "]".repeat(200_000) + "}\n"
         val (runner, _) = runnerFor(work()) { FakeProcess(stdout = deep.toByteArray(), exit = 0) }
-        assertTrue(runner.run(EngineCommands.c2Read(0, 0, 100)) is EngineResult.NoJson)
+        assertTrue(runner.run(EngineCommands.c2Read(0, 0, 100)) is EngineResult.NoJson) // whatever the parser does, never an exception
+        val oom = EngineRunner(FakeLocator(), FakeLauncher { FakeProcess(stdout = line) }, work(), parseObject = { _, _ -> throw OutOfMemoryError("test") })
+        try {
+            oom.run(EngineCommands.staticProbe())
+            org.junit.Assert.fail("an OutOfMemoryError from the parser must not be swallowed")
+        } catch (e: OutOfMemoryError) {
+            // expected
+        }
         // an Error that is not a StackOverflowError reaches the caller (documented in the class comment)
         val launcher = object : ProcessLauncher {
             override fun start(argv: List<String>, workDir: File, env: Map<String, String>): RunningProcess = throw OutOfMemoryError("test")

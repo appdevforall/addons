@@ -36,6 +36,8 @@ class EngineRunner(
     private val workDir: File,
     private val expectedVersion: String = EXPECTED_ENGINE_VERSION,
     private val onMainThread: () -> Boolean = { false },
+    /** The JSON parser of the last line; replaced in tests (the JVM's `org.json` limits nesting, Android's tokener recurses without limit). */
+    private val parseObject: (String, String) -> Map<String, Any?> = { text, what -> Json.parseObject(text, what) },
 ) : EngineExecutor {
     companion object {
         /** The engine this plugin ships (`part1-engine/VERSION`); a static probe that says otherwise is a mismatch. */
@@ -177,7 +179,7 @@ class EngineRunner(
         val line = String(stdout, Charsets.UTF_8).split('\n').map { it.trim() }.lastOrNull { it.isNotEmpty() } ?: return null
         if (!line.startsWith("{") || !line.endsWith("}")) return null
         return try {
-            Json.parseObject(line, "engine output")
+            parseObject(line, "engine output")
         } catch (e: JsonException) {
             null
         } catch (e: StackOverflowError) {
