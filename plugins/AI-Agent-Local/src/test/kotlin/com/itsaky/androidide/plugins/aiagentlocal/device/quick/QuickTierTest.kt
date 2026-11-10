@@ -601,4 +601,18 @@ class QuickTierTest {
         assertEquals(StopReason.ENGINE_CRASH, res.reason)
         assertEquals(first, r.pass()["pin_probe"])
     }
+
+    @Test
+    fun givenTheDescriptorCannotBeRegenerated_whenThePassEnds_thenTheRowsStayStoredAndThePassRecordSaysSo() {
+        val r = rig()
+        val tier = com.itsaky.androidide.plugins.aiagentlocal.device.quick.QuickTier(
+            engine = r.engine, store = r.store, index = { throw java.io.IOException("asset missing") }, foreground = r.fg, ide = r.ide, conditions = r.cond,
+            memory = r.mem, screen = r.screen, ui = r.ui, clock = r.clock, watchdog = r.wd, log = { r.logs.add(it) },
+        )
+        val res = tier.run()
+        assertEquals(QuickStatus.COMPLETED, res.status)
+        assertEquals(5, r.store.readRows().lines.size)
+        assertEquals(false, r.pass()["descriptor_regenerated"])
+        assertTrue(r.logs.any { it.contains("could not be regenerated") })
+    }
 }

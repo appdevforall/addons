@@ -58,7 +58,8 @@ class StoredRows(val lines: List<String>, val skipped: Int)
 
 /**
  * The plugin's Part 1 files under `<plugin data dir>/part1/`: `static.json`, `rows.jsonl`, `dbrecord.json`,
- * `device-descriptor-v0.2.json`, and `key.txt` (the device key, one line).
+ * `device-descriptor-v0.2.json`, `probe-facts.json`, `t1-pass.json` (the record of the last T1 pass), and `key.txt` (the device key, one line);
+ * plus `bind-failed.marker` while a key change has failed, and `old/<id>/` archives.
  *
  * - **Atomic writes:** every write goes to a temporary file and is renamed over the target ([AtomicWriter]).
  * - **Corruption:** a file that does not parse, or whose `format` is wrong, reads as absent. In `rows.jsonl` a line that is

@@ -390,7 +390,11 @@ class QuickTier(
         val elapsed = clock.nowMs() - p.startMs
         var regenerated = true
         if (p.rowsStored > 0 || p.pinFolded) {
-            regenerated = store.regenerate(index(), pluginVersion) is RegenerateResult.Regenerated
+            regenerated = try {
+                store.regenerate(index(), pluginVersion) is RegenerateResult.Regenerated
+            } catch (e: Exception) { // the index asset could not be read: the rows stay stored, the descriptor is regenerated at the next activation
+                false
+            }
             if (!regenerated) log("T1: the descriptor could not be regenerated")
         }
         var recorded = false
