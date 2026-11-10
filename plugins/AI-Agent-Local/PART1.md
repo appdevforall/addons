@@ -27,7 +27,7 @@ written stay where they are.
 **Run now** and **Skip**. While it runs, a progress dialog shows "Step *i* of *n*" and what is being measured, with a **Cancel** button. Skip
 or Cancel loads the model as before; cancelled and void rows are not stored as measurements (they are counted in `rows_void` and listed in the pass record,
 a cancelled one as `void_cancelled`); the question comes again at the next session's first load. Any end except "deferred" (Skip, Cancel, ended early, failed)
-stops T1 for the rest of the session. With no screen available, T1 is tried again at the next load. The screen is kept on for the duration and released on every way out.
+stops T1 for the rest of the session. With no screen available, T1 is tried again at the next load. The screen is kept on for the duration and released on every way out. When the plugin is deactivated during a measurement pass, the pass stops, rows already stored stay, no pass record is written, and the question is asked again in a later session.
 
 **When T1 is not offered.** No question is asked when the last T0 showed that the engine cannot run (`exec_blocked`, `program_missing` or `engine_mismatch` on
 either probe: one log line, and the pass record is written once as `skipped` with that reason); when the host offers no build-status service (deferred, reason
@@ -42,6 +42,10 @@ the status nor the headroom can be read); and the memory limit `min(55 % of MemT
 A pass is cancelled 180 s after "Run now". Nothing here makes a model load fail; but the hold on the first load is bounded, not short.
 **Worst case before the model loads, on the first load of a session:** up to 15 s waiting for T0, up to 90 s for the question, up to 180 s for the
 pass (counted from "Run now"), plus the time to write the records. A pass that is not offered (see below) costs none of that.
+When the switch is turned on after the plugin was activated, the first load runs T0 inline instead of the 15 s wait: it is bounded by the probes' own limits
+(static probe `EngineCommands.STATIC_PROBE_MAX_SECONDS` = 2 s plus `EngineRunner.GRACE_SECONDS` = 5 s, so 7 s; GPU probe `GPU_PROBE_MAX_SECONDS` = 5 s plus the same 5 s, so 10 s;
+after a hard kill the runner waits up to `DESTROY_WAIT_MS` = 1 s and `FORCE_WAIT_MS` = 2 s for the process and up to `JOIN_MS` = 2 s for each of the two output readers, so up to 7 s more per probe),
+plus up to `Part1Controller.PREVIOUS_T0_WAIT_MS` = 12 s waiting for an earlier activation's T0 to end. A normal T0 takes about 0.4 s.
 
 ## What it stores, and where
 
