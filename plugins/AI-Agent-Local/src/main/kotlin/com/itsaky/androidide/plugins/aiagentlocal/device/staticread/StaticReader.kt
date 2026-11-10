@@ -32,6 +32,16 @@ class StaticReadResult(
  * fixed system files named here, no project content, model name or prompt. `Build.FINGERPRINT` goes into the object and
  * nowhere else; this class logs nothing.
  *
+ * `Build.SOC_MANUFACTURER` is not read: the static input has no slot for it and the descriptor does not use it, so the read was
+ * dropped (P1-04A1F). The facts without a slot (`opencl_child` as the GPU probe gave it, the `public.libraries.txt` hint) are
+ * in [StaticReadResult.facts]; the store keeps them in `probe-facts.json`.
+ *
+ * **Time (T0 budget of 2 s).** Measured on the two phones (P1-03P app runs): static probe 24-83 ms, GPU probe 90-297 ms; the
+ * worst pair is 83 + 297 = 380 ms, which leaves about 1.6 s for about 30 small sysfs and procfs reads and six Android API
+ * calls. The probes' `--max-seconds` (2 and 5) are limits, not durations, and do not change those times. Worst case, with a
+ * hanging probe, the hard kill is `--max-seconds` + 5 s: the static probe is killed at 7 s and the GPU probe at 10 s (it was
+ * 8 s with `--max-seconds 3`), so a hung probe takes the T0 read far past 2 s. That is by design.
+ *
  * Blocking (two short engine processes and about 30 small file reads): call it from a background thread.
  */
 class StaticReader(
@@ -315,6 +325,8 @@ class StaticReader(
         is EngineResult.Failed -> Probe.Missing("$what failed (exit ${r.exit})")
         is EngineResult.NoJson -> Probe.Missing("$what wrote no JSON object (exit ${r.exit})")
         is EngineResult.ExecBlocked -> Probe.Missing("$what could not be started (exec_blocked)")
+        is EngineResult.ProgramMissing -> Probe.Missing("$what could not be started (the program file was not found)")
+        is EngineResult.NotStarted -> Probe.Missing("$what was not started (${r.message})")
         is EngineResult.TimeoutKilled -> Probe.Missing("$what was killed at its time limit")
         is EngineResult.EngineMismatch -> Probe.Missing("the engine version is not the expected one (found ${r.found ?: "none"})")
     }

@@ -229,7 +229,7 @@ class Part1StoreTest {
             override fun delete(file: File) = FileOps.Real.delete(file)
         }
         assertTrue(store(flaky).bindDevice("$fp-new", engine) is BindResult.IoFailed)
-        assertTrue(File(dir(), "key.txt").isFile) // the key moves last: the store still names the old device
+        assertEquals(DeviceKey.of(fp, engine) + "\n", File(dir(), "key.txt").readText()) // the key moves last: the store still names the old device
         assertTrue(store(flaky).bindDevice("$fp-new", engine) is BindResult.Changed)
         assertTrue(File(dir(), "old/${DeviceKey.of(fp, engine).take(12)}/rows.jsonl").isFile)
         assertTrue(File(dir(), "old/${DeviceKey.of(fp, engine).take(12)}/static.json").isFile)
@@ -249,11 +249,14 @@ class Part1StoreTest {
         assertEquals(listOf("C2-read-k2", "C2-read-k3", "C2-read-k4"), kept)
         assertEquals(2, rotated)
         assertTrue(File(dir(), "rows.jsonl").length() <= one * 3 + 10)
-        // the newest row stays even when it alone exceeds the cap
-        val tiny = Part1Store(File(tmp.root, "tiny"), FileOps.Real, 10, 3); tiny.bindDevice(fp, engine)
-        assertEquals(0, (tiny.appendRow(row(tag = "C2-read-k0")) as AppendResult.Appended).rotatedOut)
-        assertEquals(1, (tiny.appendRow(row(tag = "C2-read-k1")) as AppendResult.Appended).rotatedOut)
-        assertEquals(listOf("C2-read-k1"), tiny.readRows().lines.map { Json.parseObject(it)["tag"] })
+        // a row that alone does not fit (F13: the cap is enforced on every write) is rejected, and the log stays as it was
+        val tiny = Part1Store(File(tmp.root, "tiny"), FileOps.Real, key + one.toLong() - 1, 3); tiny.bindDevice(fp, engine)
+        assertTrue(tiny.appendRow(row(tag = "C2-read-k0")) is AppendResult.Rejected)
+        assertFalse(File(tmp.root, "tiny/rows.jsonl").exists())
+        val exact = Part1Store(File(tmp.root, "exact"), FileOps.Real, (key + one).toLong(), 3); exact.bindDevice(fp, engine)
+        assertEquals(0, (exact.appendRow(row(tag = "C2-read-k0")) as AppendResult.Appended).rotatedOut)
+        assertEquals(1, (exact.appendRow(row(tag = "C2-read-k1")) as AppendResult.Appended).rotatedOut)
+        assertEquals(listOf("C2-read-k1"), exact.readRows().lines.map { Json.parseObject(it)["tag"] })
         // other files count against the cap
         val d2 = File(tmp.root, "second"); val s2 = Part1Store(d2, FileOps.Real, (key + one * 3 + 10).toLong(), 3); s2.bindDevice(fp, engine)
         File(d2, "static.json").writeText("x".repeat(one * 2))
@@ -294,5 +297,173 @@ class Part1StoreTest {
         val r = s.regenerate(index) as RegenerateResult.Failed
         assertTrue(r.reason.startsWith("an input is not valid: "))
         assertFalse(File(dir(), "device-descriptor-v0.2.json").exists())
+    }
+
+    // ---- P1-04A1F: F01, F03, F04, F13, F16 ------------------------------------------------------------------
+
+    private fun keyOf(f: String) = DeviceKey.of(f, engine) + "\n"
+
+    private fun filled(): Part1Store {
+        val s = store(); s.bindDevice(fp, engine)
+        s.writeStatic(staticTree()); s.appendRow(row()); s.writeDbRecord(mapOf("format" to "part1-dbrecord-v1")); s.writeDescriptor(mapOf("schema_version" to "0.2"))
+        s.writeProbeFacts(mapOf("opencl_child" to listOf<Any>()), 1L)
+        return s
+    }
+
+    @Test
+    fun givenARegularFileNamedOld_whenTheKeyChanges_thenTheOldFilesAreDeletedNotAdoptedAndTheOutcomeIsDiscarded() {
+        // F01: the review's reproduction
+        filled()
+        File(dir(), "old").writeText("in the way")
+        val b = store()
+        val r = b.bindDevice("$fp-B", engine) as BindResult.Discarded
+        assertEquals(DeviceKey.of(fp, engine), r.oldKey)
+        assertEquals(keyOf("$fp-B"), File(dir(), "key.txt").readText())
+        assertEquals(setOf("old", "key.txt"), dir().list()!!.toSet()) // no live file of device A
+        val again = store(); assertTrue(again.bindDevice("$fp-B", engine) is BindResult.Same)
+        assertNull(again.readStatic()); assertEquals(0, again.readRows().lines.size); assertNull(again.readProbeFacts())
+        assertNull(b.readStatic()); assertEquals(0, b.readRows().lines.size)
+        assertTrue(b.appendRow(row()) is AppendResult.Appended) // the new device can go on
+    }
+
+    private class FullDisk(val failMoves: Boolean = true, val failWrites: Boolean = true) : FileOps {
+        override fun writeAndSync(file: File, bytes: ByteArray) { if (failWrites) { file.writeBytes(bytes.copyOf(bytes.size / 2)); throw IOException("No space left on device") } else FileOps.Real.writeAndSync(file, bytes) }
+        override fun moveReplacing(from: File, to: File) { if (failMoves) throw IOException("No space left on device") else FileOps.Real.moveReplacing(from, to) }
+        override fun delete(file: File) = FileOps.Real.delete(file)
+    }
+
+    @Test
+    fun givenAFullDisk_whenTheKeyChanges_thenTheNewKeyIsNotWrittenNoReadReturnsTheOldDataAndNoRowIsAccepted() {
+        // F01 and F03: all or nothing
+        filled()
+        val b = store(FullDisk())
+        assertTrue(b.bindDevice("$fp-B", engine) is BindResult.IoFailed)
+        assertEquals(keyOf(fp), File(dir(), "key.txt").readText()) // the new key was not written
+        assertNull(b.readStatic()); assertNull(b.readDbRecord()); assertNull(b.readDescriptor()); assertNull(b.readProbeFacts())
+        assertEquals(0, b.readRows().lines.size)
+        assertEquals(FileState.ABSENT, b.inspect()["static.json"])
+        // F03: no row until a bind succeeds
+        val rowsBefore = File(dir(), "rows.jsonl").readText()
+        assertTrue(b.appendRow(row()) is AppendResult.Rejected)
+        assertFalse(b.writeStatic(staticTree()))
+        assertEquals(rowsBefore, File(dir(), "rows.jsonl").readText())
+        // a store bound to the new key on the same files also fails and also returns nothing
+        val c = store(FullDisk()); assertTrue(c.bindDevice("$fp-B", engine) is BindResult.IoFailed)
+        assertNull(c.readStatic()); assertTrue(c.appendRow(row()) is AppendResult.Rejected)
+        // when the disk works again the bind succeeds by archiving, and the row goes to the new device
+        val d = store(); assertTrue(d.bindDevice("$fp-B", engine) is BindResult.Changed)
+        assertTrue(d.appendRow(row()) is AppendResult.Appended)
+        assertEquals(1, d.readRows().lines.size)
+        assertEquals(1, File(dir(), "old/${DeviceKey.of(fp, engine).take(12)}/rows.jsonl").readLines().size) // not the new device's row
+    }
+
+    @Test
+    fun givenABindThatFailedHalfWay_whenARowIsAppendedBeforeAnySuccessfulBind_thenItIsRejected() {
+        // F03: the review's scenario IoFailed, Appended, Changed
+        filled()
+        var failOnce = true
+        val flaky = object : FileOps {
+            override fun writeAndSync(file: File, bytes: ByteArray) = FileOps.Real.writeAndSync(file, bytes)
+            override fun moveReplacing(from: File, to: File) { if (failOnce && from.name == "rows.jsonl") { failOnce = false; throw IOException("busy") }; FileOps.Real.moveReplacing(from, to) }
+            override fun delete(file: File) = FileOps.Real.delete(file)
+        }
+        val b = store(flaky)
+        assertTrue(b.bindDevice("$fp-B", engine) is BindResult.IoFailed)
+        assertTrue(b.appendRow(row()) is AppendResult.Rejected)
+        assertTrue(b.bindDevice("$fp-B", engine) is BindResult.Changed)
+        assertEquals(0, b.readRows().lines.size)
+        assertEquals(1, File(dir(), "old/${DeviceKey.of(fp, engine).take(12)}/rows.jsonl").readLines().size)
+    }
+
+    @Test
+    fun givenALeftOverTempFile_whenTheStoreStartsOrTheKeyChanges_thenItIsRemovedAndNeverSurvivesAKeyChange() {
+        // F04: the review's scenario
+        filled()
+        File(dir(), "static.json.tmp").writeText("""{"format":"part1-static-v1","identity":{"build_fingerprint":"device A"}}""")
+        File(dir(), "rows.jsonl.tmp").writeText("half")
+        // start-up on the same key: removed
+        assertTrue(store().bindDevice(fp, engine) is BindResult.Same)
+        assertFalse(File(dir(), "static.json.tmp").exists()); assertFalse(File(dir(), "rows.jsonl.tmp").exists())
+        // key change with a temporary file present: it does not survive, and is not archived
+        File(dir(), "static.json.tmp").writeText("device A")
+        assertTrue(store().bindDevice("$fp-B", engine) is BindResult.Changed)
+        assertEquals(setOf("old", "key.txt"), dir().list()!!.toSet())
+        assertFalse(File(dir(), "old/${DeviceKey.of(fp, engine).take(12)}/static.json.tmp").exists())
+        // a temporary file that cannot be removed makes the key change fail
+        File(dir(), "static.json.tmp").writeText("device B")
+        val stubborn = object : FileOps {
+            override fun writeAndSync(file: File, bytes: ByteArray) = FileOps.Real.writeAndSync(file, bytes)
+            override fun moveReplacing(from: File, to: File) = FileOps.Real.moveReplacing(from, to)
+            override fun delete(file: File) = false
+        }
+        assertTrue(store(stubborn).bindDevice("$fp-C", engine) is BindResult.IoFailed)
+        assertEquals(keyOf("$fp-B"), File(dir(), "key.txt").readText())
+        // an unkeyed or fresh start also cleans
+        File(dir(), "static.json.tmp").delete()
+        File(tmp.root, "fresh").mkdirs(); File(tmp.root, "fresh/dbrecord.json.tmp").writeText("x")
+        assertTrue(Part1Store(File(tmp.root, "fresh")).bindDevice(fp, engine) is BindResult.Fresh)
+        assertFalse(File(tmp.root, "fresh/dbrecord.json.tmp").exists())
+    }
+
+    @Test
+    fun givenFilesAndArchivesAndTempFiles_whenAnyFileIsWritten_thenTheTotalNeverExceedsTheCap() {
+        // F13: enforced on every write; counts live files, archives and temporary files
+        val st = staticTree()
+        val sz = (Json.toOrg(st).toString() + "\n").toByteArray().size.toLong()
+        val key = 65L
+        val cap = key + sz * 2 + 50
+        val d = File(tmp.root, "capped")
+        fun total() = d.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        val s = Part1Store(d, FileOps.Real, cap, 3)
+        s.bindDevice(fp, engine)
+        assertTrue(s.writeStatic(st)); assertTrue(total() <= cap)
+        // a second file of the same size still fits; a third does not
+        assertTrue(s.writeDbRecordSized(sz)); assertTrue(total() <= cap)
+        assertFalse(s.writeDescriptor(mapOf("schema_version" to "0.2", "pad" to "x".repeat(sz.toInt()))))
+        assertTrue(total() <= cap)
+        // a temporary file counts: with one present (a crash right now) the write is refused
+        File(d, "x.tmp").writeText("t".repeat(sz.toInt()))
+        assertFalse(s.writeStatic(st.toMutableMap().also { it["plugin_version"] = "p" })) // old file replaced, but the temp file leaves no room
+        assertTrue(total() <= cap + sz)
+        File(d, "x.tmp").delete()
+        // an archive counts, and the oldest archive is deleted to make room
+        val s2 = Part1Store(File(tmp.root, "capped2"), FileOps.Real, cap, 3)
+        s2.bindDevice(fp, engine); assertTrue(s2.writeStatic(st))
+        s2.bindDevice("$fp-B", engine) // archives device A's static.json (sz bytes)
+        assertTrue(File(tmp.root, "capped2/old/${DeviceKey.of(fp, engine).take(12)}/static.json").isFile)
+        assertTrue(s2.writeStatic(st)); assertTrue(s2.writeDbRecordSized(sz)) // 65 + 2 sz + archive sz > cap: the archive goes
+        assertFalse(File(tmp.root, "capped2/old/${DeviceKey.of(fp, engine).take(12)}").exists())
+        assertTrue(File(tmp.root, "capped2").walkTopDown().filter { it.isFile }.sumOf { it.length() } <= cap)
+        // an archive makes a row rotate nothing out before the archive is gone
+        // a probe-facts write is capped as well
+        val s3 = Part1Store(File(tmp.root, "capped3"), FileOps.Real, 100, 3); s3.bindDevice(fp, engine)
+        assertFalse(s3.writeProbeFacts(mapOf("pad" to "x".repeat(200)), 1L))
+    }
+
+    private fun Part1Store.writeDbRecordSized(size: Long): Boolean {
+        val base = (Json.toOrg(mapOf("format" to "part1-dbrecord-v1", "pad" to "")).toString() + "\n").toByteArray().size
+        return writeDbRecord(mapOf("format" to "part1-dbrecord-v1", "pad" to "x".repeat((size - base).toInt())))
+    }
+
+    @Test
+    fun givenProbeFacts_whenWrittenAndTheKeyChanges_thenTheyAreAtomicReadBackAndArchivedWithTheKey() {
+        // F16
+        val s = store()
+        assertFalse(s.writeProbeFacts(mapOf("a" to 1L), 5L)) // not bound
+        s.bindDevice(fp, engine)
+        val facts = linkedMapOf<String, Any?>("opencl_child" to listOf(linkedMapOf("name" to "libOpenCL.so", "load" to "not_loaded", "outcome" to "dlopen_failed")), "public_libraries_names_opencl" to true)
+        assertTrue(s.writeProbeFacts(facts, 1_700_000_000_123L))
+        assertFalse(File(dir(), "probe-facts.json.tmp").exists())
+        val back = s.readProbeFacts()!!
+        assertEquals("part1-probe-facts-v1", back["format"])
+        assertEquals(engine, back["engine_version"])
+        assertEquals(1_700_000_000_123L, back["time_epoch_ms"])
+        assertEquals(emptyList<String>(), Json.diff(facts, back["facts"]))
+        File(dir(), "probe-facts.json").writeText("{")
+        assertNull(s.readProbeFacts())
+        assertTrue(s.writeProbeFacts(facts, 2L))
+        val r = store().bindDevice("$fp-B", engine) as BindResult.Changed
+        assertTrue(File(r.archive, "probe-facts.json").isFile)
+        assertFalse(File(dir(), "probe-facts.json").exists())
     }
 }

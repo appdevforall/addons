@@ -48,7 +48,6 @@ class AndroidBuildSource : BuildSource {
     override val device: String? get() = Build.DEVICE
     override val hardware: String? get() = Build.HARDWARE
     override val socModel: String? get() = Build.SOC_MODEL
-    override val socManufacturer: String? get() = Build.SOC_MANUFACTURER
     override val fingerprint: String? get() = Build.FINGERPRINT
     override val sdkInt: Int get() = Build.VERSION.SDK_INT
     override val supportedAbis: List<String> get() = Build.SUPPORTED_ABIS.toList()

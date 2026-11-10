@@ -16,6 +16,9 @@ interface FileOps {
 
     fun delete(file: File): Boolean
 
+    /** Creates [dir] and its parents; true when the directory exists afterwards. */
+    fun makeDirs(dir: File): Boolean = dir.isDirectory || dir.mkdirs() || dir.isDirectory
+
     object Real : FileOps {
         override fun writeAndSync(file: File, bytes: ByteArray) {
             FileOutputStream(file).use { out ->

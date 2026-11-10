@@ -18,7 +18,6 @@ interface BuildSource {
     val device: String?
     val hardware: String?
     val socModel: String?
-    val socManufacturer: String?
 
     /** `Build.FINGERPRINT`: stored only in the plugin's own files, never logged. */
     val fingerprint: String?

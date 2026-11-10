@@ -23,10 +23,21 @@ sealed class BindResult {
     /** The key changed: the old files were moved to [archive] (`old/<first 12 hex of the old key>`) and the store starts fresh. */
     class Changed(val oldKey: String, val archive: File?) : BindResult()
 
+    /**
+     * The key changed and the old files could not be archived because `old/<id>` cannot be created. Data of another key must
+     * never stay live, so the old live files were **deleted** and the store starts fresh under the new key. This is its own
+     * outcome: the old device's data is gone, not archived.
+     */
+    class Discarded(val oldKey: String) : BindResult()
+
     /** No fingerprint is known, so no key can be made; nothing was changed. */
     object Unkeyed : BindResult()
 
-    /** A file operation failed; the store may be half archived and the next bind repeats the move. */
+    /**
+     * A file operation failed and the key change did **not** happen: the new key is not written, `key.txt` still names the old
+     * key (an interrupted archive is repeated by the next bind), and until a bind succeeds this store returns no stored data
+     * and accepts no row.
+     */
     class IoFailed(val reason: String) : BindResult()
 }
 
@@ -54,8 +65,20 @@ class StoredRows(val lines: List<String>, val skipped: Int)
  *   not a valid `part1-rows-v1` row is dropped (a half-written last line, say) and counted.
  * - **Size cap:** the live files together stay under [maxTotalBytes]; when appending a row would exceed it, the oldest rows
  *   are rotated out of the log (the newest row always stays).
- * - **Device key:** [bindDevice] compares the key of this device and engine with `key.txt`. A change archives every
- *   file under `old/<first 12 hex of the old key>/` and starts fresh; at most [maxArchives] archives are kept.
+ * - **Size cap:** [maxTotalBytes] is enforced on **every** write ([writeStatic], [writeDbRecord], [writeDescriptor],
+ *   [writeProbeFacts], [appendRow]). It counts everything the store keeps on disk: the live files, every archive under `old/`
+ *   and the temporary files (`*.tmp`). To make room, the oldest archives are deleted first, then (for the row log) the oldest
+ *   rows; a write that cannot fit even then is refused (a file) or rejected (a row). **Worst-case disk use:** at rest at most
+ *   `maxTotalBytes` (the 65 bytes of `key.txt` written by a key change are not charged to a write, so at most
+ *   `maxTotalBytes + 65`); while one atomic write is under way the old file and its temporary copy coexist, so at most
+ *   `2 * maxTotalBytes + 65` (2 MiB + 65 bytes with the default 1 MiB). A key change moves files and does not add bytes.
+ * - **Device key:** [bindDevice] compares the key of this device and engine with `key.txt`. A change is **all or nothing**:
+ *   it archives every file under `old/<first 12 hex of the old key>/` and starts fresh; at most [maxArchives] archives are
+ *   kept. If the files cannot be archived the new key is not written ([BindResult.IoFailed]); if `old/<id>` cannot even be
+ *   created the old live files are deleted ([BindResult.Discarded]). Data of another key never stays live under a new key.
+ *   After a failed bind the store returns nothing and accepts no row until a bind succeeds.
+ * - **Temporary files:** `*.tmp` left by a crash are removed by every [bindDevice] (start-up) and are never archived; a key
+ *   change that cannot remove them fails.
  *
  * Not thread-safe: use one instance from one worker thread. Blocking I/O: not for the main thread. Logs nothing.
  */
@@ -71,13 +94,18 @@ class Part1Store(
         const val DBRECORD = "dbrecord.json"
         const val DESCRIPTOR = "device-descriptor-v0.2.json"
         const val KEY = "key.txt"
+        const val PROBE_FACTS = "probe-facts.json"
+        const val PROBE_FACTS_FORMAT = "part1-probe-facts-v1"
         const val DEFAULT_MAX_TOTAL_BYTES = 1024L * 1024L
         const val MATCH_SOURCE = "in-app device matcher (DeviceIndexMatcher) over the identity stored in static.json: platform, board, device, hardware"
-        private val LIVE = listOf(STATIC, ROWS, DBRECORD, DESCRIPTOR, KEY)
+        private val LIVE = listOf(STATIC, ROWS, DBRECORD, DESCRIPTOR, PROBE_FACTS, KEY)
     }
 
     private val writer = AtomicWriter(ops)
     private var engineId: String? = null
+
+    /** True after a bind failed: nothing is read or written until a bind succeeds (the files may still be the old device's). */
+    private var blocked = false
 
     private fun file(name: String) = File(dir, name)
 
@@ -88,55 +116,91 @@ class Part1Store(
      * `part1-engine/<version>`. Rows of another engine are refused by [appendRow].
      */
     fun bindDevice(fingerprint: String?, engineId: String): BindResult {
+        this.engineId = null // set only when this bind succeeds
         if (fingerprint.isNullOrEmpty()) return BindResult.Unkeyed
         val key = DeviceKey.of(fingerprint, engineId)
-        this.engineId = engineId
+        blocked = false // the bind itself must read key.txt
         return try {
-            bind(key)
+            val r = bind(key)
+            this.engineId = engineId
+            r
         } catch (e: IOException) {
-            BindResult.IoFailed("the files could not be moved or written (${e.javaClass.simpleName})")
+            blocked = true
+            BindResult.IoFailed("the files could not be moved, deleted or written (${e.javaClass.simpleName})")
         }
     }
 
     private fun bind(key: String): BindResult {
         val stored = readTextOrNull(KEY)?.trim()?.takeIf { DeviceKey.isKey(it) }
+        val tempsGone = removeTemps()
         val others = LIVE.filter { it != KEY && file(it).exists() }
         if (stored == key) return BindResult.Same(key)
+        if (!tempsGone) throw IOException("a temporary file could not be removed")
         if (stored == null && others.isEmpty()) {
             writeKey(key)
             return BindResult.Fresh(key)
         }
         val oldId = stored?.take(12) ?: "unkeyed"
-        val archive = archive(oldId)
+        val result = when (val a = archive(oldId)) {
+            is Archive.Moved -> BindResult.Changed(stored ?: "", a.dir)
+            Archive.NothingToMove -> BindResult.Changed(stored ?: "", null)
+            Archive.CannotCreate -> {
+                deleteLive()
+                BindResult.Discarded(stored ?: "")
+            }
+        }
         writeKey(key)
         prune()
-        return BindResult.Changed(stored ?: "", archive)
+        return result
     }
 
     private fun writeKey(key: String) = writer.write(file(KEY), (key + "\n").toByteArray())
 
-    /** Moves every live file into `old/<id>/` (key last, so an interrupted move is repeated by the next bind). */
-    private fun archive(id: String): File? {
+    /** Deletes every `*.tmp` directly in the store directory; false when one could not be deleted. */
+    private fun removeTemps(): Boolean {
+        var all = true
+        for (f in dir.listFiles { x -> x.isFile && x.name.endsWith(".tmp") }.orEmpty()) {
+            if (!ops.delete(f) && f.exists()) all = false
+        }
+        return all
+    }
+
+    /** Deletes every live file (key last); throws when one cannot be deleted, so the old key then stays and the bind fails. */
+    private fun deleteLive() {
+        for (name in LIVE) {
+            val f = file(name)
+            if (f.exists() && !ops.delete(f) && f.exists()) throw IOException("cannot delete $name")
+        }
+    }
+
+    private sealed class Archive {
+        class Moved(val dir: File) : Archive()
+        object NothingToMove : Archive()
+        object CannotCreate : Archive()
+    }
+
+    /** Moves every live file into `old/<id>/` (key last, so an interrupted move is repeated by the next bind). A failed move throws. */
+    private fun archive(id: String): Archive {
         val target = File(File(dir, "old"), id)
         var moved = false
         for (name in LIVE) { // KEY is last in LIVE
             val f = file(name)
             if (!f.exists()) continue
-            if (!target.isDirectory && !target.mkdirs() && !target.isDirectory) return null
+            if (!ops.makeDirs(target)) return Archive.CannotCreate
             ops.moveReplacing(f, File(target, name))
             moved = true
         }
-        return if (moved) target else null
+        return if (moved) Archive.Moved(target) else Archive.NothingToMove
     }
 
     private fun prune() {
-        val old = File(dir, "old").listFiles { f -> f.isDirectory }?.sortedWith(compareBy({ it.lastModified() }, { it.name })) ?: return
-        for (d in old.dropLast(maxArchives)) d.deleteRecursively()
+        for (d in archives().dropLast(maxArchives)) d.deleteRecursively()
     }
 
     // ---- reads --------------------------------------------------------------------------------------------------
 
     private fun readTextOrNull(name: String): String? {
+        if (blocked) return null
         val f = file(name)
         return try {
             if (f.isFile) String(f.readBytes(), Charsets.UTF_8) else null
@@ -163,7 +227,7 @@ class Part1Store(
     fun readDescriptor(): Map<String, Any?>? = readObject(DESCRIPTOR, descriptorCheck)
 
     /** The state of the four data files: absent, usable, or corrupt (present but read as absent). */
-    fun inspect(): Map<String, FileState> = mapOf(
+    fun inspect(): Map<String, FileState> = if (blocked) mapOf(STATIC to FileState.ABSENT, DBRECORD to FileState.ABSENT, DESCRIPTOR to FileState.ABSENT, ROWS to FileState.ABSENT) else mapOf(
         STATIC to state(STATIC) { readStatic() },
         DBRECORD to state(DBRECORD) { readDbRecord() },
         DESCRIPTOR to state(DESCRIPTOR) { readDescriptor() },
@@ -201,13 +265,18 @@ class Part1Store(
     // ---- writes -------------------------------------------------------------------------------------------------
 
     private fun writeObject(name: String, tree: Map<String, Any?>, check: (Map<String, Any?>) -> Boolean): Boolean {
-        if (!check(tree)) return false
+        if (blocked || !check(tree)) return false
         val bytes = try {
             (Json.toOrg(tree).toString() + "\n").toByteArray(Charsets.UTF_8)
         } catch (e: JsonException) {
             return false
         }
-        if (bytes.size > maxTotalBytes) return false
+        return writeCapped(name, bytes)
+    }
+
+    /** Writes [bytes] as [name] when everything the store keeps, with this file replaced, stays within [maxTotalBytes] (oldest archives are deleted to make room). */
+    private fun writeCapped(name: String, bytes: ByteArray): Boolean {
+        if (!fits(name, bytes.size.toLong())) return false
         return try {
             writer.write(file(name), bytes)
             true
@@ -216,9 +285,50 @@ class Part1Store(
         }
     }
 
+    /** True when [needed] bytes can replace [name] within the cap, after deleting as many of the oldest archives as that takes. */
+    private fun fits(name: String, needed: Long): Boolean {
+        while (usedBytes(name) + needed > maxTotalBytes) {
+            if (!deleteOldestArchive()) return false
+        }
+        return true
+    }
+
+    /** Bytes on disk of everything the store keeps (live files, archives, `*.tmp`), not counting [replaced] and its temporary file. */
+    private fun usedBytes(replaced: String?): Long {
+        var sum = 0L
+        for (f in dir.listFiles().orEmpty()) {
+            if (f.isFile && f.name != replaced && f.name != "$replaced.tmp") sum += f.length()
+        }
+        for (a in archives()) sum += treeBytes(a)
+        return sum
+    }
+
+    private fun treeBytes(d: File): Long = d.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    private fun archives(): List<File> =
+        File(dir, "old").listFiles { f -> f.isDirectory }?.sortedWith(compareBy({ it.lastModified() }, { it.name })) ?: emptyList()
+
+    private fun deleteOldestArchive(): Boolean {
+        val oldest = archives().firstOrNull() ?: return false
+        return oldest.deleteRecursively() || !oldest.exists()
+    }
+
     fun writeStatic(static: Map<String, Any?>): Boolean = writeObject(STATIC, static, staticCheck)
     fun writeDbRecord(record: Map<String, Any?>): Boolean = writeObject(DBRECORD, record, dbCheck)
     fun writeDescriptor(descriptor: Map<String, Any?>): Boolean = writeObject(DESCRIPTOR, descriptor, descriptorCheck)
+
+    /**
+     * Writes `probe-facts.json`: the two facts of the T0 read that `part1-static-v1` has no slot for (`StaticReadResult.facts`:
+     * `opencl_child` as the GPU probe gave it, and the `public.libraries.txt` hint), with the engine id this store is bound to and
+     * [atEpochMs]. Same atomic rule and size cap as the other files; archived with the key. Needs a successful [bindDevice].
+     */
+    fun writeProbeFacts(facts: Map<String, Any?>, atEpochMs: Long): Boolean {
+        val bound = engineId ?: return false
+        val tree = linkedMapOf<String, Any?>("format" to PROBE_FACTS_FORMAT, "engine_version" to bound, "time_epoch_ms" to atEpochMs, "facts" to facts)
+        return writeObject(PROBE_FACTS, tree) { it["format"] == PROBE_FACTS_FORMAT }
+    }
+
+    fun readProbeFacts(): Map<String, Any?>? = readObject(PROBE_FACTS) { it["format"] == PROBE_FACTS_FORMAT }
 
     /** Appends one row record (a `part1-rows-v1` object, with `engine_version` equal to the bound engine's id). */
     fun appendRow(record: Map<String, Any?>): AppendResult {
@@ -232,11 +342,16 @@ class Part1Store(
         if (record["engine_version"] != bound) return AppendResult.Rejected("the row names another engine (${record["engine_version"]}), this store holds rows of $bound")
         val rows = ArrayList(readRows().lines)
         rows.add(line)
-        val others = LIVE.filter { it != ROWS }.sumOf { file(it).takeIf { f -> f.isFile }?.length() ?: 0L }
+        // everything but the row log counts: live files, archives, temporary files; older archives go first, then older rows
         var dropped = 0
-        while (rows.size > 1 && others + size(rows) > maxTotalBytes) {
-            rows.removeAt(0)
-            dropped++
+        while (usedBytes(ROWS) + size(rows) > maxTotalBytes) {
+            if (deleteOldestArchive()) continue
+            if (rows.size > 1) {
+                rows.removeAt(0)
+                dropped++
+            } else {
+                return AppendResult.Rejected("the row does not fit within the size cap of $maxTotalBytes bytes")
+            }
         }
         return try {
             writer.write(file(ROWS), (rows.joinToString("\n") + "\n").toByteArray(Charsets.UTF_8))

@@ -23,7 +23,6 @@ class FakeBuild(
     override val device: String? = "C107",
     override val hardware: String? = "sun55iw3p1",
     override val socModel: String? = "A523",
-    override val socManufacturer: String? = "Allwinner",
     override val fingerprint: String? = "synthetic/d5-like:14/SYN.1/1:user/test-keys",
     override val sdkInt: Int = 34,
     override val supportedAbis: List<String> = listOf("arm64-v8a", "armeabi-v7a", "armeabi"),
