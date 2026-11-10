@@ -30,7 +30,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="On-device .gguf inference backend for AI Core, powered by a bundled llama.cpp build. Nothing leaves the device." />
+            android:value="On-device .gguf inference backend for AI Core, powered by a bundled llama.cpp build. Your AI interactions stay on the device." />
 
         <meta-data
             android:name="plugin.author"
