@@ -5,6 +5,8 @@ import android.app.ActivityManager
 import android.app.Dialog
 import android.content.Context
 import android.view.WindowManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentlocal.R
@@ -64,8 +66,8 @@ class ThreadWatchdog : Watchdog {
 }
 
 /**
- * Gate 1: the app's current activity (the host's `IdeUIService`) exists, is not finishing, and the app's process is in the foreground
- * (`ActivityManager.getMyMemoryState` importance FOREGROUND, which holds while an activity is resumed and visible). The engine
+ * Gate 1: the app's current activity (the host's `IdeUIService`) exists, is not finishing, is at least `RESUMED` when it is a `LifecycleOwner` (the host's AppCompat
+ * activities are), and the app's process is in the foreground (`ActivityManager.getMyMemoryState` importance FOREGROUND). The engine
  * checks its own cpuset by itself and refuses with exit 97; the two checks together are the gate.
  */
 class AndroidForegroundGate(private val activity: () -> Activity?) : ForegroundGate {
@@ -76,7 +78,8 @@ class AndroidForegroundGate(private val activity: () -> Activity?) : ForegroundG
         } else {
             val info = ActivityManager.RunningAppProcessInfo()
             ActivityManager.getMyMemoryState(info)
-            info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+            val resumed = (a as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: true
+            resumed && info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
         }
     } catch (e: Exception) {
         false
@@ -85,8 +88,8 @@ class AndroidForegroundGate(private val activity: () -> Activity?) : ForegroundG
 
 /**
  * Gate 2 with the host's build-status service (`IdeBuildService`: `isBuildInProgress` is true from `prepareBuild`, which a project sync
- * also goes through, until the build finishes or fails). A listener counts the builds that start. The service does not see indexing; see
- * [ProcQuietIdeGate] for what the fallback adds when the service is absent.
+ * also goes through, until the build finishes or fails). A listener counts the builds that start. The service does not see indexing. There is no
+ * fallback: without the service T1 is not offered ([UnavailableIdeGate]).
  */
 class HostQuietIdeGate(private val service: IdeBuildService) : QuietIdeGate, AutoCloseable {
     @Volatile private var starts = 0L
@@ -105,75 +108,79 @@ class HostQuietIdeGate(private val service: IdeBuildService) : QuietIdeGate, Aut
     override fun close() = service.removeBuildStatusListener(listener)
 }
 
-/** `FLAG_KEEP_SCREEN_ON` on the activity's window for the duration of a pass; removed again in [release] only when this class set it. */
-class AndroidScreenKeeper(private val activity: () -> Activity?) : ScreenKeeper {
-    private val held = AtomicReference<Activity?>()
-
-    override fun keepOn() {
-        val a = activity() ?: return
-        a.runOnUiThread {
-            val w = a.window ?: return@runOnUiThread
-            if (w.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON == 0) {
-                w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                held.set(a)
-            }
-        }
-    }
-
-    override fun release() {
-        val a = held.getAndSet(null) ?: return
-        a.runOnUiThread { a.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-    }
+/** The gate used when the host has no build-status service; the controller never offers T1 then, so it is never asked. Reports busy. */
+object UnavailableIdeGate : QuietIdeGate {
+    override fun isBusy() = true
+    override fun startsSeen() = 0L
 }
 
 /**
- * The question and the progress, as dialogs on the current activity in the plugin's existing dialog style (`MaterialAlertDialogBuilder`,
- * shown through the host's `PluginWindows.showDialog`). All text comes from string resources. The question returns Skip by itself when the
- * user does not answer within [QuickLimits.ASK_TIMEOUT_MS] or the dialog goes away; with no activity it returns `NO_ACTIVITY`.
+ * The real [WindowOps] on the current activity: `FLAG_KEEP_SCREEN_ON` on its window, and the question and the progress as dialogs in the
+ * plugin's existing dialog style (`MaterialAlertDialogBuilder`, shown through the host's `PluginWindows.showDialog`). All text comes from
+ * string resources. Every call is made on the UI thread by [PassWindows].
  */
-class AndroidQuickTierUi(private val strings: Context, private val activity: () -> Activity?) : QuickTierUi {
-    private val question = AtomicReference<Dialog?>()
-    private val progress = AtomicReference<Dialog?>()
-    private val progressHost = AtomicReference<Activity?>()
-    @Volatile private var cancelHandler: () -> Unit = {}
+class AndroidWindowOps(private val strings: Context) : WindowOps<Activity> {
+    override fun isUsable(host: Activity) = !host.isFinishing && !host.isDestroyed
 
-    override fun ask(): QuickAnswer {
-        val a = activity()
-        if (a == null || a.isFinishing || a.isDestroyed) return QuickAnswer.NO_ACTIVITY
-        val answer = AtomicReference<QuickAnswer?>()
-        val done = CountDownLatch(1)
-        a.runOnUiThread {
-            try {
-                val d = MaterialAlertDialogBuilder(a)
-                    .setTitle(strings.getString(R.string.part1_dialog_title))
-                    .setMessage(strings.getString(R.string.part1_dialog_message))
-                    .setPositiveButton(strings.getString(R.string.part1_dialog_run)) { _, _ -> answer.compareAndSet(null, QuickAnswer.RUN_NOW) }
-                    .setNegativeButton(strings.getString(R.string.part1_dialog_skip)) { _, _ -> answer.compareAndSet(null, QuickAnswer.SKIP) }
-                    .setOnDismissListener {
-                        answer.compareAndSet(null, QuickAnswer.SKIP) // back press, outside tap, activity gone
-                        done.countDown()
-                    }
-                    .create()
-                question.set(d)
-                if (!PluginWindows.showDialog(d)) {
-                    answer.compareAndSet(null, QuickAnswer.NO_ACTIVITY)
-                    done.countDown()
-                }
-            } catch (e: Exception) {
-                answer.compareAndSet(null, QuickAnswer.NO_ACTIVITY)
-                done.countDown()
-            }
-        }
-        if (!done.await(QuickLimits.ASK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-            answer.compareAndSet(null, QuickAnswer.SKIP)
-            a.runOnUiThread { runCatching { question.get()?.dismiss() } }
-        }
-        return answer.get() ?: QuickAnswer.SKIP
+    override fun flagIsSet(host: Activity): Boolean =
+        host.window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0
+
+    override fun setFlag(host: Activity, on: Boolean) {
+        val w = host.window ?: return
+        if (on) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    override fun onCancel(handler: () -> Unit) {
-        cancelHandler = handler
+    private class Handle(val dialog: Dialog) : DialogHandle {
+        override fun setText(text: String) {
+            (dialog as? androidx.appcompat.app.AlertDialog)?.setMessage(text)
+        }
+
+        override fun dismiss() = dialog.dismiss()
     }
+
+    override fun showQuestion(host: Activity, onRun: () -> Unit, onSkip: () -> Unit, onDismissed: () -> Unit): DialogHandle? {
+        val d = MaterialAlertDialogBuilder(host)
+            .setTitle(strings.getString(R.string.part1_dialog_title))
+            .setMessage(strings.getString(R.string.part1_dialog_message))
+            .setPositiveButton(strings.getString(R.string.part1_dialog_run)) { _, _ -> onRun() }
+            .setNegativeButton(strings.getString(R.string.part1_dialog_skip)) { _, _ -> onSkip() }
+            .setOnDismissListener { onDismissed() }
+            .create()
+        return if (PluginWindows.showDialog(d)) Handle(d) else null
+    }
+
+    override fun showProgress(host: Activity, text: String, onCancel: () -> Unit): DialogHandle? {
+        val d = MaterialAlertDialogBuilder(host)
+            .setTitle(strings.getString(R.string.part1_progress_title))
+            .setMessage(text)
+            .setCancelable(false)
+            .setNegativeButton(strings.getString(R.string.part1_cancel)) { _, _ -> onCancel() }
+            .create()
+        return if (PluginWindows.showDialog(d)) Handle(d) else null
+    }
+}
+
+/** Posts to the main thread, always through the looper, so that the order of posting is the order of running. */
+fun mainThreadPoster(): (Runnable) -> Unit {
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    return { r -> handler.post(r) }
+}
+
+/** `FLAG_KEEP_SCREEN_ON` for the duration of a pass, through the shared [PassWindows]; [release] ends the whole cycle. */
+class AndroidScreenKeeper(private val windows: PassWindows<Activity>) : ScreenKeeper {
+    override fun keepOn() = windows.keepOn()
+    override fun release() = windows.close()
+}
+
+/**
+ * The question and the progress, through the shared [PassWindows] (see there for the order of changes and for a recreated activity). The
+ * question returns Skip by itself when the user does not answer within [QuickLimits.ASK_TIMEOUT_MS] or the dialog goes away; with no
+ * activity it returns `NO_ACTIVITY`.
+ */
+class AndroidQuickTierUi(private val strings: Context, private val windows: PassWindows<Activity>) : QuickTierUi {
+    override fun ask(): QuickAnswer = windows.ask()
+
+    override fun onCancel(handler: () -> Unit) = windows.onCancel(handler)
 
     override fun showProgress(progress: Progress) {
         val what = when (progress.label) {
@@ -183,11 +190,11 @@ class AndroidQuickTierUi(private val strings: Context, private val activity: () 
             RowLabel.ALL_READ -> strings.getString(R.string.part1_row_all)
             RowLabel.GPU_READ -> strings.getString(R.string.part1_row_gpu)
         }
-        setProgressText(strings.getString(R.string.part1_progress_row, progress.row, progress.total, what))
+        windows.progress(strings.getString(R.string.part1_progress_row, progress.row, progress.total, what))
     }
 
     override fun showWaiting(what: WaitingFor) {
-        setProgressText(
+        windows.progress(
             strings.getString(
                 when (what) {
                     WaitingFor.IDE_QUIET -> R.string.part1_waiting_ide
@@ -198,36 +205,7 @@ class AndroidQuickTierUi(private val strings: Context, private val activity: () 
         )
     }
 
-    private fun setProgressText(text: String) {
-        val a = progressHost.get() ?: activity()?.also { progressHost.set(it) } ?: return
-        a.runOnUiThread {
-            try {
-                val existing = progress.get()
-                if (existing != null) {
-                    (existing as? androidx.appcompat.app.AlertDialog)?.setMessage(text)
-                    return@runOnUiThread
-                }
-                val d = MaterialAlertDialogBuilder(a)
-                    .setTitle(strings.getString(R.string.part1_progress_title))
-                    .setMessage(text)
-                    .setCancelable(false)
-                    .setNegativeButton(strings.getString(R.string.part1_cancel)) { _, _ -> cancelHandler() }
-                    .create()
-                progress.set(d)
-                PluginWindows.showDialog(d)
-            } catch (e: Exception) {
-                // a dialog that cannot be shown does not stop the measurement; the Cancel button is then absent, the 180 s limit remains
-            }
-        }
-    }
-
-    override fun close() {
-        val host = progressHost.getAndSet(null) ?: activity()
-        val dialogs = listOfNotNull(question.getAndSet(null), progress.getAndSet(null))
-        if (dialogs.isEmpty()) return
-        val dismiss = Runnable { dialogs.forEach { runCatching { it.dismiss() } } }
-        if (host != null) host.runOnUiThread(dismiss) else dismiss.run()
-    }
+    override fun close() = windows.close()
 }
 
 /** Builds the real Part 1 runtime from the plugin context. Called by [Part1Controller] only when the switch is on. */
@@ -253,23 +231,22 @@ object AndroidPart1Runtime {
         val closers = ArrayList<AutoCloseable>()
 
         val buildService = context.services.get(IdeBuildService::class.java)
-        val ide: QuietIdeGate = if (buildService != null) {
-            HostQuietIdeGate(buildService).also { closers.add(it) }
-        } else {
-            ProcQuietIdeGate(JavaProcFs(), android.os.Process.myUid())
-        }
+        // Without the host's build-status service a quiet IDE cannot be known: T1 is then not offered (deferred, ide_gate_unavailable)
+        val ide: QuietIdeGate = if (buildService != null) HostQuietIdeGate(buildService).also { closers.add(it) } else UnavailableIdeGate
+        val poster = mainThreadPoster()
         val newTier = {
+            val windows = PassWindows(activity, poster, AndroidWindowOps(app))
             QuickTier(
                 engine = runner, store = store, index = { DeviceIndex.loadFromAssets { app.assets.open(it) } },
                 foreground = AndroidForegroundGate(activity), ide = ide, conditions = { conditions.read() },
-                memory = ProcMemoryProbe(files), screen = AndroidScreenKeeper(activity), ui = AndroidQuickTierUi(app, activity),
+                memory = ProcMemoryProbe(files), screen = AndroidScreenKeeper(windows), ui = AndroidQuickTierUi(app, windows),
                 clock = SystemClockImpl, watchdog = ThreadWatchdog(), pluginVersion = version,
                 log = { context.logger.info("Part1: $it") },
             )
         }
         return Part1Runtime(
             reader = reader, store = store, index = { DeviceIndex.loadFromAssets { app.assets.open(it) } },
-            engineId = EngineRunner.EXPECTED_ENGINE_VERSION, pluginVersion = version, newQuickTier = newTier, engine = runner,
+            engineId = EngineRunner.EXPECTED_ENGINE_VERSION, pluginVersion = version, newQuickTier = newTier, engine = runner, ideGateAvailable = buildService != null,
             close = { closers.forEach { runCatching { it.close() } } },
         )
     }
