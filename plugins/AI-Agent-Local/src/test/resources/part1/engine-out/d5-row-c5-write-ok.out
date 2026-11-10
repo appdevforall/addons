@@ -1,0 +1,9 @@
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.1 result=pinned
+kernel             thr cores            size_mb pfdist run         median_ns      best_ns   GB/s_med  GB/s_best   %peak   minflt
+write_stp            1 4                    256      0 C5-write-k4-1     63828000     56052583       4.21       4.79     8.2        3
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.2 result=pinned
+write_stp            1 4                    256      0 C5-write-k4-2     63803417     57431917       4.21       4.67     8.2        3
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.1 result=pinned
+write_stp            1 4                    256      0 C5-write-k4-3     63869166     55974208       4.20       4.80     8.2        2
+write_stp            1 4                    256      0 C5-write-k4-mom     63828000     63828000       4.21       4.21     8.2        2
+{"format":"part1-rows-v1","tag":"C5-write-k4","kind":"write","tier":"T2","status":"ok","cpu_set":[4],"threads":1,"buffer_mib":256.0000,"gbs_median":4.2056,"gbs_min":4.2029,"gbs_max":4.2072,"repeats":3,"single_shot":false,"passes":46,"variant":"write_stp","pin":{"result":"ok","attempts":1,"time_to_pin_ms":0.1730},"exit_code":0,"gate_basis":"cpuset_top_app","conditions":{"foreground_cpuset":"/top-app","gate_basis":"cpuset_top_app","buffer_mib":256.0000,"cpu_set":"4","pin":"ok","memavail_mib":2307.1211,"memtotal_mib":3727.6875,"regime":"median_of_repeats","threads":1,"labels":[],"note":null},"duration_s":19.0075,"duration_basis":"wall_clock_since_process_start","engine_version":"part1-engine/0.2.1","origin":"measured_app","labels":[],"minflt_timed":8}

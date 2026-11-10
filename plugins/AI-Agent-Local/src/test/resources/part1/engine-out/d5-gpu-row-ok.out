@@ -1,0 +1,27 @@
+# device: Mali-G57  apiVersion 1.3.225  driverVersion 0xa000000  timestampPeriod 41.6667 ns  maxStorageBufferRange 268435456  maxWorkGroupInvocations 512
+# compute queue family 0, timestampValidBits 64, timestamps supported
+# timing: device timestamps
+# memtype 0 flags 0x7 heap 0
+# memtype 1 flags 0xb heap 0
+# memtype 2 flags 0x11 heap 0
+# buffer memoryTypeBits 0x3 -> memtype 0
+# buffer memoryTypeBits 0x3 -> memtype 0
+# buffer memoryTypeBits 0x3 -> memtype 0
+# buffers: 512 MiB src (memtype 0, host-mapped), 512 MiB dst (memtype 0, host-mapped)
+# T_dev (DEVICE_LOCAL, not HOST_VISIBLE, allowed for a storage buffer, mask 0x3): none on this driver; fallback: the least-coherent DEVICE_LOCAL|HOST_VISIBLE type allowed for buffers
+kernel         variant                size_mb run         median_ns      best_ns  GB/s_med GB/s_best  %peak
+# dispatch 1: 155555130 ns verified=1 boot_ns_start=443794076277469 boot_ns_end=443794232721927
+# dispatch 2: 152090671 ns verified=1 boot_ns_start=443794235561052 boot_ns_end=443794388654052
+# dispatch 3: 157236880 ns verified=1 boot_ns_start=443794392212136 boot_ns_end=443794550317344
+# dispatch 4: 150813338 ns verified=1 boot_ns_start=443794553554177 boot_ns_end=443794705434344
+# dispatch 5: 144634463 ns verified=1 boot_ns_start=443794708808886 boot_ns_end=443794854827386
+# G01_read gpu-wg8192-per4096 boot_ns_start=443790953595051 boot_ns_end=443794858696844
+G01_read       gpu-wg8192-per4096        512 C7-gpu-alone-1    155555130    155555130      3.45      3.45    6.7
+G01_read       gpu-wg8192-per4096        512 C7-gpu-alone-2    152090671    152090671      3.53      3.53    6.9
+G01_read       gpu-wg8192-per4096        512 C7-gpu-alone-3    157236880    157236880      3.41      3.41    6.7
+G01_read       gpu-wg8192-per4096        512 C7-gpu-alone-4    150813338    150813338      3.56      3.56    7.0
+G01_read       gpu-wg8192-per4096        512 C7-gpu-alone-5    144634463    144634463      3.71      3.71    7.2
+G01_read       gpu-wg8192-per4096        512 C7-gpu-alone-mom    152090671    144634463      3.53      3.71    6.9
+G01_read       gpu-wg8192-per4096-hostclock    512 C7-gpu-alone-hmom    153092458    146017417      3.51      3.68    6.8
+# verification passed for every variant
+{"format":"part1-rows-v1","tag":"C7-gpu-alone","kind":"gpu","tier":"T1","status":"ok","cpu_set":[],"threads":0,"buffer_mib":512.0000,"gbs_median":3.5299,"gbs_min":null,"gbs_max":null,"repeats":1,"single_shot":true,"passes":5,"variant":"gpu-wg8192-per4096","pin":{"result":"not_applicable","attempts":null,"time_to_pin_ms":null},"exit_code":0,"gate_basis":"cpuset_top_app","conditions":{"foreground_cpuset":"/top-app","gate_basis":"cpuset_top_app","buffer_mib":512.0000,"cpu_set":null,"pin":null,"memavail_mib":2413.2422,"memtotal_mib":3727.6875,"regime":"single_shot","threads":0,"labels":[],"note":null},"duration_s":5.8321,"duration_basis":"wall_clock_since_process_start","engine_version":"part1-engine/0.2.1","origin":"measured_app","labels":[]}

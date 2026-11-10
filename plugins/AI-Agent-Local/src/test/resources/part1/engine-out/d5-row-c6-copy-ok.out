@@ -1,0 +1,9 @@
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.1 result=pinned
+kernel             thr cores            size_mb pfdist run         median_ns      best_ns   GB/s_med  GB/s_best   %peak   minflt
+copy_ldp_stp         1 4                    256      0 C6-copy-k4-1     61292166     59586625       4.38       4.50     8.6        2
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.2 result=pinned
+copy_ldp_stp         1 4                    256      0 C6-copy-k4-2     59318083     58628417       4.53       4.58     8.8        2
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.3 result=pinned
+copy_ldp_stp         1 4                    256      0 C6-copy-k4-3     59384709     58424459       4.52       4.59     8.8        2
+copy_ldp_stp         1 4                    256      0 C6-copy-k4-mom     59384709     59384709       4.52       4.52     8.8        2
+{"format":"part1-rows-v1","tag":"C6-copy-k4","kind":"copy","tier":"T2","status":"ok","cpu_set":[4],"threads":1,"buffer_mib":256.0000,"gbs_median":4.5203,"gbs_min":4.3796,"gbs_max":4.5254,"repeats":3,"single_shot":false,"passes":49,"variant":"copy_ldp_stp","pin":{"result":"ok","attempts":1,"time_to_pin_ms":0.2983},"exit_code":0,"gate_basis":"cpuset_top_app","conditions":{"foreground_cpuset":"/top-app","gate_basis":"cpuset_top_app","buffer_mib":256.0000,"cpu_set":"4","pin":"ok","memavail_mib":2322.6562,"memtotal_mib":3727.6875,"regime":"median_of_repeats","threads":1,"labels":[],"note":null},"duration_s":19.0162,"duration_basis":"wall_clock_since_process_start","engine_version":"part1-engine/0.2.1","origin":"measured_app","labels":[],"minflt_timed":6}

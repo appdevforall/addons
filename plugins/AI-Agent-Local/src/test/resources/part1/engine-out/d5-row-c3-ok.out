@@ -1,0 +1,6 @@
+# pin who=membw-t0 cpu=4 attempts=1 time_to_pin_ms=0.0 result=pinned
+# pin who=membw-t1 cpu=5 attempts=1 time_to_pin_ms=0.1 result=pinned
+kernel             thr cores            size_mb pfdist run         median_ns      best_ns   GB/s_med  GB/s_best   %peak   minflt
+read_ldp             2 4+5                  256      0 C3-read-2fast-1    110727000    105258167       4.85       5.10     9.5        4
+read_ldp             2 4+5                  256      0 C3-read-2fast-mom    110727000    110727000       4.85       4.85     9.5        4
+{"format":"part1-rows-v1","tag":"C3-read-2fast","kind":"read","tier":"T1","status":"ok","cpu_set":[4,5],"threads":2,"buffer_mib":256.0000,"gbs_median":4.8486,"gbs_min":null,"gbs_max":null,"repeats":1,"single_shot":true,"passes":53,"variant":"read_ldp","pin":{"result":"ok","attempts":1,"time_to_pin_ms":0.0727},"exit_code":0,"gate_basis":"cpuset_top_app","conditions":{"foreground_cpuset":"/top-app","gate_basis":"cpuset_top_app","buffer_mib":256.0000,"cpu_set":"4+5","pin":"ok","memavail_mib":2247.4609,"memtotal_mib":3727.6875,"regime":"single_shot","threads":2,"labels":[],"note":null},"duration_s":11.1663,"duration_basis":"wall_clock_since_process_start","engine_version":"part1-engine/0.2.1","origin":"measured_app","labels":[],"minflt_timed":4}

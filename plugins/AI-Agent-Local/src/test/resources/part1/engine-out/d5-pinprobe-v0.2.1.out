@@ -1,0 +1,17 @@
+# pin who=pinprobe-cpu0 cpu=0 attempts=1 time_to_pin_ms=0.1 result=pinned
+# pinprobe cpu=0 result=ok attempts=1 time_to_pin_ms=0.1 spin_ms=250
+# pin who=pinprobe-cpu1 cpu=1 attempts=1 time_to_pin_ms=0.1 result=pinned
+# pinprobe cpu=1 result=ok attempts=1 time_to_pin_ms=0.1 spin_ms=250
+# pin who=pinprobe-cpu2 cpu=2 attempts=1 time_to_pin_ms=0.4 result=pinned
+# pinprobe cpu=2 result=ok attempts=1 time_to_pin_ms=0.4 spin_ms=250
+# pin who=pinprobe-cpu3 cpu=3 attempts=1 time_to_pin_ms=0.1 result=pinned
+# pinprobe cpu=3 result=ok attempts=1 time_to_pin_ms=0.1 spin_ms=250
+# pin who=pinprobe-cpu4 cpu=4 attempts=1 time_to_pin_ms=0.1 result=pinned
+# pinprobe cpu=4 result=ok attempts=1 time_to_pin_ms=0.1 spin_ms=250
+# pin who=pinprobe-cpu5 cpu=5 attempts=1 time_to_pin_ms=0.1 result=pinned
+# pinprobe cpu=5 result=ok attempts=1 time_to_pin_ms=0.1 spin_ms=250
+# pin who=pinprobe-cpu6 cpu=6 attempts=1 time_to_pin_ms=0.2 result=pinned
+# pinprobe cpu=6 result=ok attempts=1 time_to_pin_ms=0.2 spin_ms=250
+# pin who=pinprobe-cpu7 cpu=7 attempts=1 time_to_pin_ms=0.1 result=pinned
+# pinprobe cpu=7 result=ok attempts=1 time_to_pin_ms=0.1 spin_ms=250
+{"format":"part1-pinprobe-v1","engine_version":"part1-engine/0.2.1","gate_basis":"cpuset_top_app","foreground_cpuset":"/top-app","status":"ok","exit_code":0,"cpus":[{"index":0,"result":"ok","attempts":1,"time_to_pin_ms":0.0885},{"index":1,"result":"ok","attempts":1,"time_to_pin_ms":0.1159},{"index":2,"result":"ok","attempts":1,"time_to_pin_ms":0.4311},{"index":3,"result":"ok","attempts":1,"time_to_pin_ms":0.1233},{"index":4,"result":"ok","attempts":1,"time_to_pin_ms":0.0856},{"index":5,"result":"ok","attempts":1,"time_to_pin_ms":0.0980},{"index":6,"result":"ok","attempts":1,"time_to_pin_ms":0.2276},{"index":7,"result":"ok","attempts":1,"time_to_pin_ms":0.0632}],"duration_ms":2004.8164}
