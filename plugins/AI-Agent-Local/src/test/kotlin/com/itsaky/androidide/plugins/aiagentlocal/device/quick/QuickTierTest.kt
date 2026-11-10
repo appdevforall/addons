@@ -801,6 +801,17 @@ class QuickTierTest {
         assertFalse(r.dir.walkTopDown().any { it.name == "t1-pass.json" })
     }
 
+    @Test
+    fun givenTheTierIsDeactivatedWhileTheGatesBeforeTheQuestionRun_whenRunReachesTheQuestion_thenNoQuestionIsAsked() {
+        val r = rig()
+        val tier = r.tier()
+        r.fg.fg = { tier.cancel(StopReason.PLUGIN_DEACTIVATED); true } // the foreground check comes right before the question
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason); assertEquals(QuickStatus.CANCELLED, res.status)
+        assertEquals(0, r.ui.asked); assertTrue(r.engine.commands.isEmpty())
+        assertNull(r.store.readPassRecord())
+    }
+
     // ---- G3: a load cancelled while the question is up ------------------------------------------------------------
 
     @Test
