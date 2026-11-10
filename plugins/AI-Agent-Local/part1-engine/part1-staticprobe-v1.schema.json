@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adfa.invalid/part1-staticprobe-v1.schema.json",
+  "title": "Part 1 static probe, format part1-staticprobe-v1 (one JSON object, last stdout line of libpart1_membw.so --static-probe --json). Not a row. Measures nothing; no foreground gate.",
+  "type": "object",
+  "required": [
+    "format",
+    "engine_version",
+    "status",
+    "exit_code"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "part1-staticprobe-v1"
+    },
+    "engine_version": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/[A-Za-z0-9._-]+$",
+      "description": "Engine id <engine name>/<version>, e.g. part1-engine/0.2.2."
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "failed"
+      ],
+      "description": "ok: the probe ran. failed: a usage error (2) or the time limit (124); only status, exit_code, reason and the identity fields are present then."
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Refusal or error text; present when status is failed."
+    },
+    "page_size": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "sysconf(_SC_PAGESIZE)."
+    },
+    "hwcap": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]+$",
+      "description": "getauxval(AT_HWCAP) as a hex string."
+    },
+    "hwcap2": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]+$",
+      "description": "getauxval(AT_HWCAP2) as a hex string."
+    },
+    "features": {
+      "type": "object",
+      "required": [
+        "asimd",
+        "asimdhp",
+        "asimddp",
+        "i8mm",
+        "bf16",
+        "sve",
+        "sve2",
+        "sme"
+      ],
+      "additionalProperties": false,
+      "description": "Booleans decoded from hwcap and hwcap2 (arm64 bits): asimd HWCAP bit 1, asimdhp (fp16) bit 10, asimddp (dotprod) bit 20, sve bit 22; i8mm HWCAP2 bit 13, bf16 bit 14, sve2 bit 1, sme bit 23.",
+      "properties": {
+        "asimd": {
+          "type": "boolean"
+        },
+        "asimdhp": {
+          "type": "boolean"
+        },
+        "asimddp": {
+          "type": "boolean"
+        },
+        "i8mm": {
+          "type": "boolean"
+        },
+        "bf16": {
+          "type": "boolean"
+        },
+        "sve": {
+          "type": "boolean"
+        },
+        "sve2": {
+          "type": "boolean"
+        },
+        "sme": {
+          "type": "boolean"
+        }
+      }
+    },
+    "cpus_possible": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "/sys/devices/system/cpu/possible as read (trailing newline removed); null when unreadable."
+    },
+    "cpus_present": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "/sys/devices/system/cpu/present as read; null when unreadable."
+    },
+    "cpus_online": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "/sys/devices/system/cpu/online as read; null when unreadable."
+    },
+    "properties": {
+      "type": "object",
+      "required": [
+        "ro.board.platform",
+        "ro.hardware",
+        "ro.product.board",
+        "ro.product.device",
+        "ro.soc.model",
+        "ro.soc.manufacturer",
+        "ro.build.version.sdk"
+      ],
+      "additionalProperties": false,
+      "description": "Exactly these seven system properties, compiled into the program (no other, not extendable); an unset property is the empty string.",
+      "properties": {
+        "ro.board.platform": {
+          "type": "string"
+        },
+        "ro.hardware": {
+          "type": "string"
+        },
+        "ro.product.board": {
+          "type": "string"
+        },
+        "ro.product.device": {
+          "type": "string"
+        },
+        "ro.soc.model": {
+          "type": "string"
+        },
+        "ro.soc.manufacturer": {
+          "type": "string"
+        },
+        "ro.build.version.sdk": {
+          "type": "string"
+        }
+      }
+    },
+    "foreground_cpuset": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The program's own /proc/self/cpuset as read (the gate does not apply to this probe); null when unreadable."
+    }
+  },
+  "if": {
+    "properties": {
+      "status": {
+        "const": "ok"
+      }
+    },
+    "required": [
+      "status"
+    ]
+  },
+  "then": {
+    "required": [
+      "page_size",
+      "hwcap",
+      "hwcap2",
+      "features",
+      "cpus_possible",
+      "cpus_present",
+      "cpus_online",
+      "properties",
+      "foreground_cpuset"
+    ]
+  },
+  "else": {
+    "required": [
+      "reason"
+    ],
+    "not": {
+      "anyOf": [
+        {
+          "required": [
+            "page_size"
+          ]
+        },
+        {
+          "required": [
+            "features"
+          ]
+        },
+        {
+          "required": [
+            "properties"
+          ]
+        }
+      ]
+    }
+  }
+}

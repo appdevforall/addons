@@ -1,0 +1,63 @@
+#version 450
+// gpubw (ADFA-6890 E6): one shader, four modes. 256 invocations per workgroup, per_wg uvec4 (16 B) per workgroup.
+//  mode 0 G01_read      : coalesced loads, invocation tid reads elements base + i*256 + tid
+//  mode 1 G02_write     : coalesced stores of a constant
+//  mode 2 G03_copy      : coalesced src -> dst
+//  mode 4 G01c_read_x8  : like mode 0 with 8 loads in flight per invocation; mode 5 G01d_read_x16: 16 loads in flight
+//  mode 3 G01b_read_seq : each invocation reads n consecutive uvec4 (base + tid*n + i), the literal reading of the plan
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) buffer Src { uvec4 src[]; };
+layout(std430, binding = 1) buffer Dst { uvec4 dst[]; };
+layout(std430, binding = 2) buffer Out { uvec4 outv[]; };
+layout(push_constant) uniform PC { uint mode; uint per_wg; } pc;
+shared uvec4 red[256];
+void main() {
+    uint wg = gl_WorkGroupID.x, tid = gl_LocalInvocationID.x;
+    uint base = wg * pc.per_wg, n = pc.per_wg / 256u;
+    uvec4 acc = uvec4(0u);
+    if (pc.mode == 0u) {
+        for (uint i = 0u; i < n; i += 4u) {
+            uint b = base + i * 256u + tid;
+            uvec4 a0 = src[b], a1 = src[b + 256u], a2 = src[b + 512u], a3 = src[b + 768u];
+            acc ^= (a0 ^ a1) ^ (a2 ^ a3);
+        }
+    } else if (pc.mode == 4u) {
+        for (uint i = 0u; i < n; i += 8u) {
+            uint b = base + i * 256u + tid;
+            uvec4 a0 = src[b], a1 = src[b + 256u], a2 = src[b + 512u], a3 = src[b + 768u], a4 = src[b + 1024u], a5 = src[b + 1280u], a6 = src[b + 1536u], a7 = src[b + 1792u];
+            acc ^= ((a0 ^ a1) ^ (a2 ^ a3)) ^ ((a4 ^ a5) ^ (a6 ^ a7));
+        }
+    } else if (pc.mode == 5u) {
+        for (uint i = 0u; i < n; i += 16u) {
+            uint b = base + i * 256u + tid;
+            uvec4 a0 = src[b], a1 = src[b + 256u], a2 = src[b + 512u], a3 = src[b + 768u], a4 = src[b + 1024u], a5 = src[b + 1280u], a6 = src[b + 1536u], a7 = src[b + 1792u];
+            uvec4 a8 = src[b + 2048u], a9 = src[b + 2304u], a10 = src[b + 2560u], a11 = src[b + 2816u], a12 = src[b + 3072u], a13 = src[b + 3328u], a14 = src[b + 3584u], a15 = src[b + 3840u];
+            acc ^= (((a0 ^ a1) ^ (a2 ^ a3)) ^ ((a4 ^ a5) ^ (a6 ^ a7))) ^ (((a8 ^ a9) ^ (a10 ^ a11)) ^ ((a12 ^ a13) ^ (a14 ^ a15)));
+        }
+    } else if (pc.mode == 3u) {
+        uint b = base + tid * n;
+        for (uint i = 0u; i < n; i += 4u) {
+            uvec4 a0 = src[b + i], a1 = src[b + i + 1u], a2 = src[b + i + 2u], a3 = src[b + i + 3u];
+            acc ^= (a0 ^ a1) ^ (a2 ^ a3);
+        }
+    } else if (pc.mode == 1u) {
+        uvec4 v = uvec4(0xA5A5A5A5u);
+        for (uint i = 0u; i < n; i += 4u) {
+            uint b = base + i * 256u + tid;
+            dst[b] = v; dst[b + 256u] = v; dst[b + 512u] = v; dst[b + 768u] = v;
+        }
+    } else {
+        for (uint i = 0u; i < n; i += 4u) {
+            uint b = base + i * 256u + tid;
+            uvec4 a0 = src[b], a1 = src[b + 256u], a2 = src[b + 512u], a3 = src[b + 768u];
+            dst[b] = a0; dst[b + 256u] = a1; dst[b + 512u] = a2; dst[b + 768u] = a3;
+        }
+    }
+    red[tid] = acc;
+    barrier();
+    for (uint s = 128u; s > 0u; s >>= 1u) {
+        if (tid < s) red[tid] ^= red[tid + s];
+        barrier();
+    }
+    if (tid == 0u) outv[wg] = red[0];
+}

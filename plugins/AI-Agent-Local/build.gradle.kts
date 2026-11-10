@@ -56,6 +56,11 @@ android {
     }
 
     packaging {
+        jniLibs {
+            // The two prebuilt engine programs must reach the .cgp byte for byte (their sha256 is pinned by a test):
+            // no stripping and no other rewriting of them. See NATIVE-BUILD.md, "Part 1 engine".
+            keepDebugSymbols += setOf("**/libpart1_membw.so", "**/libpart1_gpubw.so")
+        }
         resources {
             excludes += setOf(
                 "META-INF/DEPENDENCIES",
@@ -121,6 +126,10 @@ tasks.withType<Test>().configureEach {
     val part1Index = file("src/main/assets/part1/part1-dbindex-v1.json.gz")
     inputs.file(part1Index)
     systemProperty("part1IndexAssetPath", part1Index.absolutePath)
+    // The Part 1 engine programs the build must package unchanged, and the folder the debug .cgp is built into.
+    systemProperty("part1EngineLibDir", file("src/main/jniLibs/$expectedAbi").absolutePath)
+    systemProperty("part1EngineDir", file("part1-engine").absolutePath)
+    systemProperty("builtPluginDir", layout.buildDirectory.dir("plugin").get().asFile.absolutePath)
     // Lab examples are never committed; the lab-set test runs only when this is given on the command line.
     System.getProperty("part1.labExamplesDir")?.let { systemProperty("part1.labExamplesDir", it) }
     // Optional: a directory (outside the repository) to receive the golden-set descriptors, so an external
@@ -140,6 +149,11 @@ afterEvaluate {
         // Captured as a provider and read inside the action, so no path resolves at configuration time.
         val pluginDir = layout.buildDirectory.dir("plugin")
         val abi = expectedAbi
+
+        // The unit tests open the debug .cgp. They do not depend on building it (plugin-builder moves the APK into the
+        // .cgp, so a second assemble with nothing changed produces none), but when both are asked for in one
+        // invocation the assemble runs first.
+        if (isDebug) tasks.withType<Test>().configureEach { mustRunAfter(assembleTaskName) }
 
         tasks.named(assembleTaskName) {
             // Runs before plugin-builder copies the new artifact in, so the check below can only ever see
@@ -181,6 +195,20 @@ afterEvaluate {
                         )
                     }
                     logger.lifecycle("${cgp.name}: native libraries limited to $abi")
+
+                    // The Part 1 engine programs must be packaged byte for byte (no strip, no rewrite).
+                    val committed = file("src/main/jniLibs/$abi")
+                    ZipFile(cgp).use { zip ->
+                        listOf("libpart1_membw.so", "libpart1_gpubw.so").forEach { lib ->
+                            val entry = zip.getEntry("lib/$abi/$lib")
+                                ?: throw GradleException("${cgp.name} does not contain lib/$abi/$lib.")
+                            val packaged = zip.getInputStream(entry).use { it.readBytes() }
+                            if (!packaged.contentEquals(File(committed, lib).readBytes())) {
+                                throw GradleException("${cgp.name}: lib/$abi/$lib differs from the committed file; packaging must not rewrite it.")
+                            }
+                        }
+                    }
+                    logger.lifecycle("${cgp.name}: the Part 1 engine programs are byte-identical to the committed files")
                 }
             }
         }

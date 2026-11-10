@@ -441,3 +441,41 @@ When contributing changes to the AI plugins:
 - NDK 26.1.10909125
 - llama.cpp commit b6521
 - Gradle 8.7
+
+---
+
+## Part 1 engine (device probe programs)
+
+Two small native programs, `libpart1_membw.so` and `libpart1_gpubw.so`, are shipped **prebuilt** in
+`src/main/jniLibs/arm64-v8a/`. They are executables named like libraries so that the host's plugin loader
+extracts them next to the other native files (`app_plugin_native_libs/<pluginId>/`), where the plugin starts
+them as separate processes. Gradle never compiles them.
+
+- **Source:** `part1-engine/` (engine version in `part1-engine/VERSION`, currently 0.2.4): `src/` (C), `build.sh`,
+  `tools/`, `tests/`, the documents `ENGINE.md`, `EXIT-CODES.md`, `DIFF-FROM-KIT.md` and the four JSON schemas.
+  It is a copy of the engine's own repository folder; the lab folders `history/`, `raw/` and `out/` are not
+  included. The only edits are the lab paths in documents, comments and path constants of the Python tools
+  and tests, which now read as relative names (the tests need the kit sources and the rows schema from the
+  lab and are not run from here).
+- **Rebuild:** `cd part1-engine && ./build.sh [OUTDIR]` with an Android NDK r26 or later (`NDK`, `ANDROID_NDK_HOME`
+  or `$ANDROID_HOME/ndk/*`); it writes `libpart1_membw.so` and `libpart1_gpubw.so` and prints their sha256. Copy
+  the two files to `src/main/jniLibs/arm64-v8a/` and update the two sha256 constants in
+  `src/test/kotlin/.../packaging/EnginePackagingTest.kt` in the same commit as the engine version
+  (`EngineRunner.EXPECTED_ENGINE_VERSION`). A rebuild with another NDK gives other bytes; the committed files
+  are the ones the 0.2.4 tests and the phone results refer to.
+- **Pinned hashes:** `libpart1_membw.so` `eba453063d98f4da40136572d672a2de5705561d53a7740a5b675dd63fdaf5b6`,
+  `libpart1_gpubw.so` `17b03e3529036dc9bce61ea089a0fe8fe6c3ca0535afcee4f43a1bb2ed78d222`.
+- **How the hashes are checked:**
+  1. `EnginePackagingTest` hashes the two committed files and compares them with the constants;
+  2. the last action of `assemblePlugin` and `assemblePluginDebug` opens the built `.cgp` and fails the build if
+     `lib/arm64-v8a/libpart1_*.so` differs by one byte from the committed file;
+  3. `EnginePackagingTest` repeats that comparison on the debug `.cgp` (property `builtPluginDir`); it is skipped when no
+     `.cgp` exists, so run `../../gradlew cleanPackageDebug assemblePluginDebug testDebugUnitTest`. The
+     `cleanPackageDebug` is needed only when nothing changed since the last assemble: plugin-builder moves the APK
+     into the `.cgp`, so a second assemble with no new APK finds nothing to package (this was already so before).
+- **No rewriting:** `packaging.jniLibs.keepDebugSymbols` names the two files so that AGP never strips them (stripping
+  needs an NDK; without one AGP packages "as they are", with one it would change the bytes). Native files are
+  stored uncompressed in the `.cgp`, and the bytes are unchanged by the alignment.
+- **Host reuse:** the host reuses an existing `app_plugin_native_libs/<pluginId>/` directory without extracting again,
+  so after an engine update on a phone the files there may be the old ones. The runner checks the engine version
+  (`--static-probe --json`) before its first row and reports a mismatch; it does not repair the directory.

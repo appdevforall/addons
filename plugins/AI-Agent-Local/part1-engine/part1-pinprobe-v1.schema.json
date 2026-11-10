@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adfa.invalid/part1-pinprobe-v1.schema.json",
+  "title": "Part 1 pin probe result, format part1-pinprobe-v1 (one JSON object, last stdout line of libpart1_membw.so --pin-probe --json). Not a row.",
+  "type": "object",
+  "required": [
+    "format",
+    "engine_version",
+    "gate_basis",
+    "foreground_cpuset",
+    "status",
+    "exit_code",
+    "cpus",
+    "duration_ms"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "part1-pinprobe-v1"
+    },
+    "engine_version": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/[A-Za-z0-9._-]+$",
+      "description": "Engine id <engine name>/<version>, e.g. part1-engine/0.2.0."
+    },
+    "gate_basis": {
+      "type": "string",
+      "description": "cpuset_top_app, gate_off, cpuset_not_top_app, or none when the program stopped before the gate ran."
+    },
+    "foreground_cpuset": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The program's own /proc/self/cpuset as read; null when it could not be read."
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "skipped",
+        "failed"
+      ],
+      "description": "ok: the probe ran (a CPU that did not pin is reported in cpus, it does not make the probe fail). skipped: the gate refused (exit 97). failed: usage error (2), timeout (124) or an error."
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "cpus": {
+      "type": "array",
+      "description": "One entry per CPU probed, in the order of --cores. After a failure or a timeout: the CPUs completed before it.",
+      "items": {
+        "type": "object",
+        "required": [
+          "index",
+          "result",
+          "attempts",
+          "time_to_pin_ms"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "CPU number."
+          },
+          "result": {
+            "enum": [
+              "ok",
+              "failed"
+            ],
+            "description": "ok: pin_retry pinned the thread and the spin saw the CPU all the time."
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time_to_pin_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "midr": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^0x[0-9a-f]{8}$",
+            "description": "MIDR_EL1 of this CPU as a hex string (engine 0.2.2 and later; optional, an object without it still validates). Read while the probe was pinned on that CPU: from sysfs cpu<n>/regs/identification/midr_el1, else assembled from this CPU's /proc/cpuinfo entry read during the spin (implementer, variant, part, revision; the architecture field is 0xf). For a CPU whose pin failed (engine 0.2.3 and later) the same two sources are read unpinned (midr_source sysfs_unpinned, cpuinfo_unpinned). null when no source gave it."
+          },
+          "midr_source": {
+            "enum": [
+              "sysfs",
+              "cpuinfo",
+              "sysfs_unpinned",
+              "cpuinfo_unpinned",
+              null
+            ],
+            "description": "Where `midr` came from: sysfs or cpuinfo (read while pinned on that CPU), sysfs_unpinned or cpuinfo_unpinned (engine 0.2.3 and later: the CPU's pin failed, so the same files were read without pinning), or null when midr is null."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "midr": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "midr"
+              ]
+            },
+            "then": {
+              "required": [
+                "midr_source"
+              ],
+              "properties": {
+                "midr_source": {
+                  "enum": [
+                    "sysfs",
+                    "cpuinfo",
+                    "sysfs_unpinned",
+                    "cpuinfo_unpinned"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "midr": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "midr"
+              ]
+            },
+            "then": {
+              "properties": {
+                "midr_source": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "duration_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reason": {
+      "type": "string",
+      "description": "Refusal or error text; present when status is not ok."
+    }
+  }
+}

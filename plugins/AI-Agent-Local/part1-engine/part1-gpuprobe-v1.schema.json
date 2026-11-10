@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adfa.invalid/part1-gpuprobe-v1.schema.json",
+  "title": "Part 1 GPU probe, format part1-gpuprobe-v1 (one JSON object, last stdout line of libpart1_gpubw.so --probe --json). Not a row. Allocates nothing beyond the Vulkan instance and the device queries.",
+  "type": "object",
+  "required": [
+    "format",
+    "engine_version",
+    "status",
+    "exit_code"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "part1-gpuprobe-v1"
+    },
+    "engine_version": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/[A-Za-z0-9._-]+$",
+      "description": "Engine id <engine name>/<version>, e.g. part1-engine/0.2.3."
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "failed"
+      ],
+      "description": "ok: the probe ran (no Vulkan device is ok, vulkan.available false). failed: usage error (2) or time limit (124)."
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "vulkan": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why no device was found (instance creation failed, or no physical device); only when available is false."
+        },
+        "device_name": {
+          "type": "string"
+        },
+        "device_type": {
+          "enum": [
+            "OTHER",
+            "INTEGRATED_GPU",
+            "DISCRETE_GPU",
+            "VIRTUAL_GPU",
+            "CPU",
+            "UNKNOWN"
+          ]
+        },
+        "vendor_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "device_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "api_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "major.minor.patch of VkPhysicalDeviceProperties.apiVersion."
+        },
+        "driver_version": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "VkPhysicalDeviceProperties.driverVersion as the number the driver reports (its encoding is vendor specific)."
+        },
+        "compute_queue": {
+          "type": "boolean"
+        },
+        "shader_float16": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "null when the feature query is not available on this device."
+        },
+        "shader_int8": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "null when the feature query is not available on this device."
+        },
+        "integer_dot_product": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "null when the feature query is not available on this device."
+        },
+        "memory_heaps_mib": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Size of each memory heap in MiB, in heap order."
+        }
+      },
+      "if": {
+        "properties": {
+          "available": {
+            "const": true
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "then": {
+        "required": [
+          "device_name",
+          "device_type",
+          "vendor_id",
+          "device_id",
+          "api_version",
+          "driver_version",
+          "compute_queue",
+          "shader_float16",
+          "shader_int8",
+          "integer_dot_product",
+          "memory_heaps_mib"
+        ],
+        "not": {
+          "required": [
+            "reason"
+          ]
+        }
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "device_name"
+              ]
+            },
+            {
+              "required": [
+                "memory_heaps_mib"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "opencl_child": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "The result of dlopen in a HELPER process forked for each candidate (engine 0.2.3 and later; the helper has a 2 s limit and its own process group, killed as a whole at the end of each attempt, so a library that crashes or hangs in its start-up code cannot kill the probe or leave a process behind; since 0.2.4 the four attempts share an overall limit of 2.5 s), one entry per candidate name, in this order. It may differ from loading inside the app process (other namespace, other linker configuration). outcome: loaded; dlerror (error holds the dlerror text); crashed (signal holds the signal number that ended the helper); timeout (the helper was still running at its limit, 2 s or what was left of the overall 2.5 s, and was killed with its group; also a helper ended by its own alarm); not_run (the helper could not be started; error says why); not_tried (since 0.2.4: the overall limit was used up before this candidate was started). loaded is true only when the helper wrote its loaded marker after dlopen returned.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "loaded",
+          "outcome",
+          "error",
+          "signal"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "enum": [
+              "libOpenCL.so",
+              "libOpenCL-pixel.so",
+              "/vendor/lib64/libOpenCL.so",
+              "/system/vendor/lib64/libOpenCL.so"
+            ]
+          },
+          "loaded": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "dlerror text when outcome is dlerror; the reason when outcome is not_run; null otherwise."
+          },
+          "outcome": {
+            "enum": [
+              "loaded",
+              "dlerror",
+              "crashed",
+              "timeout",
+              "not_run",
+              "not_tried"
+            ]
+          },
+          "signal": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Signal number when outcome is crashed; null otherwise."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "loaded"
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "loaded": {
+                  "const": true
+                },
+                "error": {
+                  "type": "null"
+                },
+                "signal": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "loaded": {
+                  "const": false
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "dlerror",
+                    "not_run"
+                  ]
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "signal": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "crashed"
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "type": "null"
+                },
+                "signal": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "timeout",
+                    "not_tried"
+                  ]
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "type": "null"
+                },
+                "signal": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "foreground_cpuset": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The program's own /proc/self/cpuset as read (engine 0.2.3 and later; the gate does not apply to this probe, as for the static probe); null when unreadable."
+    }
+  },
+  "if": {
+    "properties": {
+      "status": {
+        "const": "ok"
+      }
+    },
+    "required": [
+      "status"
+    ]
+  },
+  "then": {
+    "required": [
+      "vulkan",
+      "opencl_child",
+      "foreground_cpuset"
+    ]
+  },
+  "else": {
+    "required": [
+      "reason"
+    ],
+    "not": {
+      "anyOf": [
+        {
+          "required": [
+            "vulkan"
+          ]
+        },
+        {
+          "required": [
+            "opencl_child"
+          ]
+        }
+      ]
+    }
+  }
+}
