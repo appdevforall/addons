@@ -90,7 +90,8 @@ internal class Row(
                 if (gmax == null) throw JsonException("$path.gbs_max", "must be a number when repeats is 2 or more")
                 if (single) throw JsonException("$path.single_shot", "must be false when repeats is 2 or more")
             }
-            if (single && repeats != 1L) throw JsonException("$path.repeats", "must be 1 when single_shot is true")
+            // (a `single_shot` row with repeats != 1 is already refused above: repeats < 1 by the minimum, repeats >= 2 by
+            // the allOf rule; the check that stood here could never fire and was removed, review F08)
             val labels = Json.arr(m["labels"], "$path.labels").mapIndexed { i, v -> Json.str(v, "$path.labels[$i]") }
             return Row(
                 tag = tag,

@@ -111,8 +111,13 @@ internal object PyCompat {
      * Python `math.fsum` over numbers: an exactly rounded sum (P1-04D, planner decision on P1-04C F02). Every item is
      * added as the exact decimal value of its double, and the total is rounded once to the nearest double, ties to
      * even, so the spelling (`8` or `8.0`) and the order of the items cannot change the result. An empty list gives
-     * 0.0; negative zero is kept only when every item is negative zero (as `math.fsum` does). A total outside the
-     * double range raises, as `math.fsum` raises OverflowError. Items are Long or Double (see [num]).
+     * 0.0. A zero total is always **positive** zero, also when every item is negative zero: CPython 3.12
+     * `math.fsum([-0.0])` is `0.0` (review F04; `BigDecimal` has no negative zero, and the code returns `0.0`
+     * explicitly). A total outside the double range raises, as `math.fsum` raises OverflowError (here
+     * `ArithmeticException`, and only for the exact total; CPython also raises for an overflowing partial sum, review
+     * F05, unreachable for the non-negative durations the schema allows). Items are Long or Double (see [num]).
+     * `round1` of a small negative total gives `0.0` where Python's `round(-0.04, 1)` gives `-0.0`; the two compare
+     * equal and the schema's durations are not negative.
      */
     fun fsum(values: List<Any?>): Double {
         var exact = BigDecimal.ZERO

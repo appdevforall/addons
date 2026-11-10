@@ -340,7 +340,7 @@ object DescriptorGenerator {
                 "index" to idx,
                 "cluster" to cl,
                 "part" to cx.sleaf(c["part"], "cpus.part", "cpus"),
-                "midr" to cx.sleaf(c["midr"], "cpus.midr", "cpus"),
+                "midr" to cx.sleaf(c["midr"], "cpus.midr", "cpus", source = midrSource(c)),
                 "type_name" to typeNameLeaf(cx, c["part"]),
                 "max_khz" to cx.sleaf(c["max_khz"], "cpus.max_khz", "cpus", unit = "kHz"),
                 "capacity" to cx.sleaf(c["capacity"], "cpus.capacity", "cpus", source = c["capacity_source"]?.let { Json.str(it, "static.cpus[].capacity_source") }),
@@ -548,6 +548,17 @@ object DescriptorGenerator {
         if (hw2 == null) notes.add("HWCAP2 was not read; only HWCAP is decoded")
         if (unnamed.isNotEmpty()) notes.add("set bits with no name in the table: ${unnamed.joinToString(", ")}")
         return leaf(names, "static_read", STATIC_COND, source = src, note = notes.joinToString("; ").ifEmpty { null })
+    }
+
+    /**
+     * The source text of a MIDR leaf (`generate.midr_source`, review F10): a MIDR that a pin probe supplied (the folded
+     * static input carries `midr_source`) names the pin probe and how it read the value; otherwise null, which means
+     * the static read's own text.
+     */
+    internal fun midrSource(cpu: Map<String, Any?>): String? {
+        val ms = cpu["midr_source"]
+        if (ms == null || cpu["midr"] == null) return null
+        return "pin probe (MIDR read from ${PyCompat.str(ms)})"
     }
 
     private val HEX_WORD = Regex("0x[0-9a-fA-F]{1,16}")

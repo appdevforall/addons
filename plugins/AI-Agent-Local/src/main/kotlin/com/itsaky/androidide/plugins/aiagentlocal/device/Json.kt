@@ -117,29 +117,26 @@ internal object Json {
 
     /**
      * Normalises any `Number` to `Long` (an integer, also an integral double below 2^53) or `Double` (a value
-     * with a fraction). The decision comes from the value, never from the Java type: `9.0`, `9` and
-     * `BigDecimal("9.00")` all give `9L`. An integer, or an integral double, of 2^53 or more in magnitude is a
-     * [JsonException] naming [path]: it may have been rounded on the way in.
+     * with a fraction). The decision comes from the **double value** the number has, so that the two `org.json`
+     * implementations cannot disagree (review F02): `9.0`, `9`, `BigDecimal("9.00")` and `BigDecimal("9.0000000000000000001")`
+     * (whose nearest double is 9.0, the value Android's tokener gives for that literal) all give `9L`. A `BigDecimal`
+     * is first converted to its nearest double; an integral `Float`/`Double`/`BigDecimal` of 2^53 or more in
+     * magnitude, and any `Long`/`BigInteger` of 2^53 or more, is a [JsonException] naming [path]: it may have been
+     * rounded on the way in. A literal that underflows (`1e-400`) is the double 0.0 and gives `0L`, as Python's
+     * `json` gives 0.0, which the schemas' `integer` accepts. NaN and the infinities, and a literal out of the
+     * double range, are refused.
      */
     fun number(x: Number, path: String = "$"): Number {
-        val big: BigDecimal? = when (x) {
+        val d: Double = when (x) {
             is Byte, is Short, is Int, is Long -> return exact(BigInteger.valueOf(x.toLong()), path)
             is BigInteger -> return exact(x, path)
-            is BigDecimal -> x
-            is Double, is Float -> {
-                val d = x.toDouble()
-                if (d.isNaN() || d.isInfinite()) throw JsonException(path, "NaN and infinities are not JSON numbers")
-                BigDecimal(d)
-            }
+            is BigDecimal -> x.toDouble()
+            is Double, is Float -> x.toDouble()
             else -> throw JsonException(path, "unsupported number type ${x.javaClass.name}")
         }
-        val stripped = big!!.stripTrailingZeros()
-        if (stripped.scale() <= 0) {
-            return exact(stripped.toBigIntegerExact(), path)
-        }
-        return x.toDouble().also {
-            if (it.isNaN() || it.isInfinite()) throw JsonException(path, "number out of range")
-        }
+        if (d.isNaN() || d.isInfinite()) throw JsonException(path, "number out of range, or NaN or an infinity")
+        if (d == Math.floor(d)) return exact(BigDecimal(d).toBigIntegerExact(), path)
+        return d
     }
 
     // ---- typed reads: a wrong type is an error with the path -----------------------------

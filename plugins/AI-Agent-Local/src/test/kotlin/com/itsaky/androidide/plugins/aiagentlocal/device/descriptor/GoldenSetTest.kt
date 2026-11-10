@@ -64,17 +64,33 @@ class GoldenSetTest {
                 if (!isSynthetic(m.value)) bad.add("$where holds a fingerprint-shaped string")
             }
             if (!key.containsMatchIn(text)) continue
-            // jsonl files hold rows only (no fingerprints); every other file is one JSON document
-            if (f.name.endsWith(".json")) {
-                for (v in fingerprintValues(Json.parse(text, where))) {
-                    seen++
-                    if (!isSynthetic(v)) bad.add("$where holds a non-synthetic build_fingerprint")
-                }
+            val trees: List<Any?> = when {
+                f.name.endsWith(".json") -> listOf(Json.parse(text, where))
+                // review F11: a row log is one JSON object per line (blank and `#` lines are comments)
+                f.name.endsWith(".jsonl") -> jsonlTrees(text, where)
+                else -> emptyList()
+            }
+            for (t in trees) for (v in fingerprintValues(t)) {
+                seen++
+                if (!isSynthetic(v)) bad.add("$where holds a non-synthetic build_fingerprint")
             }
         }
         assertEquals(emptyList<String>(), bad)
         assertTrue("files scanned: $files", files > 300)
         assertTrue("fingerprint values seen: $seen", seen >= 100)
+    }
+
+    /** The JSON objects of a `.jsonl` text: blank lines and lines starting with `#` are skipped. */
+    private fun jsonlTrees(text: String, where: String): List<Any?> =
+        text.lines().filter { it.isNotBlank() && !it.trimStart().startsWith("#") }.mapIndexed { i, l -> Json.parse(l, "$where:${i + 1}") }
+
+    @Test
+    fun givenAJsonlRowLog_whenScanned_thenItsBuildFingerprintKeysAreFound() {
+        val fake = listOf("brand", "product", "device").joinToString("/") + ":14/ID1.0/1234:user/release-keys"
+        val text = "# comment\n\n{\"tag\":\"A\",\"conditions\":{\"build_fingerprint\":\"syn/x:1\"}}\n{\"build_fingerprint\":\"$fake\"}\n"
+        val values = jsonlTrees(text, "x.jsonl").flatMap { fingerprintValues(it) }
+        assertEquals(listOf("syn/x:1", fake), values)
+        assertTrue(values.any { !isSynthetic(it) })
     }
 
     private fun isSynthetic(v: String) = v.startsWith("syn/") || v.startsWith("synthetic/")

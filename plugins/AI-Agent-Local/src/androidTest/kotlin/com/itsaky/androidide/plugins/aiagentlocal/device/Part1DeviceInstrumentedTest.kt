@@ -49,6 +49,27 @@ class Part1DeviceInstrumentedTest {
         assertEquals(emptyList<String>(), failures)
     }
 
+    /**
+     * Review F06: the single rounding of [PyCompat.fsum] is delegated to the platform's `BigDecimal.doubleValue()`.
+     * This runs every committed list (the same resources the unit tests read) on the device's own `java.math`.
+     * A phone whose library rounds a near-halfway total differently fails here.
+     */
+    @Test
+    fun givenTheCommittedSumLists_whenSummedOnTheDevice_thenEveryResultEqualsMathFsumExactly() {
+        for (name in listOf("part1/pycompat-sum.json", "part1/pycompat-fsum.json")) {
+            val cases = Json.arr(Json.parse(testText(name)), name)
+            assertTrue("$name has ${cases.size} cases", cases.size >= 2000)
+            val bad = ArrayList<String>()
+            for ((i, c0) in cases.withIndex()) {
+                val c = Json.obj(c0, "case")
+                val got = PyCompat.fsum(Json.arr(c["items"], "items"))
+                val want = Json.double(c["sum"], "sum")
+                if (got != want || PyCompat.round1(got) != Json.double(c["round1"], "round1")) bad.add("$name #$i: got $got want $want")
+            }
+            assertEquals(emptyList<String>(), bad.take(20))
+        }
+    }
+
     @Test
     fun givenEveryMatchVector_whenMatchedAgainstTheShippedIndex_thenTheResultIsAsExpected() {
         val real = DeviceIndex.loadFromAssets { appAssets.open(it) }
