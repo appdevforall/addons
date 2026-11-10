@@ -28,6 +28,52 @@ class PyCompatTest {
     }
 
     @Test
+    fun givenTheReviewsMixedList_whenSummedAndRounded_thenItIsCPythonsEightyFourPointOne() {
+        val items = listOf(12L, 9.6, 23.25, 8L, 7.2, 24L)
+        assertEquals(84.1, PyCompat.round1(PyCompat.sum(items)) as Double, 0.0) // the earlier port gave 84
+    }
+
+    @Test
+    fun givenMixedIntAndFloatLists_whenSummed_thenEveryResultEqualsPython312Exactly() {
+        val cases = Json.arr(Part1TestResources.tree("part1/pycompat-sum.json"), "sum")
+        assertTrue(cases.size >= 2000)
+        val bad = ArrayList<String>()
+        for ((i, c0) in cases.withIndex()) {
+            val c = Json.obj(c0, "case")
+            val items = Json.arr(c["items"], "items")
+            val got = PyCompat.sum(items)
+            val want = (c["sum"] as Number).toDouble()
+            val kind = c["kind"] as String
+            val r1 = PyCompat.round1(got)
+            val ok = (if (kind == "int") got is Long && got.toDouble() == want else got is Double && got.toDouble() == want) &&
+                r1.toDouble() == (c["round1"] as Number).toDouble()
+            if (!ok) bad.add("#$i $items: got $got want ${c["sum"]} ($kind)")
+        }
+        assertEquals(emptyList<String>(), bad)
+    }
+
+    @Test
+    fun givenStringsWithNonPrintableCharacters_whenReprIsTaken_thenItEqualsPythonRepr() {
+        val cases = Json.arr(Part1TestResources.tree("part1/pycompat-repr.json"), "repr")
+        assertTrue(cases.size >= 40)
+        val bad = ArrayList<String>()
+        for (c0 in cases) {
+            val c = Json.obj(c0, "case")
+            val got = PyCompat.repr(c["text"] as String)
+            if (got != c["repr"]) bad.add("expected ${c["repr"]} got $got")
+        }
+        assertEquals(emptyList<String>(), bad)
+        // the characters the task names, written out so that a change of the resource cannot hide them
+        assertEquals("'\\x85'", PyCompat.repr("\u0085"))
+        assertEquals("'\\xa0'", PyCompat.repr("\u00a0"))
+        assertEquals("'\\u2028'", PyCompat.repr("\u2028"))
+        assertEquals("'\\u200b'", PyCompat.repr("\u200b"))
+        assertEquals("'\\ufeff'", PyCompat.repr("\ufeff"))
+        assertEquals("'\\ud800'", PyCompat.repr("\ud800"))
+        assertEquals("'\uD83D\uDE00'", PyCompat.repr("\uD83D\uDE00")) // an astral character is printable and kept
+    }
+
+    @Test
     fun givenValues_whenTruthyOrStringified_thenPythonRulesApply() {
         assertFalse(PyCompat.truthy(null)); assertFalse(PyCompat.truthy("")); assertFalse(PyCompat.truthy(0L))
         assertFalse(PyCompat.truthy(emptyList<Any?>())); assertFalse(PyCompat.truthy(emptyMap<String, Any?>())); assertFalse(PyCompat.truthy(false))

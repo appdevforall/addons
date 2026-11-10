@@ -37,21 +37,48 @@ internal object PyCompat {
 
     private fun repr(x: Any?): String = if (x is String) repr(x) else str(x)
 
-    /** Python `repr(str)`: single quotes unless the text holds a single and no double quote. */
+    /**
+     * Python `repr(str)`: single quotes unless the text holds a single and no double quote; backslash, the
+     * quote, `\t \n \r` escaped; every other character that `str.isprintable()` calls non-printable (general
+     * categories Cc, Cf, Cs, Co, Cn, Zl, Zp and Zs except the ASCII space) as a backslash escape with 2, 4 or 8 lower-case hex digits (x, u or U)
+     *. A lone surrogate is escaped; a surrogate pair is one astral character. "Unassigned"
+     * follows the JDK's Unicode tables, which can be older than CPython 3.12's (Unicode 15.0) for characters
+     * assigned recently.
+     */
     fun repr(s: String): String {
         val q = if (s.contains('\'') && !s.contains('"')) '"' else '\''
         val sb = StringBuilder().append(q)
-        for (ch in s) {
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            i += Character.charCount(cp)
             when {
-                ch == q || ch == '\\' -> sb.append('\\').append(ch)
-                ch == '\n' -> sb.append("\\n")
-                ch == '\r' -> sb.append("\\r")
-                ch == '\t' -> sb.append("\\t")
-                ch < ' ' || ch == '\u007f' -> sb.append(String.format(Locale.ROOT, "\\x%02x", ch.code))
-                else -> sb.append(ch)
+                cp == q.code || cp == '\\'.code -> sb.append('\\').appendCodePoint(cp)
+                cp == '\n'.code -> sb.append("\\n")
+                cp == '\r'.code -> sb.append("\\r")
+                cp == '\t'.code -> sb.append("\\t")
+                !isPrintable(cp) -> sb.append(escape(cp))
+                else -> sb.appendCodePoint(cp)
             }
         }
         return sb.append(q).toString()
+    }
+
+    /** Python `str.isprintable()` for one code point. */
+    private fun isPrintable(cp: Int): Boolean {
+        if (cp == ' '.code) return true
+        return when (Character.getType(cp).toByte()) {
+            Character.CONTROL, Character.FORMAT, Character.SURROGATE, Character.PRIVATE_USE, Character.UNASSIGNED,
+            Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR, Character.SPACE_SEPARATOR,
+            -> false
+            else -> true
+        }
+    }
+
+    private fun escape(cp: Int): String = when {
+        cp < 0x100 -> String.format(Locale.ROOT, "\\x%02x", cp)
+        cp < 0x10000 -> String.format(Locale.ROOT, "\\u%04x", cp)
+        else -> String.format(Locale.ROOT, "\\U%08x", cp)
     }
 
     /** Python `repr(float)` for the common cases (shortest round trip, `1.0` keeps its `.0`). */
@@ -81,8 +108,15 @@ internal object PyCompat {
     fun format1(x: Double): String = BigDecimal(x).setScale(1, RoundingMode.HALF_EVEN).toPlainString()
 
     /**
-     * Python 3.12 `sum()` over numbers: exact integer addition while the items are integers, and the
-     * compensated (Neumaier) summation once a float shows up. Returns Long (all integers) or Double.
+     * CPython 3.12 `sum()` over numbers (`builtin_sum_impl`), step for step:
+     *  1. while the items are integers they are added exactly (an `int` result when all are);
+     *  2. the first float is added to the integer total with a plain add (`PyNumber_Add`), which starts the float
+     *     phase with a compensation term of 0;
+     *  3. in the float phase a float item is added with Neumaier compensation, but an integer item is added with
+     *     a plain `f += (double) value` that does not touch the compensation term;
+     *  4. at the end the compensation is added when it is non-zero and finite.
+     * Returns Long (all integers) or Double. Integers are Long here because the JSON reader turns every integral
+     * number (also `8.0`) into an integer, which CPython would keep a float in step 3: see the KDoc of [Json].
      */
     fun sum(values: List<Any?>): Number {
         var iResult = 0L
@@ -92,16 +126,21 @@ internal object PyCompat {
             i++
         }
         if (i == values.size) return iResult
-        var f = iResult.toDouble()
+        var f = iResult.toDouble() + num(values[i]) // step 2
+        i++
         var c = 0.0
         while (i < values.size) {
-            val x = num(values[i])
-            val t = f + x
-            c += if (Math.abs(f) >= Math.abs(x)) (f - t) + x else (x - t) + f
-            f = t
+            val item = values[i]
+            if (item is Double) { // step 3, Neumaier
+                val t = f + item
+                c += if (Math.abs(f) >= Math.abs(item)) (f - t) + item else (item - t) + f
+                f = t
+            } else {
+                f += num(item) // an integer item: plain add, no compensation
+            }
             i++
         }
-        if (c != 0.0 && !c.isNaN() && !c.isInfinite()) f += c
+        if (c != 0.0 && !c.isNaN() && !c.isInfinite()) f += c // step 4
         return f
     }
 
