@@ -24,8 +24,11 @@ interface EngineExecutor {
  *   [expectedVersion] the result is [EngineResult.EngineMismatch] now and for every later call; nothing else is run and
  *   nothing is repaired (planner F179). When the probe itself gives no usable answer, that answer is returned and the check
  *   is repeated by the next call.
+ * - "Never throws" covers every `Exception`. A `StackOverflowError` from parsing the last line (a deeply nested object) is turned
+ *   into [EngineResult.NoJson]. Other `Error`s (`OutOfMemoryError`, `LinkageError`, ...) are deliberately **not** caught: the
+ *   process is in a state the runner cannot repair, and they reach the caller.
  * - Blocking: call it from a background thread. [onMainThread] (the app passes a Looper check) makes a call on the
- *   main thread return [EngineResult.ExecBlocked] without starting anything.
+ *   main thread return [EngineResult.NotStarted] without starting anything.
  */
 class EngineRunner(
     private val locator: EngineLocator,
@@ -62,7 +65,7 @@ class EngineRunner(
     @Synchronized
     override fun run(command: EngineCommand): EngineResult {
         try {
-            if (onMainThread()) return EngineResult.ExecBlocked("called on the main thread; nothing was started")
+            if (onMainThread()) return EngineResult.NotStarted("called on the main thread; nothing was started")
             mismatch?.let { return it }
             if (!verified) {
                 val probe = if (command.kind == CommandKind.STATIC_PROBE) command else EngineCommands.staticProbe()
@@ -72,7 +75,7 @@ class EngineRunner(
                 if (probe === command) return r
             }
             return execute(command)
-        } catch (e: Exception) { // never into the caller
+        } catch (e: Exception) { // never into the caller; an Error (OutOfMemoryError, ...) is not caught: see the class comment
             return EngineResult.Failed(null, -1)
         }
     }
@@ -90,9 +93,9 @@ class EngineRunner(
 
     private fun execute(command: EngineCommand): EngineResult {
         val exe = locator.locate(command.program)
-            ?: return EngineResult.ExecBlocked("${command.program.fileName} was not found")
+            ?: return EngineResult.ProgramMissing("${command.program.fileName} was not found")
         if (!workDir.isDirectory && !workDir.mkdirs() && !workDir.isDirectory) {
-            return EngineResult.ExecBlocked("the work directory cannot be created")
+            return EngineResult.NotStarted("the work directory cannot be created")
         }
         val proc = try {
             launcher.start(listOf(exe.path) + command.args, workDir, emptyMap())
@@ -177,6 +180,8 @@ class EngineRunner(
             Json.parseObject(line, "engine output")
         } catch (e: JsonException) {
             null
+        } catch (e: StackOverflowError) {
+            null // a recursive parser on a deeply nested line: no usable object
         }
     }
 }

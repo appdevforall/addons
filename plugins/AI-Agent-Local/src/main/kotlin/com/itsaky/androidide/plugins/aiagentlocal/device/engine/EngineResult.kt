@@ -28,9 +28,25 @@ sealed class EngineResult {
         override fun toString() = "NoJson($exit)"
     }
 
-    /** The process could not be started at all (plan 3.5 `exec_blocked`), or the program file was not found. */
+    /**
+     * The program file exists and the start itself threw (plan 3.5 `exec_blocked`: for example `EACCES` or a seccomp refusal).
+     * This is the only result that may be recorded as "this phone forbids starting a child process".
+     */
     class ExecBlocked(val message: String) : EngineResult() {
         override fun toString() = "ExecBlocked($message)"
+    }
+
+    /**
+     * The program file was not found where the host extracts it (a packaging or extraction fact, not a property of the phone).
+     * Never to be recorded as "this phone forbids starting a child".
+     */
+    class ProgramMissing(val message: String) : EngineResult() {
+        override fun toString() = "ProgramMissing($message)"
+    }
+
+    /** Nothing was started for a reason of the caller or the plugin folder (called on the main thread, work directory not creatable); not a fact about the phone. */
+    class NotStarted(val message: String) : EngineResult() {
+        override fun toString() = "NotStarted($message)"
     }
 
     /** The process was still running at its hard limit (`--max-seconds` + 5 s) and was destroyed. No partial result is used. */

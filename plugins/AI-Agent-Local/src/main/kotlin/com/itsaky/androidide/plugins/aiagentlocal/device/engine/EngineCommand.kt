@@ -36,8 +36,11 @@ object EngineCommands {
     /** `--max-seconds` of the static probe (it takes under 0.1 s on the measured phones). */
     const val STATIC_PROBE_MAX_SECONDS = 2
 
-    /** `--max-seconds` of the GPU probe (the engine finishes within 3 s even when four OpenCL candidates hang). */
-    const val GPU_PROBE_MAX_SECONDS = 3
+    /**
+     * `--max-seconds` of the GPU probe. The engine finishes within 3 s even when four OpenCL candidates hang (ENGINE.md), so its own
+     * watchdog is set above that worst case (5 s) and cannot fire first; the hard kill follows the usual rule: 5 + 5 = 10 s.
+     */
+    const val GPU_PROBE_MAX_SECONDS = 5
 
     /** `libpart1_membw.so --static-probe --json` (no gate, nothing measured). */
     fun staticProbe(): EngineCommand = EngineCommand(

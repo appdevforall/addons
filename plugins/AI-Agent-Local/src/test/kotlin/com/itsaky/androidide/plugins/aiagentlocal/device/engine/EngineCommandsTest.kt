@@ -17,7 +17,8 @@ class EngineCommandsTest {
         assertNull(s.tag)
         val g = EngineCommands.gpuProbe()
         assertEquals(EngineProgram.GPUBW, g.program)
-        assertEquals("--probe --json --max-seconds 3", line(g))
+        assertEquals("--probe --json --max-seconds 5", line(g)) // above the probe's documented 3 s worst case
+        assertEquals(5, g.maxSeconds)
         val p = EngineCommands.pinProbe(listOf(0, 1, 2, 3, 4, 5, 6, 7))
         assertEquals("--pin-probe --cores 0,1,2,3,4,5,6,7 --spin-ms 2000 --json --max-seconds 52", line(p))
         assertEquals(52, p.maxSeconds)

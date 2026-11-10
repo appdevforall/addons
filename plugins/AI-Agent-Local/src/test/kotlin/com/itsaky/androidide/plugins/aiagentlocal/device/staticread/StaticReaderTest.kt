@@ -190,7 +190,7 @@ class StaticReaderTest {
     @Test
     fun givenTheStaticProbeIsUnavailable_whenRead_thenItsValuesAreUnavailableAndTheCpuListComesFromSysfs() {
         val results = listOf<EngineResult>(
-            EngineResult.ExecBlocked("IOException: error=13"), EngineResult.TimeoutKilled, EngineResult.NoJson(139, ""), EngineResult.Failed(null, 1),
+            EngineResult.ExecBlocked("IOException: error=13"), EngineResult.ProgramMissing("libpart1_membw.so was not found"), EngineResult.NotStarted("x"), EngineResult.TimeoutKilled, EngineResult.NoJson(139, ""), EngineResult.Failed(null, 1),
             EngineResult.Refused(mapOf("reason" to "x"), 97), EngineResult.EngineMismatch("part1-engine/0.2.3"),
         )
         for (res in results) {

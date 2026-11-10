@@ -133,15 +133,107 @@ class EngineRunnerTest {
     }
 
     @Test
-    fun givenAMissingProgramOrWorkDir_whenRun_thenItIsExecBlocked() {
+    fun givenAMissingProgramOrWorkDir_whenRun_thenItIsNotExecBlocked() {
         val launcher = FakeLauncher { FakeProcess(stdout = Recorded.staticProbe024()) }
         val none = EngineRunner(FakeLocator(missing = setOf(EngineProgram.MEMBW)), launcher, work())
-        val r = none.run(EngineCommands.staticProbe()) as EngineResult.ExecBlocked
-        assertEquals("libpart1_membw.so was not found", r.message)
+        val r = none.run(EngineCommands.staticProbe())
+        // F14: a missing file is ProgramMissing, never ExecBlocked ("the phone forbids starting a child")
+        assertEquals("libpart1_membw.so was not found", (r as EngineResult.ProgramMissing).message)
         assertEquals(0, launcher.starts.size)
         val blocker = tmp.newFile("file-not-dir")
         val bad = EngineRunner(FakeLocator(), launcher, File(blocker, "sub"))
-        assertEquals("the work directory cannot be created", (bad.run(EngineCommands.staticProbe()) as EngineResult.ExecBlocked).message)
+        val b = bad.run(EngineCommands.staticProbe())
+        assertEquals("the work directory cannot be created", (b as EngineResult.NotStarted).message)
+        assertEquals(0, launcher.starts.size)
+    }
+
+    @Test
+    fun givenAProgramThatExistsAndWhoseStartThrows_whenRun_thenOnlyThatIsExecBlocked() {
+        val launcher = FakeLauncher { FakeProcess() }
+        launcher.failWith = IOException("error=13")
+        val r = EngineRunner(FakeLocator(), launcher, work()).run(EngineCommands.gpuProbe())
+        assertTrue(r is EngineResult.ExecBlocked)
+        assertTrue(r !is EngineResult.ProgramMissing)
+    }
+
+    @Test
+    fun givenAnOkRecordWithANonZeroExit_whenRun_thenItIsNotOk() {
+        // R06: Ok needs exit 0 as well as status ok
+        val ok = """{"format":"part1-rows-v1","tag":"C2-read-k0","status":"ok"}"""
+        for (exit in listOf(1, 2, 124)) {
+            val (runner, _) = runnerFor(work()) { FakeProcess(stdout = ok.toByteArray(), exit = exit) }
+            val r = runner.run(EngineCommands.c2Read(0, 0, 100)) as EngineResult.Failed
+            assertEquals(exit, r.exit)
+        }
+        for (exit in listOf(88, 97, 3)) {
+            val (runner, _) = runnerFor(work()) { FakeProcess(stdout = ok.toByteArray(), exit = exit) }
+            assertEquals(exit, (runner.run(EngineCommands.c2Read(0, 0, 100)) as EngineResult.Refused).exit)
+        }
+    }
+
+    @Test
+    fun givenARecordWithAnotherTag_whenRun_thenItKeepsItsOwnTag() {
+        // R07: only a record without a tag gets the started row's tag
+        val other = """{"format":"part1-rows-v1","tag":"C9-engine-own","status":"failed","exit_code":2}"""
+        val (runner, _) = runnerFor(work()) { FakeProcess(stdout = other.toByteArray(), exit = 2) }
+        val r = runner.run(EngineCommands.c2Read(1, 4, 100)) as EngineResult.Failed
+        assertEquals("C9-engine-own", r.json!!["tag"])
+        // a record that is not a row is never tagged
+        val probe = """{"format":"part1-staticprobe-v1","status":"failed"}"""
+        val (runner2, _) = runnerFor(work()) { FakeProcess(stdout = probe.toByteArray(), exit = 1) }
+        assertNull((runner2.run(EngineCommands.c2Read(1, 4, 100)) as EngineResult.Failed).json!!["tag"])
+    }
+
+    @Test
+    fun givenAThreadInterruptedWhileWaiting_whenRun_thenTheFlagIsRestoredTheChildIsKilledAndAResultIsReturned() {
+        // R20, R21
+        var destroyed = false
+        var forced = false
+        val proc = object : RunningProcess {
+            override val stdout = ByteArrayInputStream(ByteArray(0))
+            override val stderr = ByteArrayInputStream(ByteArray(0))
+            override fun closeStdin() {}
+            private var calls = 0
+            override fun waitFor(timeoutMs: Long): Boolean {
+                calls++
+                if (calls == 1) throw InterruptedException("cancelled")
+                return destroyed // later waits (inside the kill) see the process die
+            }
+            override fun exitValue() = 143
+            override fun destroy() { destroyed = true }
+            override fun destroyForcibly() { forced = true }
+            override fun isAlive() = !destroyed
+        }
+        val launcher = object : ProcessLauncher {
+            override fun start(argv: List<String>, workDir: File, env: Map<String, String>) = proc
+        }
+        val runner = EngineRunner(FakeLocator(), launcher, work())
+        try {
+            val r = runner.run(EngineCommands.staticProbe())
+            assertTrue(r is EngineResult.Failed && r.json == null && r.exit == -1)
+            assertTrue("the interrupt flag must be restored", Thread.currentThread().isInterrupted)
+            assertTrue("the child must be killed", destroyed)
+            assertTrue(!forced) // it died on destroy
+        } finally {
+            Thread.interrupted() // clear the flag for the next test on this thread
+        }
+    }
+
+    @Test
+    fun givenALastLineNestedTooDeeply_whenRun_thenItIsNoJsonAndOtherErrorsAreNotCaught() {
+        val deep = "{\"a\":" + "[".repeat(200_000) + "]".repeat(200_000) + "}\n"
+        val (runner, _) = runnerFor(work()) { FakeProcess(stdout = deep.toByteArray(), exit = 0) }
+        assertTrue(runner.run(EngineCommands.c2Read(0, 0, 100)) is EngineResult.NoJson)
+        // an Error that is not a StackOverflowError reaches the caller (documented in the class comment)
+        val launcher = object : ProcessLauncher {
+            override fun start(argv: List<String>, workDir: File, env: Map<String, String>): RunningProcess = throw OutOfMemoryError("test")
+        }
+        try {
+            EngineRunner(FakeLocator(), launcher, work()).run(EngineCommands.staticProbe())
+            org.junit.Assert.fail("an OutOfMemoryError must not be swallowed")
+        } catch (e: OutOfMemoryError) {
+            // expected
+        }
     }
 
     @Test
@@ -153,6 +245,14 @@ class EngineRunnerTest {
         assertTrue(proc!!.destroyed)
         assertTrue(!proc!!.forced) // it died on destroy
         assertEquals((120 + 5) * 1000L, proc!!.waits[0])
+    }
+
+    @Test
+    fun givenTheGpuProbe_whenItHangs_thenTheHardKillIsItsMaxSecondsPlusFive() {
+        var proc: FakeProcess? = null
+        val (runner, _) = runnerFor(work()) { FakeProcess(hangs = true).also { proc = it } }
+        assertEquals(EngineResult.TimeoutKilled, runner.run(EngineCommands.gpuProbe()))
+        assertEquals((5 + 5) * 1000L, proc!!.waits[0])
     }
 
     @Test
@@ -172,9 +272,15 @@ class EngineRunnerTest {
         val (runner, _) = runnerFor(work()) { FakeProcess(stdout = (noise + line + "\n").toByteArray(), stderr = noise.toByteArray(), exit = 0) }
         assertTrue(runner.run(EngineCommands.c2Read(0, 0, 100)) is EngineResult.Ok)
         // a last line that is itself larger than the cap is cut and therefore not JSON
-        val huge = "{\"x\":\"" + "y".repeat(EngineRunner.OUTPUT_CAP_BYTES + 100) + "\"}\n"
+        // the cap is pinned as a literal number: 1 MiB (R17)
+        assertEquals(1_048_576, EngineRunner.OUTPUT_CAP_BYTES)
+        val huge = "{\"x\":\"" + "y".repeat(1_048_576 + 100) + "\"}\n"
         val (runner2, _) = runnerFor(work()) { FakeProcess(stdout = huge.toByteArray(), exit = 0) }
         assertTrue(runner2.run(EngineCommands.c2Read(0, 0, 100)) is EngineResult.NoJson)
+        // a last line just under the cap is kept whole (it is an object, so not NoJson)
+        val big = "{\"x\":\"" + "y".repeat(1_048_576 - 100) + "\"}\n"
+        val (runner3, _) = runnerFor(work()) { FakeProcess(stdout = big.toByteArray(), exit = 0) }
+        assertTrue(runner3.run(EngineCommands.c2Read(0, 0, 100)) is EngineResult.Failed)
     }
 
     @Test
@@ -252,7 +358,7 @@ class EngineRunnerTest {
     @Test
     fun givenACallOnTheMainThread_whenRun_thenNothingIsStarted() {
         val (runner, launcher) = runnerFor(work(), onMain = true) { FakeProcess() }
-        assertTrue(runner.run(EngineCommands.staticProbe()) is EngineResult.ExecBlocked)
+        assertTrue(runner.run(EngineCommands.staticProbe()) is EngineResult.NotStarted)
         assertEquals(0, launcher.starts.size)
     }
 
