@@ -40,22 +40,46 @@ class DeviceIndex internal constructor(
         /** sha256 of the decompressed index; it is `index.index_sha256` in a database record. */
         const val ASSET_JSON_SHA256 = "5688119ef9af440dd8acd44e7a27da0682588ba5a2b60633f141f423f5ea47a7"
 
-        /** Path of the index inside the plugin's assets. */
+        /** Path of the index in the source tree's assets (`src/main/assets/`). */
         const val ASSET_PATH = "part1/part1-dbindex-v1.json.gz"
 
         /**
-         * Reads an index from [input] (the gzip asset when [gzipped], else plain JSON text, UTF-8) and
-         * closes it. The sha256 is taken over the decompressed bytes.
+         * Path of the index inside the built plugin. The Android Gradle plugin decompresses an asset whose
+         * name ends in `.gz` and drops the suffix when it packages it, so on a device the asset is this name,
+         * not [ASSET_PATH]. Its content is the same index (the same [ASSET_JSON_SHA256]).
          */
-        fun load(input: InputStream, gzipped: Boolean = true): DeviceIndex {
-            val bytes = input.use { raw ->
-                val src = if (gzipped) GZIPInputStream(raw) else raw
-                val out = ByteArrayOutputStream()
-                src.copyTo(out)
-                out.toByteArray()
+        const val PACKAGED_ASSET_PATH = "part1/part1-dbindex-v1.json"
+
+        /**
+         * Reads an index from [input] and closes it. Gzip data (magic bytes 1f 8b) is decompressed, plain
+         * JSON text (UTF-8) is read as it is. The sha256 is taken over the decompressed bytes.
+         */
+        fun load(input: InputStream): DeviceIndex {
+            val raw = input.use { it.readBytes() }
+            val bytes = if (raw.size >= 2 && raw[0] == 0x1f.toByte() && raw[1] == 0x8b.toByte()) {
+                GZIPInputStream(raw.inputStream()).use { gz ->
+                    val out = ByteArrayOutputStream()
+                    gz.copyTo(out)
+                    out.toByteArray()
+                }
+            } else {
+                raw
             }
             val hex = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
             return DeviceIndex(Json.parseObject(String(bytes, Charsets.UTF_8), "index"), hex)
+        }
+
+        /**
+         * Loads the index through [open] (for example `{ assets.open(it) }` on an `AssetManager`): first the
+         * packaged name, then the source name, whichever the build produced.
+         */
+        fun loadFromAssets(open: (String) -> InputStream): DeviceIndex {
+            val stream = try {
+                open(PACKAGED_ASSET_PATH)
+            } catch (_: java.io.IOException) {
+                open(ASSET_PATH)
+            }
+            return load(stream)
         }
 
         /** An index already parsed into a tree (the test fixture index). */

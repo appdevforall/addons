@@ -51,7 +51,7 @@ class Part1DeviceInstrumentedTest {
 
     @Test
     fun givenEveryMatchVector_whenMatchedAgainstTheShippedIndex_thenTheResultIsAsExpected() {
-        val real = DeviceIndex.load(appAssets.open(DeviceIndex.ASSET_PATH))
+        val real = DeviceIndex.loadFromAssets { appAssets.open(it) }
         assertEquals(DeviceIndex.ASSET_JSON_SHA256, real.sha256)
         val doc = Json.parseObject(testText("part1/vectors.json"))
         val fixture = DeviceIndex.fromTree(Json.obj(doc["fixture_index"], "fixture_index"))

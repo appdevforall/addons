@@ -29,9 +29,25 @@ class DeviceIndexMatcherTest {
     @Test
     fun givenPlainJsonText_whenLoaded_thenTheShaIsOfTheBytesGiven() {
         val bytes = """{"records":[],"generic_board_patterns":[],"shared_boards":[]}""".toByteArray()
-        val idx = DeviceIndex.load(ByteArrayInputStream(bytes), gzipped = false)
+        val idx = DeviceIndex.load(ByteArrayInputStream(bytes))
         assertEquals(sha256(bytes), idx.sha256)
         assertEquals(0, idx.records.size)
+    }
+
+    @Test
+    fun givenThePackagedAndTheSourceAssetName_whenLoadedThroughAnOpener_thenEitherWorksAndTheShaIsTheSame() {
+        val gz = Part1TestResources.indexAssetFile().readBytes()
+        val plain = java.util.zip.GZIPInputStream(ByteArrayInputStream(gz)).use { it.readBytes() }
+        // AGP packages the asset decompressed and without the .gz suffix
+        val packaged = DeviceIndex.loadFromAssets { name ->
+            if (name == DeviceIndex.PACKAGED_ASSET_PATH) ByteArrayInputStream(plain) else throw java.io.FileNotFoundException(name)
+        }
+        val source = DeviceIndex.loadFromAssets { name ->
+            if (name == DeviceIndex.ASSET_PATH) ByteArrayInputStream(gz) else throw java.io.FileNotFoundException(name)
+        }
+        assertEquals(DeviceIndex.ASSET_JSON_SHA256, packaged.sha256)
+        assertEquals(DeviceIndex.ASSET_JSON_SHA256, source.sha256)
+        assertEquals(real.records.size, packaged.records.size)
     }
 
     @Test
