@@ -63,20 +63,23 @@ class StoredRows(val lines: List<String>, val skipped: Int)
  * - **Atomic writes:** every write goes to a temporary file and is renamed over the target ([AtomicWriter]).
  * - **Corruption:** a file that does not parse, or whose `format` is wrong, reads as absent. In `rows.jsonl` a line that is
  *   not a valid `part1-rows-v1` row is dropped (a half-written last line, say) and counted.
- * - **Size cap:** the live files together stay under [maxTotalBytes]; when appending a row would exceed it, the oldest rows
- *   are rotated out of the log (the newest row always stays).
  * - **Size cap:** [maxTotalBytes] is enforced on **every** write ([writeStatic], [writeDbRecord], [writeDescriptor],
- *   [writeProbeFacts], [appendRow]). It counts everything the store keeps on disk: the live files, every archive under `old/`
- *   and the temporary files (`*.tmp`). To make room, the oldest archives are deleted first, then (for the row log) the oldest
- *   rows; a write that cannot fit even then is refused (a file) or rejected (a row). **Worst-case disk use:** at rest at most
- *   `maxTotalBytes` (the 65 bytes of `key.txt` written by a key change are not charged to a write, so at most
- *   `maxTotalBytes + 65`); while one atomic write is under way the old file and its temporary copy coexist, so at most
- *   `2 * maxTotalBytes + 65` (2 MiB + 65 bytes with the default 1 MiB). A key change moves files and does not add bytes.
+ *   [writeProbeFacts], [appendRow]). It counts everything the store keeps on disk: the live files (`static.json`, `rows.jsonl`,
+ *   `dbrecord.json`, `device-descriptor-v0.2.json`, `probe-facts.json`, `key.txt`), every archive under `old/` and the temporary
+ *   files (`*.tmp`). To make room, the oldest archives are deleted first, then (for the row log) the oldest rows. A write that
+ *   cannot fit **even with every archive gone** is refused (a file) or rejected (a row) **before** any archive is deleted.
+ *   **Worst-case disk use:** a write is charged for what it adds, a key change is not: it moves the old files into an archive
+ *   and writes a new 65-byte `key.txt`, and up to [maxArchives] archives keep their old files. So at rest the store holds at most
+ *   `maxTotalBytes + 65 * maxArchives` bytes (the key files of the key changes since the last write), plus the 2-byte
+ *   `bind-failed.marker` while a bind has failed. While one atomic write is under way the old file and its temporary copy
+ *   coexist, so at most `2 * maxTotalBytes + 65 * maxArchives` (with the default 1 MiB and 3 archives: 2 MiB + 195 bytes).
  * - **Device key:** [bindDevice] compares the key of this device and engine with `key.txt`. A change is **all or nothing**:
  *   it archives every file under `old/<first 12 hex of the old key>/` and starts fresh; at most [maxArchives] archives are
  *   kept. If the files cannot be archived the new key is not written ([BindResult.IoFailed]); if `old/<id>` cannot even be
  *   created the old live files are deleted ([BindResult.Discarded]). Data of another key never stays live under a new key.
- *   After a failed bind the store returns nothing and accepts no row until a bind succeeds.
+ *   **Nothing is read and nothing is written until [bindDevice] has succeeded in this instance** (a fresh instance is unbound,
+ *   so a new process cannot see another key's files either). A failed key change also leaves the file `bind-failed.marker`;
+ *   a bind that succeeds removes it.
  * - **Temporary files:** `*.tmp` left by a crash are removed by every [bindDevice] (start-up) and are never archived; a key
  *   change that cannot remove them fails.
  *
@@ -95,6 +98,7 @@ class Part1Store(
         const val DESCRIPTOR = "device-descriptor-v0.2.json"
         const val KEY = "key.txt"
         const val PROBE_FACTS = "probe-facts.json"
+        const val MARKER = "bind-failed.marker"
         const val PROBE_FACTS_FORMAT = "part1-probe-facts-v1"
         const val DEFAULT_MAX_TOTAL_BYTES = 1024L * 1024L
         const val MATCH_SOURCE = "in-app device matcher (DeviceIndexMatcher) over the identity stored in static.json: platform, board, device, hardware"
@@ -104,8 +108,8 @@ class Part1Store(
     private val writer = AtomicWriter(ops)
     private var engineId: String? = null
 
-    /** True after a bind failed: nothing is read or written until a bind succeeds (the files may still be the old device's). */
-    private var blocked = false
+    /** Nothing is read or written until a bind has succeeded in this instance (the files may be another key's). */
+    private val bound: Boolean get() = engineId != null
 
     private fun file(name: String) = File(dir, name)
 
@@ -119,19 +123,19 @@ class Part1Store(
         this.engineId = null // set only when this bind succeeds
         if (fingerprint.isNullOrEmpty()) return BindResult.Unkeyed
         val key = DeviceKey.of(fingerprint, engineId)
-        blocked = false // the bind itself must read key.txt
         return try {
             val r = bind(key)
             this.engineId = engineId
+            runCatching { ops.delete(file(MARKER)) }
             r
         } catch (e: IOException) {
-            blocked = true
+            runCatching { writer.write(file(MARKER), "1\n".toByteArray()) }
             BindResult.IoFailed("the files could not be moved, deleted or written (${e.javaClass.simpleName})")
         }
     }
 
     private fun bind(key: String): BindResult {
-        val stored = readTextOrNull(KEY)?.trim()?.takeIf { DeviceKey.isKey(it) }
+        val stored = rawText(KEY)?.trim()?.takeIf { DeviceKey.isKey(it) }
         val tempsGone = removeTemps()
         val others = LIVE.filter { it != KEY && file(it).exists() }
         if (stored == key) return BindResult.Same(key)
@@ -199,8 +203,9 @@ class Part1Store(
 
     // ---- reads --------------------------------------------------------------------------------------------------
 
-    private fun readTextOrNull(name: String): String? {
-        if (blocked) return null
+    private fun readTextOrNull(name: String): String? = if (bound) rawText(name) else null
+
+    private fun rawText(name: String): String? {
         val f = file(name)
         return try {
             if (f.isFile) String(f.readBytes(), Charsets.UTF_8) else null
@@ -227,7 +232,7 @@ class Part1Store(
     fun readDescriptor(): Map<String, Any?>? = readObject(DESCRIPTOR, descriptorCheck)
 
     /** The state of the four data files: absent, usable, or corrupt (present but read as absent). */
-    fun inspect(): Map<String, FileState> = if (blocked) mapOf(STATIC to FileState.ABSENT, DBRECORD to FileState.ABSENT, DESCRIPTOR to FileState.ABSENT, ROWS to FileState.ABSENT) else mapOf(
+    fun inspect(): Map<String, FileState> = if (!bound) mapOf(STATIC to FileState.ABSENT, DBRECORD to FileState.ABSENT, DESCRIPTOR to FileState.ABSENT, ROWS to FileState.ABSENT) else mapOf(
         STATIC to state(STATIC) { readStatic() },
         DBRECORD to state(DBRECORD) { readDbRecord() },
         DESCRIPTOR to state(DESCRIPTOR) { readDescriptor() },
@@ -265,7 +270,7 @@ class Part1Store(
     // ---- writes -------------------------------------------------------------------------------------------------
 
     private fun writeObject(name: String, tree: Map<String, Any?>, check: (Map<String, Any?>) -> Boolean): Boolean {
-        if (blocked || !check(tree)) return false
+        if (!bound || !check(tree)) return false
         val bytes = try {
             (Json.toOrg(tree).toString() + "\n").toByteArray(Charsets.UTF_8)
         } catch (e: JsonException) {
@@ -287,6 +292,7 @@ class Part1Store(
 
     /** True when [needed] bytes can replace [name] within the cap, after deleting as many of the oldest archives as that takes. */
     private fun fits(name: String, needed: Long): Boolean {
+        if (usedBytes(name) - archiveBytes() + needed > maxTotalBytes) return false // cannot fit even with every archive gone: delete nothing
         while (usedBytes(name) + needed > maxTotalBytes) {
             if (!deleteOldestArchive()) return false
         }
@@ -302,6 +308,8 @@ class Part1Store(
         for (a in archives()) sum += treeBytes(a)
         return sum
     }
+
+    private fun archiveBytes(): Long = archives().sumOf { treeBytes(it) }
 
     private fun treeBytes(d: File): Long = d.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
@@ -343,6 +351,9 @@ class Part1Store(
         val rows = ArrayList(readRows().lines)
         rows.add(line)
         // everything but the row log counts: live files, archives, temporary files; older archives go first, then older rows
+        if (usedBytes(ROWS) - archiveBytes() + size(listOf(line)) > maxTotalBytes) {
+            return AppendResult.Rejected("the row does not fit within the size cap of $maxTotalBytes bytes") // before any archive is deleted
+        }
         var dropped = 0
         while (usedBytes(ROWS) + size(rows) > maxTotalBytes) {
             if (deleteOldestArchive()) continue

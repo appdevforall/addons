@@ -201,7 +201,7 @@ class Part1StoreTest {
         assertTrue(File(dir(), "old/unkeyed/static.json").isFile)
         // data without any key file
         File(dir(), "key.txt").delete()
-        store().writeStatic(staticTree())
+        File(dir(), "static.json").writeText(Json.toOrg(staticTree()).toString() + "\n") // an unbound store writes nothing
         assertTrue(store().bindDevice(fp, engine) is BindResult.Changed)
     }
 
@@ -521,5 +521,135 @@ class Part1StoreTest {
         assertEquals(0, (s.appendRow(row(tag = "C2-read-k2")) as AppendResult.Appended).rotatedOut) // the archive made room
         assertFalse(archive.exists())
         assertEquals(2, s.readRows().lines.size)
+    }
+
+    // ---- P1-04A2 step 0: F03 F04 F05 F06 F10 F11 ------------------------------------------------------------
+
+    @Test
+    fun givenAWriteThatCanNeverFit_whenRefused_thenNoArchiveIsDeleted() {
+        // F04: a 2 MiB descriptor and a 2 MiB row with one archive present
+        val d = File(tmp.root, "never")
+        val s = Part1Store(d, FileOps.Real, 4096, 3)
+        s.bindDevice(fp, engine); s.appendRow(row())
+        s.bindDevice("$fp-B", engine)
+        val archive = File(d, "old/${DeviceKey.of(fp, engine).take(12)}")
+        assertTrue(archive.isDirectory)
+        assertFalse(s.writeDescriptor(mapOf("schema_version" to "0.2", "pad" to "x".repeat(2 * 1024 * 1024))))
+        assertTrue(archive.isDirectory)
+        val big = LinkedHashMap(row()); big["pad"] = "x".repeat(8192)
+        assertTrue(s.appendRow(big) is AppendResult.Rejected)
+        assertTrue(archive.isDirectory)
+        assertTrue(File(archive, "rows.jsonl").isFile)
+    }
+
+    @Test
+    fun givenAFreshInstanceAndAFailedKeyChange_whenReadOrWritten_thenNothingIsReturnedUntilABindSucceedsAndTheMarkerSurvivesARestart() {
+        // F10
+        filled()
+        val unbound = store()
+        assertNull(unbound.readStatic()); assertNull(unbound.readDbRecord()); assertNull(unbound.readDescriptor()); assertNull(unbound.readProbeFacts())
+        assertEquals(0, unbound.readRows().lines.size)
+        assertEquals(FileState.ABSENT, unbound.inspect()["static.json"])
+        assertFalse(unbound.writeStatic(staticTree())); assertFalse(unbound.writeDbRecord(mapOf("format" to "part1-dbrecord-v1")))
+        assertFalse(unbound.writeDescriptor(mapOf("schema_version" to "0.2")))
+        assertTrue(unbound.appendRow(row()) is AppendResult.Rejected)
+        assertTrue(unbound.regenerate(Part1TestResources.realIndex()) is RegenerateResult.Failed)
+        // a failed key change leaves a marker; a new instance (a restart) is blocked too, and the old data is not returned
+        val movesFail = object : FileOps {
+            override fun writeAndSync(file: File, bytes: ByteArray) = FileOps.Real.writeAndSync(file, bytes)
+            override fun moveReplacing(from: File, to: File) { if (from.name != "bind-failed.marker.tmp") throw IOException("busy"); FileOps.Real.moveReplacing(from, to) }
+            override fun delete(file: File) = FileOps.Real.delete(file)
+        }
+        assertTrue(store(movesFail).bindDevice("$fp-B", engine) is BindResult.IoFailed)
+        assertTrue(File(dir(), Part1Store.MARKER).isFile)
+        val restarted = store()
+        assertNull(restarted.readStatic()); assertEquals(0, restarted.readRows().lines.size)
+        assertFalse(restarted.writeStatic(staticTree()))
+        // an unkeyed bind does not unblock
+        assertTrue(restarted.bindDevice(null, engine) is BindResult.Unkeyed)
+        assertNull(restarted.readStatic())
+        // a successful bind clears the marker
+        assertTrue(restarted.bindDevice("$fp-B", engine) is BindResult.Changed)
+        assertFalse(File(dir(), Part1Store.MARKER).exists())
+        assertNull(restarted.readStatic())
+        assertTrue(restarted.writeStatic(staticTree()))
+    }
+
+    @Test
+    fun givenALiveFileThatCannotBeDeleted_whenTheDiscardPathRuns_thenTheKeyChangeFailsAndTheKeyStaysTheOld() {
+        // F05 (mutant V04): the archive cannot be created, then a live file cannot be deleted
+        filled()
+        File(dir(), "old").writeText("in the way")
+        val stubborn = object : FileOps {
+            override fun writeAndSync(file: File, bytes: ByteArray) = FileOps.Real.writeAndSync(file, bytes)
+            override fun moveReplacing(from: File, to: File) = FileOps.Real.moveReplacing(from, to)
+            override fun delete(file: File) = if (file.name == "rows.jsonl") false else FileOps.Real.delete(file)
+        }
+        val b = store(stubborn)
+        assertTrue(b.bindDevice("$fp-B", engine) is BindResult.IoFailed)
+        assertEquals(keyOf(fp), File(dir(), "key.txt").readText())
+        assertTrue(File(dir(), "rows.jsonl").isFile)
+        assertNull(b.readStatic())
+    }
+
+    @Test
+    fun givenThreeArchivesAndACap_whenAWriteNeedsRoom_thenTheOldestArchiveGoesFirst() {
+        // F06 (mutant V05)
+        val st = staticTree()
+        val sz = (Json.toOrg(st).toString() + "\n").toByteArray().size.toLong()
+        val d = File(tmp.root, "three")
+        val s = Part1Store(d, FileOps.Real, 65L * 4 + sz * 4 + 10, 3)
+        val keys = listOf("$fp-1", "$fp-2", "$fp-3", "$fp-4")
+        s.bindDevice(keys[0], engine); s.writeStatic(st)
+        for (i in 1..3) { s.bindDevice(keys[i], engine); s.writeStatic(st) }
+        val ids = keys.take(3).map { File(d, "old/${DeviceKey.of(it, engine).take(12)}") }
+        assertTrue(ids.all { it.isDirectory })
+        // oldest first by modification time, set explicitly (the file system's clock is too coarse)
+        ids[0].setLastModified(1_000_000_000_000L); ids[1].setLastModified(1_100_000_000_000L); ids[2].setLastModified(1_200_000_000_000L)
+        assertTrue(s.writeDbRecordSized(sz * 2)) // needs room for roughly two archives
+        assertFalse("the oldest archive goes first", ids[0].exists())
+        assertTrue("the newest archive stays while room is made", ids[2].exists() || !ids[1].exists())
+        assertFalse(ids[1].exists() && !ids[2].exists())
+    }
+
+    @Test
+    fun givenThreeKeyChangesWithNoWrite_whenTheDiskUseIsCounted_thenItIsWithinCapPlus65PerArchive() {
+        // F03: the stated bound
+        val st = staticTree()
+        val sz = (Json.toOrg(st).toString() + "\n").toByteArray().size.toLong()
+        val d = File(tmp.root, "bound")
+        val cap = 65L + sz
+        val s = Part1Store(d, FileOps.Real, cap, 3)
+        s.bindDevice(fp, engine); s.writeStatic(st)
+        for (i in 1..3) s.bindDevice("$fp-$i", engine)
+        val total = d.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        assertTrue("$total", total <= cap + 65L * 3)
+    }
+
+    @Test
+    fun givenProbeFactsOfAnotherFormatAndAStaleKeyTemp_whenReadOrBound_thenTheFormerReadsAsAbsentAndTheLatterIsRemoved() {
+        // F11 (mutants V10, V12)
+        val s = store(); s.bindDevice(fp, engine)
+        File(dir(), "probe-facts.json").writeText("""{"format":"something-else","facts":{}}""")
+        assertNull(s.readProbeFacts())
+        File(dir(), "probe-facts.json").writeText("""{"format":"part1-probe-facts-v1","facts":{}}""")
+        assertTrue(s.readProbeFacts() != null)
+        File(dir(), "key.txt.tmp").writeText("stale")
+        File(dir(), "other.tmp").writeText("stale")
+        assertTrue(store().bindDevice(fp, engine) is BindResult.Same)
+        assertFalse(File(dir(), "key.txt.tmp").exists()); assertFalse(File(dir(), "other.tmp").exists())
+    }
+
+    @Test
+    fun givenProbeFactsWithTheCandidatesAsTheProbeGaveThem_whenStoredAndRead_thenNothingIsReduced() {
+        // F08
+        val s = store(); s.bindDevice(fp, engine)
+        val cand = listOf(
+            linkedMapOf<String, Any?>("name" to "libOpenCL.so", "loaded" to false, "outcome" to "crashed", "error" to "dlopen failed", "signal" to 11L),
+            linkedMapOf<String, Any?>("loaded" to false, "outcome" to "not_tried"), // unnamed
+        )
+        assertTrue(s.writeProbeFacts(linkedMapOf("opencl_child" to cand), 1L))
+        val back = Json.obj(s.readProbeFacts()!!["facts"], "facts")
+        assertEquals(emptyList<String>(), Json.diff(cand, back["opencl_child"]))
     }
 }
