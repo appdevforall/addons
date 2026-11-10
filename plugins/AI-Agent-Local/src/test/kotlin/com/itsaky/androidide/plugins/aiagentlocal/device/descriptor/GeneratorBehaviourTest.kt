@@ -3,7 +3,6 @@ package com.itsaky.androidide.plugins.aiagentlocal.device.descriptor
 import com.itsaky.androidide.plugins.aiagentlocal.device.Json
 import com.itsaky.androidide.plugins.aiagentlocal.device.JsonException
 import com.itsaky.androidide.plugins.aiagentlocal.device.Part1TestResources
-import java.math.BigInteger
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -58,14 +57,83 @@ class GeneratorBehaviourTest {
     }
 
     @Test
-    fun givenAnIntegerBeyondTheLongRangeInHwcap_whenDecoded_thenTheBitsAreStillNamedExactly() {
+    fun givenAHexWordWithAllSixtyFourBitsSet_whenDecoded_thenTheBitsAreStillNamedExactly() {
         val s = staticOf("t0-no-rows-no-record")
-        val feats = Json.obj(s["features"], "f") + ("hwcap" to BigInteger("18446744073709551615")) + ("hwcap2" to null)
+        val feats = Json.obj(s["features"], "f") + ("hwcap" to "0xffffffffffffffff") + ("hwcap2" to null)
         val d = Json.fromOrg(gen(s + ("features" to feats))) as Map<*, *>
-        val f = ((d["capabilities"] as Map<*, *>)["features"] as Map<*, *>)
+        val caps = d["capabilities"] as Map<*, *>
+        val f = caps["features"] as Map<*, *>
         val names = f["value"] as List<*>
         assertEquals(48, names.size) // all 48 HWCAP names set, bits 48..63 unnamed
         assertTrue((f["note"] as String).contains("hwcap bit 63"))
+        assertEquals("0xffffffffffffffff", (caps["hwcap"] as Map<*, *>)["value"]) // a word of 2^53 or more is a hex string in the descriptor
+    }
+
+    @Test
+    fun givenWordsBelowAndAtTwoToThe53_whenGenerated_thenTheDescriptorHoldsAnIntegerBelowAndAHexStringAtOrAbove() {
+        val s = staticOf("t0-no-rows-no-record")
+        fun words(hw: Any?, hw2: Any?): Map<*, *> {
+            val feats = Json.obj(s["features"], "f") + ("hwcap" to hw) + ("hwcap2" to hw2)
+            return (Json.fromOrg(gen(s + ("features" to feats))) as Map<*, *>)["capabilities"] as Map<*, *>
+        }
+        val c = words((1L shl 53) - 1, "0x20000000000000")
+        assertEquals((1L shl 53) - 1, (c["hwcap"] as Map<*, *>)["value"])
+        assertEquals("0x20000000000000", (c["hwcap2"] as Map<*, *>)["value"])
+        val u = words("0x1FFFFFFFFFFFFF", "0x1") // upper-case hex digits are allowed
+        assertEquals((1L shl 53) - 1, (u["hwcap"] as Map<*, *>)["value"])
+    }
+
+    @Test
+    fun givenBadWordsAndBigNumbers_whenGenerated_thenEachIsRefusedWithAPathLikeGeneratePy() {
+        val s = staticOf("t0-no-rows-no-record")
+        val rows = rowLines("t1-three-clusters-exact")
+        val rec = recordOf("t1-three-clusters-exact")
+        fun withFeature(k: String, v: Any?) = s + ("features" to (Json.obj(s["features"], "f") + (k to v)))
+        val two53 = 1L shl 53
+        val cases: Map<String, () -> Any?> = mapOf(
+            "static.features.hwcap" to { gen(withFeature("hwcap", two53)) }, // an integer at 2^53
+            "static.features.hwcap2" to { gen(withFeature("hwcap2", java.math.BigInteger("18446744073709551615"))) },
+            "static.features.hwcap#neg" to { gen(withFeature("hwcap", -1L)) },
+            "static.features.hwcap#float" to { gen(withFeature("hwcap", 1.5)) },
+            "static.features.hwcap#bool" to { gen(withFeature("hwcap", true)) },
+            "static.features.hwcap#empty" to { gen(withFeature("hwcap", "")) },
+            "static.features.hwcap#no0x" to { gen(withFeature("hwcap", "119fff")) },
+            "static.features.hwcap#bare" to { gen(withFeature("hwcap", "0x")) },
+            "static.features.hwcap#17digits" to { gen(withFeature("hwcap", "0x10000000000000000")) },
+            "static.features.hwcap#nonhex" to { gen(withFeature("hwcap", "0xzz")) },
+            "static.features.hwcap#decimal" to { gen(withFeature("hwcap", "123")) },
+            "static.features.hwcap#space" to { gen(withFeature("hwcap", " 0x1")) },
+            "static.features.hwcap#list" to { gen(withFeature("hwcap", listOf(1L))) },
+            "static.memory.memtotal_kb" to { gen(s + ("memory" to mapOf("memtotal_kb" to two53))) },
+            "dbrecord.record.n_measured_leaves" to { gen(s, rows, rec + ("record" to (Json.obj(rec["record"], "r") + ("n_measured_leaves" to two53)))) },
+        )
+        for ((path, f) in cases) {
+            val want = path.substringBefore('#')
+            try {
+                f()
+                fail("accepted input violating $path")
+            } catch (e: JsonException) {
+                assertEquals(path, want, e.path)
+            }
+        }
+        // a row with an integer of 2^53 or more
+        try {
+            DescriptorGenerator.generate(Json.toOrg(s) as JSONObject, rows.map { if (it.contains("C4-read-all")) it.replace("\"exit_code\": 0", "\"exit_code\": 9007199254740992") else it }, null, null)
+            fail("a row with an integer of 2^53 was accepted")
+        } catch (e: JsonException) {
+            assertTrue(e.path, e.path.startsWith("line ") && e.path.endsWith(".exit_code"))
+        }
+    }
+
+    @Test
+    fun givenAPinOriginOfNull_whenGenerated_thenItIsAnError() {
+        // generate.py: static.get("pin_origin", "measured_app") is None, and leaf() raises ValueError("bad origin None")
+        try {
+            gen(staticOf("t0-no-rows-no-record") + ("pin_origin" to null))
+            fail()
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message, e.message!!.contains("bad origin"))
+        }
     }
 
     @Test

@@ -15,7 +15,7 @@ class JsonException(val path: String, message: String) : Exception("$path: $mess
  *
  * Android ships its own `org.json`; JVM unit tests use the `org.json:json` library. The two differ, so
  * everything here converts to a plain tree and back and the rest of the code never sees a `JSONObject`.
- * The tree holds only: `Map<String, Any?>`, `List<Any?>`, `String`, `Boolean`, `Long`, `BigInteger`,
+ * The tree a parse returns holds only: `Map<String, Any?>`, `List<Any?>`, `String`, `Boolean`, `Long`,
  * `Double` and `null`.
  *
  * Known differences between the two implementations and how they are avoided:
@@ -24,8 +24,10 @@ class JsonException(val path: String, message: String) : Exception("$path: $mess
  *  2. Number types: the same text gives Integer, Long, BigInteger, Double or BigDecimal depending on the
  *     implementation and the digits. [number] decides integer or fraction from the value.
  *  3. Integers beyond the Long range: `org.json:json` gives BigInteger, Android gives Double (precision
- *     is lost there). Such a value is kept as BigInteger when it arrives as one; it cannot be repaired
- *     when Android already rounded it.
+ *     is lost there). No Part 1 JSON format carries an integer of 2^53 or more (the HWCAP words are hex
+ *     strings), so [number] rejects every integer, and every integer-valued double, of 2^53 or more in
+ *     magnitude with a [JsonException] naming the JSON path: a value Android may have rounded is never
+ *     used silently.
  *  4. `JSONObject.NULL` vs `null`: `opt` returns NULL for a JSON null in both; `put(key, null)` removes the
  *     key. [toOrg] always writes `JSONObject.NULL`, [fromOrg] maps NULL to null.
  *  5. Duplicate keys: `org.json:json` throws, Android keeps the last. Python keeps the last; the inputs of
@@ -40,9 +42,16 @@ internal object Json {
 
     // ---- parsing and writing -------------------------------------------------------------
 
+    /**
+     * Creates the tokener [parse] uses. A test replaces it to stand in for Android's number parsing
+     * (an integer literal becomes a `Long` when it fits, else a `Double`); production code never changes it.
+     */
+    @Volatile
+    internal var tokenerFactory: (String) -> JSONTokener = { JSONTokener(it) }
+
     fun parse(text: String, path: String = "$"): Any? {
         try {
-            val tokener = JSONTokener(text)
+            val tokener = tokenerFactory(text)
             val value = tokener.nextValue()
             if (tokener.nextClean() != '\u0000') throw JsonException(path, "text after the JSON value")
             return fromOrg(value, path)
@@ -96,15 +105,26 @@ internal object Json {
 
     // ---- numbers: one reader, one writer -------------------------------------------------
 
+    /** The first integer a JSON number may not reach: 2^53 (rule A1, review F01). */
+    private val MAX_EXACT: BigInteger = BigInteger.ONE.shiftLeft(53)
+
+    private fun exact(bi: BigInteger, path: String): Long {
+        if (bi.abs() >= MAX_EXACT) {
+            throw JsonException(path, "an integer of 2^53 or more is not allowed in a Part 1 JSON document (write such a word as a hex string)")
+        }
+        return bi.toLong()
+    }
+
     /**
-     * Normalises any `Number` to `Long`, `BigInteger` (an integer beyond the Long range) or `Double`
-     * (a value with a fraction, or beyond 2^53 and not exactly an integer). The decision comes from the
-     * value, never from the Java type: `9.0`, `9` and `BigDecimal("9.00")` all give `9L`.
+     * Normalises any `Number` to `Long` (an integer, also an integral double below 2^53) or `Double` (a value
+     * with a fraction). The decision comes from the value, never from the Java type: `9.0`, `9` and
+     * `BigDecimal("9.00")` all give `9L`. An integer, or an integral double, of 2^53 or more in magnitude is a
+     * [JsonException] naming [path]: it may have been rounded on the way in.
      */
     fun number(x: Number, path: String = "$"): Number {
         val big: BigDecimal? = when (x) {
-            is Byte, is Short, is Int, is Long -> return x.toLong()
-            is BigInteger -> return if (x.bitLength() < 64) x.toLong() else x
+            is Byte, is Short, is Int, is Long -> return exact(BigInteger.valueOf(x.toLong()), path)
+            is BigInteger -> return exact(x, path)
             is BigDecimal -> x
             is Double, is Float -> {
                 val d = x.toDouble()
@@ -115,8 +135,7 @@ internal object Json {
         }
         val stripped = big!!.stripTrailingZeros()
         if (stripped.scale() <= 0) {
-            val bi = stripped.toBigIntegerExact()
-            return if (bi.bitLength() < 64) bi.toLong() else bi
+            return exact(stripped.toBigIntegerExact(), path)
         }
         return x.toDouble().also {
             if (it.isNaN() || it.isInfinite()) throw JsonException(path, "number out of range")

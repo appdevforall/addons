@@ -23,9 +23,9 @@ class JsonTest {
         assertEquals(2.5, Json.number(2.5))
         assertEquals(2.5, Json.number(BigDecimal("2.50")))
         assertEquals(0.1, Json.number(0.1))
-        assertEquals(BigInteger("18446744073709551615"), Json.number(BigInteger("18446744073709551615")))
-        assertEquals(BigInteger("18446744073709551616"), Json.number(BigDecimal("1.8446744073709551616E19")))
-        assertEquals(Long.MAX_VALUE, Json.number(Long.MAX_VALUE))
+        assertEquals((1L shl 53) - 1, Json.number((1L shl 53) - 1))
+        assertEquals(-((1L shl 53) - 1), Json.number(-((1L shl 53) - 1).toDouble()))
+        assertEquals(0L, Json.number(-0.0)) // an integral double is an integer value
     }
 
     @Test
@@ -115,10 +115,40 @@ class JsonTest {
     }
 
     @Test
-    fun givenAnIntegerBeyondLongRange_whenRoundTripped_thenItStaysExact() {
-        val t = Json.parseObject("""{"w":18446744073709551615}""")
-        assertEquals(BigInteger("18446744073709551615"), t["w"])
-        val back = Json.fromOrg(Json.toOrg(t)) as Map<*, *>
-        assertEquals(BigInteger("18446744073709551615"), back["w"])
+    fun givenAnIntegerOfTwoToThe53OrMore_whenNormalisedOrParsed_thenItIsRejectedWithThePath() {
+        val big = BigInteger.ONE.shiftLeft(53)
+        val numbers: List<Number> = listOf(
+            1L shl 53, -(1L shl 53), Long.MAX_VALUE, big, big.negate(), BigInteger("18446744073709551615"),
+            BigDecimal("9007199254740992.0"), 9007199254740992.0, 1e300, -1e17, 1.8446744073709552E19,
+        )
+        for (n in numbers) {
+            try {
+                Json.number(n, "$.w")
+                fail("accepted $n")
+            } catch (e: JsonException) {
+                assertEquals("$.w", e.path)
+            }
+        }
+        for (text in listOf("""{"w":9007199254740992}""", """{"w":[0,{"v":-9007199254740992}]}""", """{"w":18446744073709551615}""",
+            """{"w":9223372036854775808}""", """{"w":1e300}""", """{"w":9007199254740993}""")) {
+            try {
+                Json.parse(text, "in")
+                fail("accepted $text")
+            } catch (e: JsonException) {
+                assertTrue(e.path, e.path.startsWith("in.w"))
+            }
+        }
+        val e = try { Json.parse("""{"a":{"b":[1,9007199254740992]}}""", "in"); null } catch (x: JsonException) { x }
+        assertEquals("in.a.b[1]", e!!.path)
+    }
+
+    @Test
+    fun givenIntegersBelowTwoToThe53_whenParsed_thenTheyStayExactIntegersAndIntegralDoublesBecomeIntegers() {
+        val t = Json.parseObject("""{"a":9007199254740991,"b":-9007199254740991,"c":9007199254740990.0,"d":2.0,"e":1e3}""")
+        assertEquals(9007199254740991L, t["a"])
+        assertEquals(-9007199254740991L, t["b"])
+        assertEquals(9007199254740990L, t["c"])
+        assertEquals(2L, t["d"])
+        assertEquals(1000L, t["e"])
     }
 }

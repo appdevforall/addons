@@ -60,7 +60,7 @@ object DescriptorGenerator {
         inputNames: List<String>,
     ): Map<String, Any?> {
         checkFormats(static, dbrec)
-        val cx = Ctx(static, rows, dbrec)
+        val cx = Ctx(wordsToInt(static), rows, dbrec)
         val cores = buildCores(cx)
         val ident = buildIdentity(cx)
         val d = Obj()
@@ -121,6 +121,21 @@ object DescriptorGenerator {
         if (m["result"] != "none" && dbrec["record"] !is Map<*, *>) {
             throw JsonException("dbrecord.record", "db-record input: a match other than none needs the index record")
         }
+    }
+
+    /**
+     * A copy of the static input whose `features.hwcap` and `features.hwcap2` are `BigInteger` (or null): the input
+     * spells them as hex strings (see [word]). Mirrors `generate.words_to_int`. The input is not changed.
+     */
+    private fun wordsToInt(static: Map<String, Any?>): Map<String, Any?> {
+        val f = static["features"] as? Map<*, *> ?: return static
+        val out = LinkedHashMap(static)
+        val feats = LinkedHashMap<String, Any?>()
+        f.forEach { (k, v) -> feats[k as String] = v }
+        feats["hwcap"] = word(f["hwcap"], "static.features.hwcap")
+        feats["hwcap2"] = word(f["hwcap2"], "static.features.hwcap2")
+        out["features"] = feats
+        return out
     }
 
     // ------------------------------------------------------------------ context
@@ -269,7 +284,8 @@ object DescriptorGenerator {
     private fun pinLeaves(cx: Ctx, cpu: Map<String, Any?>): Pair<Obj, Obj> {
         val p = cpu["pin"]
         if (!PyCompat.truthy(p)) {
-            return unk("no pin result for this CPU in the static input") to unk("no pin result for this CPU in the static input")
+            val why = cx.why("cpus.pin.${PyCompat.str(cpu["index"])}") ?: "no pin result for this CPU in the static input"
+            return unk(why) to unk(why)
         }
         val pin = Json.obj(p, "static.cpus[].pin")
         val cond = Obj(orEmpty(cx.static["pin_conditions"], "static.pin_conditions"))
@@ -525,7 +541,7 @@ object DescriptorGenerator {
             }
             if (!has) return unk("this phone does not list arm64-v8a: the arm64 HWCAP name table does not apply")
         }
-        val (names, unnamed) = PartLib.decodeHwcap(word(hw, "static.features.hwcap"), word(hw2, "static.features.hwcap2"))
+        val (names, unnamed) = PartLib.decodeHwcap(hw as BigInteger, (hw2 as BigInteger?) ?: BigInteger.ZERO)
         val what = cx.source("features")?.takeIf { it.isNotEmpty() } ?: "HWCAP words"
         val src = "decoded by generate.py (arm64 hwcap.h names) from: $what"
         val notes = ArrayList<String>()
@@ -534,20 +550,35 @@ object DescriptorGenerator {
         return leaf(names, "static_read", STATIC_COND, source = src, note = notes.joinToString("; ").ifEmpty { null })
     }
 
-    /** `int(word or 0)` of a HWCAP word. */
-    private fun word(x: Any?, path: String): BigInteger = when (x) {
-        null -> BigInteger.ZERO
-        is Long -> BigInteger.valueOf(x)
-        is BigInteger -> x
-        else -> throw JsonException(path, "expected an integer, got ${Json.describe(x)}")
+    private val HEX_WORD = Regex("0x[0-9a-fA-F]{1,16}")
+    private val MAX_EXACT: BigInteger = BigInteger.ONE.shiftLeft(53)
+
+    /**
+     * A HWCAP/HWCAP2 word of the static input (`part1lib.parse_word`): null, a hex string `0x` + 1 to 16 hex
+     * digits, or an integer from 0 to 2^53-1. Anything else is a [JsonException] naming [path].
+     */
+    internal fun word(x: Any?, path: String): BigInteger? = when (x) {
+        null -> null
+        is Long -> when {
+            x < 0 -> throw JsonException(path, "a word cannot be negative")
+            BigInteger.valueOf(x) >= MAX_EXACT -> throw JsonException(path, "an integer of 2^53 or more is not allowed; write the word as a hex string")
+            else -> BigInteger.valueOf(x)
+        }
+        is String ->
+            if (HEX_WORD.matches(x)) BigInteger(x.substring(2), 16) else throw JsonException(path, "a word must be a hex string 0x followed by 1 to 16 hex digits")
+        is BigInteger -> throw JsonException(path, "an integer of 2^53 or more is not allowed; write the word as a hex string")
+        else -> throw JsonException(path, "expected a hex string such as 0x119fff, got ${Json.describe(x)}")
     }
+
+    /** The JSON value of a decoded word in the descriptor: an integer below 2^53, else a lower-case hex string (`part1lib.word_json`). */
+    private fun wordJson(x: Any?): Any? = (x as BigInteger?)?.let { if (it.bitLength() <= 53) it.toLong() else "0x" + it.toString(16) }
 
     private fun buildCapabilities(cx: Ctx): Obj {
         val f = orEmpty(cx.static["features"], "static.features")
         val vk = cx.static["vulkan"]
         val out = Obj()
-        out["hwcap"] = cx.sleaf(f["hwcap"], "features.hwcap", "features")
-        out["hwcap2"] = cx.sleaf(f["hwcap2"], "features.hwcap2", "features")
+        out["hwcap"] = cx.sleaf(wordJson(f["hwcap"]), "features.hwcap", "features")
+        out["hwcap2"] = cx.sleaf(wordJson(f["hwcap2"]), "features.hwcap2", "features")
         out["features"] = buildFeatures(cx, f)
         out["page_size"] = cx.sleaf(f["page_size"], "features.page_size", "features", unit = "B")
         out["ram_total_kb"] = cx.sleaf(orEmpty(cx.static["memory"], "static.memory")["memtotal_kb"], "memory.memtotal_kb", "memory", unit = "kB")

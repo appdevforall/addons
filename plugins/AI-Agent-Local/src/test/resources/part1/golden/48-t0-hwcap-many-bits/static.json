@@ -175,8 +175,8 @@
   }
  ],
  "features": {
-  "hwcap": 2097151,
-  "hwcap2": 73786976294838207226,
+  "hwcap": "0x1fffff",
+  "hwcap2": "0x40000000000002fa",
   "page_size": 4096,
   "dcache_line_bytes": 64
  },
