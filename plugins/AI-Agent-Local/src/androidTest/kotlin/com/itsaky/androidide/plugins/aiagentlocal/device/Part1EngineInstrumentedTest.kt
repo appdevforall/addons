@@ -37,7 +37,13 @@ class Part1EngineInstrumentedTest {
 
     /** The test APK's own context: its `nativeLibraryDir` holds the extracted engine programs. */
     private val context = InstrumentationRegistry.getInstrumentation().context
-    private val work = File(context.filesDir, "part1/work")
+
+    /**
+     * The **target** (app) context: the tests run in the app's process under the app's uid, which can create files only in the app's
+     * own data directory, not in the test package's. The work directory is therefore under the target's `filesDir`.
+     */
+    private val target = InstrumentationRegistry.getInstrumentation().targetContext
+    private val work = File(target.filesDir, "part1/work")
 
     private fun runner(): EngineRunner {
         val locator = NativeLibEngineLocator(
@@ -77,12 +83,20 @@ class Part1EngineInstrumentedTest {
     @Test
     fun givenTheRealSources_whenTheT0ReadRuns_thenItGivesAPart1StaticObjectWithinTheBudget() {
         val reader = StaticReader(
-            runner(), JavaSysFiles(), AndroidBuildSource(), AndroidMemorySource(context),
-            ConditionsReader(AndroidThermalSource(context), AndroidBatterySource(context), AndroidDisplaySource(context), AndroidScreenSource(context)),
+            runner(), JavaSysFiles(), AndroidBuildSource(), AndroidMemorySource(target),
+            ConditionsReader(AndroidThermalSource(target), AndroidBatterySource(target), AndroidDisplaySource(target), AndroidScreenSource(target)),
             onMainThread = ::isMainThread,
         )
         val r = reader.read("test")
         assertEquals("part1-static-v1", r.static["format"])
+        // the test must fail when a probe did not run: nothing of either probe may be recorded as unavailable
+        val un = (r.static["unavailable"] as Map<*, *>).keys.map { it.toString() }
+        for (k in listOf("identity.platform", "features.hwcap", "features.hwcap2", "features.page_size", "vulkan")) {
+            assertTrue("a probe did not run: $k is unavailable (${r.static["unavailable"]})", k !in un)
+        }
+        assertTrue("the static probe did not give the platform property", (r.static["identity"] as Map<*, *>)["platform"] is String)
+        assertTrue("the static probe gave no feature word", (r.static["features"] as Map<*, *>)["hwcap"] is String)
+        assertTrue("the GPU probe gave no object", r.static["vulkan"] is Map<*, *> && r.facts.containsKey("opencl_child"))
         assertTrue("T0 took ${r.elapsedMs} ms", r.elapsedMs < 2000)
         assertTrue((r.static["cpus"] as List<*>).isNotEmpty())
     }

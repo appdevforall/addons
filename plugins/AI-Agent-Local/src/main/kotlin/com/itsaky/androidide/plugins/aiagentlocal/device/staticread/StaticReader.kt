@@ -5,7 +5,6 @@ import com.itsaky.androidide.plugins.aiagentlocal.device.descriptor.PinProbe
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineCommands
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineExecutor
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineResult
-import com.itsaky.androidide.plugins.aiagentlocal.device.engine.OpenClChild
 import java.math.BigInteger
 
 /** The outcome of one T0 read. [static] is a `part1-static-v1` object (plain tree). */
@@ -257,7 +256,8 @@ class StaticReader(
                     if (vulkan[k] == null) un["vulkan.$k"] = "the GPU probe has no answer for this value (null)" else origins["vulkan.$k"] = "engine GPU probe"
                 }
             }
-            facts["opencl_child"] = OpenClChild.toFacts(OpenClChild.parse(gpObj))
+            // kept as the probe gave it (name, loaded, outcome, error, signal; unnamed candidates too), not the derived view
+            facts["opencl_child"] = (gpObj["opencl_child"] as? List<*>).orEmpty().map { it }
         } else {
             vulkan = null
             un["vulkan"] = gpWhy ?: "the GPU probe gave no object"

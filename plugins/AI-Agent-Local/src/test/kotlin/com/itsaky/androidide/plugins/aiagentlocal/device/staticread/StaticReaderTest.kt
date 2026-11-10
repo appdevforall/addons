@@ -209,6 +209,12 @@ class StaticReaderTest {
             assertTrue(p.files.reads.contains("/sys/devices/system/cpu/possible"))
             descriptor(r)
         }
+        // F07 (mutants W05, W06): only ExecBlocked may say that the phone forbids a start
+        val pm = D5Like(); pm.engine.static = { EngineResult.ProgramMissing("libpart1_membw.so was not found") }
+        assertEquals("ro.board.platform comes from the static probe: the static probe could not be started (the program file was not found)", unavailable(pm.reader().read())["identity.platform"])
+        val ns = D5Like(); ns.engine.static = { EngineResult.NotStarted("the work directory cannot be created") }
+        assertEquals("ro.board.platform comes from the static probe: the static probe was not started (the work directory cannot be created)", unavailable(ns.reader().read())["identity.platform"])
+        for (q in listOf(pm, ns)) assertFalse(unavailable(q.reader().read()).values.any { (it as? String)?.contains("exec_blocked") == true })
         // the reasons name the kind of failure
         val p = D5Like(); p.engine.static = { EngineResult.ExecBlocked("x") }
         assertEquals("ro.board.platform comes from the static probe: the static probe could not be started (exec_blocked)", unavailable(p.reader().read())["identity.platform"])
@@ -267,7 +273,9 @@ class StaticReaderTest {
         val r = p.reader().read()
         val child = r.facts["opencl_child"] as List<*>
         assertEquals(4, child.size)
-        assertEquals("not_loaded", obj(child[0])["load"])
+        assertEquals(false, obj(child[0])["loaded"]) // as the probe gave it: loaded, outcome, name (and error, signal when it has them)
+        assertEquals("dlerror", obj(child[0])["outcome"])
+        assertEquals("libOpenCL.so", obj(child[0])["name"])
         assertEquals(false, r.facts["public_libraries_names_opencl"]) // a comment line naming opencl does not count
         assertTrue((obj(r.static["sources"])["opencl"] as String).contains("names no OpenCL library"))
         assertEquals("child-process result does not apply inside the app", unavailable(r)["opencl_loadable"])
@@ -282,6 +290,15 @@ class StaticReaderTest {
         val r3 = p.reader().read()
         assertNull(r3.facts["public_libraries_names_opencl"])
         assertTrue((obj(r3.static["sources"])["opencl"] as String).contains("was not readable (unknown)"))
+    }
+
+    @Test
+    fun givenAnUnnamedCrashedCandidate_whenRead_thenTheFactsKeepEveryKeyTheProbeGave() {
+        val p = D5Like()
+        p.engine.gpu = { EngineResult.Ok(Json.parseObject("""{"format":"part1-gpuprobe-v1","status":"ok","vulkan":{"available":false},"opencl_child":[{"loaded":false,"outcome":"crashed","signal":11},{"name":"a","loaded":false,"outcome":"dlerror","error":"not found"}]}""")) }
+        val child = p.reader().read().facts["opencl_child"] as List<*>
+        assertEquals(setOf("loaded", "outcome", "signal"), obj(child[0]).keys)
+        assertEquals(setOf("name", "loaded", "outcome", "error"), obj(child[1]).keys)
     }
 
     @Test
