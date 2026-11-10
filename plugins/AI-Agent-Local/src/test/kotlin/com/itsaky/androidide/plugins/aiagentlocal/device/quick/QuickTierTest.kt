@@ -179,7 +179,7 @@ class QuickTierTest {
         val t0 = r.clock.now
         val res = r.run()
         assertEquals(QuickStatus.DEFERRED, res.status); assertEquals(StopReason.IDE_BUSY, res.reason)
-        assertEquals(QuickLimits.IDE_WAIT_MS, r.clock.now - t0)
+        assertEquals(60_000L, r.clock.now - t0) // exactly 60 s
         assertTrue(r.engine.commands.isEmpty()); r.assertClean()
         assertNull(r.store.readPassRecord())
     }
@@ -283,7 +283,7 @@ class QuickTierTest {
         val t0 = before.clock.now
         val res = before.run()
         assertEquals(StopReason.THERMAL, res.reason); assertEquals(QuickStatus.DEFERRED, res.status) // nothing had started yet
-        assertEquals(QuickLimits.THERMAL_WAIT_MS, before.clock.now - t0)
+        assertEquals(60_000L, before.clock.now - t0) // exactly 60 s
         // hot only from the second row on: the pass ends early
         val later = rig()
         later.engine.beforeRun = { c -> if (c.tag == "C2-read-k0") later.cond.status = { 4 } }
@@ -312,9 +312,10 @@ class QuickTierTest {
         val res = r.run()
         assertEquals(QuickStatus.COMPLETED, res.status)
         val rest = ((r.pass()["waits_ms"] as Map<*, *>)["rest"] as Number).toLong()
-        assertEquals(5 * QuickLimits.BLIND_REST_MS, rest) // six rows, five rests
+        assertEquals(50_000L, rest) // six rows, five rests of exactly 10 s each
         assertEquals(5, r.ui.waiting.count { it == WaitingFor.REST })
         assertTrue(r.clock.now - t0 >= rest)
+        assertEquals(10_000L, QuickLimits.BLIND_REST_MS)
     }
 
     @Test
@@ -355,7 +356,13 @@ class QuickTierTest {
     fun givenCancelIsPressedAtEveryRow_whenThePassRuns_thenNoProcessNoHalfWrittenFileAndTheScreenFlagIsCleared() {
         for (tag in d5Tags) {
             val r = rig()
-            r.engine.beforeRun = { c -> if (r.tagOf(c) == tag) r.ui.cancelHandler() } // the Cancel button the pass registered
+            r.engine.beforeRun = { c ->
+                if (r.tagOf(c) == tag) {
+                    r.ui.cancelHandler() // the Cancel button the pass registered
+                    // the running process is destroyed at once, not when the pass next looks
+                    assertEquals(tag, 1, r.engine.cancelCalls)
+                }
+            }
             val res = r.run()
             assertEquals(tag, QuickStatus.CANCELLED, res.status); assertEquals(StopReason.USER_CANCELLED, res.reason)
             val expectedStored = maxOf(0, d5Tags.indexOf(tag) - 1)
