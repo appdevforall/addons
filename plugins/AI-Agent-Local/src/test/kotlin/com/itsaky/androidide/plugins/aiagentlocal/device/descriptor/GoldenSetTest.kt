@@ -32,6 +32,7 @@ class GoldenSetTest {
                 peakTolerance = Json.double(args["peak_tolerance"], "peak_tolerance"),
                 inputNames = Json.arr(args["input_names"], "input_names").map { it as String },
             )
+            System.getProperty("part1.goldenOutDir")?.let { File(it, "$name.json").writeText(got.toString(1)) }
             val diff = Json.diff(Part1TestResources.tree("$base/expected.json"), Json.fromOrg(got))
             if (diff.isNotEmpty()) failures.add("$name differs at $diff")
         }

@@ -123,6 +123,9 @@ tasks.withType<Test>().configureEach {
     systemProperty("part1IndexAssetPath", part1Index.absolutePath)
     // Lab examples are never committed; the lab-set test runs only when this is given on the command line.
     System.getProperty("part1.labExamplesDir")?.let { systemProperty("part1.labExamplesDir", it) }
+    // Optional: a directory (outside the repository) to receive the golden-set descriptors, so an external
+    // validator can check them.
+    System.getProperty("part1.goldenOutDir")?.let { systemProperty("part1.goldenOutDir", it) }
 }
 
 // Guards the abiFilters above: a regenerated AAR or a dropped filter would silently re-inflate the .cgp.
