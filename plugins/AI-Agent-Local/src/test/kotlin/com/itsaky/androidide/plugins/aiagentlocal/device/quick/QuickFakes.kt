@@ -169,11 +169,11 @@ class D1Like {
 }
 
 /** A static input with [clusters] (lists of CPUs) and the CPUs in [unpinnable] failing to pin, built by hand for the planner tests. */
-fun staticWith(clusters: List<List<Int>>, unpinnable: Set<Int> = emptySet(), vulkanCompute: Boolean = true): Map<String, Any?> {
+fun staticWith(clusters: List<List<Int>>, unpinnable: Set<Int> = emptySet(), vulkanCompute: Boolean = true, maxKhz: (Int) -> Long = { 1000000L }): Map<String, Any?> {
     val cpus = clusters.flatMap { c ->
         c.map { i ->
             linkedMapOf<String, Any?>(
-                "index" to i.toLong(), "related_cpus" to c.map { it.toLong() }, "max_khz" to 1000000L, "capacity" to 500L,
+                "index" to i.toLong(), "related_cpus" to c.map { it.toLong() }, "max_khz" to maxKhz(i), "capacity" to 500L,
                 "pin" to linkedMapOf<String, Any?>("result" to if (i in unpinnable) "failed" else "ok", "attempts" to 1L, "time_to_pin_s" to 0.0, "cpuset" to "/top-app"),
             )
         }

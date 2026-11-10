@@ -62,6 +62,15 @@ class RowPlannerTest {
     }
 
     @Test
+    fun givenATieInTheMeasuredValue_whenRanked_thenTheHigherMaxKhzComesFirstAsInTheDescriptorGenerator() {
+        // F09: the generator breaks a tie by higher max kHz, then lower id; the planner must agree
+        val cs = RowPlanner.clusters(staticWith(listOf(listOf(0, 1), listOf(2, 3), listOf(4, 5)), maxKhz = { i -> if (i in 2..3) 2_000_000L else 1_000_000L }))
+        assertEquals(listOf(1, 0, 2), RowPlanner.ranking(cs, mapOf(0 to 7.0, 1 to 7.0, 2 to 7.0))) // 1 has the higher max kHz, then 0 before 2
+        assertEquals(listOf(0, 1, 2), RowPlanner.ranking(cs, mapOf(0 to 9.0, 1 to 7.0, 2 to 7.0))) // value still comes first
+        assertEquals(listOf(1, 0), com.itsaky.androidide.plugins.aiagentlocal.device.descriptor.PartLib.rankOrder(listOf(0, 1), { 5.0 }, { if (it == 1) 9.0 else 1.0 }))
+    }
+
+    @Test
     fun givenARanking_whenTheTwoFastestAreChosen_thenTheyComeFromTheFastestClusterThenTheNext() {
         val cs = RowPlanner.clusters(staticWith(listOf(listOf(0, 1, 2, 3), listOf(4, 5), listOf(6, 7))))
         assertEquals(listOf(6, 7), RowPlanner.twoFastest(cs, listOf(2, 1, 0)))

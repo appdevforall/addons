@@ -387,7 +387,7 @@ object DescriptorGenerator {
                 val v = Json.obj(staticByIdx[c], "static.cpus[]")["max_khz"]
                 if (PyCompat.truthy(v)) PyCompat.num(v) else 0.0
             }
-            val order = (0 until n).sortedWith(compareBy<Int>({ -gbs(reads[it]!!) }, { -mx(it) }, { it }))
+            val order = PartLib.rankOrder((0 until n).toList(), { gbs(reads[it]!!) }, ::mx)
             tie = order.map { gbs(reads[it]!!) }.toSet().size != order.size
             order.forEachIndexed { pos, k -> ranks[k] = pos + 1 }
         }

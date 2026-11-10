@@ -52,6 +52,13 @@ internal object PartLib {
         return leaf(null, "unk", reason = reason, unit = unit, source = source)
     }
 
+    /**
+     * The one ranking of clusters by their measured single-core read, used by the descriptor generator and by the T1 row planner so
+     * that both agree: value descending, then higher max kHz, then lower id.
+     */
+    fun rankOrder(ids: List<Int>, value: (Int) -> Double, maxKhz: (Int) -> Double): List<Int> =
+        ids.sortedWith(compareBy<Int>({ -value(it) }, { -maxKhz(it) }, { it }))
+
     fun cpuSetStr(cpus: List<Long>): String = cpus.joinToString("+")
 
     class ClusterInfo(val clusterOf: Map<Long, Int>, val members: List<List<Long>>, val how: Map<Long, String>)

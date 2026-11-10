@@ -3,7 +3,7 @@ package com.itsaky.androidide.plugins.aiagentlocal.device.quick
 import com.itsaky.androidide.plugins.aiagentlocal.device.descriptor.PartLib
 
 /** One cluster of the static input: the CPUs that share a `related_cpus` group, and the ones of them that pinned. */
-class ClusterPlan(val id: Int, val cpus: List<Int>, val pinnable: List<Int>)
+class ClusterPlan(val id: Int, val cpus: List<Int>, val pinnable: List<Int>, val maxKhz: Double = 0.0)
 
 /** The CPU a cluster's single-core row runs on: the first CPU, a [substitutedFor] stand-in from the same cluster, or [unpinned]. */
 class C2Choice(val cpu: Int, val substitutedFor: Int?, val unpinned: Boolean)
@@ -14,7 +14,7 @@ class C2Choice(val cpu: Int, val substitutedFor: Int?, val unpinned: Boolean)
  * - **Clusters** are the groups of `related_cpus` ([PartLib.clusterInfo]); ids are 0..N-1 in the order of each cluster's lowest CPU, the
  *   id the `C2-read-k<id>` tag carries.
  * - **Pinnable** means the pin probe gave `pin.result` `ok` for the CPU. A CPU the probe did not list is not pinnable.
- * - **Ranking** is by the measured single-core value, never by name, capacity or frequency; equal values keep the lower cluster id first;
+ * - **Ranking** is by the measured single-core value, never by name, capacity or frequency; the order is the descriptor generator's ([PartLib.rankOrder]): value descending, then higher max kHz, then lower id;
  *   a cluster with no measured value comes after every measured one.
  */
 object RowPlanner {
@@ -23,15 +23,17 @@ object RowPlanner {
         val cpus = (static["cpus"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }
         val related = LinkedHashMap<Long, List<Long>?>()
         val pinned = HashSet<Long>()
+        val khz = HashMap<Long, Double>()
         for (c in cpus) {
             val index = (c["index"] as? Number)?.toLong() ?: continue
+            (c["max_khz"] as? Number)?.toDouble()?.let { khz[index] = it }
             related[index] = (c["related_cpus"] as? List<*>)?.mapNotNull { (it as? Number)?.toLong() }
             if (((c["pin"] as? Map<*, *>)?.get("result")) == "ok") pinned.add(index)
         }
         if (related.isEmpty()) return emptyList()
         val info = PartLib.clusterInfo(related)
         return info.members.mapIndexed { id, members ->
-            ClusterPlan(id, members.map { it.toInt() }, members.filter { it in pinned }.map { it.toInt() })
+            ClusterPlan(id, members.map { it.toInt() }, members.filter { it in pinned }.map { it.toInt() }, members.maxOfOrNull { khz[it] ?: 0.0 } ?: 0.0)
         }
     }
 
@@ -46,9 +48,10 @@ object RowPlanner {
     /** Cluster ids, best measured value first; [measured] maps a cluster id to its single-core read (GB/s). */
     fun ranking(clusters: List<ClusterPlan>, measured: Map<Int, Double>): List<Int> {
         val have = clusters.filter { measured[it.id] != null }
-        val sortedHave = have.sortedWith(compareBy<ClusterPlan>({ -measured.getValue(it.id) }, { it.id }))
+        val byId = clusters.associateBy { it.id }
+        val sortedHave = PartLib.rankOrder(have.map { it.id }, { measured.getValue(it) }, { byId.getValue(it).maxKhz })
         val rest = clusters.filter { measured[it.id] == null }.sortedBy { it.id }
-        return (sortedHave + rest).map { it.id }
+        return sortedHave + rest.map { it.id }
     }
 
     /** The two fastest pinnable CPUs: from the best cluster, then the next; null when fewer than two CPUs pinned. */
