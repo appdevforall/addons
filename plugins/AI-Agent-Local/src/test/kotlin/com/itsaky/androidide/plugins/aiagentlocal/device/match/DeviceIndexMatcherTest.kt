@@ -105,4 +105,29 @@ class DeviceIndexMatcherTest {
         assertEquals("soc_sibling", m.result)
         assertEquals("yy-seed", m.key) // zz-bare has more leaves but is skipped through its identity
     }
+
+    @Test
+    fun givenIdentityValuesOfUnkRecordsWithoutDeviceIdsAndSiblingTies_whenMatched_thenEveryFieldEqualsMatchPyOnTheExtendedFixture() {
+        // match-extra.json: a fixture index (the vectors fixture plus seven records) and match.py's result for each input;
+        // it holds the rules of the match.py docstring that vectors.json does not (review F11) and 48 device strings whose
+        // Python repr appears in the "how" text (review F04)
+        val doc = Part1TestResources.obj("part1/match-extra.json")
+        val idx = DeviceIndex.fromTree(Json.obj(doc["fixture_index"], "fixture_index"))
+        val cases = Json.arr(doc["cases"], "cases").map { Json.obj(it, "case") }
+        assertTrue(cases.size >= 50)
+        val failures = ArrayList<String>()
+        for (c in cases) {
+            val i = Json.obj(c["input"], "input")
+            val e = Json.obj(c["expect"], "expect")
+            val got = DeviceIndexMatcher.match(i["platform"] as String, i["board"] as String, i["device"] as String, i["hardware"] as String, idx)
+            if (got.toTree() != e) failures.add("${c["id"]}: got ${got.toTree()} expected $e")
+        }
+        assertEquals(emptyList<String>(), failures.take(5))
+        // the named rules, so that a change of the resource cannot hide them
+        fun m(p: String, b: String) = DeviceIndexMatcher.match(p, b, "d", "hw", idx)
+        assertEquals("unkx-b1", m("unkx", "b1").key) // identity.soc "unk" counts as absent: an exact hit
+        assertEquals("exact", m("unkx", "b1").result)
+        assertEquals("exact", m("nid", "b1").result) // a record without device_ids
+        assertEquals("sib-a-b", m("sib", "nomatch").key) // equal leaf counts: "sib-a-b.json" sorts before "sib-a.json"
+    }
 }

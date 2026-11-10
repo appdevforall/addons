@@ -39,20 +39,73 @@ class GoldenSetTest {
         assertEquals(emptyList<String>(), failures)
     }
 
+    /**
+     * The synthetic-fingerprint guard (review F15): every committed test resource of the Part 1 code (all three input
+     * kinds, the expected descriptors, vectors, differential and rejection files) is scanned. Two checks:
+     *  - the JSON trees: every value of a key `build_fingerprint` (a string, or the `value` of a leaf) must start with
+     *    `syn/` or `synthetic/`;
+     *  - the raw text: no string shaped like an Android build fingerprint (`brand/product/device:release/id/incr:type/tags`)
+     *    may appear unless it starts with `syn/` or `synthetic/`; no lab path (`/home/`) appears.
+     */
     @Test
-    fun givenTheGoldenSet_whenRead_thenEveryFingerprintIsSyntheticAndNoLabPathAppears() {
-        val dir = File(GoldenSetTest::class.java.classLoader!!.getResource("part1/golden")!!.toURI())
-        val fp = Regex("\"build_fingerprint\":\\s*\"([^\"]*)\"")
+    fun givenEveryPart1TestResource_whenScanned_thenEveryFingerprintIsSyntheticAndNoLabPathAppears() {
+        val dir = File(GoldenSetTest::class.java.classLoader!!.getResource("part1")!!.toURI())
+        val shape = Regex("[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+:[^/\\s\"]+/[^/\\s\"]+/[^/\\s\"]+:[A-Za-z]+/[A-Za-z0-9,._-]+")
+        val key = Regex("\"build_fingerprint\"")
+        var files = 0
         var seen = 0
+        val bad = ArrayList<String>()
         for (f in dir.walkTopDown().filter { it.isFile }) {
+            files++
             val text = f.readText()
-            assertTrue("${f.name} names a lab path", !text.contains("/home/"))
-            for (m in fp.findAll(text)) {
-                seen++
-                assertTrue("non-synthetic fingerprint in ${f.parentFile.name}", m.groupValues[1].startsWith("syn/"))
+            val where = "${f.parentFile.name}/${f.name}"
+            if (text.contains("/home/")) bad.add("$where names a lab path")
+            for (m in shape.findAll(text)) {
+                if (!isSynthetic(m.value)) bad.add("$where holds a fingerprint-shaped string")
+            }
+            if (!key.containsMatchIn(text)) continue
+            // jsonl files hold rows only (no fingerprints); every other file is one JSON document
+            if (f.name.endsWith(".json")) {
+                for (v in fingerprintValues(Json.parse(text, where))) {
+                    seen++
+                    if (!isSynthetic(v)) bad.add("$where holds a non-synthetic build_fingerprint")
+                }
             }
         }
-        assertTrue(seen >= 40)
+        assertEquals(emptyList<String>(), bad)
+        assertTrue("files scanned: $files", files > 300)
+        assertTrue("fingerprint values seen: $seen", seen >= 100)
+    }
+
+    private fun isSynthetic(v: String) = v.startsWith("syn/") || v.startsWith("synthetic/")
+
+    /** Every `build_fingerprint` value in a tree: a string, or the `value` of a leaf object; null is not a value. */
+    private fun fingerprintValues(x: Any?): List<String> {
+        val out = ArrayList<String>()
+        when (x) {
+            is Map<*, *> -> for ((k, v) in x) {
+                if (k == "build_fingerprint") {
+                    val inner = if (v is Map<*, *>) v["value"] else v
+                    if (inner is String) out.add(inner)
+                } else {
+                    out.addAll(fingerprintValues(v))
+                }
+            }
+            is List<*> -> x.forEach { out.addAll(fingerprintValues(it)) }
+        }
+        return out
+    }
+
+    @Test
+    fun givenTheGuard_whenAFingerprintShapedStringIsNotSynthetic_thenItIsDetected() {
+        val shape = Regex("[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+:[^/\\s\"]+/[^/\\s\"]+/[^/\\s\"]+:[A-Za-z]+/[A-Za-z0-9,._-]+")
+        // a made-up string of the real shape, built from parts so that this file itself holds no such string
+        val fake = listOf("brand", "product", "device").joinToString("/") + ":14/ID1.0/1234:user/release-keys"
+        assertTrue(shape.containsMatchIn(fake))
+        assertTrue(!isSynthetic(fake))
+        assertEquals(listOf(fake), fingerprintValues(mapOf("identity" to mapOf("build_fingerprint" to mapOf("value" to fake)))))
+        assertEquals(listOf(fake), fingerprintValues(listOf(mapOf("build_fingerprint" to fake))))
+        assertTrue(isSynthetic("syn/fingerprint:1") && isSynthetic("synthetic/x"))
     }
 
     private fun optional(path: String): String? =
