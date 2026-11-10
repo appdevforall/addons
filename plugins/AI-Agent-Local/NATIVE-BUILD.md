@@ -454,13 +454,13 @@ them as separate processes. Gradle never compiles them.
 - **Source:** `part1-engine/` (engine version in `part1-engine/VERSION`, currently 0.2.4): `src/` (C), `build.sh`,
   `tools/`, `tests/`, the documents `ENGINE.md`, `EXIT-CODES.md`, `DIFF-FROM-KIT.md` and the four JSON schemas.
   The repository copy is **the master of the engine source** from P1-04A1F on: edit it here, not in the lab
-  folder stays as the frozen 0.2.4 lab copy. The lab folders `history/`, `raw/` and
+  folder, which stays as the frozen 0.2.4 lab copy. The lab folders `history/`, `raw/` and
   `out/` are not part of it. It works from the repository alone: `schemas/part1-rows-v1.schema.json` (a copy of
   the rows schema) is found by a path relative to `tests/test_engine.py` and `tools/validate_captured.py`; the
   checks that need the kit (`tools/kernel_identity.py`, the kit-oracle tests) read the kit's `intake` directory
   from the environment variable `PART1_KIT_DIR` and skip with a message when it is unset. Run the suite with
-  `cd part1-engine && python3 -I -B -m unittest discover -s tests` (host build; the NDK checks need an NDK and
-  `out/arm64-v8a/`, which the repository does not hold).
+  `cd part1-engine && python3 -I -B -m unittest discover -s tests` (host build; the NDK checks need an NDK and the built programs: set `PART1_ENGINE_OUT` to the folder that holds
+  `libpart1_membw.so` and `libpart1_gpubw.so`; without it those tests skip with a message that names the variable).
 - **Rebuild:** `cd part1-engine && ./build.sh [OUTDIR]` with an Android NDK r26 or later (`NDK`, `ANDROID_NDK_HOME`
   or `$ANDROID_HOME/ndk/*`); it writes `libpart1_membw.so` and `libpart1_gpubw.so` and prints their sha256. Copy
   the two files to `src/main/jniLibs/arm64-v8a/` and update the two sha256 constants in

@@ -15,7 +15,7 @@ import org.junit.Test
  * changes them). Gradle passes the paths. The unit tests do **not** depend on `assemblePluginDebug` (they only run after it
  * when both are asked for in one invocation, see `build.gradle.kts`), so a `.cgp` left by an earlier build may be what they read.
  * The two `.cgp` tests **skip** when there is no `.cgp`, unless the system property `part1.requireCgp` is set
- * (`-Dpart1.requireCgp=true`, as CI and the proof runs do): then a missing `.cgp` is a **failure**. The assemble task's own
+ * (`-Dpart1.requireCgp=true`, as the proof runs do; CI runs only `assemblePlugin` through `scripts/build-plugins.sh`, no unit tests and no property): then a missing `.cgp` is a **failure**. The assemble task's own
  * last action checks the same bytes on every build and fails it, so a skip never hides a difference in a shipped build.
  */
 class EnginePackagingTest {

@@ -4,7 +4,7 @@
 Builds three AArch64 membw binaries into a scratch directory (nothing is written to the kit tree):
   KIT-REBUILD  the kit's membw.c compiled with the kit-arm64 recipe (aarch64-linux-android31-clang -O2 -march=armv8.2-a+fp16 -fno-tree-vectorize -pie)
   ENG-KITFLAGS the engine's membw.c compiled with exactly that recipe (so any difference is a source difference)
-  ENG-SHIPPED  out/arm64-v8a/libpart1_membw.so as shipped (-march=armv8-a, API 33)
+  ENG-SHIPPED  libpart1_membw.so as shipped (--shipped, or PART1_ENGINE_OUT) (-march=armv8-a, API 33)
 and compares the disassembly (addresses and branch targets normalised to symbol+offset) of k01..k12 (identical required) and of the three inlined chase loops (the exact rename map EXPECTED_RENAMES required, nothing else may differ), and the byte equality of the
 kit's shipped binary with KIT-REBUILD when it exists. usage: python3 -I -B tools/kernel_identity.py SCRATCHDIR [--shipped PATH]
 P1-03H: the code AROUND each paced loop (the chunk set-up before it and the tear-down after it: the chunk-count register, the per-chunk load and store of the groups counter) is compared too, against an
@@ -78,7 +78,8 @@ def main():
     eng_kf = os.path.join(scratch, "engine-kitflags-membw")
     build("31", "armv8.2-a+fp16", os.path.join(KIT_SRC, "membw.c"), kit_re)
     build("31", "armv8.2-a+fp16", os.path.join(ROOT, "src", "membw.c"), eng_kf, ["-DP1_ENGINE_VERSION=\"x\""])
-    shipped = os.path.join(ROOT, "out/arm64-v8a/libpart1_membw.so")
+    # the shipped program: --shipped PATH, else PART1_ENGINE_OUT/libpart1_membw.so, else the lab layout out/arm64-v8a/ of this tree
+    shipped = os.path.join(os.environ.get("PART1_ENGINE_OUT") or os.path.join(ROOT, "out/arm64-v8a"), "libpart1_membw.so")
     if "--shipped" in sys.argv:
         shipped = sys.argv[sys.argv.index("--shipped") + 1]
     print("kit shipped binary   sha256 %s" % (sha(KIT_BIN) if os.path.exists(KIT_BIN) else "(absent)"))

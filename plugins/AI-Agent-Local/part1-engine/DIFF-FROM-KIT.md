@@ -1,4 +1,4 @@
-# Differences from the kit (kit v4d-5x sources under `intake-v4d5x/intake/src/`, read only)
+# Differences from the kit (kit v4d-5x sources: the `src/` directory of the kit's `intake` directory, read only; tests and tools find it through `PART1_KIT_DIR`)
 
 Full unified diffs: `raw/diff-membw.txt` (kit `membw.c` to `src/membw.c`) and `raw/diff-gpubw.txt`. Proof that the kernels are untouched: `raw/kernel-identity.txt` (object-code comparison) and `tests/test_engine.py::TestDocsAndSources`.
 

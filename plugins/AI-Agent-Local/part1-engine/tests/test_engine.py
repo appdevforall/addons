@@ -36,16 +36,21 @@ SCHEMA = os.environ.get("P1_ROWS_SCHEMA") or os.path.join(ROOT, "schemas", "part
 # The kit-dependent checks take the kit location from PART1_KIT_DIR (the kit's `intake` directory, which holds src/ and bin/);
 # without it they skip with a clear message. The repository holds no copy of the kit.
 KIT_DIR = os.environ.get("PART1_KIT_DIR") or ""
-KIT_SKIP = "kit sources not present: set PART1_KIT_DIR to the kit's intake directory"
+KIT_SKIP = ("PART1_KIT_DIR is not set: set it to the kit's intake directory (it holds src/ and bin/)" if not KIT_DIR
+            else "PART1_KIT_DIR=%s has not the kit's files (src/membw.c, src/gpubw/, src/pinretry.h, bin/membw)" % KIT_DIR)
 KIT_MEMBW = os.path.join(KIT_DIR, "src/membw.c") if KIT_DIR else ""
 KIT_GPUBW = os.path.join(KIT_DIR, "src/gpubw/gpubw.c") if KIT_DIR else ""
 KIT_PIN = os.path.join(KIT_DIR, "src/pinretry.h") if KIT_DIR else ""
 KIT_SPV = os.path.join(KIT_DIR, "src/gpubw/shader_spv.h") if KIT_DIR else ""
 # The lab's build outputs (out/) and raw logs (raw/) are not part of the repository copy; the checks that read them skip without them.
-HAVE_OUT = os.path.exists(os.path.join(ROOT, "out", "arm64-v8a", "libpart1_membw.so"))
+# Tests that need the built programs take their directory from PART1_ENGINE_OUT (the folder that holds libpart1_membw.so and libpart1_gpubw.so,
+# and logs/ for the build logs); they skip with a message that names the variable when it is unset or the programs are not there.
+OUT_DIR = os.environ.get("PART1_ENGINE_OUT") or ""
+HAVE_OUT = bool(OUT_DIR) and os.path.exists(os.path.join(OUT_DIR, "libpart1_membw.so"))
 HAVE_RAW = os.path.isdir(os.path.join(SRC, "raw"))
-OUT_SKIP = "the lab's out/arm64-v8a/ (built programs) is not part of the repository copy"
-RAW_SKIP = "the lab's raw/ (recorded logs) is not part of the repository copy"
+OUT_SKIP = ("PART1_ENGINE_OUT is not set: set it to the folder with the built programs (libpart1_membw.so, libpart1_gpubw.so)" if not OUT_DIR
+            else "PART1_ENGINE_OUT=%s holds no libpart1_membw.so" % OUT_DIR)
+RAW_SKIP = "no raw/ folder of recorded build logs in the engine tree %s (the lab's raw/ is not part of the repository copy)" % SRC
 PINPROBE_SCHEMA = os.path.join(ROOT, "part1-pinprobe-v1.schema.json")
 KIT_BIN_FOR_TOOL = os.path.join(KIT_DIR, "bin/membw") if KIT_DIR else ""
 TMP = None
@@ -601,12 +606,12 @@ class TestDocsAndSources(unittest.TestCase):
                     self.fail("%s contains a MAC- or IP-like string: %s" % (p, m.group(0)))
 
 
-@unittest.skipUnless(find_ndk() and HAVE_OUT, "no NDK, or " + OUT_SKIP)
+@unittest.skipUnless(find_ndk() and HAVE_OUT, ("no Android NDK found" if not find_ndk() else OUT_SKIP))
 class TestCrossBuiltBinaries(unittest.TestCase):
     """ELF facts of the shipped arm64 binaries (they cannot be run here: no qemu-aarch64)."""
 
     def test_elf_rules(self):
-        outd = os.path.join(ROOT, "out", "arm64-v8a")
+        outd = OUT_DIR
         files = [os.path.join(outd, n) for n in ("libpart1_membw.so", "libpart1_gpubw.so")]
         for f in files:
             self.assertTrue(os.path.exists(f), f)
@@ -1253,11 +1258,18 @@ class TestH_A1_A2_A3_PinFactsInEveryRecord(unittest.TestCase):
 
 class TestH_A4_ChunkSetupAndTeardown(unittest.TestCase):
     TOOL = os.path.join(ROOT, "tools", "kernel_identity.py")
-    SHIPPED = os.path.join(ROOT, "out", "arm64-v8a", "libpart1_membw.so")
+    SHIPPED = os.path.join(OUT_DIR, "libpart1_membw.so") if OUT_DIR else ""
 
     def setUp(self):
         if not (KIT_DIR and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL) and NDK and os.path.exists(self.SHIPPED)):
-            self.skipTest(KIT_SKIP + " (and the NDK and out/arm64-v8a/libpart1_membw.so must be present)")
+            why = []
+            if not (KIT_DIR and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL)):
+                why.append(KIT_SKIP + " (it needs src/membw.c and bin/membw)")
+            if not NDK:
+                why.append("no Android NDK found (ANDROID_NDK_HOME)")
+            if not os.path.exists(self.SHIPPED):
+                why.append(OUT_SKIP)
+            self.skipTest("; ".join(why))
         self.bin_dir = os.path.join(NDK, "toolchains/llvm/prebuilt/linux-x86_64/bin")
 
     def tool(self, shipped, tag):
@@ -1512,7 +1524,7 @@ class TestH_C1_StaticProbe(unittest.TestCase):
         src = rd(os.path.join(SRC, "src", "membw.c")) + rd(os.path.join(SRC, "src", "part1_common.h"))
         lits = set(re.findall(r'"((?:ro|persist|sys|vendor|net|gsm|dhcp|init|service)\.[A-Za-z0-9._]+)"', src))
         self.assertEqual(sorted(lits), sorted(PROP_NAMES))
-        binary = os.path.join(ROOT, "out", "arm64-v8a", "libpart1_membw.so")
+        binary = os.path.join(OUT_DIR, "libpart1_membw.so") if OUT_DIR else ""
         if os.path.exists(binary):
             found = set(m.decode() for m in re.findall(rb"(?:ro|persist|sys|vendor|net|gsm|dhcp|init|service)\.[A-Za-z0-9._]{3,}", open(binary, "rb").read()))
             self.assertEqual(sorted(found), sorted(PROP_NAMES))
@@ -1893,7 +1905,7 @@ class TestC_DocsStatements(unittest.TestCase):
         self.assertIn("x25->x12", t)
         self.assertNotIn("def canon", t)                              # the any-rename check is gone
 
-    @unittest.skipUnless(KIT_MEMBW and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL) and HAVE_OUT, KIT_SKIP + " (and " + OUT_SKIP + ")")
+    @unittest.skipUnless(KIT_MEMBW and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL) and HAVE_OUT, "; ".join(x for x, have in ((KIT_SKIP, KIT_MEMBW and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL)), (OUT_SKIP, HAVE_OUT)) if not have) or "needs the kit and the built programs")
     def test_g_f01_tool_is_strict(self):
         tool = os.path.join(ROOT, "tools", "kernel_identity.py")
         src = rd(tool)
@@ -1927,11 +1939,11 @@ class TestC_DocsStatements(unittest.TestCase):
                 for cmd in re.findall(r"`([^`]*)`", r):
                     self.assertLessEqual(cmd.count("--fit-buffer"), 1, cmd)
 
-    @unittest.skipUnless(HAVE_RAW and HAVE_OUT, RAW_SKIP + " / " + OUT_SKIP)
+    @unittest.skipUnless(HAVE_RAW and HAVE_OUT, "; ".join(x for x, have in ((RAW_SKIP, HAVE_RAW), (OUT_SKIP, HAVE_OUT)) if not have) or "needs raw/ and the built programs")
     def test_g_raw_build_logs_are_the_current_build(self):
         for n in ("membw", "gpubw"):
             a = rd(os.path.join(ROOT, "raw", "build-%s.log" % n))
-            b = rd(os.path.join(ROOT, "out", "arm64-v8a", "logs", "build-%s.log" % n))
+            b = rd(os.path.join(OUT_DIR, "logs", "build-%s.log" % n))
             self.assertEqual(a, b)
             self.assertNotIn("0.1.0", a)
 
@@ -2143,8 +2155,8 @@ class TestI5_OpenclHelper(unittest.TestCase):
         src = rd(os.path.join(ROOT, "src", "gpubw", "gpubw.c"))
         i = src.index("static const char *gp_ocl_path")
         self.assertIn("#ifdef P1_HOST_BUILD", src[i:i + 200])
-        if os.path.exists(os.path.join(ROOT, "out", "arm64-v8a", "libpart1_gpubw.so")):
-            self.assertNotIn(b"P1_OCL_PATH", rd(os.path.join(ROOT, "out", "arm64-v8a", "libpart1_gpubw.so"), "rb"))
+        if os.path.exists(os.path.join(OUT_DIR, "libpart1_gpubw.so") if OUT_DIR else ""):
+            self.assertNotIn(b"P1_OCL_PATH", rd(os.path.join(OUT_DIR, "libpart1_gpubw.so") if OUT_DIR else "", "rb"))
 
 class TestJ_OpenclHelper(unittest.TestCase):
     """P1-03J items 3 and 4 (P1-03I F01-F04). The tests of this class fail on 0.2.3."""
