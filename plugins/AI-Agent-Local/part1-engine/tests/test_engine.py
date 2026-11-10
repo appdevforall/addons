@@ -1524,14 +1524,15 @@ class TestH_C1_StaticProbe(unittest.TestCase):
         src = rd(os.path.join(SRC, "src", "membw.c")) + rd(os.path.join(SRC, "src", "part1_common.h"))
         lits = set(re.findall(r'"((?:ro|persist|sys|vendor|net|gsm|dhcp|init|service)\.[A-Za-z0-9._]+)"', src))
         self.assertEqual(sorted(lits), sorted(PROP_NAMES))
-        binary = os.path.join(OUT_DIR, "libpart1_membw.so") if OUT_DIR else ""
-        if os.path.exists(binary):
-            found = set(m.decode() for m in re.findall(rb"(?:ro|persist|sys|vendor|net|gsm|dhcp|init|service)\.[A-Za-z0-9._]{3,}", open(binary, "rb").read()))
-            self.assertEqual(sorted(found), sorted(PROP_NAMES))
         for extra in (["--prop", "ro.serialno"], ["--property", "ro.build.fingerprint"], ["--props", "ro.serialno,ro.x"]):
             rc, rec, out, err = self.S(["--static-probe", "--json"] + extra)
             self.assertEqual(rc, 2, extra)                                      # not extendable from the command line
             self.assertNotIn("serialno", json.dumps(rec.get("properties", {})))
+        binary = os.path.join(OUT_DIR, "libpart1_membw.so") if OUT_DIR else ""
+        if not os.path.exists(binary):
+            self.skipTest("the binary half of this check is skipped (the source half passed): " + OUT_SKIP)
+        found = set(m.decode() for m in re.findall(rb"(?:ro|persist|sys|vendor|net|gsm|dhcp|init|service)\.[A-Za-z0-9._]{3,}", open(binary, "rb").read()))
+        self.assertEqual(sorted(found), sorted(PROP_NAMES))
 
     def test_the_gate_does_not_apply_and_the_cpuset_seen_is_recorded(self):
         rc, rec, out, err = self.S(env={"P1_CPUSET_PATH": cpuset_fg()})
@@ -2155,8 +2156,9 @@ class TestI5_OpenclHelper(unittest.TestCase):
         src = rd(os.path.join(ROOT, "src", "gpubw", "gpubw.c"))
         i = src.index("static const char *gp_ocl_path")
         self.assertIn("#ifdef P1_HOST_BUILD", src[i:i + 200])
-        if os.path.exists(os.path.join(OUT_DIR, "libpart1_gpubw.so") if OUT_DIR else ""):
-            self.assertNotIn(b"P1_OCL_PATH", rd(os.path.join(OUT_DIR, "libpart1_gpubw.so") if OUT_DIR else "", "rb"))
+        if not os.path.exists(os.path.join(OUT_DIR, "libpart1_gpubw.so") if OUT_DIR else ""):
+            self.skipTest("the binary half of this check is skipped (the source half passed): " + OUT_SKIP)
+        self.assertNotIn(b"P1_OCL_PATH", rd(os.path.join(OUT_DIR, "libpart1_gpubw.so"), "rb"))
 
 class TestJ_OpenclHelper(unittest.TestCase):
     """P1-03J items 3 and 4 (P1-03I F01-F04). The tests of this class fail on 0.2.3."""
