@@ -802,6 +802,32 @@ class QuickTierTest {
     }
 
     @Test
+    fun givenTheTierIsDeactivatedJustAfterThePinProbeRan_whenTheStaticInputIsAboutToBeFolded_thenItIsNotWritten() {
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "i${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        val tier = r.tier()
+        var writesAtClose = -1
+        r.fg.fg = {
+            if (r.engine.commands.size == 1 && writesAtClose < 0) { writesAtClose = ops.replaced.size; tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
+            true
+        }
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason)
+        assertEquals("static.json was written after the deactivation", writesAtClose, ops.replaced.size)
+        assertEquals(1, r.engine.commands.size)
+    }
+
+    @Test
+    fun givenTheTierIsDeactivatedWhileRunResetsTheEngineCancelState_whenRunContinues_thenItStopsBeforeTheQuestion() {
+        val r = rig()
+        val tier = r.tier()
+        r.engine.onReset = { tier.cancel(StopReason.PLUGIN_DEACTIVATED) } // the cancel that run() would otherwise erase (R-F05)
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason)
+        assertEquals(0, r.ui.asked); assertTrue(r.engine.commands.isEmpty())
+    }
+
+    @Test
     fun givenTheTierIsDeactivatedWhileTheGatesBeforeTheQuestionRun_whenRunReachesTheQuestion_thenNoQuestionIsAsked() {
         val r = rig()
         val tier = r.tier()

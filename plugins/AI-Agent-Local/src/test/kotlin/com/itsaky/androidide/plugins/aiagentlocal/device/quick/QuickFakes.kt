@@ -122,7 +122,8 @@ class ScriptedEngine(var serve: (EngineCommand) -> EngineResult) : EngineExecuto
     }
 
     override fun cancel() { cancelCalls++; cancelled = true; running = false }
-    override fun resetCancel() { resets++; cancelled = false }
+    var onReset: () -> Unit = {}
+    override fun resetCancel() { resets++; cancelled = false; onReset() }
 }
 
 /** Recorded D5 and D1 engine lines, served with the packaged engine's version and with the tag the app starts. */
