@@ -735,7 +735,7 @@ class LocalLlmBackendTest {
 
     // ---- the Part 1 hook (P1-04A2) -------------------------------------------------------------------------------------
 
-    private fun backendWithHook(source: NativeModelSource, engine: ModelResidencyEngine, hook: suspend () -> Unit) =
+    private fun backendWithHook(source: NativeModelSource, engine: ModelResidencyEngine, hook: suspend (Boolean) -> Unit) =
         LocalLlmBackend(pluginContext, { null }, source, engine, FakeWatcher(), beforeModelLoad = hook)
 
     @Test
@@ -755,6 +755,26 @@ class LocalLlmBackendTest {
         val backend = backendWithHook(source, engine) { throw IllegalStateException("part 1 bug") }
         runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
         assertEquals(1, engine.loadCount)
+    }
+
+    @Test
+    fun givenAHookThatThrowsAnError_whenAModelLoads_thenTheLoadGoesOnAndNothingIsRaised() {
+        // F11: a linkage or initialiser Error from Part 1 must not fail the load either
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        val backend = backendWithHook(source, engine) { throw ExceptionInInitializerError("part 1 init") }
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        assertEquals(1, engine.loadCount)
+    }
+
+    @Test
+    fun givenAnotherModelIsResident_whenAModelLoads_thenTheHookIsToldAndOtherwiseItIsNot() {
+        // F10: switching from model A to model B tells the hook that a model is resident
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel()), OTHER_CONTENT_URI to handleFor(chatModel())))
+        val told = ArrayList<Boolean>()
+        val backend = backendWithHook(source, FakeEngine()) { told.add(it) }
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI); backend.ensureModelLoaded(OTHER_CONTENT_URI) }
+        assertEquals(listOf(false, true), told)
     }
 
     @Test

@@ -63,9 +63,11 @@ class LocalLlmBackend(
     /**
      * Called under [generationMutex] when a model is about to be loaded (not when it is already resident), before anything is opened
      * or loaded. Part 1's quick measurement (tier T1) runs here when its switch is on; the default `null` does nothing. A failure in
-     * the hook is logged and the load goes on; it never fails or hangs the load.
+     * the hook (an `Error` too) is logged and the load goes on; it never fails the load. It is bounded, not instant: on the first load of
+     * a session it can hold the load for up to 15 s (waiting for T0), 90 s (the question) and 180 s (the pass, from "Run now"). The
+     * argument is true when a different model is still resident.
      */
-    private val beforeModelLoad: (suspend () -> Unit)? = null,
+    private val beforeModelLoad: (suspend (otherModelResident: Boolean) -> Unit)? = null,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ActiveModelReportingBackend,
     ContextWindowReportingBackend {
 
@@ -447,10 +449,10 @@ class LocalLlmBackend(
 
         beforeModelLoad?.let { hook ->
             try {
-                hook()
+                hook(modelLoaded) // true: another model is still resident (the same ref returned above)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) { // an Error (a linkage or class-init failure on an older host) must not fail the load either
                 context.logger.warn("Part 1 hook failed (${e.javaClass.simpleName}); the model load goes on")
             }
         }

@@ -32,6 +32,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
     /** Part 1 (device characterization): inert unless Experiments and the plugin preference are both on. Built per activation. */
     @Volatile private var part1: Part1Controller? = null
 
+    /** The controller of the last deactivation: a new activation waits for its T0 thread to end before it binds the store. */
+    @Volatile private var part1Closed: Part1Controller? = null
+
     /** Keeps [backend] registered with AI Core across its restarts, and reports setting changes. */
     private lateinit var registration: LlmBackendRegistration
 
@@ -108,7 +111,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
                 runtimeFactory = { AndroidPart1Runtime.create(context) },
                 background = { r -> Thread(r, "part1-t0").apply { isDaemon = true }.start() },
                 log = { context.logger.info("Part1: $it") },
+                previous = part1Closed,
             )
+            part1Closed = null
             part1 = controller
             val local = LocalLlmBackend(context, sharedPromptConfig::configIfLoaded, beforeModelLoad = controller::beforeModelLoad)
             backend = local
@@ -169,6 +174,7 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
     private fun releaseBackend() {
         if (::registration.isInitialized) registration.stop()
         part1?.close()
+        part1Closed = part1 ?: part1Closed
         part1 = null
         backend?.close()
         backend = null

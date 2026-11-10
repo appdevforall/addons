@@ -221,10 +221,10 @@ class Part1ControllerTest {
         val c = CRig(); c.rig.fg.fg = { false } // not in the foreground: deferred
         val ctl = c.controller(); ctl.onActivated()
         runBlocking { ctl.beforeModelLoad() }
-        assertEquals(1, c.rig.ui.asked); assertTrue(c.rig.engine.commands.isEmpty())
+        assertEquals(0, c.rig.ui.asked); assertTrue(c.rig.engine.commands.isEmpty()) // F26: not asked while the foreground gate fails
         c.rig.fg.fg = { true }
         runBlocking { ctl.beforeModelLoad() }
-        assertEquals(2, c.rig.ui.asked); assertEquals(6, c.rig.engine.commands.size)
+        assertEquals(1, c.rig.ui.asked); assertEquals(6, c.rig.engine.commands.size)
     }
 
     @Test
@@ -303,4 +303,191 @@ class Part1ControllerTest {
         runBlocking { ctl.beforeModelLoad() }
         assertEquals(0, c.rig.ui.asked)
     }
+
+    // ---- P1-04A2F ---------------------------------------------------------------------------------------------------
+
+    @Test
+    fun givenTheLastT0ShowedThatTheEngineCannotRun_whenTheModelLoads_thenNoQuestionOneLogLineAndOneSkippedRecord() {
+        // F05
+        val cases = listOf<Pair<String, (CRig) -> Unit>>(
+            "exec_blocked" to { c -> c.phone.engine.static = { EngineResult.ExecBlocked("error=13") } },
+            "program_missing" to { c -> c.phone.engine.gpu = { EngineResult.ProgramMissing("x") } },
+            "engine_mismatch" to { c -> c.phone.engine.static = { EngineResult.EngineMismatch("part1-engine/0.2.3") } },
+        )
+        for ((reason, setup) in cases) {
+            val c = CRig(); setup(c)
+            val ctl = c.controller(); ctl.onActivated()
+            runBlocking { ctl.beforeModelLoad(); ctl.beforeModelLoad() }
+            assertEquals(reason, 0, c.rig.ui.asked)
+            assertTrue(reason, c.rig.engine.commands.isEmpty())
+            assertEquals(reason, 1, c.logs.count { it.contains("not offered") })
+            val rec = c.rig.store.readPassRecord()!!
+            assertEquals("skipped", rec["status"]); assertEquals(reason, rec["reason"])
+        }
+    }
+
+    @Test
+    fun givenAWorkingEngineAndACompletedPass_whenAnotherLoadComes_thenTheCompletedRecordIsNotOverwritten() {
+        val c = CRig(); val ctl = c.controller(); ctl.onActivated()
+        runBlocking { ctl.beforeModelLoad() }
+        assertEquals("completed", c.rig.store.readPassRecord()!!["status"])
+        val next = CRig(c.root); next.phone.engine.static = { EngineResult.ExecBlocked("x") }
+        val n = next.controller(); n.onActivated(); runBlocking { n.beforeModelLoad() }
+        assertEquals("completed", next.rig.store.readPassRecord()!!["status"])
+    }
+
+    @Test
+    fun givenTheCallingCoroutineIsCancelledWhileWaitingForT0_whenItWaits_thenItReturnsAtOnce() {
+        // F07: the wait is interruptible (it used to block for the whole 15 s)
+        val c = CRig(); c.runBackground = false
+        val ctl = c.controller(t0WaitMs = 30_000); ctl.onActivated()
+        var thrown: Throwable? = null
+        val t0 = System.nanoTime()
+        runBlocking {
+            val job = launch(Dispatchers.Default) {
+                try { ctl.beforeModelLoad() } catch (e: CancellationException) { thrown = e; throw e }
+            }
+            kotlinx.coroutines.delay(200)
+            job.cancel(); job.join()
+        }
+        assertNotNull(thrown)
+        assertTrue("took ${(System.nanoTime() - t0) / 1_000_000} ms", (System.nanoTime() - t0) < 10_000_000_000L)
+    }
+
+    @Test
+    fun givenTheCallingCoroutineIsCancelledDuringAnInlineT0_whenAProbeRuns_thenTheProbeIsInterruptedAndTheCancellationIsPassedOn() {
+        val c = CRig(); c.experiments = false
+        val ctl = c.controller(); ctl.onActivated()
+        c.experiments = true
+        val inProbe = CountDownLatch(1)
+        val interrupted = java.util.concurrent.atomic.AtomicBoolean(false)
+        c.phone.engine.static = {
+            inProbe.countDown()
+            try { Thread.sleep(30_000) } catch (e: InterruptedException) { interrupted.set(true); Thread.currentThread().interrupt() }
+            EngineResult.Cancelled
+        }
+        var thrown: Throwable? = null
+        runBlocking {
+            val job = launch(Dispatchers.Default) {
+                try { ctl.beforeModelLoad() } catch (e: CancellationException) { thrown = e; throw e }
+            }
+            assertTrue(inProbe.await(10, TimeUnit.SECONDS))
+            job.cancel(); job.join()
+        }
+        assertNotNull(thrown); assertTrue(interrupted.get())
+        assertEquals(0, c.rig.ui.asked)
+    }
+
+    @Test
+    fun givenAnotherModelIsResident_whenTheHookRuns_thenT1IsDeferredAndTheNextLoadWithNoModelAsks() {
+        // F10
+        val c = CRig(); val ctl = c.controller(); ctl.onActivated()
+        runBlocking { ctl.beforeModelLoad(otherModelResident = true) }
+        assertEquals(0, c.rig.ui.asked)
+        assertTrue(c.logs.any { it.contains("model_resident") })
+        runBlocking { ctl.beforeModelLoad(otherModelResident = false) }
+        assertEquals(1, c.rig.ui.asked)
+    }
+
+    @Test
+    fun givenAnErrorFromAFake_whenTheEntryPointsRun_thenItIsALogLineWithTheClassNameOnly() {
+        // F11
+        val a = CRig(); a.factoryFails = null
+        val boom = Part1Controller(Part1Switch { true }, { throw NoClassDefFoundError("secret/Path") }, { it.run() }, { a.logs.add(it) })
+        boom.onActivated()
+        assertTrue(a.logs.any { it.contains("T0 failed (NoClassDefFoundError)") })
+        assertFalse(a.logs.any { it.contains("secret") })
+        val b = CRig(); b.phone.engine.static = { throw ExceptionInInitializerError("x") }
+        val ctl = b.controller(); ctl.onActivated()
+        assertTrue(b.logs.any { it.contains("T0 failed (ExceptionInInitializerError)") })
+        val c = CRig()
+        val ctl2 = Part1Controller(
+            Part1Switch { true },
+            { Part1Runtime(c.phone.reader(), c.rig.store, { c.rig.index }, EngineRunner.EXPECTED_ENGINE_VERSION, "1", { throw LinkageError("tier") }) },
+            { it.run() }, { c.logs.add(it) },
+        )
+        ctl2.onActivated()
+        runBlocking { ctl2.beforeModelLoad() } // nothing reaches the caller
+        assertTrue(c.logs.any { it.contains("T1 failed (LinkageError)") })
+        val d = Part1Controller(Part1Switch { throw OutOfMemoryError() }, { throw AssertionError() }, { throw AssertionError() }, { })
+        runCatching { d.onActivated() }.let { assertTrue("an Error from the switch reaches only the logger", it.isSuccess) }
+    }
+
+    @Test
+    fun givenCloseDuringT0_whenTheT0ThreadGoesOn_thenItWritesNothingAfterTheMark() {
+        // F12
+        val c = CRig()
+        val ctl = c.controller()
+        val orig = c.phone.engine.static
+        c.phone.engine.static = { ctl.close(); orig() } // the plugin is deactivated while T0 reads
+        ctl.onActivated()
+        assertFalse(File(c.rig.dir, "static.json").exists())
+        assertFalse(File(c.rig.dir, "key.txt").exists())
+        assertFalse(File(c.rig.dir, "device-descriptor-v0.2.json").exists())
+    }
+
+    @Test
+    fun givenAnOldT0ThatDoesNotEnd_whenAnActivationFollows_thenItBindsNothingAndDoesNoPart1Work() {
+        val c = CRig()
+        val gate = CountDownLatch(1)
+        val orig = c.phone.engine.static
+        val inProbe = CountDownLatch(1)
+        c.phone.engine.static = { inProbe.countDown(); gate.await(20, TimeUnit.SECONDS); orig() }
+        var old: Thread? = null
+        val oldCtl = Part1Controller(Part1Switch { true }, runtimeOf(c), { r -> old = Thread(r).also { it.start() } }, { c.logs.add(it) })
+        oldCtl.onActivated()
+        assertTrue(inProbe.await(10, TimeUnit.SECONDS))
+        oldCtl.close()
+        val fresh = CRig(File(tmp.root, "fresh${System.nanoTime()}").also { it.mkdirs() })
+        val newCtl = Part1Controller(Part1Switch { true }, { fresh.runtime() }, { it.run() }, { fresh.logs.add(it) }, previous = oldCtl, previousWaitMs = 100)
+        newCtl.onActivated()
+        assertEquals(0, fresh.factoryCalls)
+        assertFalse(File(fresh.rig.dir, "key.txt").exists())
+        assertTrue(fresh.logs.any { it.contains("earlier T0 is still running") })
+        gate.countDown(); old?.join(10_000)
+    }
+
+    @Test
+    fun givenAnOldT0ThatEndsInTime_whenAnActivationFollows_thenTheNewOneRunsItsT0() {
+        val c = CRig()
+        val gate = CountDownLatch(1)
+        val orig = c.phone.engine.static
+        val inProbe = CountDownLatch(1)
+        c.phone.engine.static = { inProbe.countDown(); gate.await(20, TimeUnit.SECONDS); orig() }
+        var old: Thread? = null
+        val oldCtl = Part1Controller(Part1Switch { true }, runtimeOf(c), { r -> old = Thread(r).also { it.start() } }, { c.logs.add(it) })
+        oldCtl.onActivated(); assertTrue(inProbe.await(10, TimeUnit.SECONDS)); oldCtl.close()
+        val fresh = CRig(File(tmp.root, "fresh${System.nanoTime()}").also { it.mkdirs() })
+        val newCtl = Part1Controller(Part1Switch { true }, { fresh.runtime() }, { it.run() }, { fresh.logs.add(it) }, previous = oldCtl, previousWaitMs = 10_000)
+        Thread { Thread.sleep(200); gate.countDown() }.start()
+        newCtl.onActivated()
+        assertTrue(File(fresh.rig.dir, "static.json").exists())
+        old?.join(10_000)
+    }
+
+    @Test
+    fun givenTheHostHasNoBuildStatusService_whenTheModelLoads_thenT1IsNotOfferedAndTheLineIsLoggedOnce() {
+        // F16
+        val c = CRig()
+        val ctl = Part1Controller(
+            Part1Switch { true },
+            { Part1Runtime(c.phone.reader(), c.rig.store, { c.rig.index }, EngineRunner.EXPECTED_ENGINE_VERSION, "1", { c.rig.tier() }, ideGateAvailable = false) },
+            { it.run() }, { c.logs.add(it) },
+        )
+        ctl.onActivated()
+        runBlocking { ctl.beforeModelLoad(); ctl.beforeModelLoad() }
+        assertEquals(0, c.rig.ui.asked); assertTrue(c.rig.engine.commands.isEmpty())
+        assertEquals(1, c.logs.count { it.contains("ide_gate_unavailable") })
+    }
+
+    @Test
+    fun givenClosedDuringAPass_whenCloseRuns_thenThePassEndsCancelledWithPluginDeactivated() {
+        val c = CRig(); val ctl = c.controller(); ctl.onActivated()
+        c.rig.engine.beforeRun = { cmd -> if (c.rig.tagOf(cmd) == "C2-read-k0") ctl.close() }
+        runBlocking { ctl.beforeModelLoad() }
+        val rec = c.rig.store.readPassRecord()
+        assertEquals("cancelled", rec!!["status"]); assertEquals("plugin_deactivated", rec["reason"])
+    }
+
+    private fun runtimeOf(c: CRig): () -> Part1Runtime = { c.runtime() }
 }

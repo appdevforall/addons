@@ -18,6 +18,11 @@ class StaticReadResult(
     /** Facts that have no slot in `part1-static-v1`: the engine's `opencl_child` list, the `public.libraries.txt` hint. */
     val facts: Map<String, Any?>,
     val elapsedMs: Long,
+    /**
+     * Set when either probe showed that the engine cannot run on this phone: `exec_blocked`, `program_missing` or `engine_mismatch`
+     * (the first of the static and GPU probes that shows one). Null otherwise. T1 is not offered then.
+     */
+    val engineUnusable: String? = null,
 ) {
     /** Never prints the static object: it holds `Build.FINGERPRINT`. */
     override fun toString() = "StaticReadResult(${elapsedMs} ms, ${(static["cpus"] as? List<*>)?.size ?: 0} CPUs)"
@@ -121,8 +126,11 @@ class StaticReader(
         val facts = LinkedHashMap<String, Any?>()
 
         // ---- the engine's two probes
-        val sp = probeObject(engine.run(EngineCommands.staticProbe()), "part1-staticprobe-v1", "the static probe")
-        val gp = probeObject(engine.run(EngineCommands.gpuProbe()), "part1-gpuprobe-v1", "the GPU probe")
+        val spResult = engine.run(EngineCommands.staticProbe())
+        val gpResult = engine.run(EngineCommands.gpuProbe())
+        val sp = probeObject(spResult, "part1-staticprobe-v1", "the static probe")
+        val gp = probeObject(gpResult, "part1-gpuprobe-v1", "the GPU probe")
+        val engineUnusable = engineUnusableCode(spResult) ?: engineUnusableCode(gpResult)
         val spObj = (sp as? Probe.Object)?.json
         val gpObj = (gp as? Probe.Object)?.json
         val spWhy = (sp as? Probe.Missing)?.reason
@@ -308,10 +316,17 @@ class StaticReader(
         static["unavailable"] = un
         // one plain tree: Int becomes Long, keys are visited in order, a value no JSON can hold is refused here
         val tree = Json.obj(Json.fromOrg(Json.toOrg(static)), "static")
-        return StaticReadResult(tree, cond, memAvail, origins, facts, elapsed)
+        return StaticReadResult(tree, cond, memAvail, origins, facts, elapsed, engineUnusable)
     }
 
     // ---- helpers ------------------------------------------------------------------------------------------------
+
+    private fun engineUnusableCode(r: EngineResult): String? = when (r) {
+        is EngineResult.ExecBlocked -> "exec_blocked"
+        is EngineResult.ProgramMissing -> "program_missing"
+        is EngineResult.EngineMismatch -> "engine_mismatch"
+        else -> null
+    }
 
     private sealed class Probe {
         class Object(val json: Map<String, Any?>) : Probe()
