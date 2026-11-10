@@ -100,9 +100,11 @@ class Part1Store(
         const val PROBE_FACTS = "probe-facts.json"
         const val MARKER = "bind-failed.marker"
         const val PROBE_FACTS_FORMAT = "part1-probe-facts-v1"
+        const val PASS = "t1-pass.json"
+        const val PASS_FORMAT = "part1-pass-v1"
         const val DEFAULT_MAX_TOTAL_BYTES = 1024L * 1024L
         const val MATCH_SOURCE = "in-app device matcher (DeviceIndexMatcher) over the identity stored in static.json: platform, board, device, hardware"
-        private val LIVE = listOf(STATIC, ROWS, DBRECORD, DESCRIPTOR, PROBE_FACTS, KEY)
+        private val LIVE = listOf(STATIC, ROWS, DBRECORD, DESCRIPTOR, PROBE_FACTS, PASS, KEY)
     }
 
     private val writer = AtomicWriter(ops)
@@ -337,6 +339,21 @@ class Part1Store(
     }
 
     fun readProbeFacts(): Map<String, Any?>? = readObject(PROBE_FACTS) { it["format"] == PROBE_FACTS_FORMAT }
+
+    /**
+     * Writes `t1-pass.json`: the record of the last quick-measurement (T1) pass that ran (status, reason, times, what each row came to,
+     * and the pin probe object as the engine gave it, which the T0 read folds into the static input again). [record] is the body; the
+     * store adds the format, the bound engine id and [atEpochMs]. Same atomic rule and size cap as the other files; archived with the
+     * key. Needs a successful [bindDevice].
+     */
+    fun writePassRecord(record: Map<String, Any?>, atEpochMs: Long): Boolean {
+        val bound = engineId ?: return false
+        val tree = linkedMapOf<String, Any?>("format" to PASS_FORMAT, "engine_version" to bound, "time_epoch_ms" to atEpochMs)
+        for ((k, v) in record) if (k !in tree) tree[k] = v
+        return writeObject(PASS, tree) { it["format"] == PASS_FORMAT }
+    }
+
+    fun readPassRecord(): Map<String, Any?>? = readObject(PASS) { it["format"] == PASS_FORMAT && it["engine_version"] == engineId }
 
     /** Appends one row record (a `part1-rows-v1` object, with `engine_version` equal to the bound engine's id). */
     fun appendRow(record: Map<String, Any?>): AppendResult {

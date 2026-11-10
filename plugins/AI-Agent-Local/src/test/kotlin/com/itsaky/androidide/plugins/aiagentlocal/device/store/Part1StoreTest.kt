@@ -652,4 +652,32 @@ class Part1StoreTest {
         val back = Json.obj(s.readProbeFacts()!!["facts"], "facts")
         assertEquals(emptyList<String>(), Json.diff(cand, back["opencl_child"]))
     }
+
+    @Test
+    fun givenAPassRecord_whenWrittenReadAndTheKeyChanges_thenItIsAtomicBoundToTheEngineAndArchivedWithTheKey() {
+        val s = store()
+        assertFalse(s.writePassRecord(mapOf("status" to "completed"), 1L)) // not bound
+        s.bindDevice(fp, engine)
+        assertTrue(s.writePassRecord(linkedMapOf("status" to "completed", "pin_probe" to linkedMapOf("format" to "x")), 1_700_000_000_123L))
+        assertFalse(File(dir(), "t1-pass.json").let { File(dir(), "t1-pass.json.tmp").exists() })
+        val back = s.readPassRecord()!!
+        assertEquals("part1-pass-v1", back["format"]); assertEquals(engine, back["engine_version"]); assertEquals("completed", back["status"])
+        assertEquals(1_700_000_000_123L, back["time_epoch_ms"])
+        // a record of another format, or of another engine id, reads as absent
+        File(dir(), "t1-pass.json").writeText("""{"format":"other","status":"completed"}""")
+        assertNull(s.readPassRecord())
+        File(dir(), "t1-pass.json").writeText("""{"format":"part1-pass-v1","engine_version":"part1-engine/0.2.3","status":"completed"}""")
+        assertNull(s.readPassRecord())
+        // the caller's body cannot override the format or the engine
+        assertTrue(s.writePassRecord(mapOf("format" to "x", "engine_version" to "y", "status" to "ended_early"), 2L))
+        assertEquals("part1-pass-v1", s.readPassRecord()!!["format"])
+        // archived with the key: the new key starts without a pass record
+        val r = store().bindDevice("$fp-B", engine) as BindResult.Changed
+        assertTrue(File(r.archive, "t1-pass.json").isFile)
+        assertFalse(File(dir(), "t1-pass.json").exists())
+        val b = store(); b.bindDevice("$fp-B", engine); assertNull(b.readPassRecord())
+        // capped like the other files
+        val capped = Part1Store(File(tmp.root, "cappedpass"), FileOps.Real, 100, 3); capped.bindDevice(fp, engine)
+        assertFalse(capped.writePassRecord(mapOf("pad" to "x".repeat(300)), 1L))
+    }
 }

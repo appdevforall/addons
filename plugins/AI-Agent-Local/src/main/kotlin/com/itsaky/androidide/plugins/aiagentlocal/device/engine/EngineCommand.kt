@@ -69,12 +69,15 @@ object EngineCommands {
         )
     }
 
-    /** `C2-read-k<cluster>`: one thread on [cpu], the single-core read of cluster [cluster] (tier T1). */
-    fun c2Read(cluster: Int, cpu: Int, memLimitMib: Long): EngineCommand {
+    /**
+     * `C2-read-k<cluster>`: one thread on [cpu], the single-core read of cluster [cluster] (tier T1). With [allowUnpinned] the row runs
+     * unpinned (and says so) when the pin does not hold within the engine's 5 s retry window (`--allow-unpinned`, ENGINE.md P1).
+     */
+    fun c2Read(cluster: Int, cpu: Int, memLimitMib: Long, allowUnpinned: Boolean = false): EngineCommand {
         require(cluster >= 0) { "cluster must not be negative" }
         val tag = "C2-read-k$cluster"
         return cpuRow(tag, listOf("--kernel", "K02", "--threads", "1", "--cores", cpuList(listOf(cpu), 1).joinToString("+"),
-            "--warmup-s", "3", "--window-s", "6", "--runs", "1", "--tag", tag), memLimitMib)
+            "--warmup-s", "3", "--window-s", "6", "--runs", "1") + (if (allowUnpinned) listOf("--allow-unpinned") else emptyList()) + listOf("--tag", tag), memLimitMib)
     }
 
     /** `C3-read-2fast`: two threads on the CPUs [a] and [b]. */

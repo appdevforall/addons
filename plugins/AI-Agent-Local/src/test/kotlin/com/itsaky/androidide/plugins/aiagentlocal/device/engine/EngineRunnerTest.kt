@@ -405,4 +405,70 @@ class EngineRunnerTest {
         assertTrue(Recorded.names().size >= 11)
         for (n in Recorded.names()) assertTrue(n, Recorded.bytes(n).isNotEmpty())
     }
+
+    // ---- cancel (P1-04A2) ----------------------------------------------------------------------------------------
+
+    /** A process that runs until it is destroyed: [waitFor] blocks. */
+    private class BlockingProcess : RunningProcess {
+        val started = CountDownLatch(1)
+        private val dead = CountDownLatch(1)
+        @Volatile var destroyed = false
+        override val stdout: java.io.InputStream = ByteArrayInputStream(ByteArray(0))
+        override val stderr: java.io.InputStream = ByteArrayInputStream(ByteArray(0))
+        override fun closeStdin() {}
+        override fun waitFor(timeoutMs: Long): Boolean { started.countDown(); return dead.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        override fun exitValue() = 143
+        override fun destroy() { destroyed = true; dead.countDown() }
+        override fun destroyForcibly() { destroyed = true; dead.countDown() }
+        override fun isAlive() = dead.count > 0
+    }
+
+    @Test
+    fun givenARowIsRunning_whenCancelled_thenTheProcessIsDestroyedTheResultIsCancelledAndLaterRunsAreRefusedUntilReset() {
+        val blocking = BlockingProcess()
+        val started = java.util.concurrent.atomic.AtomicInteger()
+        val launcher = object : ProcessLauncher {
+            override fun start(argv: List<String>, workDir: File, env: Map<String, String>): RunningProcess {
+                started.incrementAndGet()
+                return if ("--static-probe" in argv) FakeProcess(stdout = Recorded.staticProbe024()) else blocking
+            }
+        }
+        val runner = EngineRunner(FakeLocator(), launcher, work())
+        var result: EngineResult? = null
+        val t = Thread { result = runner.run(EngineCommands.c2Read(0, 0, 1694)) }
+        t.start()
+        assertTrue(blocking.started.await(10, java.util.concurrent.TimeUnit.SECONDS))
+        runner.cancel()
+        t.join(10_000)
+        assertTrue(!t.isAlive)
+        assertEquals(EngineResult.Cancelled, result)
+        assertTrue(blocking.destroyed)
+        assertEquals(2, started.get())
+        // a call after the cancel starts nothing
+        assertEquals(EngineResult.Cancelled, runner.run(EngineCommands.c2Read(0, 0, 1694)))
+        assertEquals(2, started.get())
+        // reset: runs again
+        runner.resetCancel()
+        val (r2, _) = runnerFor(work()) { recorded("d5-row-c2-ok-v0.2.1.out") }
+        assertTrue(r2.run(EngineCommands.c2Read(0, 0, 1694)) is EngineResult.Ok)
+    }
+
+    @Test
+    fun givenCancelBeforeAnyRun_whenRun_thenNothingIsStartedAndResetClearsIt() {
+        val (runner, launcher) = runnerFor(work()) { recorded("d5-row-c2-ok-v0.2.1.out") }
+        runner.cancel()
+        assertEquals(EngineResult.Cancelled, runner.run(EngineCommands.staticProbe()))
+        assertEquals(0, launcher.starts.size)
+        runner.resetCancel()
+        assertTrue(runner.run(EngineCommands.c2Read(0, 0, 1694)) is EngineResult.Ok)
+    }
+
+    @Test
+    fun givenAProcessThatFinishedBeforeTheCancelWasSeen_whenCancelled_thenItsOutputIsNotUsed() {
+        val (runner, _) = runnerFor(work()) { recorded("d5-row-c2-ok-v0.2.1.out") }
+        runner.run(EngineCommands.staticProbe()) // verified
+        runner.cancel()
+        // cancel() after the version check: the next call is refused at once; a row that ends after a cancel is Cancelled, not Ok
+        assertEquals(EngineResult.Cancelled, runner.run(EngineCommands.c2Read(0, 0, 1694)))
+    }
 }

@@ -327,6 +327,7 @@ class StaticReader(
         is EngineResult.ExecBlocked -> Probe.Missing("$what could not be started (exec_blocked)")
         is EngineResult.ProgramMissing -> Probe.Missing("$what could not be started (the program file was not found)")
         is EngineResult.NotStarted -> Probe.Missing("$what was not started (${r.message})")
+        is EngineResult.Cancelled -> Probe.Missing("$what was cancelled")
         is EngineResult.TimeoutKilled -> Probe.Missing("$what was killed at its time limit")
         is EngineResult.EngineMismatch -> Probe.Missing("the engine version is not the expected one (found ${r.found ?: "none"})")
     }

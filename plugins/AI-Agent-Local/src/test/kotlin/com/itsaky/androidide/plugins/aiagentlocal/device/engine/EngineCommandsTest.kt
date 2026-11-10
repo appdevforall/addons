@@ -64,4 +64,15 @@ class EngineCommandsTest {
         assertEquals("part1_membw", EngineProgram.MEMBW.libraryName)
         assertEquals("part1_gpubw", EngineProgram.GPUBW.libraryName)
     }
+
+    @Test
+    fun givenAllowUnpinned_whenAC2RowIsBuilt_thenTheOptionSitsBeforeTheTagAndOtherwiseIsAbsent() {
+        val plain = EngineCommands.c2Read(0, 0, 100)
+        assertEquals(false, plain.args.contains("--allow-unpinned"))
+        val un = EngineCommands.c2Read(2, 6, 100, allowUnpinned = true)
+        assertEquals("C2-read-k2", un.tag)
+        val a = un.args
+        assertEquals(listOf("--warmup-s", "3", "--window-s", "6", "--runs", "1", "--allow-unpinned", "--tag", "C2-read-k2"), a.subList(a.indexOf("--warmup-s"), a.indexOf("--tag") + 2))
+        assertEquals(plain.args.size + 1, EngineCommands.c2Read(0, 0, 100, allowUnpinned = true).args.size)
+    }
 }

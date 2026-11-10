@@ -8,6 +8,15 @@ import java.io.InputStream
 /** Runs engine commands; implemented by [EngineRunner], replaced by fakes in tests of the code that uses it. */
 interface EngineExecutor {
     fun run(command: EngineCommand): EngineResult
+
+    /**
+     * Destroys the process that is running now (if any) and makes this call and every later [run] return [EngineResult.Cancelled] until
+     * [resetCancel]. May be called from any thread; never blocks for long. The default does nothing (fakes that never cancel).
+     */
+    fun cancel() {}
+
+    /** Clears a [cancel]; called by whoever starts a new series of runs. */
+    fun resetCancel() {}
 }
 
 /**
@@ -63,11 +72,24 @@ class EngineRunner(
     private var verified = false
     private var mismatch: EngineResult.EngineMismatch? = null
 
+    @Volatile private var cancelled = false
+    @Volatile private var current: RunningProcess? = null
+
+    override fun cancel() {
+        cancelled = true
+        current?.let { kill(it) }
+    }
+
+    override fun resetCancel() {
+        cancelled = false
+    }
+
     /** Runs [command] (after the one-time version check) and reports the outcome. */
     @Synchronized
     override fun run(command: EngineCommand): EngineResult {
         try {
             if (onMainThread()) return EngineResult.NotStarted("called on the main thread; nothing was started")
+            if (cancelled) return EngineResult.Cancelled
             mismatch?.let { return it }
             if (!verified) {
                 val probe = if (command.kind == CommandKind.STATIC_PROBE) command else EngineCommands.staticProbe()
@@ -104,6 +126,20 @@ class EngineRunner(
         } catch (e: Exception) {
             return EngineResult.ExecBlocked("${e.javaClass.simpleName}: ${e.message.orEmpty().take(200)}")
         }
+        current = proc
+        if (cancelled) { // a cancel that came between the check in run() and the start above
+            kill(proc)
+            current = null
+            return EngineResult.Cancelled
+        }
+        try {
+            return supervise(proc, command)
+        } finally {
+            current = null
+        }
+    }
+
+    private fun supervise(proc: RunningProcess, command: EngineCommand): EngineResult {
         val out = TailCapture(OUTPUT_CAP_BYTES)
         val err = TailCapture(OUTPUT_CAP_BYTES)
         val readers = try {
@@ -119,9 +155,10 @@ class EngineRunner(
                 kill(proc)
                 closeQuietly(proc.stdout); closeQuietly(proc.stderr)
                 readers.forEach { it.join(JOIN_MS) }
-                return EngineResult.TimeoutKilled
+                return if (cancelled) EngineResult.Cancelled else EngineResult.TimeoutKilled
             }
             readers.forEach { it.join(JOIN_MS) }
+            if (cancelled) return EngineResult.Cancelled
             return classify(proc.exitValue(), out, err, command)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()

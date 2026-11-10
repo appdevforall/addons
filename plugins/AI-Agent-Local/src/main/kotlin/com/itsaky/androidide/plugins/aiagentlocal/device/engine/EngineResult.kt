@@ -49,6 +49,14 @@ sealed class EngineResult {
         override fun toString() = "NotStarted($message)"
     }
 
+    /**
+     * The pass was cancelled ([EngineExecutor.cancel]): the running process, if any, was destroyed and nothing more was started. No partial
+     * result is used. Never recorded as a fact about the phone.
+     */
+    object Cancelled : EngineResult() {
+        override fun toString() = "Cancelled"
+    }
+
     /** The process was still running at its hard limit (`--max-seconds` + 5 s) and was destroyed. No partial result is used. */
     object TimeoutKilled : EngineResult() {
         override fun toString() = "TimeoutKilled"
