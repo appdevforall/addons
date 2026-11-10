@@ -561,7 +561,20 @@ class Part1StoreTest {
             override fun delete(file: File) = FileOps.Real.delete(file)
         }
         assertTrue(store(movesFail).bindDevice("$fp-B", engine) is BindResult.IoFailed)
-        assertNull(File(dir(), "bind-failed.marker").takeIf { it.exists() }) // no marker file is written
+        // R-F03: no marker file is written. The fake above fails every move, so a marker write (which is a temporary file and a move) could not
+        // succeed there and the old assertion could never fail. This one fails only the move onto the key file and lets every other write through,
+        // so a marker write of the earlier design would leave `bind-failed.marker` behind.
+        val keyMoveFails = object : FileOps {
+            override fun writeAndSync(file: File, bytes: ByteArray) = FileOps.Real.writeAndSync(file, bytes)
+            override fun moveReplacing(from: File, to: File) { if (to.name == "key.txt") throw IOException("busy"); FileOps.Real.moveReplacing(from, to) }
+            override fun delete(file: File) = FileOps.Real.delete(file)
+        }
+        val before = dir().walkTopDown().filter { it.isFile }.map { it.relativeTo(dir()).path }.toSet()
+        assertTrue(store(keyMoveFails).bindDevice("$fp-C", engine) is BindResult.IoFailed)
+        val after = dir().walkTopDown().filter { it.isFile }.map { it.relativeTo(dir()).path }.toSet()
+        // the old files move into old/<id>/; every file name afterwards is one that was there before: no marker, no temporary file
+        assertEquals("the failed key change adds no file besides the expected ones", emptySet<String>(), after.map { File(it).name }.toSet() - before.map { File(it).name }.toSet())
+        assertTrue(after.none { it.contains("marker") || it.contains("bind-failed") || it.endsWith(".tmp") })
         val restarted = store()
         assertNull(restarted.readStatic()); assertEquals(0, restarted.readRows().lines.size)
         assertFalse(restarted.writeStatic(staticTree()))
