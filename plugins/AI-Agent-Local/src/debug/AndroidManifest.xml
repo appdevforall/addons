@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        A plain empty activity that exists for the instrumented Part 1 tests only, and is in debug builds only (R-F01).
+        The tests run in the process of the app under test, so the activity must belong to that app.
+        No intent filter, not exported: nothing but the tests can start it.
+    -->
+    <application>
+        <activity
+            android:name="com.itsaky.androidide.plugins.aiagentlocal.device.TestHostActivity"
+            android:exported="false" />
+    </application>
+</manifest>

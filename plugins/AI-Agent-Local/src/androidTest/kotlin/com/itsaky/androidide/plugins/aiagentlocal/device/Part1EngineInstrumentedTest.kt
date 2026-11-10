@@ -30,7 +30,7 @@ import org.junit.runner.RunWith
  * a phone). The two programs are packaged into the **test APK** (`build.gradle.kts`: the committed `jniLibs`, with
  * `useLegacyPackaging` for the androidTest component only), so the system extracts them to the test APK's
  * `nativeLibraryDir`. The tests **fail** with a clear message when they are not there; they do not skip. The foreground
- * tests that run a row start [TestHostActivity] and keep it resumed, so the process is in `/top-app`: exit 97 is then a **failure**, with the cpuset read
+ * tests that run a row start [TestHostActivity] (declared in the app under test, debug builds only, started with the target package name) and keep it resumed, so the process is in `/top-app`: exit 97 is then a **failure**, with the cpuset read
  * from `/proc/self/cpuset` in the message.
  */
 @RunWith(AndroidJUnit4::class)

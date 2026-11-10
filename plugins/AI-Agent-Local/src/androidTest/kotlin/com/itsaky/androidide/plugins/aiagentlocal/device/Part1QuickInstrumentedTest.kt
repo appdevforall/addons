@@ -45,7 +45,7 @@ import org.junit.runner.RunWith
  * P1-04A2 and compiled there; **not run** (it needs a phone, with the plugin's test APK installed and the app on screen). It fails, it does
  * not skip, when the programs are not extracted or the pass does not complete: the message names the result and the reason.
  *
- * The test starts a plain empty activity ([TestHostActivity], test APK only, `FLAG_KEEP_SCREEN_ON`), keeps it resumed for the whole test and
+ * The test starts a plain empty activity ([TestHostActivity], declared in the app under test, debug builds only, `FLAG_KEEP_SCREEN_ON`; the tests run in the app's process, so the activity is started with the target package name), keeps it resumed for the whole test and
  * finishes it in `finally`, so the process is in `/top-app`. The foreground gate is the real [AndroidForegroundGate] on that activity (the
  * engine checks its own cpuset as well, exit 97).
  * Fakes: the dialog (answers Run now), the IDE gate (idle) and the screen flag. Everything else is real. The work directory is under the target context's files directory; the programs are those of the test APK.

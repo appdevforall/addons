@@ -85,6 +85,42 @@ class EnginePackagingTest {
         assertEquals(emptyList<String>(), bad)
     }
 
+    @Test
+    fun givenTheBuiltDebugCgp_whenScannedForTheTestActivity_thenItIsThere() {
+        // Positive control for the release scan below: the same scan must be able to find the class.
+        assertTrue("the debug .cgp must carry TestHostActivity (src/debug)", containsTestActivity(builtCgp()))
+    }
+
+    @Test
+    fun givenTheBuiltReleaseCgp_whenScannedForTheTestActivity_thenItHasNone() {
+        val cgps = pluginDir.listFiles { f -> f.name.endsWith(".cgp") && !f.name.endsWith("-debug.cgp") }.orEmpty()
+        val message = "no release .cgp under ${pluginDir.absolutePath}; run assemblePlugin first"
+        // The release package is built by a separate invocation (assemblePlugin); a missing one skips even with part1.requireCgp.
+        Assume.assumeTrue(message, cgps.isNotEmpty())
+        for (cgp in cgps) assertTrue("${cgp.name} must not contain TestHostActivity", !containsTestActivity(cgp))
+    }
+
+    /** True when any entry of the package (dex, binary manifest, anything) holds the class name, as Latin-1 text or as UTF-16LE (binary XML). */
+    private fun containsTestActivity(cgp: File): Boolean {
+        val latin = "TestHostActivity".toByteArray(Charsets.ISO_8859_1)
+        val utf16 = "TestHostActivity".toByteArray(Charsets.UTF_16LE)
+        fun has(h: ByteArray, n: ByteArray): Boolean {
+            outer@ for (i in 0..h.size - n.size) {
+                for (j in n.indices) if (h[i + j] != n[j]) continue@outer
+                return true
+            }
+            return false
+        }
+        ZipFile(cgp).use { zip ->
+            for (e in zip.entries()) {
+                if (e.isDirectory) continue
+                val b = zip.getInputStream(e).use { it.readBytes() }
+                if (has(b, latin) || has(b, utf16)) return true
+            }
+        }
+        return false
+    }
+
     private fun builtCgp(): File {
         val cgps = pluginDir.listFiles { f -> f.name.endsWith("-debug.cgp") }.orEmpty()
         // No .cgp is built by the unit-test task itself (see build.gradle.kts and the class comment).

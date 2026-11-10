@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.view.WindowManager
 
 /**
- * A plain, empty activity for the instrumented Part 1 tests (declared only in the androidTest manifest). While it is resumed the process is
+ * A plain, empty activity for the instrumented Part 1 tests (declared in `src/debug/AndroidManifest.xml`, so it is in debug builds of the app under test only; the instrumented tests run in the app's process, and `startActivitySync` cannot start an activity of another process). While it is resumed the process is
  * in `/top-app`, which the engine's foreground check (exit 97) needs. It keeps the screen on for as long as it exists.
  */
 class TestHostActivity : Activity() {
@@ -19,7 +19,7 @@ class TestHostActivity : Activity() {
     companion object {
         /** Starts the activity and returns it once resumed; the caller finishes it in `finally` with [finishAndWait]. */
         fun start(instrumentation: Instrumentation): TestHostActivity {
-            val intent = Intent().setClassName(instrumentation.context.packageName, TestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val intent = Intent().setClassName(instrumentation.targetContext.packageName, TestHostActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             val a = instrumentation.startActivitySync(intent)
             return a as? TestHostActivity ?: throw AssertionError("the test activity did not start (got $a)")
         }
