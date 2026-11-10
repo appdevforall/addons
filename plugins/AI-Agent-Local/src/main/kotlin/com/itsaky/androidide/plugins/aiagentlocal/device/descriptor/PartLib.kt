@@ -113,6 +113,13 @@ internal object PartLib {
         "sme_sf8dp2", "poe",
     )
 
+    /**
+     * A JSON-Schema `pattern` of the form `^...$` as Python's `re.search` applies it: `$` also matches before one
+     * final newline, so `"kit/v1\n"` satisfies `^[a-z0-9-]+/[A-Za-z0-9._-]+$`. The same quirk is ported so the
+     * Kotlin parsers accept exactly what the Python schema check accepts.
+     */
+    fun schemaPattern(re: Regex, s: String): Boolean = re.matches(s) || (s.endsWith("\n") && re.matches(s.dropLast(1)))
+
     /** Names of the set bits (HWCAP names then HWCAP2 names, in bit order) and `hwcap bit N` for unnamed set bits. */
     fun decodeHwcap(hwcap: BigInteger, hwcap2: BigInteger): Pair<List<String>, List<String>> {
         val names = ArrayList<String>()

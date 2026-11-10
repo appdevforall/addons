@@ -104,4 +104,123 @@ class PinProbeTest {
         val tree = Json.fromOrg(JSONObject(probe()))
         assertEquals(3, PinProbe.parse(tree).cpus.size)
     }
+
+    // ---- "Folding a pin probe" rules (part1-inputs-v1.md), P1-04C C4
+
+    private fun pinnedStatic(): Map<String, Any?> {
+        val d = "part1/golden/" + Part1TestResources.goldenCaseNames().first { it.endsWith("t0-no-rows-no-record") }
+        return Part1TestResources.obj("$d/static.json") // 8 CPUs, every one with an older pin result "ok", MIDR set
+    }
+
+    private fun cpuOf(folded: Map<String, Any?>, i: Int) = Json.obj(Json.arr(folded["cpus"], "cpus")[i], "cpu")
+
+    private fun generated(folded: Map<String, Any?>) = DescriptorGenerator.generateTree(folded, emptyList(), null, null, 0.05, emptyList())
+
+    private fun coreOf(d: Map<String, Any?>, i: Int) = Json.obj(Json.arr(d["cores"], "cores")[i], "core")
+
+    @Test
+    fun givenAnOkProbeMissingACpuThatHadAnOlderPin_whenFolded_thenTheOlderPinIsNotKeptAndTheLeavesAreUnkWithTheReason() {
+        val s = pinnedStatic()
+        assertTrue(Json.arr(s["cpus"], "c").all { (it as Map<*, *>)["pin"] != null })
+        val folded = PinProbe.fold(s, PinProbe.parse(probe()))
+        assertTrue(!cpuOf(folded, 3).containsKey("pin"))
+        assertEquals("CPU not in the pin probe", Json.obj(folded["unavailable"], "u")["cpus.pin.3"])
+        assertTrue(!Json.obj(folded["unavailable"], "u").containsKey("cpus.pin.0")) // listed CPUs get no such reason
+        assertEquals("synthetic: not probed", Json.obj(folded["unavailable"], "u")["opencl_loadable"]) // other entries are kept
+        val d = generated(folded)
+        for (leaf in listOf("pin", "pin_attempts")) {
+            val l = Json.obj(coreOf(d, 3)[leaf], leaf)
+            assertEquals("unk", l["origin"])
+            assertEquals("CPU not in the pin probe", l["reason"])
+        }
+        assertEquals("measured_app", Json.obj(coreOf(d, 0)["pin"], "pin")["origin"])
+    }
+
+    @Test
+    fun givenAProbeCpuThatFailedToPin_whenFolded_thenItFoldsAsFailedWithItsAttempts() {
+        val folded = PinProbe.fold(pinnedStatic(), PinProbe.parse(probe()))
+        val pin = Json.obj(cpuOf(folded, 1)["pin"], "pin")
+        assertEquals("failed", pin["result"])
+        assertEquals(3L, pin["attempts"])
+        assertEquals(6.5, pin["time_to_pin_s"])
+        val d = generated(folded)
+        assertEquals("failed", Json.obj(coreOf(d, 1)["pin"], "pin")["value"])
+        assertEquals(3L, Json.obj(coreOf(d, 1)["pin_attempts"], "a")["value"])
+    }
+
+    @Test
+    fun givenAProbeAndADifferentStaticEnvironmentCpuset_whenFolded_thenTheCpusetIsTheProbes() {
+        val s = pinnedStatic()
+        val env = Json.obj(s["environment"], "env")
+        assertEquals("/top-app", env["foreground_cpuset"])
+        val folded = PinProbe.fold(s, PinProbe.parse(probe().replace("\"/top-app\"", "\"/foreground\"")))
+        assertEquals("/foreground", Json.obj(folded["pin_conditions"], "c")["foreground_cpuset"])
+        assertEquals("/foreground", Json.obj(cpuOf(folded, 0)["pin"], "pin")["cpuset"])
+        assertEquals("/top-app", Json.obj(Json.obj(folded["environment"], "e"), "e")["foreground_cpuset"]) // the environment is not changed
+    }
+
+    @Test
+    fun givenAProbeMidr_whenTheStaticCpuHasNone_thenItIsCarriedWithItsSource() {
+        val s = LinkedHashMap(pinnedStatic())
+        s["cpus"] = Json.arr(s["cpus"], "c").mapIndexed { i, c ->
+            val m = LinkedHashMap(Json.obj(c, "cpu"))
+            if (i == 0) m["midr"] = null
+            if (i == 1) m.remove("midr")
+            m
+        }
+        val folded = PinProbe.fold(s, PinProbe.parse(probe()))
+        assertEquals("0x410fd050", cpuOf(folded, 0)["midr"])
+        assertEquals("sysfs", cpuOf(folded, 0)["midr_source"])
+        assertEquals(null, cpuOf(folded, 1)["midr"]) // the probe has no MIDR for CPU 1
+        assertTrue(!cpuOf(folded, 1).containsKey("midr_source"))
+        assertEquals("pin probe part1-engine/0.2.3", Json.obj(folded["pin_conditions"], "c")["note"]) // no disagreement, no extra note
+    }
+
+    @Test
+    fun givenAProbeMidrThatDisagreesWithTheStaticOne_whenFolded_thenTheStaticValueIsKeptWithANote() {
+        val s = pinnedStatic()
+        val staticMidr = cpuOf(s, 0)["midr"]
+        val folded = PinProbe.fold(s, PinProbe.parse(probe()))
+        assertEquals(staticMidr, cpuOf(folded, 0)["midr"])
+        assertTrue(!cpuOf(folded, 0).containsKey("midr_source"))
+        assertEquals(
+            "pin probe part1-engine/0.2.3; MIDR of CPU 0 differs between the static read and the pin probe; the static value is kept",
+            Json.obj(folded["pin_conditions"], "c")["note"],
+        )
+    }
+
+    @Test
+    fun givenAProbeMidrEqualToTheStaticOneInAnotherCase_whenFolded_thenThereIsNoNote() {
+        val s = LinkedHashMap(pinnedStatic())
+        s["cpus"] = Json.arr(s["cpus"], "c").mapIndexed { i, c -> if (i == 0) LinkedHashMap(Json.obj(c, "cpu")).also { it["midr"] = "0x410FD050" } else c }
+        val folded = PinProbe.fold(s, PinProbe.parse(probe()))
+        assertEquals("0x410FD050", cpuOf(folded, 0)["midr"])
+        assertEquals("pin probe part1-engine/0.2.3", Json.obj(folded["pin_conditions"], "c")["note"])
+    }
+
+    @Test
+    fun givenAProbeCpuThatTheStaticInputDoesNotList_whenFolded_thenItIsIgnored() {
+        val folded = PinProbe.fold(
+            pinnedStatic(),
+            PinProbe.parse(probe(cpus = """[{"index":99,"result":"ok","attempts":1,"time_to_pin_ms":1.0,"midr":"0x410fd050","midr_source":"sysfs"}]""")),
+        )
+        assertEquals(8, Json.arr(folded["cpus"], "c").size)
+        assertTrue(Json.arr(folded["cpus"], "c").none { (it as Map<*, *>).containsKey("midr_source") })
+        assertTrue(Json.arr(folded["cpus"], "c").all { !(it as Map<*, *>).containsKey("pin") }) // none of the 8 is in this probe
+    }
+
+    @Test
+    fun givenAnOkProbe_whenFolded_thenPinOriginAndConditionsFollowTheRules() {
+        val s = LinkedHashMap(pinnedStatic())
+        s["environment"] = null
+        s["pin_conditions"] = mapOf("kit_marker" to "kept", "labels" to listOf("x"))
+        s["pin_origin"] = "measured_shell"
+        val folded = PinProbe.fold(s, PinProbe.parse(probe()))
+        assertEquals("measured_app", folded["pin_origin"])
+        val c = Json.obj(folded["pin_conditions"], "c")
+        assertEquals("kept", c["kit_marker"]) // an existing key is kept
+        assertTrue(c.containsKey("thermal_status") && c["thermal_status"] == null) // the key rule R3 needs
+        assertEquals("single_shot", c["regime"])
+        assertEquals("cpuset_top_app", c["gate_basis"])
+    }
 }

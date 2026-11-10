@@ -12,10 +12,16 @@ internal data class RowPin(
 )
 
 /**
- * One record of a `part1-rows-v1` row log. Unknown extra fields are ignored (the engine may add
- * optional ones); required fields and the types, enums, patterns and conditional rules of
- * `part1-rows-v1.schema.json` are checked, and a violation is a [JsonException] with the path.
- * [conditions] keeps only the keys the schema defines.
+ * One record of a `part1-rows-v1` row log. Required fields and the types, enums, patterns and conditional rules of
+ * `part1-rows-v1.schema.json` are checked, and a violation is a [JsonException] with the path. [conditions] keeps
+ * only the keys the schema defines.
+ *
+ * **Intended difference from Python (review F13):** unknown keys, at the top level, in `pin` and in `conditions`,
+ * are ignored here (the engine may add optional fields; they are dropped from the result), while `generate.py`
+ * rejects them (`additionalProperties: false` in the schema). On every schema-valid row the two agree; the
+ * rejection test compares each row variant with the schema's verdict and lists the unknown-key cases as the only
+ * difference. The same holds for [PinProbe]. `$` in the schema patterns also accepts one trailing newline, as
+ * Python's `re.search` does ([PartLib.schemaPattern]).
  */
 internal class Row(
     val tag: String,
@@ -65,9 +71,9 @@ internal class Row(
             for (k in REQUIRED) if (!m.containsKey(k)) throw JsonException("$path.$k", "required field is missing")
             if (m["format"] != PartLib.ROWS_FORMAT) throw JsonException("$path.format", "must be ${PartLib.ROWS_FORMAT}")
             val tag = Json.str(m["tag"], "$path.tag")
-            if (!TAG.matches(tag)) throw JsonException("$path.tag", "not a row tag of part1-rows-v1: $tag")
+            if (!PartLib.schemaPattern(TAG, tag)) throw JsonException("$path.tag", "not a row tag of part1-rows-v1: $tag")
             val engine = Json.str(m["engine_version"], "$path.engine_version")
-            if (!ENGINE.matches(engine)) throw JsonException("$path.engine_version", "must be <engine name>/<version>")
+            if (!PartLib.schemaPattern(ENGINE, engine)) throw JsonException("$path.engine_version", "must be <engine name>/<version>")
             val status = enum(m["status"], STATUSES, "$path.status")
             val cpuSet = Json.arr(m["cpu_set"], "$path.cpu_set").mapIndexed { i, v -> nonNegLong(v, "$path.cpu_set[$i]") }
             if (cpuSet.toSet().size != cpuSet.size) throw JsonException("$path.cpu_set", "items must be unique")
