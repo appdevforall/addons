@@ -23,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.services.GradleTaskResult
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -207,14 +208,19 @@ class ComposePreviewFragment : Fragment() {
         val task = if (modulePath.isNotEmpty()) "$modulePath:assemble$variant" else "assemble$variant"
         LOG.info("Compose preview triggering build: {}", task)
 
-        buildService.executeTasks(task).whenComplete { success, error ->
+        buildService.executeTasks(listOf(task), emptyList()).whenComplete { result, error ->
             view?.post {
                 buildTriggered = false
-                if (error == null && success == true) {
-                    viewModel.refreshAfterBuild(pluginContext)
-                } else {
-                    LOG.error("Compose preview build failed", error)
-                    viewModel.setBuildFailed()
+                when {
+                    error == null && result is GradleTaskResult.Success -> viewModel.refreshAfterBuild(pluginContext)
+                    result is GradleTaskResult.Refused -> {
+                        LOG.error("Compose preview build refused: {}", result.reason)
+                        viewModel.setBuildFailed(result.reason)
+                    }
+                    else -> {
+                        LOG.error("Compose preview build failed: {}", result, error)
+                        viewModel.setBuildFailed()
+                    }
                 }
             }
         }
