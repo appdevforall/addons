@@ -132,6 +132,11 @@ tasks.withType<Test>().configureEach {
     systemProperty("builtPluginDir", layout.buildDirectory.dir("plugin").get().asFile.absolutePath)
     // Lab examples are never committed; the lab-set test runs only when this is given on the command line.
     System.getProperty("part1.labExamplesDir")?.let { systemProperty("part1.labExamplesDir", it) }
+    // The main sources of the three new Part 1 packages (engine, staticread, store): a test scans them.
+    systemProperty("part1MainSrcDir", file("src/main/kotlin").absolutePath)
+    // Optional: a directory (outside the repository) to receive the static inputs and descriptors the engine,
+    // static-read and store tests produce, so generate.py and validate.py can judge them.
+    System.getProperty("part1.engineOutDir")?.let { systemProperty("part1.engineOutDir", it) }
     // Optional: a directory (outside the repository) to receive the golden-set descriptors, so an external
     // validator can check them.
     System.getProperty("part1.goldenOutDir")?.let { systemProperty("part1.goldenOutDir", it) }
