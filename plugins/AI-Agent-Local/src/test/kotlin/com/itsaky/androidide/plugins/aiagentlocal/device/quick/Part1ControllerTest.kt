@@ -427,6 +427,36 @@ class Part1ControllerTest {
     }
 
     @Test
+    fun givenCloseBetweenTwoStoreWrites_whenT0GoesOn_thenTheNextWriteIsNotDone() {
+        // F12: the mark is checked before each store write (close comes while the 1st, 2nd or 3rd file is being written)
+        val expectedFiles = listOf(
+            1 to setOf("key.txt"),
+            2 to setOf("key.txt", "static.json"),
+            3 to setOf("key.txt", "static.json", "probe-facts.json"),
+        )
+        for ((closeAt, files) in expectedFiles) {
+            val c = CRig(File(tmp.root, "w$closeAt${System.nanoTime()}").also { it.mkdirs() })
+            var writes = 0
+            var ctl: Part1Controller? = null
+            val ops = object : com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps {
+                override fun writeAndSync(file: File, bytes: ByteArray) {
+                    com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real.writeAndSync(file, bytes)
+                    if (!file.name.endsWith(".tmp")) return
+                    if (++writes == closeAt) ctl!!.close()
+                }
+                override fun moveReplacing(from: File, to: File) = com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real.moveReplacing(from, to)
+                override fun delete(file: File) = com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real.delete(file)
+            }
+            val store = com.itsaky.androidide.plugins.aiagentlocal.device.store.Part1Store(c.rig.dir, ops)
+            val rt = Part1Runtime(c.phone.reader(), store, { c.rig.index }, EngineRunner.EXPECTED_ENGINE_VERSION, "1", { c.rig.tier() })
+            ctl = Part1Controller(Part1Switch { true }, { rt }, { it.run() }, { c.logs.add(it) })
+            ctl.onActivated()
+            val present = (c.rig.dir.list() ?: emptyArray()).filter { !it.endsWith(".tmp") }.toSet()
+            assertEquals("closed at write $closeAt", files, present)
+        }
+    }
+
+    @Test
     fun givenAnOldT0ThatDoesNotEnd_whenAnActivationFollows_thenItBindsNothingAndDoesNoPart1Work() {
         val c = CRig()
         val gate = CountDownLatch(1)

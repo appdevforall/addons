@@ -246,6 +246,11 @@ class QuickTierTest {
         val l = load.run()
         assertEquals(StopReason.LOAD_CANCELLED, l.reason); assertEquals(QuickStatus.CANCELLED, l.status)
         Thread.interrupted()
+        val flagged = rig() // the thread's own interrupt flag (a cancelled load), not an InterruptedException from a sleep
+        flagged.engine.beforeRun = { c -> if (c.tag == "C2-read-k0") Thread.currentThread().interrupt() }
+        val fl = flagged.run()
+        assertEquals(StopReason.LOAD_CANCELLED, fl.reason)
+        Thread.interrupted()
         val bad = rig()
         bad.overrides["C3-read-2fast"] = { EngineResult.Failed(mapOf("format" to "part1-rows-v1", "status" to "failed"), 1) }
         assertEquals(StopReason.ENGINE_RECORD_INVALID, bad.run().reason)
