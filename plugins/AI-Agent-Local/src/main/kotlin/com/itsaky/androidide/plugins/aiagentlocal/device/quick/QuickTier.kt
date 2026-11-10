@@ -19,21 +19,22 @@ import com.itsaky.androidide.plugins.aiagentlocal.device.store.RowRecord
  * model loading wait for more than [QuickLimits.OVERALL_MS] after "Run now", and leaves the screen flag, the dialog and the engine
  * process cleaned up in every exit path.
  *
- * **Flow.** The stored static input (T0) must exist. Battery is checked, then the one question is asked (Skip, no activity and a
- * timeout end the pass before anything runs). After "Run now" the screen is kept on and the 180 s watchdog starts. Then: pin probe
+ * **Flow.** The stored static input (T0) must exist. Battery is checked, then the foreground and the quiet IDE (without waiting: if either fails the pass is deferred and the user is
+ * not asked), then the one question is asked (Skip, no activity and a timeout end the pass before anything runs). After "Run now" the screen is kept on and the 180 s watchdog starts. Then: pin probe
  * (all CPUs) folded into the static input; one `C2-read-k<id>` per cluster (first pinnable CPU, a substitute from the same cluster, or an
  * unpinned row); clusters ranked by the measured value; `C3-read-2fast` on the two fastest pinnable CPUs; `C4-read-all` on all pinnable
  * CPUs; `C7-gpu-alone` when the GPU probe found a Vulkan compute device. Command lines come only from [EngineCommands].
  *
- * **Gates**, before the start and before every row (a fake each): foreground; quiet IDE (a busy IDE is waited for up to 60 s: before the
- * start the pass is then deferred, later it ends early); battery (at least 20 %, stop at a drop of 5 points since the start; an unreadable
+ * **Gates**, before the start and before every row (a fake each): foreground; quiet IDE (after "Run now" a busy IDE is waited for up to 60 s: before the
+ * first row the pass is then deferred, before a later row it ends early); battery (at least 20 %, stop at a drop of 5 points since the start; an unreadable
  * level does not pass); thermal (status NONE or LIGHT to start; a hotter phone is waited for up to 60 s per row, the wait is recorded; a
  * fixed 10 s rest between rows only when neither status nor headroom can be read); memory (`L = min(55 % MemTotal, 70 % MemAvailable)`,
  * read just before the row, with `--fit-buffer`).
  *
- * **Voids.** A row is void (not stored, counted) when the foreground was lost, a build started during it or the pass was cancelled during
- * it. A build that started during a row voids it and the row is repeated once; a second void ends the pass early. A refusal for the
- * foreground (exit 97) voids the row and stops the pass. Other results than `Ok` that the engine wrote as a row (memory guard, a
+ * **Voids.** A row is void (not stored, counted in `rows_void` and listed in the pass record) when the foreground was lost, a build started
+ * during it or the pass was cancelled during it (`void_cancelled`). A build that started during a row voids it and the row is repeated once; a second void ends the pass early. A refusal for the
+ * foreground (exit 97) voids **that row** and stops the pass: rows stored earlier in the same pass stay (each passed its own engine gate
+ * and the app's foreground check after it), the pass ends `ended_early` with reason `not_foreground`, and T1 is offered again next session. Other results than `Ok` that the engine wrote as a row (memory guard, a
  * failure, unsupported) are stored with their status; they never feed a leaf (the generator enforces that).
  *
  * **End.** The valid rows are in the store; [Part1Store.regenerate] runs; `t1-pass.json` records the status, the reason, the total time
@@ -56,6 +57,8 @@ class QuickTier(
     private val pluginVersion: String? = null,
     private val epochMs: () -> Long = { System.currentTimeMillis() },
     private val log: (String) -> Unit = {},
+    /** Runs a task on another thread (the Cancel button's kill); replaced in tests. */
+    private val handOff: (Runnable) -> Unit = { r -> Thread(r, "part1-t1-cancel").apply { isDaemon = true }.start() },
 ) {
     /** Unwinds the pass to the one place that decides the status. */
     private class Stop(val reason: StopReason) : RuntimeException(reason.code, null, false, false)
@@ -87,6 +90,15 @@ class QuickTier(
         engine.cancel()
     }
 
+    /**
+     * What the Cancel button does. It runs on the UI thread, so it only marks the cancel and hands the kill (which can wait up to 3 s
+     * for the process) to another thread through [handOff].
+     */
+    private fun cancelFromButton() {
+        if (cancelReason == null) cancelReason = StopReason.USER_CANCELLED
+        handOff(Runnable { runCatching { engine.cancel() } })
+    }
+
     /** Runs the pass. See the class comment. */
     fun run(): QuickResult {
         cancelReason = null
@@ -97,6 +109,9 @@ class QuickTier(
         try {
             val static = store.readStatic() ?: return deferred(StopReason.STATIC_MISSING)
             precheckBattery()?.let { return deferred(it) }
+            // F26: no question when the foreground or the IDE already fails; these two checks do not wait
+            if (!foreground.isForeground()) return deferred(StopReason.NOT_FOREGROUND)
+            if (ide.isBusy()) return deferred(StopReason.IDE_BUSY)
             val answer = try {
                 ui.ask()
             } catch (e: InterruptedException) {
@@ -111,7 +126,7 @@ class QuickTier(
             val p = Pass(clock.nowMs())
             pass = p
             p.static = static
-            ui.onCancel { cancel(StopReason.USER_CANCELLED) }
+            ui.onCancel { cancelFromButton() } // returns at once: it runs on the UI thread
             watch = watchdog.start(QuickLimits.OVERALL_MS) { cancel(StopReason.OVERALL_LIMIT) }
             screen.keepOn()
             screenSet = true
@@ -122,7 +137,7 @@ class QuickTier(
                 s
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
-                Stop(StopReason.USER_CANCELLED)
+                Stop(StopReason.LOAD_CANCELLED)
             }
             return finish(p, stop)
         } catch (e: Exception) {
@@ -228,7 +243,11 @@ class QuickTier(
             p.engineStarted = true
             val result = engine.run(command)
             val wall = clock.nowMs() - t0
-            interruptedOrCancelled()?.let { throw Stop(it) }
+            interruptedOrCancelled()?.let {
+                p.rowsVoid++ // the row was cancelled while it ran: void, counted and listed
+                p.notes.add(RowNote(tag, "void_cancelled", wall))
+                throw Stop(it)
+            }
             val buildDuring = ide.startsSeen() != startsBefore || ide.isBusy()
             val lostForeground = !foreground.isForeground()
 
@@ -317,7 +336,7 @@ class QuickTier(
 
     private fun interruptedOrCancelled(): StopReason? {
         cancelReason?.let { return it }
-        if (Thread.currentThread().isInterrupted) return StopReason.USER_CANCELLED
+        if (Thread.currentThread().isInterrupted) return StopReason.LOAD_CANCELLED
         return null
     }
 
@@ -381,7 +400,7 @@ class QuickTier(
     // ---- the end -------------------------------------------------------------------------------------------------
 
     private fun finish(p: Pass, stop: Stop?): QuickResult {
-        val reason = stop?.reason ?: if (p.incomplete) StopReason.ENGINE_CRASH else StopReason.NONE
+        val reason = stop?.reason ?: if (p.incomplete) StopReason.ENGINE_RECORD_INVALID else StopReason.NONE
         val status = when {
             stop == null && !p.incomplete -> QuickStatus.COMPLETED
             stop == null -> QuickStatus.ENDED_EARLY
@@ -407,9 +426,9 @@ class QuickTier(
     }
 
     private fun statusFor(reason: StopReason, p: Pass): QuickStatus = when (reason) {
-        StopReason.USER_CANCELLED -> QuickStatus.CANCELLED
+        StopReason.USER_CANCELLED, StopReason.LOAD_CANCELLED, StopReason.PLUGIN_DEACTIVATED -> QuickStatus.CANCELLED
         StopReason.USER_SKIPPED -> QuickStatus.SKIPPED
-        StopReason.NO_ACTIVITY, StopReason.STATIC_MISSING -> QuickStatus.DEFERRED
+        StopReason.NO_ACTIVITY, StopReason.STATIC_MISSING, StopReason.MODEL_RESIDENT, StopReason.IDE_GATE_UNAVAILABLE -> QuickStatus.DEFERRED
         StopReason.EXEC_BLOCKED, StopReason.PROGRAM_MISSING, StopReason.ENGINE_MISMATCH, StopReason.NOT_STARTED,
         StopReason.ENGINE_CRASH, StopReason.ENGINE_TIMEOUT, StopReason.PIN_PROBE_FAILED, StopReason.UNEXPECTED,
         -> if (p.rowsStored == 0) QuickStatus.FAILED else QuickStatus.ENDED_EARLY

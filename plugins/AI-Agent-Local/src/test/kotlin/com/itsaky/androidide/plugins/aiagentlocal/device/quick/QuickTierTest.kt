@@ -4,6 +4,8 @@ import com.itsaky.androidide.plugins.aiagentlocal.device.Json
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineResult
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.Recorded
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -149,7 +151,7 @@ class QuickTierTest {
     }
 
     @Test
-    fun givenAnEngineRefusalForTheForeground_whenARowRuns_thenThePassIsVoidedAndStopped() {
+    fun givenAnEngineRefusalForTheForeground_whenARowRuns_thenTheRowIsVoidAndThePassStops() {
         val r = rig()
         r.overrides["C2-read-k1"] = { EngineResult.Refused(Lines.obj("d5-row-gate-97.out"), 97) }
         val res = r.run()
@@ -160,10 +162,101 @@ class QuickTierTest {
     }
 
     @Test
+    fun givenAnEngineRefusalForTheForegroundAtALaterRow_whenThePassEnds_thenTheEarlierRowsStayInTheStoreAndTheDescriptor() {
+        // F03: 97 voids that row only; rows stored earlier in the same pass stay, the status is ended_early / not_foreground
+        val r = rig()
+        r.overrides["C3-read-2fast"] = { EngineResult.Refused(Lines.obj("d5-row-gate-97.out"), 97) }
+        val res = r.run()
+        assertEquals(QuickStatus.ENDED_EARLY, res.status); assertEquals(StopReason.NOT_FOREGROUND, res.reason)
+        assertEquals(2, res.rowsStored); assertEquals(1, res.rowsVoid)
+        assertEquals(2, r.store.readRows().lines.size)
+        val tags = r.store.readRows().lines.map { Json.parseObject(it)["tag"] }
+        assertEquals(listOf("C2-read-k0", "C2-read-k1"), tags)
+        assertTrue(r.store.readDescriptor().toString().contains("measured_app"))
+        assertEquals("ended_early", r.pass()["status"]); assertEquals("not_foreground", r.pass()["reason"])
+        assertTrue((r.pass()["rows"] as List<*>).any { (it as Map<*, *>)["outcome"] == "void_foreground_refused" })
+    }
+
+    @Test
+    fun givenAForegroundOrIdeGateThatFailsBeforeTheQuestion_whenThePassRuns_thenItIsDeferredWithoutAskingAndWithoutWaiting() {
+        // F26
+        val fg = rig(); fg.fg.fg = { false }
+        val t0 = fg.clock.now
+        assertEquals(StopReason.NOT_FOREGROUND, fg.run().reason); assertEquals(0, fg.ui.asked); assertEquals(t0, fg.clock.now)
+        val ide = rig(); ide.ide.busy = { true }
+        val t1 = ide.clock.now
+        val res = ide.run()
+        assertEquals(QuickStatus.DEFERRED, res.status); assertEquals(StopReason.IDE_BUSY, res.reason)
+        assertEquals(0, ide.ui.asked); assertEquals(t1, ide.clock.now); assertTrue(ide.clock.sleeps.isEmpty())
+    }
+
+    @Test
+    fun givenTheCancelButtonIsPressed_whenTheHandlerRuns_thenItReturnsWithoutWaitingForTheKill() {
+        // F04: the click is on the UI thread; the kill (up to 3 s) goes to another thread
+        val r = rig()
+        val release = CountDownLatch(1)
+        val killed = CountDownLatch(1)
+        val blocking = object : com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineExecutor by r.engine {
+            override fun cancel() { release.await(10, TimeUnit.SECONDS); r.engine.cancel(); killed.countDown() }
+        }
+        val tier = QuickTier(
+            engine = blocking, store = r.store, index = { r.index }, foreground = r.fg, ide = r.ide, conditions = r.cond, memory = r.mem,
+            screen = r.screen, ui = r.ui, clock = r.clock, watchdog = r.wd, pluginVersion = "1.1.0",
+        )
+        var handlerMs = -1L
+        r.engine.beforeRun = { c ->
+            if (c.tag == "C2-read-k0") {
+                val t = System.nanoTime()
+                r.ui.cancelHandler()
+                handlerMs = (System.nanoTime() - t) / 1_000_000
+                release.countDown()
+            }
+        }
+        val res = tier.run()
+        assertTrue("the handler took $handlerMs ms", handlerMs in 0..1500)
+        assertTrue(killed.await(5, TimeUnit.SECONDS))
+        assertEquals(StopReason.USER_CANCELLED, res.reason)
+    }
+
+    @Test
+    fun givenARowIsCancelledWhileItRuns_whenThePassEnds_thenItIsCountedInRowsVoidAndListedAsVoidCancelled() {
+        // F08
+        val r = rig()
+        r.engine.beforeRun = { c -> if (c.tag == "C2-read-k1") r.ui.cancelHandler() }
+        val res = r.run()
+        assertEquals(QuickStatus.CANCELLED, res.status)
+        assertEquals(1, res.rowsVoid); assertEquals(1, res.rowsStored)
+        val rows = (r.pass()["rows"] as List<*>).map { it as Map<*, *> }
+        assertTrue(rows.any { it["tag"] == "C2-read-k1" && it["outcome"] == "void_cancelled" })
+        assertEquals(1L, r.pass()["rows_void"])
+    }
+
+    @Test
+    fun givenDifferentWaysToStop_whenThePassEnds_thenTheReasonNamesTheRealCause() {
+        // F24: only the Cancel button is user_cancelled
+        val button = rig(); button.engine.beforeRun = { c -> if (c.tag == "C2-read-k0") button.ui.cancelHandler() }
+        assertEquals(StopReason.USER_CANCELLED, button.run().reason)
+        val deactivated = rig()
+        val tier = deactivated.tier()
+        deactivated.engine.beforeRun = { c -> if (c.tag == "C2-read-k0") tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
+        val d = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, d.reason); assertEquals(QuickStatus.CANCELLED, d.status)
+        assertEquals("plugin_deactivated", deactivated.pass()["reason"])
+        val load = rig(); load.ide.busy = { load.ui.asked > 0 }; load.clock.interruptOnSleep = true
+        val l = load.run()
+        assertEquals(StopReason.LOAD_CANCELLED, l.reason); assertEquals(QuickStatus.CANCELLED, l.status)
+        Thread.interrupted()
+        val bad = rig()
+        bad.overrides["C3-read-2fast"] = { EngineResult.Failed(mapOf("format" to "part1-rows-v1", "status" to "failed"), 1) }
+        assertEquals(StopReason.ENGINE_RECORD_INVALID, bad.run().reason)
+        assertEquals("engine_record_invalid", bad.pass()["reason"])
+    }
+
+    @Test
     fun givenABusyIdeBeforeTheStart_whenItBecomesQuietWithin60s_thenThePassWaitsAndRuns() {
         val r = rig()
         val t0 = r.clock.now
-        r.ide.busy = { r.clock.now - t0 < 20_000 }
+        r.ide.busy = { r.ui.asked > 0 && r.clock.now - t0 < 20_000 } // busy from the answer on: the check before the question does not wait
         val res = r.run()
         assertEquals(QuickStatus.COMPLETED, res.status)
         assertTrue(r.ui.waiting.contains(WaitingFor.IDE_QUIET))
@@ -175,7 +268,7 @@ class QuickTierTest {
 
     @Test
     fun givenAnIdeBusyForMoreThan60sBeforeTheStart_whenThePassRuns_thenItIsDeferredAfter60s() {
-        val r = rig(); r.ide.busy = { true }
+        val r = rig(); r.ide.busy = { r.ui.asked > 0 }
         val t0 = r.clock.now
         val res = r.run()
         assertEquals(QuickStatus.DEFERRED, res.status); assertEquals(StopReason.IDE_BUSY, res.reason)
@@ -377,7 +470,7 @@ class QuickTierTest {
 
     @Test
     fun givenCancelIsPressedWhileTheIdeIsBeingWaitedFor_whenThePassWaits_thenItIsCancelledAtOnce() {
-        val r = rig(); r.ide.busy = { true }
+        val r = rig(); r.ide.busy = { r.ui.asked > 0 }
         r.clock.onSleep = { r.ui.cancelHandler() }
         val res = r.run()
         assertEquals(QuickStatus.CANCELLED, res.status)
@@ -392,6 +485,7 @@ class QuickTierTest {
         val res = r.run()
         assertEquals(QuickStatus.ENDED_EARLY, res.status); assertEquals(StopReason.OVERALL_LIMIT, res.reason)
         assertEquals(2, res.rowsStored)
+        assertEquals(1, res.rowsVoid) // F08: the row cancelled while it ran
         assertTrue(r.engine.cancelCalls >= 1)
         r.assertClean()
     }
@@ -423,7 +517,7 @@ class QuickTierTest {
 
     @Test
     fun givenTheThreadIsInterruptedWhileWaiting_whenThePassWaits_thenItCountsAsCancelled() {
-        val r = rig(); r.ide.busy = { true }; r.clock.interruptOnSleep = true
+        val r = rig(); r.ide.busy = { r.ui.asked > 0 }; r.clock.interruptOnSleep = true
         val res = r.run()
         assertEquals(QuickStatus.CANCELLED, res.status)
         r.assertClean()

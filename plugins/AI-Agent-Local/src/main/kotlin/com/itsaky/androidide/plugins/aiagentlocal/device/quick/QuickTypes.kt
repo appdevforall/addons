@@ -85,7 +85,23 @@ fun interface Watchdog {
 enum class StopReason(val code: String) {
     NONE("none"),
     USER_SKIPPED("user_skipped"),
+    /** Only the Cancel button. */
     USER_CANCELLED("user_cancelled"),
+
+    /** The calling load was cancelled (the thread was interrupted). */
+    LOAD_CANCELLED("load_cancelled"),
+
+    /** The plugin was deactivated while the pass ran. */
+    PLUGIN_DEACTIVATED("plugin_deactivated"),
+
+    /** Another model was still loaded when the load that would have run the pass began. */
+    MODEL_RESIDENT("model_resident"),
+
+    /** The host offers no build-status service, so a quiet IDE cannot be known. */
+    IDE_GATE_UNAVAILABLE("ide_gate_unavailable"),
+
+    /** The engine's answer for a row was not a valid row record. */
+    ENGINE_RECORD_INVALID("engine_record_invalid"),
     NO_ACTIVITY("no_activity"),
     NOT_FOREGROUND("not_foreground"),
     IDE_BUSY("ide_busy"),
@@ -114,7 +130,7 @@ enum class QuickStatus(val code: String) {
     /** The pass stopped; the valid rows are kept and the rest is unknown. */
     ENDED_EARLY("ended_early"),
 
-    /** The user pressed Cancel (or the load was cancelled). */
+    /** The user pressed Cancel, the load was cancelled or the plugin was deactivated. */
     CANCELLED("cancelled"),
 
     /** The user chose Skip. Nothing was measured. */

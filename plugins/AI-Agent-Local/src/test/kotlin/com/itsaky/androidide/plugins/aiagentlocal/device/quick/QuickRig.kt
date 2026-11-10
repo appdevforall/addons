@@ -77,7 +77,7 @@ class Rig(root: File, val phone: String = "D5", prepare: Boolean = true) {
 
     fun tier(): QuickTier = QuickTier(
         engine = engine, store = store, index = { index }, foreground = fg, ide = ide, conditions = cond, memory = mem,
-        screen = screen, ui = ui, clock = clock, watchdog = wd, pluginVersion = "1.1.0", epochMs = { 1_700_000_000_000L }, log = { logs.add(it) },
+        screen = screen, ui = ui, clock = clock, watchdog = wd, pluginVersion = "1.1.0", epochMs = { 1_700_000_000_000L }, log = { logs.add(it) }, handOff = { it.run() },
     )
 
     fun run(): QuickResult = tier().run()
