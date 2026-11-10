@@ -37,6 +37,17 @@ class NewCodeRulesTest {
     }
 
     @Test
+    fun givenTheStringResources_whenScanned_thenNoStringPromisesThatResultsStayOnThePhone() {
+        // addendum 1: users who opt in to telemetry will later contribute results, so no text may promise that
+        val strings = File(System.getProperty("part1MainResDir") ?: "src/main/res").walkTopDown().filter { it.isFile && it.name == "strings.xml" }.toList()
+        assertTrue("strings.xml found", strings.isNotEmpty())
+        val phrases = listOf("leaves the phone", "leave the phone", "stay on the phone")
+        val hits = ArrayList<String>()
+        for (f in strings) for (p in phrases) if (f.readText().contains(p, ignoreCase = true)) hits.add("${f.parentFile.name}/${f.name}: $p")
+        assertEquals(emptyList<String>(), hits)
+    }
+
+    @Test
     fun givenTheNewSources_whenScanned_thenNoForbiddenApiOrFieldAppears() {
         // names are assembled from parts so that this file does not hold them as words either
         val forbidden = listOf(
