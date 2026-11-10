@@ -1,0 +1,9 @@
+{
+ "plugin_version": "2.0.0",
+ "peak_tolerance": 0.05,
+ "input_names": [
+  "static.json",
+  "rows.jsonl",
+  "dbrecord.json"
+ ]
+}

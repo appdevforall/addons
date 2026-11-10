@@ -1,0 +1,66 @@
+{
+ "format": "part1-dbrecord-v1",
+ "match": {
+  "result": "exact",
+  "key": "synplat-synboard",
+  "how": "synthetic",
+  "how_class": "exact_soc_board"
+ },
+ "match_source": "synthetic matcher over the synthetic identity values",
+ "index": {
+  "index_version": "part1-dbindex-v1",
+  "snapshot_date": "2026-01-01",
+  "source_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "index_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+ },
+ "record": {
+  "key": "synplat-synboard",
+  "identity": {
+   "soc": "synplat",
+   "board": "synboard",
+   "device_ids": []
+  },
+  "cores": [
+   {
+    "index": 0,
+    "part": "0xd05",
+    "type": "cortex-a55"
+   },
+   {
+    "index": 4,
+    "part": "0xd0d",
+    "type": "cortex-a77"
+   },
+   {
+    "index": 5,
+    "part": "0x805",
+    "type_note": "unknown-part-0x805 (synthetic note)"
+   },
+   {
+    "index": 6,
+    "part": "0xd99",
+    "type": "",
+    "type_note": ""
+   }
+  ],
+  "core_control": {
+   "mechanism": "none",
+   "wake_then_pin_needed": false
+  },
+  "governor_kind": "synthetic_gov (predicted)",
+  "governor_kind_basis": "predicted",
+  "measured": {
+   "single_core_read": {
+    "gbs": 9.5,
+    "kit": "v0"
+   },
+   "gpu_read_alone": {
+    "gbs": 4.0,
+    "kit": "v0"
+   }
+  },
+  "n_measured_leaves": 2,
+  "entry_date": "2026-01-01",
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+ }
+}

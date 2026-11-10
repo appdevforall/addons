@@ -1,0 +1,218 @@
+{
+ "format": "part1-static-v1",
+ "sources": {
+  "identity": "synthetic",
+  "cpus": "synthetic",
+  "features": "synthetic words",
+  "caches": "synthetic"
+ },
+ "identity": {
+  "platform": "synplat",
+  "board": "synboard",
+  "device": "syndev",
+  "hardware": "synhw",
+  "soc_model": "SYN1",
+  "sdk_int": 34,
+  "build_fingerprint": "syn/fingerprint:1"
+ },
+ "cpus": [
+  {
+   "index": 0,
+   "related_cpus": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "max_khz": 1800000,
+   "capacity": 160,
+   "midr": "0x41000d050",
+   "implementer": "0x41",
+   "part": "0xd05",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 1,
+   "related_cpus": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "max_khz": 1800000,
+   "capacity": 160,
+   "midr": "0x41000d050",
+   "implementer": "0x41",
+   "part": "0xd05",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 2,
+   "related_cpus": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "max_khz": 1800000,
+   "capacity": 160,
+   "midr": "0x41000d050",
+   "implementer": "0x41",
+   "part": "0xd05",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 3,
+   "related_cpus": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "max_khz": 1800000,
+   "capacity": 160,
+   "midr": "0x41000d050",
+   "implementer": "0x41",
+   "part": "0xd05",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 4,
+   "related_cpus": [
+    4,
+    5,
+    6
+   ],
+   "max_khz": 2400000,
+   "capacity": 420,
+   "midr": "0x41000d410",
+   "implementer": "0x41",
+   "part": "0xd41",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 5,
+   "related_cpus": [
+    4,
+    5,
+    6
+   ],
+   "max_khz": 2400000,
+   "capacity": 420,
+   "midr": "0x41000d410",
+   "implementer": "0x41",
+   "part": "0xd41",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 6,
+   "related_cpus": [
+    4,
+    5,
+    6
+   ],
+   "max_khz": 2400000,
+   "capacity": 420,
+   "midr": "0x41000d410",
+   "implementer": "0x41",
+   "part": "0xd41",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  },
+  {
+   "index": 7,
+   "related_cpus": [
+    7
+   ],
+   "max_khz": 2800000,
+   "capacity": 1024,
+   "midr": "0x41000d440",
+   "implementer": "0x41",
+   "part": "0xd44",
+   "pin": {
+    "result": "ok",
+    "attempts": 1,
+    "time_to_pin_s": 0.0,
+    "cpuset": "/top-app"
+   }
+  }
+ ],
+ "features": {
+  "hwcap": 1,
+  "hwcap2": 0,
+  "page_size": 4096,
+  "dcache_line_bytes": 64
+ },
+ "memory": {
+  "memtotal_kb": 4000000
+ },
+ "vulkan": {
+  "present": true,
+  "device_name": "synGPU",
+  "api_version": "1.3.0",
+  "shader_float16": "yes",
+  "int_dot": true,
+  "compute_queue": true
+ },
+ "opencl_loadable": null,
+ "nnapi_devices": [
+  "nnapi-reference"
+ ],
+ "environment": {
+  "thermal_status": 0,
+  "thermal_headroom": 0.5,
+  "battery_pct": 80,
+  "charging": false,
+  "display_refresh_hz": 60,
+  "display_px": "1080x2400",
+  "screen_on": true,
+  "foreground_cpuset": "/top-app"
+ },
+ "pin_origin": "measured_app",
+ "pin_conditions": {
+  "thermal_status": 0,
+  "thermal_headroom": null,
+  "screen_on": true,
+  "foreground_cpuset": "/top-app",
+  "gate_basis": "cpuset_top_app",
+  "regime": "single_shot",
+  "note": "synthetic"
+ },
+ "unavailable": {
+  "opencl_loadable": "synthetic: not probed"
+ }
+}

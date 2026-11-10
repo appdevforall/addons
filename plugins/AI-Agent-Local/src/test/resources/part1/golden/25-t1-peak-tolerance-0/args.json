@@ -1,0 +1,8 @@
+{
+ "plugin_version": null,
+ "peak_tolerance": 0.0,
+ "input_names": [
+  "static.json",
+  "rows.jsonl"
+ ]
+}

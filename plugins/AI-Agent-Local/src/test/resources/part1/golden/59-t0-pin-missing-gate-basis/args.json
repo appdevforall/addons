@@ -1,0 +1,7 @@
+{
+ "plugin_version": null,
+ "peak_tolerance": 0.05,
+ "input_names": [
+  "static.json"
+ ]
+}

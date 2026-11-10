@@ -1,0 +1,17 @@
+{
+ "format": "part1-dbrecord-v1",
+ "match": {
+  "result": "none",
+  "key": null,
+  "how": "synthetic",
+  "how_class": "none"
+ },
+ "match_source": "synthetic matcher over the synthetic identity values",
+ "index": {
+  "index_version": "part1-dbindex-v1",
+  "snapshot_date": "2026-01-01",
+  "source_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "index_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+ },
+ "record": null
+}
