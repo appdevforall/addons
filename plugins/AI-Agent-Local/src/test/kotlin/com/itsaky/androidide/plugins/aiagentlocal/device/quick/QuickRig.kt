@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineResult
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.EngineRunner
 import com.itsaky.androidide.plugins.aiagentlocal.device.staticread.D5Like
 import com.itsaky.androidide.plugins.aiagentlocal.device.store.BindResult
+import com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps
 import com.itsaky.androidide.plugins.aiagentlocal.device.store.Part1Store
 import java.io.File
 
@@ -13,9 +14,9 @@ import java.io.File
  * A pass on fakes: the store is real (a temporary folder), bound and holding the T0 object of a D5-like or D1-like phone; the engine
  * serves the recorded rows of that phone and moves the fake clock by each row's recorded duration; every gate is a fake that passes.
  */
-class Rig(root: File, val phone: String = "D5", prepare: Boolean = true) {
+class Rig(root: File, val phone: String = "D5", prepare: Boolean = true, ops: FileOps = FileOps.Real) {
     val dir = File(root, "part1")
-    val store = Part1Store(dir)
+    val store = Part1Store(dir, ops)
     val clock = FakeClock()
     val fg = FakeForeground()
     val ide = FakeIde()

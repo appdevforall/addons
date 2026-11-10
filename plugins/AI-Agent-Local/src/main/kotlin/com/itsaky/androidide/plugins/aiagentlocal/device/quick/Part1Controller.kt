@@ -200,6 +200,9 @@ class Part1Controller(
             val tier = rt.newQuickTier()
             activeTier = tier
             try {
+                // close() sets `closed` and then reads `activeTier`; this sets `activeTier` and then reads `closed` (both volatile): either this
+                // sees `closed`, or close() sees the tier and cancels it. A cancel that comes after this check is permanent in the tier (QuickTier.run
+                // returns at once when it was deactivated before or during the call).
                 if (closed) return
                 val result = runInterruptible(Dispatchers.IO) { tier.run() }
                 if (result.status != QuickStatus.DEFERRED) sessionDone = true

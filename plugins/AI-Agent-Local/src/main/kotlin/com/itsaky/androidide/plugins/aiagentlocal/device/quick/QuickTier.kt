@@ -84,10 +84,26 @@ class QuickTier(
 
     @Volatile private var cancelReason: StopReason? = null
 
-    /** Cancels the pass (from the Cancel button, the watchdog or a cancelled load): destroys the running process and stops the next step. */
+    /**
+     * Set by `cancel(PLUGIN_DEACTIVATED)` and **never reset**: a deactivation is permanent for this tier. [run] does not clear it, and once it is set
+     * the pass thread makes no further store write (no row, no static input, no descriptor, no pass record). Rows stored before it stay.
+     * A write that is already inside the store when the flag is set cannot be taken back.
+     */
+    @Volatile private var deactivated = false
+
+    /**
+     * Cancels the pass (from the Cancel button, the watchdog, a cancelled load or the plugin's deactivation): destroys the running process and
+     * stops the next step. [StopReason.PLUGIN_DEACTIVATED] also makes the cancel permanent for this tier (see [deactivated]).
+     */
     fun cancel(reason: StopReason = StopReason.USER_CANCELLED) {
+        if (reason == StopReason.PLUGIN_DEACTIVATED) deactivated = true
         if (cancelReason == null) cancelReason = reason
         engine.cancel()
+    }
+
+    private fun deactivatedResult(): QuickResult {
+        log("T1 stopped: ${StopReason.PLUGIN_DEACTIVATED.code}")
+        return QuickResult(QuickStatus.CANCELLED, StopReason.PLUGIN_DEACTIVATED, 0, 0, 0, false)
     }
 
     /**
@@ -101,8 +117,10 @@ class QuickTier(
 
     /** Runs the pass. See the class comment. */
     fun run(): QuickResult {
+        if (deactivated) return deactivatedResult() // first: no store read, no question, no engine
         cancelReason = null
         engine.resetCancel()
+        if (deactivated) return deactivatedResult() // a deactivation that came while the cancel state was being reset
         var pass: Pass? = null
         var watch: AutoCloseable? = null
         var screenSet = false
@@ -112,12 +130,15 @@ class QuickTier(
             // F26: no question when the foreground or the IDE already fails; these two checks do not wait
             if (!foreground.isForeground()) return deferred(StopReason.NOT_FOREGROUND)
             if (ide.isBusy()) return deferred(StopReason.IDE_BUSY)
+            if (deactivated) return deactivatedResult()
             val answer = try {
                 ui.ask()
             } catch (e: InterruptedException) {
+                // the load was cancelled while the question was up: not a choice of the user
                 Thread.currentThread().interrupt()
-                QuickAnswer.SKIP
+                return if (deactivated) deactivatedResult() else QuickResult(QuickStatus.CANCELLED, StopReason.LOAD_CANCELLED, 0, 0, 0, false).also { log("T1 stopped: ${StopReason.LOAD_CANCELLED.code}") }
             }
+            if (deactivated) return deactivatedResult()
             when (answer) {
                 QuickAnswer.NO_ACTIVITY -> return deferred(StopReason.NO_ACTIVITY)
                 QuickAnswer.SKIP -> return QuickResult(QuickStatus.SKIPPED, StopReason.USER_SKIPPED, 0, 0, 0, false).also { log("T1 skipped by the user") }
@@ -180,6 +201,7 @@ class QuickTier(
         if (pin.state != RowState.STORED_PROBE || probe == null || probe.status != "ok") throw Stop(StopReason.PIN_PROBE_FAILED)
         p.pinProbe = pin.json
         val folded = StaticReader.foldPinProbe(p.static, probe)
+        if (deactivated) throw Stop(StopReason.PLUGIN_DEACTIVATED)
         if (!store.writeStatic(folded)) throw Stop(StopReason.STORE_FAILED)
         p.pinFolded = true
         p.static = folded
@@ -299,6 +321,7 @@ class QuickTier(
                     RowOutcome(RowState.NOT_STORED, json, null)
                 }
             }
+            if (deactivated) throw Stop(StopReason.PLUGIN_DEACTIVATED) // no row is written after a deactivation
             val record = adjust(withAppFacts(json, cond, wall, p))
             return when (val a = store.appendRow(record)) {
                 is AppendResult.Appended -> {
@@ -335,6 +358,7 @@ class QuickTier(
     // ---- gates ---------------------------------------------------------------------------------------------------
 
     private fun interruptedOrCancelled(): StopReason? {
+        if (deactivated) return StopReason.PLUGIN_DEACTIVATED
         cancelReason?.let { return it }
         if (Thread.currentThread().isInterrupted) return StopReason.LOAD_CANCELLED
         return null
@@ -400,15 +424,17 @@ class QuickTier(
     // ---- the end -------------------------------------------------------------------------------------------------
 
     private fun finish(p: Pass, stop: Stop?): QuickResult {
-        val reason = stop?.reason ?: if (p.incomplete) StopReason.ENGINE_RECORD_INVALID else StopReason.NONE
+        val dead = deactivated // read once: from here on a deactivated pass writes nothing
+        val reason = if (dead) StopReason.PLUGIN_DEACTIVATED else stop?.reason ?: if (p.incomplete) StopReason.ENGINE_RECORD_INVALID else StopReason.NONE
         val status = when {
+            dead -> QuickStatus.CANCELLED
             stop == null && !p.incomplete -> QuickStatus.COMPLETED
             stop == null -> QuickStatus.ENDED_EARLY
             else -> statusFor(stop.reason, p)
         }
         val elapsed = clock.nowMs() - p.startMs
         var regenerated = true
-        if (p.rowsStored > 0 || p.pinFolded) {
+        if (!dead && (p.rowsStored > 0 || p.pinFolded)) {
             regenerated = try {
                 store.regenerate(index(), pluginVersion) is RegenerateResult.Regenerated
             } catch (e: Exception) { // the index asset could not be read: the rows stay stored, the descriptor is regenerated at the next activation
@@ -417,11 +443,11 @@ class QuickTier(
             if (!regenerated) log("T1: the descriptor could not be regenerated")
         }
         var recorded = false
-        if (p.engineStarted) {
+        if (!dead && p.engineStarted) {
             recorded = store.writePassRecord(passRecord(p, status, reason, elapsed, regenerated), epochMs())
             if (!recorded) log("T1: the pass record could not be written")
         }
-        log("T1 ${status.code} (${reason.code}): ${p.rowsStored} rows stored, ${p.rowsVoid} void, $elapsed ms")
+        if (dead) log("T1 stopped: ${reason.code}") else log("T1 ${status.code} (${reason.code}): ${p.rowsStored} rows stored, ${p.rowsVoid} void, $elapsed ms")
         return QuickResult(status, reason, p.rowsStored, p.rowsVoid, elapsed, recorded)
     }
 

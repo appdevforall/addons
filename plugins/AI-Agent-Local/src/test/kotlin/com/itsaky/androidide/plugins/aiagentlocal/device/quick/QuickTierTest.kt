@@ -241,7 +241,7 @@ class QuickTierTest {
         deactivated.engine.beforeRun = { c -> if (c.tag == "C2-read-k0") tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
         val d = tier.run()
         assertEquals(StopReason.PLUGIN_DEACTIVATED, d.reason); assertEquals(QuickStatus.CANCELLED, d.status)
-        assertEquals("plugin_deactivated", deactivated.pass()["reason"])
+        assertNull("a deactivated pass writes no pass record", deactivated.store.readPassRecord())
         val load = rig(); load.ide.busy = { load.ui.asked > 0 }; load.clock.interruptOnSleep = true
         val l = load.run()
         assertEquals(StopReason.LOAD_CANCELLED, l.reason); assertEquals(QuickStatus.CANCELLED, l.status)
@@ -713,5 +713,107 @@ class QuickTierTest {
         assertEquals(5, r.store.readRows().lines.size)
         assertEquals(false, r.pass()["descriptor_regenerated"])
         assertTrue(r.logs.any { it.contains("could not be regenerated") })
+    }
+
+    // ---- G2: a deactivation is permanent for a tier, and a deactivated pass writes nothing more --------------------
+
+    @Test
+    fun givenTheTierIsDeactivatedBeforeRun_whenRunStarts_thenNoQuestionNoEngineCommandAndNoStoreWrite() {
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "d${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        val before = ops.replaced.size
+        val tier = r.tier()
+        tier.cancel(StopReason.PLUGIN_DEACTIVATED) // close() between the controller's check and tier.run()
+        val res = tier.run()
+        assertEquals(QuickStatus.CANCELLED, res.status); assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason)
+        assertEquals(0, r.ui.asked); assertTrue(r.engine.commands.isEmpty())
+        assertEquals(before, ops.replaced.size)
+        assertNull(r.store.readPassRecord())
+        assertEquals(1, r.logs.count { it == "T1 stopped: plugin_deactivated" })
+        assertEquals("run() must return before it resets the engine's cancel state", 0, r.engine.resets)
+    }
+
+    @Test
+    fun givenADeactivatedTier_whenRunIsCalledAgain_thenItReturnsAtOnceAndTheFlagIsNotReset() {
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "e${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        val tier = r.tier()
+        r.engine.beforeRun = { c -> if (c.tag == "C2-read-k0") tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, tier.run().reason)
+        val asked = r.ui.asked; val commands = r.engine.commands.size; val resets = r.engine.resets; val writes = ops.replaced.size
+        val again = tier.run()
+        assertEquals(QuickStatus.CANCELLED, again.status); assertEquals(StopReason.PLUGIN_DEACTIVATED, again.reason)
+        assertEquals(asked, r.ui.asked); assertEquals(commands, r.engine.commands.size); assertEquals(resets, r.engine.resets); assertEquals(writes, ops.replaced.size)
+    }
+
+    @Test
+    fun givenTheTierIsDeactivatedDuringARow_whenThePassEnds_thenNothingMoreIsWrittenAndRowsStoredBeforeStay() {
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "f${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        val tier = r.tier()
+        var writesAtClose = -1
+        r.engine.beforeRun = { c ->
+            if (c.tag == "C2-read-k1") { writesAtClose = ops.replaced.size; tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
+        }
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason); assertEquals(QuickStatus.CANCELLED, res.status)
+        assertTrue(writesAtClose > 0)
+        assertEquals("a store write happened after the deactivation", writesAtClose, ops.replaced.size)
+        assertFalse("t1-pass.json must not be written", r.dir.walkTopDown().any { it.name == "t1-pass.json" })
+        assertFalse(res.recorded)
+        assertTrue("the row stored before the deactivation stays", File(r.dir, "rows.jsonl").readText().contains("C2-read-k0"))
+        assertEquals(1, r.logs.count { it == "T1 stopped: plugin_deactivated" })
+        r.assertClean()
+    }
+
+    @Test
+    fun givenTheTierIsDeactivatedJustAfterARowRan_whenItsResultIsAboutToBeStored_thenTheRowIsNotWritten() {
+        // the flag comes while the pass reads the foreground after the engine returned: only the check before appendRow can stop the write
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "g${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        val tier = r.tier()
+        var writesAtClose = -1
+        r.fg.fg = {
+            if (r.engine.commands.size == 3 && writesAtClose < 0) { writesAtClose = ops.replaced.size; tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
+            true
+        }
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason)
+        assertEquals(3, r.engine.commands.size)
+        assertEquals("a row or record was written after the deactivation", writesAtClose, ops.replaced.size)
+        assertFalse(r.dir.walkTopDown().any { it.name == "t1-pass.json" })
+        assertFalse(File(r.dir, "rows.jsonl").readText().contains("C2-read-k1"))
+    }
+
+    @Test
+    fun givenTheTierIsDeactivatedDuringTheLastRow_whenThePassEnds_thenNoDescriptorAndNoPassRecordAreWritten() {
+        val ops = RecordingOps()
+        val r = Rig(File(tmp.root, "h${System.nanoTime()}").also { it.mkdirs() }, ops = ops)
+        val tier = r.tier()
+        var writesAtClose = -1
+        r.fg.fg = {
+            if (r.engine.commands.size == 6 && writesAtClose < 0) { writesAtClose = ops.replaced.size; tier.cancel(StopReason.PLUGIN_DEACTIVATED) }
+            true
+        }
+        val res = tier.run()
+        assertEquals(StopReason.PLUGIN_DEACTIVATED, res.reason)
+        assertEquals("a descriptor or pass record was written after the deactivation", writesAtClose, ops.replaced.size)
+        assertFalse(r.dir.walkTopDown().any { it.name == "t1-pass.json" })
+    }
+
+    // ---- G3: a load cancelled while the question is up ------------------------------------------------------------
+
+    @Test
+    fun givenTheLoadIsCancelledWhileTheQuestionIsUp_whenAskIsInterrupted_thenTheResultIsCancelledLoadCancelledNotSkipped() {
+        val r = rig()
+        r.ui.answer = { throw InterruptedException() }
+        val res = r.run()
+        val flag = Thread.interrupted() // restored by the tier; clear it so it does not leak into other tests
+        assertEquals(QuickStatus.CANCELLED, res.status); assertEquals(StopReason.LOAD_CANCELLED, res.reason)
+        assertTrue("the interrupt flag is restored", flag)
+        assertEquals(1, r.logs.count { it == "T1 stopped: load_cancelled" })
+        assertTrue(r.logs.none { it.contains("skipped by the user") })
+        assertNull("no pass record", r.store.readPassRecord())
+        assertTrue(r.engine.commands.isEmpty())
     }
 }

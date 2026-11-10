@@ -25,8 +25,8 @@ class Part1ControllerTest {
     val tmp = TemporaryFolder()
 
     /** A controller on fakes. [factoryCalls] counts how often the runtime was built. */
-    private inner class CRig(val root: File = File(tmp.root, "c${System.nanoTime()}").also { it.mkdirs() }) {
-        val rig = Rig(root, prepare = false)
+    private inner class CRig(val root: File = File(tmp.root, "c${System.nanoTime()}").also { it.mkdirs() }, ops: com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps = com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real) {
+        val rig = Rig(root, prepare = false, ops = ops)
         val phone = D5Like()
         var experiments = true
         var preference = true
@@ -515,8 +515,39 @@ class Part1ControllerTest {
         val c = CRig(); val ctl = c.controller(); ctl.onActivated()
         c.rig.engine.beforeRun = { cmd -> if (c.rig.tagOf(cmd) == "C2-read-k0") ctl.close() }
         runBlocking { ctl.beforeModelLoad() }
-        val rec = c.rig.store.readPassRecord()
-        assertEquals("cancelled", rec!!["status"]); assertEquals("plugin_deactivated", rec["reason"])
+        assertNull("a deactivated pass writes no pass record", c.rig.store.readPassRecord())
+        assertEquals(1, c.rig.logs.count { it == "T1 stopped: plugin_deactivated" })
+    }
+
+    @Test
+    fun givenCloseBetweenTheControllersCheckAndTheTier_whenTheTierIsBuilt_thenNoQuestionNoEngineCommandAndNoStoreWrite() {
+        val ops = RecordingOps(); val c = CRig(ops = ops)
+        val store = c.rig.store
+        var ctl: Part1Controller? = null
+        val rt = Part1Runtime(c.phone.reader(), store, { c.rig.index }, EngineRunner.EXPECTED_ENGINE_VERSION, "1", { ctl!!.close(); c.rig.tier() })
+        ctl = Part1Controller(Part1Switch { true }, { rt }, { it.run() }, { c.logs.add(it) })
+        ctl.onActivated()
+        val writes = ops.replaced.size
+        runBlocking { ctl.beforeModelLoad() }
+        assertEquals(0, c.rig.ui.asked); assertTrue(c.rig.engine.commands.isEmpty())
+        assertEquals(writes, ops.replaced.size)
+        assertFalse(c.rig.dir.walkTopDown().any { it.name == "t1-pass.json" })
+    }
+
+    @Test
+    fun givenCloseDuringARow_whenThePassEnds_thenNoStoreWriteHappensAfterTheCloseAndNoPassRecordIsWritten() {
+        val ops = RecordingOps(); val c = CRig(ops = ops)
+        val store = c.rig.store
+        val rt = Part1Runtime(c.phone.reader(), store, { c.rig.index }, EngineRunner.EXPECTED_ENGINE_VERSION, "1", { c.rig.tier() })
+        val ctl = Part1Controller(Part1Switch { true }, { rt }, { it.run() }, { c.logs.add(it) })
+        ctl.onActivated()
+        var writesAtClose = -1
+        c.rig.engine.beforeRun = { cmd -> if (c.rig.tagOf(cmd) == "C2-read-k1") { writesAtClose = ops.replaced.size; ctl.close() } }
+        runBlocking { ctl.beforeModelLoad() }
+        assertTrue(writesAtClose > 0)
+        assertEquals("a store write happened after close()", writesAtClose, ops.replaced.size)
+        assertFalse(c.rig.dir.walkTopDown().any { it.name == "t1-pass.json" })
+        assertTrue("rows stored before the close stay", File(c.rig.dir, "rows.jsonl").readText().contains("C2-read-k0"))
     }
 
     private fun runtimeOf(c: CRig): () -> Part1Runtime = { c.runtime() }

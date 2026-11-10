@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentlocal.device.quick
 
+import java.io.File
 import com.itsaky.androidide.plugins.aiagentlocal.device.Json
 import com.itsaky.androidide.plugins.aiagentlocal.device.Part1TestResources
 import com.itsaky.androidide.plugins.aiagentlocal.device.engine.CommandKind
@@ -185,3 +186,11 @@ fun staticWith(clusters: List<List<Int>>, unpinnable: Set<Int> = emptySet(), vul
 
 /** Resource helpers kept here so the tests of the quick package share one place. */
 internal fun d5Static(): Map<String, Any?> = Part1TestResources.obj("part1/golden/" + Part1TestResources.goldenCaseNames().first { it.endsWith("t0-no-rows-no-record") } + "/static.json")
+
+/** The real file operations, with a log of every file the store replaced (by name), so a test can show that no write happens after a point. */
+class RecordingOps : com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps {
+    val replaced = java.util.Collections.synchronizedList(ArrayList<String>())
+    override fun writeAndSync(file: File, bytes: ByteArray) = com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real.writeAndSync(file, bytes)
+    override fun moveReplacing(from: File, to: File) { com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real.moveReplacing(from, to); replaced.add(to.name) }
+    override fun delete(file: File) = com.itsaky.androidide.plugins.aiagentlocal.device.store.FileOps.Real.delete(file)
+}
