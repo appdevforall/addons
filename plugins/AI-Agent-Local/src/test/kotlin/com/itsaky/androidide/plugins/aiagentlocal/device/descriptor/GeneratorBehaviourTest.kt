@@ -146,4 +146,30 @@ class GeneratorBehaviourTest {
         val b = Json.fromOrg(DescriptorGenerator.generate(s, rows, r, "1"))
         assertEquals(emptyList<String>(), Json.diff(a, b))
     }
+
+    @Test
+    fun givenAWordAsALongAtTheBoundary_whenRead_thenTwoToThe53IsRefusedAndOneBelowIsKept() {
+        // the JSON reader refuses such integers earlier; the word reader is also a boundary of its own
+        assertEquals(java.math.BigInteger.valueOf((1L shl 53) - 1), DescriptorGenerator.word((1L shl 53) - 1, "w"))
+        try {
+            DescriptorGenerator.word(1L shl 53, "w")
+            fail("2^53 accepted")
+        } catch (e: JsonException) {
+            assertEquals("w", e.path)
+        }
+        assertEquals(null, DescriptorGenerator.word(null, "w"))
+        assertEquals(java.math.BigInteger("18446744073709551615"), DescriptorGenerator.word("0xffffffffffffffff", "w"))
+    }
+
+    @Test
+    fun givenMemberValuesAsALongAndADoubleOfTheSameNumber_whenAClusterIsBuilt_thenTheyAreOneValue() {
+        // a tree that did not come from JSON text may hold 1800000 and 1800000.0 side by side (generate.py B2)
+        val s = staticOf("t0-no-rows-no-record")
+        val cpus = Json.arr(s["cpus"], "cpus").mapIndexed { i, c ->
+            if (i == 1) Json.obj(c, "cpu") + ("max_khz" to 1800000.0) else c
+        }
+        val d = DescriptorGenerator.generateTree(s + ("cpus" to cpus), emptyList(), null, null, 0.05, emptyList())
+        val k0 = Json.obj(Json.arr(d["clusters"], "clusters")[0], "k0")
+        assertEquals("static_read", Json.obj(k0["max_khz"], "max_khz")["origin"])
+    }
 }
