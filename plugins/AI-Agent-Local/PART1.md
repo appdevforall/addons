@@ -2,7 +2,7 @@
 
 Part 1 of ADFA-6876 lets the plugin describe the phone it runs on, so that the local model can later choose threads, cores and a backend
 that suit the phone. It writes one JSON document, the **device descriptor** (schema v0.2), and the measurements behind it. **It is
-experimental and off by default.** Nothing in this document changes how models load or run: the descriptor is only written, nothing in the
+experimental and off by default.** Apart from the bounded hold on the first load of a session described below, nothing here changes how models load or run: the descriptor is only written, nothing in the
 plugin reads it yet (`InferenceThreads` and every other behaviour stay as they were).
 
 ## How to switch it on
@@ -25,20 +25,28 @@ written stay where they are.
 
 **The question.** Before anything is measured, one dialog on the IDE's current screen says what T1 is and that it takes about a minute, with
 **Run now** and **Skip**. While it runs, a progress dialog shows "Step *i* of *n*" and what is being measured, with a **Cancel** button. Skip
-or Cancel loads the model as before; cancelled and void rows are not stored as measurements; the question comes again at the next session's
-first load. With no screen available, T1 is tried again at the next load. The screen is kept on for the duration and released on every way out.
+or Cancel loads the model as before; cancelled and void rows are not stored as measurements (they are counted in `rows_void` and listed in the pass record,
+a cancelled one as `void_cancelled`); the question comes again at the next session's first load. Any end except "deferred" (Skip, Cancel, ended early, failed)
+stops T1 for the rest of the session. With no screen available, T1 is tried again at the next load. The screen is kept on for the duration and released on every way out.
 
-**Gates** (checked before the start and before every row): the app is in the foreground (the engine also refuses by itself with exit 97, which
-voids the pass); the IDE is quiet (no build or sync; a busy IDE is waited for up to 60 s, then T1 is deferred to the next load, and a build
-that starts during a row voids that row, which is repeated once); the battery is at least 20 % and has not dropped 5 points since the start;
+**When T1 is not offered.** No question is asked when the last T0 showed that the engine cannot run (`exec_blocked`, `program_missing` or `engine_mismatch` on
+either probe: one log line, and the pass record is written once as `skipped` with that reason); when the host offers no build-status service (deferred, reason
+`ide_gate_unavailable`); or when another model is still loaded at that load (deferred, reason `model_resident`).
+
+**Gates** (checked before the start and before every row): the app is in the foreground (the app's process importance, plus the activity being at least resumed, plus the engine's own refusal with exit 97, which voids **that row** and
+stops the pass: rows stored earlier in the same pass stay, the pass is `ended_early` with reason `not_foreground`, and T1 is offered again next session); the IDE is quiet (no build or sync; before the question the check does not wait: a busy IDE or a lost foreground defers T1 without asking.
+After "Run now" a busy IDE is waited for up to 60 s: before the first row T1 is then deferred to the next load; before a later row the pass ends early and is not
+retried in this session; a build that starts during a row voids that row, which is repeated once); the battery is at least 20 % and has not dropped 5 points since the start;
 the thermal status is none or light (a hotter phone is waited for up to 60 s per row and the wait is recorded; a fixed 10 s rest only when neither
 the status nor the headroom can be read); and the memory limit `min(55 % of MemTotal, 70 % of MemAvailable)` is read just before each row.
-A pass is cancelled after 180 s in all. Nothing here can make a model load fail or hang.
+A pass is cancelled 180 s after "Run now". Nothing here makes a model load fail; but the hold on the first load is bounded, not short.
+**Worst case before the model loads, on the first load of a session:** up to 15 s waiting for T0, up to 90 s for the question, up to 180 s for the
+pass (counted from "Run now"), plus the time to write the records. A pass that is not offered (see below) costs none of that.
 
 ## What it stores, and where
 
-Everything is in the plugin's own data directory, under `part1/` (and `part1-work/` as the engine's working directory). Nothing leaves the
-phone: the plugin uses no network API for Part 1.
+Everything is in the plugin's own data directory, under `part1/` (and `part1-work/` as the engine's working directory). This version
+sends nothing. A later version will let users who opt in to telemetry contribute their device's measurements; that is not in this code. The plugin uses no network API for Part 1.
 
 | File | Content |
 |---|---|
@@ -51,16 +59,16 @@ phone: the plugin uses no network API for Part 1.
 | `key.txt` | The device key: sha256 of the build fingerprint, the engine id and the schema version. |
 | `old/<12 hex>/` | The files of an earlier key (a system update changes the fingerprint), at most three archives. |
 
-The files are written atomically. All of `part1/` is capped at 1 MiB (see the store's class comment for the exact worst case). Nothing is read
-or written before the store is bound to this device in the running process, and a failed key change leaves a marker so that a restart is blocked
-too until a bind succeeds. **The build fingerprint and the device key are never logged and never shown in the interface.** Log lines name rows
+The files are written atomically. All of `part1/` is capped at 1 MiB; the exact worst case is `maxTotalBytes + 65 * maxArchives` bytes at rest and `2 * maxTotalBytes + 65 * maxArchives` during a write
+(the store's class comment). A store instance reads and
+writes nothing until its own bind succeeds in the running process, and a failed key change is retried at the next bind (the next activation). **The build fingerprint and the device key are never logged and never shown in the interface.** Log lines name rows
 and outcomes only.
 
 ## What it never reads
 
 No serial number, Android ID, IMEI or MEID, account, phone number, IP or MAC address, Wi-Fi name, location, installed-app list, file outside
-the plugin's own folder and the fixed system files named in `StaticReader` (`/sys/devices/system/cpu`, `/proc/meminfo`,
-`/vendor/etc/public.libraries.txt`), no project content, no model name or file, and no prompt. It does not load a vendor GPU library into the
+the plugin's own folder and the fixed system files named in `StaticReader` and the memory guard (`/sys/devices/system/cpu`, `/proc/meminfo`,
+`/vendor/etc/public.libraries.txt`), no `/proc/<pid>` entry of another process, no project content, no model name or file, and no prompt. It does not load a vendor GPU library into the
 IDE's process.
 
 ## File formats
@@ -81,7 +89,7 @@ By reference; this document does not repeat them.
   The engine labels such a row `gpu_rate_unstable` (largest/smallest at least 1.25); the descriptor leaf keeps the label, and consumers must read it
   as a range.
 - **Not in scope:** 32-bit phones and Android 12 or older (the plugin itself needs Android 13+ and arm64). NNAPI devices are not read.
-- **Quiet IDE.** With the host's build-status service the gate sees builds and project syncs, not indexing inside the IDE. Without the service, a scan
-  of the app's own processes for a Gradle or Java daemon stands in (and counts an idle daemon as busy).
+- **Quiet IDE.** With the host's build-status service the gate sees builds and project syncs, not indexing inside the IDE. Without the service T1 is not offered
+  (`ide_gate_unavailable`). The plugin reads no `/proc/<pid>` entry of another process.
 - **Foreground.** The check is the app process's importance plus the engine's own cpuset check; it is proven on a phone only by the smoke test.
 - Part 1 is validated only on the five phones of the plan; the tiers T2 (full), T3 (sustained) and the contribution flow are not part of this change.
