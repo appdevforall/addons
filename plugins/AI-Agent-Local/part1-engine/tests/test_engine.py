@@ -9,7 +9,7 @@ How it works. No qemu-aarch64 is installed, so the AArch64 binaries cannot run h
 Option parsing, the foreground gate, the memory guard, pinning/unpinned handling, the time limit, the JSON writer and the exit codes are therefore the
 engine's real code. Not covered here (needs a phone): the asm kernels, real Vulkan dispatch, real /proc/self/cpuset values.
 The environment variables P1_CPUSET_PATH and P1_MEMINFO_PATH redirect the two /proc files in the host build only.
-The JSON lines are checked against descriptor-v02/part1-rows-v1.schema.json (jsonschema, already installed) AS EMITTED (P1-03F B1: the
+The JSON lines are checked against schemas/part1-rows-v1.schema.json, the copy of descriptor-v02's schema (jsonschema, already installed) AS EMITTED (P1-03F B1: the
 schema has the optional fields `reason` and `minflt_timed` since descriptor-v02 P24; nothing is removed or added). The one documented exception is a usage
 error reported before `--tag` was parsed: that record has no `tag` (the app adds it), so only then is a placeholder tag put in before the check.
 P1-03F: set the environment variable P1_SRC_ROOT to another engine tree (for example history/pre-P1-03F) to build the host binaries from that tree and see
@@ -32,13 +32,22 @@ def rd(path, mode="r"):
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = os.environ.get("P1_SRC_ROOT") or ROOT      # tree whose src/ the host binaries are built from (default: this tree)
-SCHEMA = os.environ.get("P1_ROWS_SCHEMA") or "descriptor-v02/part1-rows-v1.schema.json"   # P1_ROWS_SCHEMA: only to show that the B1 tests fail with the schema of before P1-03F
-KIT_MEMBW = "intake-v4d5x/intake/src/membw.c"
-KIT_GPUBW = "intake-v4d5x/intake/src/gpubw/gpubw.c"
-KIT_PIN = "intake-v4d5x/intake/src/pinretry.h"
-KIT_SPV = "intake-v4d5x/intake/src/gpubw/shader_spv.h"
+SCHEMA = os.environ.get("P1_ROWS_SCHEMA") or os.path.join(ROOT, "schemas", "part1-rows-v1.schema.json")   # P1_ROWS_SCHEMA: only to show that the B1 tests fail with the schema of before P1-03F
+# The kit-dependent checks take the kit location from PART1_KIT_DIR (the kit's `intake` directory, which holds src/ and bin/);
+# without it they skip with a clear message. The repository holds no copy of the kit.
+KIT_DIR = os.environ.get("PART1_KIT_DIR") or ""
+KIT_SKIP = "kit sources not present: set PART1_KIT_DIR to the kit's intake directory"
+KIT_MEMBW = os.path.join(KIT_DIR, "src/membw.c") if KIT_DIR else ""
+KIT_GPUBW = os.path.join(KIT_DIR, "src/gpubw/gpubw.c") if KIT_DIR else ""
+KIT_PIN = os.path.join(KIT_DIR, "src/pinretry.h") if KIT_DIR else ""
+KIT_SPV = os.path.join(KIT_DIR, "src/gpubw/shader_spv.h") if KIT_DIR else ""
+# The lab's build outputs (out/) and raw logs (raw/) are not part of the repository copy; the checks that read them skip without them.
+HAVE_OUT = os.path.exists(os.path.join(ROOT, "out", "arm64-v8a", "libpart1_membw.so"))
+HAVE_RAW = os.path.isdir(os.path.join(SRC, "raw"))
+OUT_SKIP = "the lab's out/arm64-v8a/ (built programs) is not part of the repository copy"
+RAW_SKIP = "the lab's raw/ (recorded logs) is not part of the repository copy"
 PINPROBE_SCHEMA = os.path.join(ROOT, "part1-pinprobe-v1.schema.json")
-KIT_BIN_FOR_TOOL = "intake-v4d5x/intake/bin/membw"
+KIT_BIN_FOR_TOOL = os.path.join(KIT_DIR, "bin/membw") if KIT_DIR else ""
 TMP = None
 MEMBW = GPUBW = GPUBW_FULL = FAKEAFF = FAKESPAM = FAKEOPEN = MEMBW_PROD = None
 NDK = None
@@ -544,7 +553,7 @@ class TestDocsAndSources(unittest.TestCase):
         self.assertRegex(v, r"^\d+\.\d+\.\d+$")
         self.assertIn("VERSION", rd(os.path.join(ROOT, "build.sh")))
 
-    @unittest.skipUnless(os.path.exists(KIT_MEMBW), "kit sources not present")
+    @unittest.skipUnless(KIT_MEMBW and os.path.exists(KIT_MEMBW), KIT_SKIP)
     def test_kernel_text_is_the_kits(self):
         kit = rd(KIT_MEMBW).split("\n")
         mine = rd(os.path.join(ROOT, "src", "membw.c")).split("\n")
@@ -565,7 +574,7 @@ class TestDocsAndSources(unittest.TestCase):
         mt = region(mine, "typedef struct { const char *id", "static uint64_t now_ns")
         self.assertEqual(kt, mt)
 
-    @unittest.skipUnless(os.path.exists(KIT_PIN), "kit sources not present")
+    @unittest.skipUnless(KIT_PIN and os.path.exists(KIT_PIN), KIT_SKIP)
     def test_pinretry_and_shader_are_byte_copies(self):
         self.assertEqual(rd(KIT_PIN, "rb"), rd(os.path.join(ROOT, "src", "pinretry.h"), "rb"))
         self.assertEqual(rd(KIT_SPV, "rb"), rd(os.path.join(ROOT, "src", "gpubw", "shader_spv.h"), "rb"))
@@ -592,7 +601,7 @@ class TestDocsAndSources(unittest.TestCase):
                     self.fail("%s contains a MAC- or IP-like string: %s" % (p, m.group(0)))
 
 
-@unittest.skipUnless(find_ndk(), "no NDK")
+@unittest.skipUnless(find_ndk() and HAVE_OUT, "no NDK, or " + OUT_SKIP)
 class TestCrossBuiltBinaries(unittest.TestCase):
     """ELF facts of the shipped arm64 binaries (they cannot be run here: no qemu-aarch64)."""
 
@@ -891,6 +900,7 @@ class TestB8ProductionIgnoresPinRetryEnv(unittest.TestCase):
 class TestB9BuildScriptLogs(unittest.TestCase):
     """B9 (review F13): build.sh writes its logs under the chosen output directory and leaves raw/ alone; its header does not mention an ELF check."""
 
+    @unittest.skipUnless(HAVE_RAW, RAW_SKIP)
     def test_logs_go_to_outdir(self):
         out = uniq("build-out")
         before = {n: os.stat(os.path.join(SRC, "raw", n)).st_mtime_ns for n in os.listdir(os.path.join(SRC, "raw")) if n.startswith("build-")}
@@ -1246,8 +1256,8 @@ class TestH_A4_ChunkSetupAndTeardown(unittest.TestCase):
     SHIPPED = os.path.join(ROOT, "out", "arm64-v8a", "libpart1_membw.so")
 
     def setUp(self):
-        if not (os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL) and NDK and os.path.exists(self.SHIPPED)):
-            self.skipTest("kit sources, NDK or the built binary not present")
+        if not (KIT_DIR and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL) and NDK and os.path.exists(self.SHIPPED)):
+            self.skipTest(KIT_SKIP + " (and the NDK and out/arm64-v8a/libpart1_membw.so must be present)")
         self.bin_dir = os.path.join(NDK, "toolchains/llvm/prebuilt/linux-x86_64/bin")
 
     def tool(self, shipped, tag):
@@ -1883,7 +1893,7 @@ class TestC_DocsStatements(unittest.TestCase):
         self.assertIn("x25->x12", t)
         self.assertNotIn("def canon", t)                              # the any-rename check is gone
 
-    @unittest.skipUnless(os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL), "kit sources or NDK not present")
+    @unittest.skipUnless(KIT_MEMBW and os.path.exists(KIT_MEMBW) and os.path.exists(KIT_BIN_FOR_TOOL) and HAVE_OUT, KIT_SKIP + " (and " + OUT_SKIP + ")")
     def test_g_f01_tool_is_strict(self):
         tool = os.path.join(ROOT, "tools", "kernel_identity.py")
         src = rd(tool)
@@ -1917,6 +1927,7 @@ class TestC_DocsStatements(unittest.TestCase):
                 for cmd in re.findall(r"`([^`]*)`", r):
                     self.assertLessEqual(cmd.count("--fit-buffer"), 1, cmd)
 
+    @unittest.skipUnless(HAVE_RAW and HAVE_OUT, RAW_SKIP + " / " + OUT_SKIP)
     def test_g_raw_build_logs_are_the_current_build(self):
         for n in ("membw", "gpubw"):
             a = rd(os.path.join(ROOT, "raw", "build-%s.log" % n))

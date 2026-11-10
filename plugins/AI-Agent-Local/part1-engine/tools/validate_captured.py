@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """validate_captured.py CAPTURE.jsonl: validate the last JSON line of every captured engine run, exactly as emitted, against the schema of its `format` (part1-rows-v1 from
-descriptor-v02, part1-pinprobe-v1, part1-staticprobe-v1, part1-gpuprobe-v1). The two documented exceptions of the rows schema are counted, not hidden: an exit 2 (or the exit 1 for an unreadable CPU list) raised before --tag was parsed
+schemas/ (a copy of descriptor-v02's), part1-pinprobe-v1, part1-staticprobe-v1, part1-gpuprobe-v1). The two documented exceptions of the rows schema are counted, not hidden: an exit 2 (or the exit 1 for an unreadable CPU list) raised before --tag was parsed
 (no `tag`) and a helper-tag row. Exit 1 when any other line is invalid. usage: python3 -I -B tools/validate_captured.py CAPTURE.jsonl"""
 import json, os, sys, collections
 import jsonschema
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCH = {"part1-rows-v1": "descriptor-v02/part1-rows-v1.schema.json"}
+SCH = {"part1-rows-v1": os.path.join(ROOT, "schemas", "part1-rows-v1.schema.json")}
 for k in ("pinprobe", "staticprobe", "gpuprobe"):
     SCH["part1-%s-v1" % k] = os.path.join(ROOT, "part1-%s-v1.schema.json" % k)
 V = {k: jsonschema.Draft202012Validator(json.load(open(v))) for k, v in SCH.items()}

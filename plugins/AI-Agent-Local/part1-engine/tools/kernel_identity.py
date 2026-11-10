@@ -19,8 +19,12 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KIT_SRC = "intake-v4d5x/intake/src"
-KIT_BIN = "intake-v4d5x/intake/bin/membw"
+KIT_DIR = os.environ.get("PART1_KIT_DIR")   # the kit's `intake` directory (src/, bin/); the repository holds no copy of the kit
+if not KIT_DIR:
+    print("skipped: kernel_identity.py needs the kit; set PART1_KIT_DIR to the kit's intake directory")
+    sys.exit(77)
+KIT_SRC = os.path.join(KIT_DIR, "src")
+KIT_BIN = os.path.join(KIT_DIR, "bin/membw")
 NDK = sorted(glob.glob(os.path.expanduser("~/Android/Sdk/ndk/*")))[-1]
 TC = os.path.join(NDK, "toolchains/llvm/prebuilt/linux-x86_64/bin")
 FUNCS = ["k%02d" % i for i in range(1, 13)]

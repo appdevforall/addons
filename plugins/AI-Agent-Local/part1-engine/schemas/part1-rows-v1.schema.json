@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adfa.invalid/part1-rows-v1.schema.json",
+  "title": "Part 1 measurement row, format part1-rows-v1 (one JSON object per line)",
+  "type": "object",
+  "required": ["format", "tag", "kind", "status", "cpu_set", "threads", "buffer_mib", "gbs_median", "gbs_min", "gbs_max", "repeats", "single_shot", "variant", "pin", "exit_code", "gate_basis", "conditions", "duration_s", "engine_version", "origin", "labels"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {"const": "part1-rows-v1"},
+    "tag": {
+      "type": "string",
+      "pattern": "^(pinprobe|C1-sweep-k[0-9]+|C2-read-k[0-9]+|C3-read-2fast|C4-read-all|C5-write-k[0-9]+|C6-copy-k[0-9]+|C7-gpu-alone|C8-gpu-with-cpustream|C9-prefetch-k[0-9]+-d[0-9]+|PC-pacer-[a-z0-9]+-(on|off)|S1-gpu-10min|S2-read-10min)$"
+    },
+    "kit_tag": {"type": "string", "description": "Tag of the shell-kit row this record was converted from (kit_to_rows.py only)."},
+    "kind": {"enum": ["pinprobe", "read", "write", "copy", "gpu", "sweep", "prefetch", "pacer", "sustained"]},
+    "tier": {"enum": ["T1", "T2", "T3"]},
+    "status": {"enum": ["ok", "void", "unsupported", "skipped", "failed"]},
+    "cpu_set": {"type": "array", "items": {"type": "integer", "minimum": 0}, "uniqueItems": true, "description": "CPUs the row's threads were pinned to (for a GPU row with a CPU stream: the stream's CPUs; empty if none or not recorded)."},
+    "threads": {"type": "integer", "minimum": 0},
+    "buffer_mib": {"type": ["number", "null"], "description": "Per-thread buffer actually used."},
+    "gbs_median": {"type": ["number", "null"], "minimum": 0},
+    "gbs_min": {"type": ["number", "null"], "minimum": 0},
+    "gbs_max": {"type": ["number", "null"], "minimum": 0},
+    "repeats": {"type": "integer", "minimum": 1, "description": "Independent repeats behind median/min/max. T1 rows: 1 and single_shot true."},
+    "single_shot": {"type": "boolean"},
+    "passes": {"type": ["integer", "null"], "description": "Timed passes inside one repeat, where the engine reports it."},
+    "minflt_timed": {"type": "integer", "minimum": 0, "description": "Minor page faults in the timed windows (in-app engine; kit_to_rows.py does not emit it)."},
+    "reason": {"type": "string", "description": "Refusal or error text (in-app engine; kit_to_rows.py does not emit it)."},
+    "variant": {"type": ["string", "null"], "description": "Free-text kernel/variant label; the kit's main_variant column."},
+    "pin": {
+      "type": "object",
+      "required": ["result", "attempts", "time_to_pin_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "result": {"enum": ["ok", "substituted", "unpinned", "failed", "not_applicable"]},
+        "attempts": {"type": ["integer", "null"], "minimum": 0},
+        "time_to_pin_ms": {"type": ["number", "null"], "minimum": 0},
+        "substituted_for": {"type": ["integer", "null"]}
+      }
+    },
+    "exit_code": {"type": "integer"},
+    "gate_basis": {"type": "string", "description": "What allowed the row to start (cpuset, thermal gate, rest rule). 'none' is allowed and means no gate was applied."},
+    "conditions": {"$ref": "#/$defs/conditions"},
+    "duration_s": {"type": ["number", "null"], "minimum": 0},
+    "duration_basis": {"type": "string"},
+    "engine_version": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+/[A-Za-z0-9._-]+$", "description": "Engine id <engine name>/<version>, e.g. kit/v4d-5w or part1-engine/0.2.0."},
+    "origin": {"enum": ["measured_app", "measured_shell"]},
+    "labels": {"type": "array", "items": {"type": "string"}, "description": "Validity labels (memory_pressure, smaller buffer, foreign load, ...)."}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "ok"}}, "required": ["status"]}, "then": {"properties": {"gbs_median": {"type": "number"}}}},
+    {"if": {"properties": {"repeats": {"minimum": 2}}, "required": ["repeats"]}, "then": {"properties": {"gbs_min": {"type": "number"}, "gbs_max": {"type": "number"}, "single_shot": {"const": false}}}},
+    {"if": {"properties": {"single_shot": {"const": true}}, "required": ["single_shot"]}, "then": {"properties": {"repeats": {"const": 1}}}}
+  ],
+  "$defs": {
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "thermal_status": {"type": ["integer", "null"]},
+        "thermal_headroom": {"type": ["number", "null"]},
+        "battery_pct": {"type": ["number", "null"]},
+        "charging": {"type": ["boolean", "null"]},
+        "display_refresh_hz": {"type": ["number", "null"]},
+        "display_px": {"type": ["string", "null"]},
+        "screen_on": {"type": ["boolean", "null"]},
+        "foreground_cpuset": {"type": ["string", "null"]},
+        "gate_basis": {"type": ["string", "null"]},
+        "buffer_mib": {"type": ["number", "null"]},
+        "cpu_set": {"type": ["string", "null"]},
+        "pin": {"type": ["string", "null"]},
+        "start_temp_c": {"type": ["number", "null"]},
+        "memavail_mib": {"type": ["number", "null"]},
+        "memtotal_mib": {"type": ["number", "null"]},
+        "regime": {"enum": ["single_shot", "median_of_repeats", "sustained", "static", null]},
+        "kit": {"type": ["string", "null"]},
+        "note": {"type": ["string", "null"]},
+        "threads": {"type": ["integer", "null"], "minimum": 0},
+        "labels": {"type": "array", "items": {"type": "string"}},
+        "comparable": {"type": ["boolean", "null"]}
+      }
+    }
+  }
+}
