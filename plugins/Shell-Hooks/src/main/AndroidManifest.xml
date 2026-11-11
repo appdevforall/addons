@@ -32,13 +32,24 @@
             android:name="plugin.min_ide_version"
             android:value="26.47" />
 
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
         <!-- system.commands: runs the user's hook scripts through IdeCommandService
              and their actions in the Terminal through IdeTerminalService.
              filesystem.read: the open file, the project root, and the file and
-             project listeners all need it. -->
+             project listeners all need it.
+             filesystem.write: "Create sample hooks" writes scripts into the user's
+             hooks folder. -->
         <meta-data
             android:name="plugin.permissions"
-            android:value="system.commands,filesystem.read" />
+            android:value="system.commands,filesystem.read,filesystem.write" />
+
+        <!-- The Hooks tab in the editor's bottom panel (UIExtension.getEditorTabs). -->
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
 
         <meta-data
             android:name="plugin.main_class"
