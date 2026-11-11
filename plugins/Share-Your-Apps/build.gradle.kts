@@ -102,7 +102,7 @@ tasks.matching { it.name.startsWith("assemblePlugin") }.configureEach {
 // downloadAssets before assemblePlugin, as its own invocation, so CI makes the APK this way. In CI the server must be
 // signed with its release key, from the SERVER_SIGNING_* variables: an unsigned or differently signed server can't
 // update the one already on owners' phones, so the build stops instead.
-val downloadAssets by tasks.registering(Exec::class) {
+tasks.register<Exec>("downloadAssets") {
     val serverDir = layout.projectDirectory.dir("server").asFile
     val built = layout.projectDirectory.file("server/app/build/outputs/apk/release/app-release.apk").asFile
     val bundled = layout.projectDirectory.file("src/main/assets/share-your-apps-server.apk").asFile
@@ -131,7 +131,7 @@ configurations.configureEach {
 }
 
 dependencies {
-    compileOnly(files("libs/plugin-api.jar"))
+    compileOnly(files("../../libs/plugin-api.jar"))
     // Pebble renders the catalog page. compileOnly: at runtime the plugin uses CodeOnTheGo's own
     // copy (4.1.1, kept intact by its build), found through the plugin's parent class loader.
     compileOnly("io.pebbletemplates:pebble:4.1.1")
@@ -172,6 +172,6 @@ tasks.matching {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17"))
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }

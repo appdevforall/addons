@@ -3,7 +3,7 @@ import java.util.Properties
 import java.io.FileInputStream
 
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.application")
 }
 
 // Release signing. CI sets the four SERVER_SIGNING_* variables from repository secrets (see the
@@ -144,7 +144,7 @@ tasks.withType<JavaCompile> {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17"))
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
  
