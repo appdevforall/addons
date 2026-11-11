@@ -52,7 +52,7 @@ android {
         applicationId = "org.appdevforall.shareyourapps.server"
         minSdk = 28 
         targetSdk = 36  
-        versionCode = 49
+        versionCode = 50
         versionName = "1.0.$versionCode"
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
         

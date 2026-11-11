@@ -39,7 +39,12 @@ class ShareYourAppsPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun activate(): Boolean = true
     override fun deactivate(): Boolean = true
-    override fun dispose() {}
+    override fun dispose() {
+        PublishFlow.dispose()
+        ServerInstaller.dispose()
+        CatalogState.dispose()
+        context = null
+    }
 
     override fun getEditorTabs(): List<TabItem> = listOf(
         TabItem(
@@ -49,6 +54,7 @@ class ShareYourAppsPlugin : IPlugin, UIExtension, DocumentationExtension {
             isEnabled = true,
             isVisible = true,
             order = 0,
+            tooltipTag = Help.OVERVIEW,
         )
     )
 

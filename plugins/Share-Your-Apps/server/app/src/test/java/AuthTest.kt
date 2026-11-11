@@ -116,6 +116,20 @@ fun runChecks(): List<String> {
     check("POST elsewhere is 405", http(p, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n").status == 405)
     srv.stop()
 
+    // Wrong PINs: after PIN_FREE_TRIES a client waits, even for the right PIN, and the wait doubles.
+    var nowMs = 1_000_000L
+    val locked = HttpServer(store, listOf(InetAddress.getByName("127.0.0.1")), 0, log, Auth("4321", secret, null), clock = { nowMs })
+    locked.start(); val lp = locked.boundPort
+    repeat(HttpServer.PIN_FREE_TRIES) { postPin(lp, "0000") }
+    check("after ${HttpServer.PIN_FREE_TRIES} wrong PINs, even the right one waits", postPin(lp, "4321").let { it.status == 429 && it.headers["set-cookie"] == null && it.text.contains("Too many wrong PINs") })
+    nowMs += HttpServer.PIN_LOCKOUT_MS
+    check("once the wait is over, a wrong PIN locks again for twice as long", postPin(lp, "0000").status == 200 &&
+        postPin(lp, "4321").status == 429 && run { nowMs += HttpServer.PIN_LOCKOUT_MS; postPin(lp, "4321").status == 429 })
+    nowMs += HttpServer.PIN_LOCKOUT_MS
+    check("after the doubled wait, the right PIN works", postPin(lp, "4321").status == 302)
+    check("…and a right PIN clears the count", postPin(lp, "0000").status == 200 && postPin(lp, "4321").status == 302)
+    locked.stop()
+
     // A server with no token configured must not accept an empty or any token.
     val noTok = HttpServer(store, listOf(InetAddress.getByName("127.0.0.1")), 0, log, Auth("1", secret, null))
     noTok.start()

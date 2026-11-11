@@ -27,8 +27,8 @@ android {
         applicationId = "org.appdevforall.shareyourapps"
         minSdk = 28 
         targetSdk = 36 
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
         // When this build was made, for the Share Your Apps tab's footer. Release builds use
         // --no-configuration-cache, so theirs is exact; a cached debug build may show an older time.
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")

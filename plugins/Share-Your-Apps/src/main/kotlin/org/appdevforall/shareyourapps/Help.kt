@@ -53,6 +53,8 @@ object Help {
             "<p>Up to 6 digits. Leave it empty for an open store.</p>" +
                 "<p>After entering the PIN, a buyer's browser stays signed in for 24 hours. Changing the PIN " +
                 "doesn't sign anyone out.</p>" +
+                "<p>After 5 wrong PINs, a phone must wait 30 seconds before trying again, and twice as long after " +
+                "each further wrong PIN.</p>" +
                 "<p>The store doesn't use encryption, so treat the PIN as a way to keep casual visitors out, not " +
                 "as real security.</p>"),
         e(PRODUCTS, "The apps in your store, in the order buyers see them.",

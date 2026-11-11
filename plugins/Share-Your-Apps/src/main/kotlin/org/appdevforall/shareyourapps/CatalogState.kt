@@ -13,7 +13,7 @@ import java.util.concurrent.Executors
 object CatalogState {
 
     private val main = Handler(Looper.getMainLooper())
-    private val writer = Executors.newSingleThreadExecutor()
+    private var writer = Executors.newSingleThreadExecutor()
     private val saveSoon = Runnable { saveNow() }
     private var dataDir: File? = null
 
@@ -128,11 +128,19 @@ object CatalogState {
         products = catalog.products.mapIndexed { i, p -> p.copy(ordinal = i + 1) }
     )
 
+    /** The plugin is being unloaded: saves any edit still waiting, lets that write finish, and stops the writer's thread. */
+    fun dispose() {
+        saveNow()
+        writer.shutdown()
+        dataDir = null
+    }
+
     fun saveNow() {
         main.removeCallbacks(saveSoon)
         val dir = dataDir ?: return
         val json = snapshot().toJson().toString(2)
         if (json == lastWritten) return
+        if (writer.isShutdown) writer = Executors.newSingleThreadExecutor()
         writer.execute {
             writing = true
             runCatching {

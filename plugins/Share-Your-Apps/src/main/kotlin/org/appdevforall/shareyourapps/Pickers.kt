@@ -33,26 +33,51 @@ object Pickers {
             .setNegativeButton("Cancel", null).show()
     }
 
-    /** The APKs the project has built, newest first, from any module's build/outputs/apk. */
+    /**
+     * The APKs the project has built, newest first, from any module's outputs/apk. CodeOnTheGo 26.45
+     * and later build into its own private storage instead of the project's build folders (see
+     * [relocatedBuildTree]); older versions, and projects not yet synced since, still use the project's.
+     */
     fun pickApk(ctx: Context, project: String?, pick: (String?) -> Unit) {
         if (project == null) { message(ctx, "Choose an APK", "Choose the product's project first."); return }
         val root = File(sdcard, project)
-        val apks = root.walkTopDown().onEnter { d -> d == root || !d.name.startsWith(".") }
+        val inProject = root.walkTopDown().onEnter { d -> d == root || !d.name.startsWith(".") }
             .filter { it.isFile && it.name.endsWith(".apk") && it.path.contains("/build/outputs/apk/") }
-            .sortedByDescending { it.lastModified() }.toList()
+        val relocated = File(relocatedBuildTree(ctx, root), "main").listFiles().orEmpty()
+            .flatMap { module -> File(module, "outputs/apk").walkTopDown().filter { it.isFile && it.name.endsWith(".apk") } }
+        val apks = (inProject + relocated).sortedByDescending { it.lastModified() }.toList()
         if (apks.isEmpty()) {
             message(ctx, "Choose an APK", "This project hasn't built an APK yet. Build it in CodeOnTheGo, then try again.")
             return
         }
         val fmt = SimpleDateFormat("MMM d, HH:mm", Locale.US)
         val labels = apks.map { f ->
-            val variant = f.parentFile?.relativeTo(File(f.path.substringBefore("/build/outputs/apk/") + "/build/outputs/apk"))?.path.orEmpty()
+            val variant = f.parentFile?.relativeTo(File(f.path.substringBefore("/outputs/apk/") + "/outputs/apk"))?.path.orEmpty()
             "${if (variant.isEmpty()) "" else "$variant · "}${f.name}\n${sizeLabel(f.length())} · built ${fmt.format(Date(f.lastModified()))}" +
                 if (apkSigned(f)) "" else "\n⚠ Unsigned: buyers can't install it"
         } + "No APK"
         AlertDialog.Builder(ctx).setTitle("Choose an APK")
             .setItems(labels.toTypedArray()) { _, i -> pick(if (i < apks.size) rel(apks[i]) else null) }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    /**
+     * Where CodeOnTheGo 26.45+ builds [projectRoot]: `no_backup/gradle-build/<key>`, the root build's modules under
+     * `main/`. The key is CodeOnTheGo's ProjectStorageKey.of() of the project's canonical path, copied exactly:
+     * CodeOnTheGo offers plugins no API for build outputs, so if it changes the key, this must change with it.
+     * The APKs it finds are stored as paths relative to shared storage, through `..`, like every other path.
+     */
+    fun relocatedBuildTree(ctx: Context, projectRoot: File): File =
+        File(ctx.noBackupFilesDir, "gradle-build/" + storageKey(runCatching { projectRoot.canonicalFile }.getOrElse { projectRoot.absoluteFile }))
+
+    /** CodeOnTheGo's ProjectStorageKey.of(): `<sanitized name>-<first 16 hex digits of the path's SHA-256>`. */
+    fun storageKey(projectRoot: File): String {
+        val normalized = projectRoot.absoluteFile.normalize().path
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }.take(16)
+        val base = projectRoot.name.map { if (it.isLetterOrDigit() || it == '.' || it == '_' || it == '-') it else '_' }
+            .joinToString("").take(40).ifEmpty { "project" }
+        return "$base-$hash"
     }
 
     /** A WebVTT captions file, for a video (design, Known open items: picture descriptions and video captions). */

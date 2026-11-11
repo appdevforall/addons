@@ -44,6 +44,11 @@ fun runChecks(): List<String> {
     check("included: source ticked", prod(null, true, true).leftOutReason == null)
     check("left out: no APK and source unticked", prod(null, true, false).leftOutReason == "has no APK chosen, and Publish the source isn't ticked")
     check("left out: both unticked", prod("a.apk", false, false).leftOutReason == "has Publish the APK and Publish the source both unticked")
+
+    // Where CodeOnTheGo 26.45+ builds a project: the key seen on a phone for Fix6.
+    val key = org.appdevforall.shareyourapps.Pickers.storageKey(java.io.File("/storage/emulated/0/CodeOnTheGoProjects/Fix6"))
+    check("build tree key matches CodeOnTheGo's", key == "Fix6-a0709ad2867d18df")
+    check("build tree key replaces unsafe characters", org.appdevforall.shareyourapps.Pickers.storageKey(java.io.File("/x/My App!")).startsWith("My_App_-"))
     println(if (failures == 0) "\nALL PASSED" else "\n$failures FAILED"); return failedNames.toList()
 }
 

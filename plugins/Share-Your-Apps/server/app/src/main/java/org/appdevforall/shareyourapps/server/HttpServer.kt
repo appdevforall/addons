@@ -87,6 +87,7 @@ class HttpServer(
     private val auth: Auth = Auth.NONE,
     private val storeName: String = "Share Your Apps",
     private val stallMs: Long = STALL_MS,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     companion object {
         const val READ_TIMEOUT_MS = 2000
@@ -98,11 +99,15 @@ class HttpServer(
         const val MAX_SENDERS = 16
         private const val MAX_HEADER_BYTES = 16 * 1024
         private const val MAX_FORM_BYTES = 1024
+        /** Wrong PINs a client may enter before it must wait; each wrong PIN after that doubles the wait. */
+        const val PIN_FREE_TRIES = 5
+        const val PIN_LOCKOUT_MS = 30_000L
+        private const val PIN_LOCKOUT_MAX_MS = 3_600_000L
         const val COOKIE = "ls_auth"
         const val COOKIE_MAX_AGE = Auth.LIFETIME_S
         private val STATUS = mapOf(
             200 to "OK", 206 to "Partial Content", 302 to "Found", 304 to "Not Modified", 400 to "Bad Request", 403 to "Forbidden",
-            404 to "Not Found", 405 to "Method Not Allowed", 409 to "Conflict", 410 to "Gone", 426 to "Upgrade Required", 416 to "Range Not Satisfiable", 503 to "Service Unavailable",
+            404 to "Not Found", 405 to "Method Not Allowed", 409 to "Conflict", 410 to "Gone", 426 to "Upgrade Required", 416 to "Range Not Satisfiable", 429 to "Too Many Requests", 503 to "Service Unavailable",
         )
     }
 
@@ -496,7 +501,15 @@ class HttpServer(
 
     private fun same(a: String, b: String) = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
 
-    /** GET shows the PIN page (or redirects home if there's nothing to enter); POST checks the PIN. */
+    /** A client's wrong PINs, and until when it must wait. Main thread only, like everything [pinRoute] touches. */
+    private class PinFails(var count: Int = 0, var lockedUntil: Long = 0)
+    private val pinFails = HashMap<String, PinFails>()
+
+    /**
+     * GET shows the PIN page (or redirects home if there's nothing to enter); POST checks the PIN.
+     * After [PIN_FREE_TRIES] wrong PINs a client waits [PIN_LOCKOUT_MS], doubling with each further
+     * wrong one, so a short PIN can't simply be tried in full. A waiting client is answered at once.
+     */
     private fun pinRoute(input: InputStream, x: Exchange, req: Request) {
         val pin = auth.pin
         if (pin == null || authenticated(req)) return redirect(x, req, "/")
@@ -505,10 +518,24 @@ class HttpServer(
             "POST" -> {
                 val entered = readForm(input, req)?.get("pin")
                     ?: return respondText(x, req, 400, "Bad request.")
+                val now = clock()
+                val fails = pinFails[x.client]
+                if (fails != null && now < fails.lockedUntil) {
+                    val seconds = (fails.lockedUntil - now + 999) / 1000
+                    return respondHtml(x, req, pinPage("Too many wrong PINs. Try again in $seconds seconds."), 429)
+                }
                 if (entered.isNotEmpty() && same(entered, pin)) {
+                    pinFails.remove(x.client)
                     redirect(x, req, "/", mapOf("Set-Cookie" to
                         "$COOKIE=${auth.issueCookie()}; Max-Age=$COOKIE_MAX_AGE; Path=/; HttpOnly; SameSite=Lax"))
                 } else {
+                    // ponytail: per-client only; many addresses guessing together aren't slowed. Add a store-wide budget if that's seen.
+                    if (pinFails.size > 1000) pinFails.clear()
+                    val f = pinFails.getOrPut(x.client) { PinFails() }
+                    f.count++
+                    if (f.count >= PIN_FREE_TRIES) {
+                        f.lockedUntil = now + minOf(PIN_LOCKOUT_MS shl minOf(f.count - PIN_FREE_TRIES, 20), PIN_LOCKOUT_MAX_MS)
+                    }
                     respondHtml(x, req, pinPage("That PIN isn't right."))
                 }
             }
@@ -547,15 +574,15 @@ class HttpServer(
         x.status = 302
     }
 
-    private fun respondHtml(x: Exchange, req: Request, html: String) {
+    private fun respondHtml(x: Exchange, req: Request, html: String, status: Int = 200) {
         val bytes = html.toByteArray(Charsets.UTF_8)
-        writeHead(x.out, 200, linkedMapOf(
+        writeHead(x.out, status, linkedMapOf(
             "Content-Type" to "text/html; charset=utf-8",
             "Content-Length" to bytes.size.toString(),
             "Cache-Control" to "no-store",
         ))
         if (req.method != "HEAD") x.out.write(bytes)
-        x.status = 200
+        x.status = status
         x.inlineBytes = bytes.size.toLong()
     }
 

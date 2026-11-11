@@ -9,7 +9,7 @@ import android.os.Looper
 import java.io.File
 import java.security.SecureRandom
 import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.concurrent.thread
+import java.util.concurrent.CopyOnWriteArraySet
 
 /** What the server's LaunchActivity expects. Must match the server's LaunchContract. */
 object ServerContract {
@@ -64,6 +64,31 @@ object PublishFlow {
     fun observe(l: () -> Unit) { listeners += l; l() }
     fun remove(l: () -> Unit) { listeners -= l }
 
+    /** The background work under way, so [dispose] can interrupt it. */
+    private val workers = CopyOnWriteArraySet<Thread>()
+    /** Set by [dispose]: work still finishing then changes nothing. */
+    @Volatile private var disposed = false
+
+    private fun work(name: String, block: () -> Unit) {
+        val t = Thread({ try { block() } finally { workers -= Thread.currentThread() } }, name)
+        workers += t
+        t.start()
+    }
+
+    private fun post(block: () -> Unit) { main.post { if (!disposed) block() } }
+
+    /** The plugin is being unloaded: interrupts the work under way, drops what's posted, and lets go of every Context and Intent. */
+    fun dispose() {
+        disposed = true
+        main.removeCallbacksAndMessages(null)
+        workers.forEach { it.interrupt() }
+        listeners.clear()
+        pending = null
+        confirm = null
+        appContext = null
+        phase = Phase.IDLE
+    }
+
     /**
      * The message a finished publish leaves — success, failure, or refused before it started —
      * begins with the date and time, on the same line: the message stays up until the next publish,
@@ -98,27 +123,28 @@ object PublishFlow {
     @Volatile private var appContext: Context? = null
 
     fun publish(catalog: Catalog, extraError: String?, app: Context): Boolean {
+        disposed = false
         appContext = app.applicationContext
         if (busy) return false
         if (extraError != null) { set(Phase.IDLE, "Extra JSON: $extraError", error = true); return false }
         set(Phase.BUILDING, "Publishing…")
         progress.reset(); main.removeCallbacks(showProgress); main.postDelayed(showProgress, 500)
-        thread(name = "publish") {
+        work("publish") {
             try {
                 val plan = ServerInstaller.plan(app)
                 val built = Publisher(sdcard, Posters::make, apkFacts = { f -> ApkReader.read(app, f) }, version = BuildConfig.VERSION_NAME, progress = progress).build(catalog)
                 val token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
-                main.post {
+                post {
                     pending = Pending(catalog, built, token)
                     val apk = plan.install
                     if (apk == null) set(Phase.WAITING_TO_LAUNCH, "Starting the server…")
                     else {
                         set(Phase.INSTALLING, "Installing Share Your Apps Server…")
-                        ServerInstaller.install(app, apk) { r -> main.post { onInstall(r) } }
+                        ServerInstaller.install(app, apk) { r -> post { onInstall(r) } }
                     }
                 }
             } catch (e: Exception) {
-                main.post { set(Phase.IDLE, e.message ?: e.toString(), error = true) }
+                post { set(Phase.IDLE, e.message ?: e.toString(), error = true) }
             }
         }
         return true
@@ -138,9 +164,9 @@ object PublishFlow {
             is ServerInstaller.Result.Failed -> {
                 val p = pending ?: return
                 pending = null
-                thread(name = "rollback") {
+                work("rollback") {
                     runCatching { deleteTree(File(Publisher(sdcard).projects, p.built.storeDir)) }
-                    main.post { set(Phase.IDLE, "Couldn't install Share Your Apps Server: ${r.message}\nNothing was published; the previous store is unchanged.", error = true) }
+                    post { set(Phase.IDLE, "Couldn't install Share Your Apps Server: ${r.message}\nNothing was published; the previous store is unchanged.", error = true) }
                 }
             }
         }
@@ -173,20 +199,20 @@ object PublishFlow {
         val newDir = File(projects, p.built.storeDir)
         if (error != null) {
             set(Phase.VERIFYING, "Cleaning up…")
-            thread(name = "rollback") {
+            work("rollback") {
                 runCatching { deleteTree(newDir) }
-                main.post { CatalogState.setPendingDir(null) }
+                post { CatalogState.setPendingDir(null) }
                 // By the time a start fails, the server has usually stopped the old store already, so say which it is.
                 val after = if (unchanged) "Nothing was published, and the server is as it was."
                     else "Nothing was published, and the store is no longer being served. To serve the previous version, open Share Your Apps Server and tap Start."
-                main.post { set(Phase.IDLE, "The server didn't start: $error\n$after", error = true) }
+                post { set(Phase.IDLE, "The server didn't start: $error\n$after", error = true) }
             }
             return
         }
         set(Phase.VERIFYING, "Checking what the server serves…")
-        thread(name = "verify") {
+        work("verify") {
             // Save the new directory first, then remove every other one, including any left pending.
-            main.post { CatalogState.setStoreDir(p.built.storeDir) }
+            post { CatalogState.setStoreDir(p.built.storeDir) }
             runCatching { Publisher(sdcard).removeOthers(setOf(p.built.storeDir)) }
             val problems = Verifier(port, p.token).verify(newDir, p.built.files)
             val count = p.built.files.size + 1
@@ -197,7 +223,7 @@ object PublishFlow {
                 1 -> "\nLeft out: ${leftOut[0]}."
                 else -> "\nLeft out (${leftOut.size}):\n" + leftOut.joinToString("\n") { "• $it" }
             }
-            main.post {
+            post {
                 val warnNote = p.built.warnings.let { w -> when (w.size) { 0 -> ""; 1 -> "\nNote: ${w[0]}"; else -> "\nNotes (${w.size}):\n" + w.joinToString("\n") { "• $it" } } }
                 if (problems.isEmpty()) set(Phase.IDLE, "Published ${p.built.storeDir} — $count files verified.$leftOutNote$warnNote")
                 else set(Phase.IDLE, "Published ${p.built.storeDir}, but the check found problems:\n" + problems.joinToString("\n") + leftOutNote + warnNote, error = true)

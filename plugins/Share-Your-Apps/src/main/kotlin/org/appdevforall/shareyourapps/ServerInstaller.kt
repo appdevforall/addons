@@ -71,23 +71,41 @@ object ServerInstaller {
         return out
     }
 
-    /** Installs [apk], reporting once on the main thread's Handler via [done]. */
+    /** The install result receiver while an install is under way, so [dispose] can unregister it. */
+    private var registered: Pair<Context, BroadcastReceiver>? = null
+
+    /** Unregisters any install result receiver; for the plugin's dispose(). */
+    fun dispose() { registered?.let { (app, r) -> unregister(app, r) } }
+
+    /**
+     * Installs [apk], reporting once on the main thread's Handler via [done].
+     *
+     * Before Android 13 the result receiver can't be registered as not exported, so any app could send it a
+     * result. It takes only its own session's, and launches a confirmation screen only when it belongs to a
+     * system app (the package installer), without URI grants: otherwise another app could have Code On The Go
+     * open one of its own private screens.
+     */
     fun install(app: Context, apk: File, done: (Result) -> Unit) {
         val installer = app.packageManager.packageInstaller
-        var receiver: BroadcastReceiver? = null
-        receiver = object : BroadcastReceiver() {
+        registered?.let { (a, r) -> unregister(a, r) }
+        val sessionId = java.util.concurrent.atomic.AtomicInteger(-1)
+        val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
+                val id = sessionId.get()
+                if (id == -1 || intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1) != id) return
                 val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
                 when (status) {
                     PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                         @Suppress("DEPRECATION")
-                        val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
-                        if (confirm != null) done(Result.NeedsConfirmation(confirm))
-                        else { unregister(app, receiver); done(Result.Failed("the install needs confirmation, but no confirmation screen was provided")) }
+                        val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.takeIf { fromSystem(app, it) }
+                        if (confirm != null) {
+                            confirm.flags = confirm.flags and GRANTS.inv()
+                            done(Result.NeedsConfirmation(confirm))
+                        } else { unregister(app, this); done(Result.Failed("the install needs confirmation, but no confirmation screen was provided")) }
                     }
-                    PackageInstaller.STATUS_SUCCESS -> { unregister(app, receiver); done(Result.Installed) }
+                    PackageInstaller.STATUS_SUCCESS -> { unregister(app, this); done(Result.Installed) }
                     else -> {
-                        unregister(app, receiver)
+                        unregister(app, this)
                         val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "status $status"
                         done(Result.Failed(explain(status, msg)))
                     }
@@ -97,10 +115,12 @@ object ServerInstaller {
         val filter = IntentFilter(ACTION)
         if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         else @Suppress("UnspecifiedRegisterReceiverFlag") app.registerReceiver(receiver, filter)
+        registered = app to receiver
 
         thread(name = "install-server") {
             try {
                 val id = installer.createSession(PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL))
+                sessionId.set(id)
                 installer.openSession(id).use { s ->
                     apk.inputStream().use { i -> s.openWrite("server", 0, apk.length()).use { o -> i.copyTo(o); s.fsync(o) } }
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
@@ -115,8 +135,19 @@ object ServerInstaller {
     }
 
     private fun unregister(app: Context, r: BroadcastReceiver?) {
+        if (r != null && registered?.second === r) registered = null
         try { if (r != null) app.unregisterReceiver(r) } catch (e: IllegalArgumentException) { }
     }
+
+    private const val GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+
+    /** Whether [intent] opens a screen of a system app, as the package installer's confirmation does. */
+    private fun fromSystem(app: Context, intent: Intent): Boolean = try {
+        val pkg = intent.resolveActivity(app.packageManager)?.packageName ?: return false
+        pkg != app.packageName &&
+            (app.packageManager.getApplicationInfo(pkg, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+    } catch (e: PackageManager.NameNotFoundException) { false }
 
     private fun explain(status: Int, msg: String): String = when {
         status == PackageInstaller.STATUS_FAILURE_ABORTED -> "the install was cancelled"

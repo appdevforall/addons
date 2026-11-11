@@ -50,7 +50,7 @@
 </header>
 
 <section id="overview">
-  <h2>Overview</h2>
+  <h2>Executive overview</h2>
   <p>
     Share Your Apps turns the apps you build in Code on the Go into a small web store.
     People on the same Wi-Fi network or hotspot open it in their phone's browser and
@@ -63,7 +63,7 @@
 </section>
 
 <section id="functionality">
-  <h2>What it does</h2>
+  <h2>Core functionality</h2>
   <ul>
     <li><strong>Manage the catalog</strong> in the Share Your Apps tab: the store's name,
       description, header image and optional PIN, and products with their project, APK,
@@ -79,14 +79,41 @@
   </ul>
 </section>
 
+<section id="architecture">
+  <h2>Technical architecture</h2>
+  <p>Share Your Apps is two parts:</p>
+  <ul>
+    <li><strong>The plugin</strong> runs inside Code on the Go as a tab in the bottom sheet. It keeps the catalog in
+      the plugin's private folder, renders the store page with Pebble templates, and on <strong>Publish</strong> writes a
+      complete new <code>Store_*</code> folder to shared storage: each product's APK and its source as a zip, without
+      build output, IDE settings or signing files.</li>
+    <li><strong>Share Your Apps Server</strong> is a small Android app the plugin carries and installs. It serves the
+      store folder over HTTP on Wi-Fi or a hotspot, as a foreground service, with an optional PIN. It also copies a
+      store to another phone, encrypted, after the owner allows it, and can be controlled by other apps on the phone
+      through an MCP endpoint on <code>127.0.0.1</code> that needs a token.</li>
+  </ul>
+  <p>The plugin starts the server on the new folder, then downloads every file back from it over
+    <code>127.0.0.1</code> and compares sizes and checksums before removing the old folder.</p>
+</section>
+
 <section id="usage">
-  <h2>Using it</h2>
+  <h2>Usage</h2>
   <ol>
     <li>Install the plugin and open the <strong>Share Your Apps</strong> tab.</li>
     <li>Name your store and add a product for each app you want to share.</li>
     <li>Tap <strong>Publish</strong>. The first time, the plugin installs Share Your Apps Server.</li>
     <li>Share the address the server shows. Anyone on the same network can open it.</li>
   </ol>
+</section>
+
+<section id="benefits">
+  <h2>Key benefits</h2>
+  <ul>
+    <li><strong>Works offline.</strong> No internet, app store account or computer is needed to hand out an app.</li>
+    <li><strong>Source and app together.</strong> Learners can download what a classmate built and how they built it.</li>
+    <li><strong>Safe to update.</strong> Buyers keep the current store until the new one is checked and serving.</li>
+    <li><strong>Passes on.</strong> A store can be copied to another phone, so it reaches people beyond one Wi-Fi network.</li>
+  </ul>
 </section>
 
 <footer>

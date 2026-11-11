@@ -206,8 +206,10 @@ class ShareYourAppsFragment : Fragment() {
         val built = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(BuildConfig.BUILD_TIME))
         val base = "Share Your Apps ${BuildConfig.VERSION_NAME} · built $built"
         val line = st.hint(bundledServer?.let { "$base · with Share Your Apps Server $it" } ?: base).apply { setPadding(0, st.dp(16), 0, 0) }
+        // The Context is taken here, on the main thread: requireContext() on the thread would throw if the tab closed first.
+        val app = ctx().applicationContext
         if (bundledServer == null) Thread {
-            val v = ServerInstaller.bundledVersionName(ctx().applicationContext) ?: return@Thread
+            val v = ServerInstaller.bundledVersionName(app) ?: return@Thread
             bundledServer = v
             line.post { line.text = "$base · with Share Your Apps Server $v" }
         }.start()
