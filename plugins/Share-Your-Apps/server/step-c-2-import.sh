@@ -2,8 +2,8 @@
 # step-c-2-import.sh: step C, script 2 of 6. Merges ImportJob.kt (A + B) and gives B's ImportActivity.kt A's
 # public defaultPhoneName(context), which McpTools uses.
 #
-# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-2-import.sh"
-# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-2-import.sh" undo
+# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-2-import.sh"
+# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-2-import.sh" undo
 #
 # ImportJob.kt (A's file, patched):
 #   1. Snapshot gets storeId (B's stale import result fix).
@@ -85,7 +85,7 @@ fi
 "$PY" - "$STEP" "$BK" "$SUMS" <<'PYEOF'
 import hashlib, os, shutil, sys
 step, bk, sums_path = sys.argv[1], sys.argv[2], sys.argv[3]
-SRC = "app/src/main/java/org/appdevforall/localstore/server/"
+SRC = "app/src/main/java/org/appdevforall/shareyourapps/server/"
 P = []
 def patch(f, what, old, new): P.append((SRC + f, what, old, new))
 

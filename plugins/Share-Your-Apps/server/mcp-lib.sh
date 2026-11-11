@@ -59,7 +59,7 @@ start_session() {
   SESSION="$(grep -i '^mcp-session-id:' "$WORK/head" | head -n 1 | cut -d: -f2- | tr -d ' \r')"
   if [ "$HTTP" != 200 ] || [ -z "$SESSION" ]; then
     echo "MCP control didn't answer at $URL."
-    echo "Check that MCP control is on in Local Store Server, and that MCP_TOKEN is this phone's token."
+    echo "Check that MCP control is on in Share Your Apps Server, and that MCP_TOKEN is this phone's token."
     show
     return 1
   fi

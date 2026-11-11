@@ -76,7 +76,7 @@ start_session() {
   SESSION="$(grep -i '^mcp-session-id:' "$WORK/head" | head -n 1 | cut -d: -f2- | tr -d ' \r')"
   if [ "$HTTP" != 200 ] || [ -z "$SESSION" ]; then
     echo "MCP control didn't answer at $URL."
-    echo "Check that MCP control is on in Local Store Server, and that MCP_TOKEN is this phone's token."
+    echo "Check that MCP control is on in Share Your Apps Server, and that MCP_TOKEN is this phone's token."
     show
     return 1
   fi
@@ -155,7 +155,7 @@ read_code() {
     ask "Type the code shown on phone 1 (LS-XXXX-XXXX), or its link, then press Enter:"
     r="$(printf '%s' "$a_ans" | tr -d ' \r')"
     case "$r" in
-      localstore-share://*) CODE_ARGS="\"link\":\"$(printf '%s' "$r" | tr -cd 'A-Za-z0-9:/.-')\"" ;;
+      shareyourapps-share://*) CODE_ARGS="\"link\":\"$(printf '%s' "$r" | tr -cd 'A-Za-z0-9:/.-')\"" ;;
       ?*) CODE_ARGS="\"code\":\"$(printf '%s' "$r" | tr -cd 'A-Za-z0-9-')\"" ;;
     esac
   done
@@ -212,7 +212,7 @@ cancel_step() {
 }
 
 if [ "$TEST" = 11 ]; then
-  echo ">>> Test 11: Local Store Server must stay off screen. You're in the terminal, so it is."
+  echo ">>> Test 11: Share Your Apps Server must stay off screen. You're in the terminal, so it is."
   echo ">>> Don't open the app until this script ends."
   wait_enter "Ready? The script waits 15 seconds, then starts."
   sleep 15
@@ -267,7 +267,7 @@ case "$TEST" in
   ensure_stopped || exit 1
   BEFORE="$(copy_sig)"
   info "imported copy before: $BEFORE"
-  echo ">>> On this phone: open Local Store Server, tap Import a store…, type phone 1's code and tap Continue."
+  echo ">>> On this phone: open Share Your Apps Server, tap Import a store…, type phone 1's code and tap Continue."
   echo ">>> When it says it's waiting for phone 1's owner, come back to this terminal."
   wait_enter "Back here?"
   call import_status

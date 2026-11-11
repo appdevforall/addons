@@ -2,8 +2,8 @@ package soundpayloadtest
 
 import java.net.Inet4Address
 import java.net.InetAddress
-import org.appdevforall.localstore.server.ShareCodes
-import org.appdevforall.localstore.server.SoundPayload
+import org.appdevforall.shareyourapps.server.ShareCodes
+import org.appdevforall.shareyourapps.server.SoundPayload
 
 var failures = 0
 val failedNames = mutableListOf<String>()

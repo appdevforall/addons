@@ -4,7 +4,7 @@ import com.google.zxing.BinaryBitmap
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
-import org.appdevforall.localstore.server.QrCodes
+import org.appdevforall.shareyourapps.server.QrCodes
 
 var failures = 0
 val failedNames = mutableListOf<String>()

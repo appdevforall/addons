@@ -12,14 +12,14 @@ import java.io.File
 import kotlin.concurrent.thread
 
 /**
- * The server APK can travel inside the plugin as the asset `local-store-server.apk`. On publish
+ * The server APK can travel inside the plugin as the asset `share-your-apps-server.apk`. On publish
  * it's installed when the server is missing or older, and a publish is refused when the
  * installed server is newer, since PackageInstaller won't downgrade. Without the asset, the
  * plugin uses whatever server is installed.
  */
 object ServerInstaller {
 
-    const val ASSET = "local-store-server.apk"
+    const val ASSET = "share-your-apps-server.apk"
     private const val ACTION = "org.appdevforall.shareyourapps.INSTALL_RESULT"
 
     /** What this publish needs: the APK to install, or null to use the installed server. */
@@ -42,11 +42,11 @@ object ServerInstaller {
     fun plan(app: Context): Plan {
         val apk = extractBundled(app) ?: return Plan(null)
         val bundled = app.packageManager.getPackageArchiveInfo(apk.path, 0)?.longVersionCode
-            ?: throw PublishException("the Local Store Server APK inside this plugin can't be read")
+            ?: throw PublishException("the Share Your Apps Server APK inside this plugin can't be read")
         val installed = installedVersion(app)
         return when {
             installed != null && installed > bundled -> throw PublishException(
-                "The installed Local Store Server (version $installed) is newer than the one in this plugin " +
+                "The installed Share Your Apps Server (version $installed) is newer than the one in this plugin " +
                     "(version $bundled). Update the plugin, or uninstall the server.")
             installed == null || bundled > installed -> Plan(apk)
             else -> Plan(null)
@@ -122,11 +122,11 @@ object ServerInstaller {
         status == PackageInstaller.STATUS_FAILURE_ABORTED -> "the install was cancelled"
         // A newer server installed another way — from another owner's share screen, say — which this
         // plugin can't see beforehand, since Code On The Go only sees apps it installed itself.
-        "DOWNGRADE" in msg.uppercase() -> "This phone has a newer Local Store Server than the one in this plugin, " +
+        "DOWNGRADE" in msg.uppercase() -> "This phone has a newer Share Your Apps Server than the one in this plugin, " +
             "perhaps from another owner's share screen. Update the Share Your Apps plugin, then publish again."
         status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ->
             "$msg. If the server in this plugin is signed with a different key from the installed one, " +
-                "uninstall Local Store Server once, then publish again."
+                "uninstall Share Your Apps Server once, then publish again."
         status == PackageInstaller.STATUS_FAILURE_STORAGE -> "not enough space to install: $msg"
         else -> msg
     }

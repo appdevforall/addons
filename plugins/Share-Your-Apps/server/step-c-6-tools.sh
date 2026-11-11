@@ -1,8 +1,8 @@
 #!/bin/sh
 # step-c-6-tools.sh: step C, script 6 of 6. The MCP sound tools, share_play_sound and import_listen, and the help.
 #
-# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-6-tools.sh"
-# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-6-tools.sh" undo
+# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-6-tools.sh"
+# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-6-tools.sh" undo
 #
 # New file McpSoundTools.kt:
 #   share_play_sound: plays the open share's code as tones, as the share screen's Play sound does; stops by itself
@@ -85,7 +85,7 @@ fi
 "$PY" - "$STEP" "$BK" "$SUMS" <<'PYEOF'
 import hashlib, os, shutil, sys
 step, bk, sums_path = sys.argv[1], sys.argv[2], sys.argv[3]
-SRC = "app/src/main/java/org/appdevforall/localstore/server/"
+SRC = "app/src/main/java/org/appdevforall/shareyourapps/server/"
 TOOLS = SRC + "McpTools.kt"
 SERVICE = SRC + "McpService.kt"
 HELP = "help/build_help_db.py"
@@ -173,7 +173,7 @@ patch(HELP, "server.mcp tooltip mentions sound", r'''     "They can't change the
 r'''     "They can't change the store or approve a copy: you still tap <b>Allow</b>. Other devices on the network can't reach it.</p>"
      "<p>Apps can also play the share code as sound, and use the microphone to hear another phone's, only while they ask it to.</p>"''')
 
-KT = r'''package org.appdevforall.localstore.server
+KT = r'''package org.appdevforall.shareyourapps.server
 
 import android.content.ComponentName
 import android.content.Context
@@ -322,7 +322,7 @@ object McpSoundTools {
         val app = ctx.applicationContext
         if (ServerStatus.url == null) { SoundLog.write(app, message); return }
         val line = SoundLog.line(message)
-        android.util.Log.i("LocalStoreSound", line)
+        android.util.Log.i("ShareYourAppsSound", line)
         Handler(Looper.getMainLooper()).post { LogOnce(app, line).send() }
     }
 
@@ -452,7 +452,7 @@ try:
 except SyntaxError as e:
     stop("the patched %s isn't valid Python (%s): the script is wrong." % (HELP, e))
 print("The patched build_help_db.py compiles as Python.")
-if not KT.startswith("package org.appdevforall.localstore.server\n"): stop("McpSoundTools.kt's text doesn't start with its package line.")
+if not KT.startswith("package org.appdevforall.shareyourapps.server\n"): stop("McpSoundTools.kt's text doesn't start with its package line.")
 if not KT.endswith("}\n// END OF McpSoundTools.kt\n"): stop("McpSoundTools.kt's text is cut off: it doesn't end with its END line.")
 if bal(KT) != (0, 0): stop("McpSoundTools.kt's { } or ( ) don't balance %s: the script is wrong." % (bal(KT),))
 data = KT.encode("utf-8")

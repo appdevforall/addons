@@ -13,8 +13,8 @@ import kotlin.concurrent.thread
 
 /** What the server's LaunchActivity expects. Must match the server's LaunchContract. */
 object ServerContract {
-    const val PACKAGE = "org.appdevforall.localstore.server"
-    const val ACTIVITY = "org.appdevforall.localstore.server.LaunchActivity"
+    const val PACKAGE = "org.appdevforall.shareyourapps.server"
+    const val ACTIVITY = "org.appdevforall.shareyourapps.server.LaunchActivity"
     const val EXTRA_DIR = "dir"
     const val EXTRA_TOKEN = "token"
     const val EXTRA_PIN = "pin"
@@ -113,7 +113,7 @@ object PublishFlow {
                     val apk = plan.install
                     if (apk == null) set(Phase.WAITING_TO_LAUNCH, "Starting the server…")
                     else {
-                        set(Phase.INSTALLING, "Installing Local Store Server…")
+                        set(Phase.INSTALLING, "Installing Share Your Apps Server…")
                         ServerInstaller.install(app, apk) { r -> main.post { onInstall(r) } }
                     }
                 }
@@ -133,14 +133,14 @@ object PublishFlow {
             is ServerInstaller.Result.Installed -> set(Phase.WAITING_TO_LAUNCH, "Installed. Starting the server…")
             is ServerInstaller.Result.NeedsConfirmation -> {
                 confirm = r.intent
-                set(Phase.INSTALLING, "Confirm the Local Store Server install…")
+                set(Phase.INSTALLING, "Confirm the Share Your Apps Server install…")
             }
             is ServerInstaller.Result.Failed -> {
                 val p = pending ?: return
                 pending = null
                 thread(name = "rollback") {
                     runCatching { deleteTree(File(Publisher(sdcard).projects, p.built.storeDir)) }
-                    main.post { set(Phase.IDLE, "Couldn't install Local Store Server: ${r.message}\nNothing was published; the previous store is unchanged.", error = true) }
+                    main.post { set(Phase.IDLE, "Couldn't install Share Your Apps Server: ${r.message}\nNothing was published; the previous store is unchanged.", error = true) }
                 }
             }
         }
@@ -178,7 +178,7 @@ object PublishFlow {
                 main.post { CatalogState.setPendingDir(null) }
                 // By the time a start fails, the server has usually stopped the old store already, so say which it is.
                 val after = if (unchanged) "Nothing was published, and the server is as it was."
-                    else "Nothing was published, and the store is no longer being served. To serve the previous version, open Local Store Server and tap Start."
+                    else "Nothing was published, and the store is no longer being served. To serve the previous version, open Share Your Apps Server and tap Start."
                 main.post { set(Phase.IDLE, "The server didn't start: $error\n$after", error = true) }
             }
             return

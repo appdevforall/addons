@@ -1,5 +1,5 @@
 package hstest
-import org.appdevforall.localstore.server.HotspotSettings as H
+import org.appdevforall.shareyourapps.server.HotspotSettings as H
 
 var failures = 0
 val failedNames = mutableListOf<String>()

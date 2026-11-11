@@ -9,12 +9,12 @@ the app shows, on all screens (user: "All qr codes means all codes on all screen
 
 ## What was found (read-only)
 - ImportActivity.kt (read in full, 522 lines): the only way a share QR reaches the import screen today is
-  the camera app opening the localstore-share://… link (onCreate parses intent.data with ShareLink.parse
+  the camera app opening the shareyourapps-share://… link (onCreate parses intent.data with ShareLink.parse
   and fills linkAddress / linkCode). Nothing reads a picture.
 - QR codes the app shows:
   | Screen | Code | Content |
   |---|---|---|
-  | Share screen (ShareActivity.kt:366) | Share code | localstore-share://<address>:<port>/<code> |
+  | Share screen (ShareActivity.kt:366) | Share code | shareyourapps-share://<address>:<port>/<code> |
   | Serve screen, "1. Join this Wi-Fi network" (ServeActivity.kt:149) | Wi-Fi code | QrCodes.wifi(ssid, password): the app's own hotspot, the phone's Mobile hotspot, or a home Wi-Fi network (the last two typed by the owner) |
   | Serve screen, "2. Open the store" | Store code | NOT read yet; drawn by the qr(content) helper (ServeActivity.kt:256); content set in lines 1–119; probably the store's web address |
 - Gaps to close before writing:

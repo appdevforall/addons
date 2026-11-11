@@ -1,6 +1,6 @@
 package sharetest
 
-import org.appdevforall.localstore.server.*
+import org.appdevforall.shareyourapps.server.*
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -202,10 +202,10 @@ fun runChecks(): List<String> {
     host = ShareHost(shop, "Top Android apps", shareKey); ownerServer.share = host
     val older = rawJson(ownerServer.boundPort, "/share/request", JSONObject().put("code", host.code).put("name", "Old").put("protocol", 0)
         .put("commitment", java.util.Base64.getEncoder().encodeToString(ShareCrypto.commitment(ShareCrypto.newKeyPair().public.encoded))))
-    check("an older seller's app is refused, telling it to update", older.first == 426 && "This phone's Local Store Server is older" in older.second.getString("error"))
+    check("an older seller's app is refused, telling it to update", older.first == 426 && "This phone's Share Your Apps Server is older" in older.second.getString("error"))
     val newer = rawJson(ownerServer.boundPort, "/share/request", JSONObject().put("code", host.code).put("name", "New").put("protocol", ShareHost.PROTOCOL + 1)
         .put("commitment", java.util.Base64.getEncoder().encodeToString(ShareCrypto.commitment(ShareCrypto.newKeyPair().public.encoded))))
-    check("…and a newer one, telling the owner to update", newer.first == 426 && "The owner's Local Store Server is older" in newer.second.getString("error"))
+    check("…and a newer one, telling the owner to update", newer.first == 426 && "The owner's Share Your Apps Server is older" in newer.second.getString("error"))
     check("…while the share stays open for a matching phone", host.state() == ShareHost.State.OPEN)
     // Expired, and guessed.
     var clockNow = System.currentTimeMillis()
@@ -223,7 +223,7 @@ fun runChecks(): List<String> {
     val app = java.net.URL("$base/share/app").openConnection() as java.net.HttpURLConnection
     val appBytes = app.inputStream.use { it.readBytes() }
     check("/share/app sends the app, as an APK to install", app.responseCode == 200 && appBytes.contentEquals(fakeApk.readBytes()) &&
-        app.contentType == "application/vnd.android.package-archive" && app.getHeaderField("Content-Disposition") == "attachment; filename=\"local-store-server.apk\"")
+        app.contentType == "application/vnd.android.package-archive" && app.getHeaderField("Content-Disposition") == "attachment; filename=\"share-your-apps-server.apk\"")
     ownerServer.share = null
     check("…only while a share is open", rawStatus(ownerServer.boundPort, "GET /share/app") == 404)
 
@@ -333,10 +333,10 @@ fun runChecks(): List<String> {
     File(keyDir, "store-key.p8").writeBytes(byteArrayOf(1, 2, 3))
     check("a damaged key file makes a new key, a new store identity", StoreKeyFile.loadOrCreate(keyDir).public != k1.public)
     val link = ShareLink.make("192.168.1.5", 6175, "7Q4K9M2P")
-    check("a share link: $link", link == "localstore-share://192.168.1.5:6175/LS-7Q4K-9M2P")
+    check("a share link: $link", link == "shareyourapps-share://192.168.1.5:6175/LS-7Q4K-9M2P")
     check("…reads back", ShareLink.parse(link) == Triple("192.168.1.5", 6175, "7Q4K9M2P"))
-    check("…and refuses anything else", listOf("http://192.168.1.5:6175/LS-7Q4K-9M2P", "localstore-share://999.1.1.1:6175/LS-7Q4K-9M2P",
-        "localstore-share://192.168.1.5:99999/LS-7Q4K-9M2P", "localstore-share://192.168.1.5:6175/nope", "localstore-share://evil.example:80/LS-7Q4K-9M2P").all { ShareLink.parse(it) == null })
+    check("…and refuses anything else", listOf("http://192.168.1.5:6175/LS-7Q4K-9M2P", "shareyourapps-share://999.1.1.1:6175/LS-7Q4K-9M2P",
+        "shareyourapps-share://192.168.1.5:99999/LS-7Q4K-9M2P", "shareyourapps-share://192.168.1.5:6175/nope", "shareyourapps-share://evil.example:80/LS-7Q4K-9M2P").all { ShareLink.parse(it) == null })
 
     tmp.deleteRecursively()
 

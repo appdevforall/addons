@@ -1,12 +1,12 @@
 #!/bin/sh
 # step-c-1-copy.sh: step C, script 1 of 6. Copies project B's sound files into this project, unchanged.
 #
-# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-1-copy.sh"
-# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-1-copy.sh" undo
+# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-1-copy.sh"
+# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-1-copy.sh" undo
 #        (puts back the files it replaced, deletes the files it added)
 #
 # Copied from project-b-reference (only read, never changed) to the same place here:
-#   app/src/main/java/org/appdevforall/localstore/server/
+#   app/src/main/java/org/appdevforall/shareyourapps/server/
 #     SoundPayload.kt SoundDsp.kt SoundModem.kt SoundDecoder.kt SoundIo.kt SoundLog.kt WifiJoin.kt  (new here)
 #     ImportActivity.kt                                                                          (replaces A's)
 #   SoundPayloadTest.kt SoundModemTest.kt SoundLogTest.kt SoundLevelTest.kt (found by name under app/src/test)
@@ -38,7 +38,7 @@ cd "$HERE" || exit 2
 fail() { echo "STOPPED: $*"; echo "Nothing was changed."; exit 1; }
 
 REF="project-b-reference"
-SRC="app/src/main/java/org/appdevforall/localstore/server"
+SRC="app/src/main/java/org/appdevforall/shareyourapps/server"
 BK="step-c-backup/$STEP"
 SUMS="step-c-checksums.txt"
 

@@ -26,7 +26,7 @@ val hasValidSigningProps = keystorePropsFile.exists().also { exists ->
 
 
 android {
-    namespace = "org.appdevforall.localstore.server"
+    namespace = "org.appdevforall.shareyourapps.server"
     compileSdk = 36 
     
     // disable linter
@@ -48,7 +48,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "org.appdevforall.localstore.server"
+        applicationId = "org.appdevforall.shareyourapps.server"
         minSdk = 28 
         targetSdk = 36  
         versionCode = 49

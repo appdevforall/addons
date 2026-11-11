@@ -248,7 +248,7 @@
   "key": [
    [
     1,
-    "Open <b>Settings</b>, and allow Code On The Go to install apps. Needed once, for Local Store Server."
+    "Open <b>Settings</b>, and allow Code On The Go to install apps. Needed once, for Share Your Apps Server."
    ]
   ],
   "how": "On a phone where Code On The Go has never installed an app, publish for the first time, and capture Android's prompt.",
@@ -354,7 +354,7 @@
     "What <b>Start</b> will serve."
    ]
   ],
-  "how": "Open Local Store Server while it serves your store, and capture the top of Manage server.",
+  "how": "Open Share Your Apps Server while it serves your store, and capture the top of Manage server.",
   "real": false,
   "captured": true
  },
@@ -369,7 +369,7 @@
     "Tap it and allow access, once: the server needs it to read your store's files."
    ]
   ],
-  "how": "Before allowing All files access to Local Store Server, open it. (Or turn the access off in Android's Settings, capture, then turn it on again.)",
+  "how": "Before allowing All files access to Share Your Apps Server, open it. (Or turn the access off in Android's Settings, capture, then turn it on again.)",
   "real": false,
   "captured": true
  },
@@ -527,7 +527,7 @@
    ],
    [
     4,
-    "For a phone without the app: a small code, or a link to open in its browser, with a button that copies it, to download Local Store Server from this phone."
+    "For a phone without the app: a small code, or a link to open in its browser, with a button that copies it, to download Share Your Apps Server from this phone."
    ]
   ],
   "how": "Tap Share this store\u2026, and capture the whole screen, scrolling if needed.",
@@ -682,7 +682,7 @@
     "Tap <b>Import a store\u2026</b>."
    ]
   ],
-  "how": "On a phone with Local Store Server but no store, open Manage server.",
+  "how": "On a phone with Share Your Apps Server but no store, open Manage server.",
   "real": false,
   "captured": true
  },

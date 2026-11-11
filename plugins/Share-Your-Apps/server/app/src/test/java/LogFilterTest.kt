@@ -1,6 +1,6 @@
 package logtest
-import org.appdevforall.localstore.server.LogFilter
-import org.appdevforall.localstore.server.LogFilter.Kind
+import org.appdevforall.shareyourapps.server.LogFilter
+import org.appdevforall.shareyourapps.server.LogFilter.Kind
 
 var failures = 0
 val failedNames = mutableListOf<String>()

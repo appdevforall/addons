@@ -91,14 +91,14 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="localstore-share" />
+                <data android:scheme="shareyourapps-share" />
             </intent-filter>
         </activity>
 
         <!-- Hands log files to the share sheet, read-only, one grant per share. -->
         <provider
             android:name=".LogProvider"
-            android:authorities="org.appdevforall.localstore.server.logs"
+            android:authorities="org.appdevforall.shareyourapps.server.logs"
             android:exported="false"
             android:grantUriPermissions="true" />
 

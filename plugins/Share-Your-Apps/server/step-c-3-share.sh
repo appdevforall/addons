@@ -1,8 +1,8 @@
 #!/bin/sh
 # step-c-3-share.sh: step C, script 3 of 6. Adds project B's Play sound / Stop sound to project A's ShareActivity.kt.
 #
-# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-3-share.sh"
-# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-3-share.sh" undo
+# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-3-share.sh"
+# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-3-share.sh" undo
 #
 # ShareActivity.kt (A's file, patched with B's sound code, copied from project B unchanged):
 #   1. The class description mentions Play sound.
@@ -80,7 +80,7 @@ fi
 "$PY" - "$STEP" "$BK" "$SUMS" <<'PYEOF'
 import hashlib, os, shutil, sys
 step, bk, sums_path = sys.argv[1], sys.argv[2], sys.argv[3]
-SRC = "app/src/main/java/org/appdevforall/localstore/server/"
+SRC = "app/src/main/java/org/appdevforall/shareyourapps/server/"
 P = []
 def patch(f, what, old, new): P.append((SRC + f, what, old, new))
 
@@ -165,7 +165,7 @@ patch("ShareActivity.kt", "the sound functions (from project B)", r'''    privat
     /** The server process owns the log file while it serves, so the line goes to it, over the share's connection. */
     private fun logSound(message: String) {
         val line = SoundLog.line(message)
-        android.util.Log.i("LocalStoreSound", line)
+        android.util.Log.i("ShareYourAppsSound", line)
         send(Ipc.MSG_LOG, Bundle().apply { putString(Ipc.KEY_LINE, line) })
     }
 

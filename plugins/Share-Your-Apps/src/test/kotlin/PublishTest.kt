@@ -1,10 +1,10 @@
 package pubtest
 
 import org.appdevforall.shareyourapps.*
-import org.appdevforall.localstore.server.Auth
-import org.appdevforall.localstore.server.Compressor
-import org.appdevforall.localstore.server.HttpServer
-import org.appdevforall.localstore.server.StoreLog
+import org.appdevforall.shareyourapps.server.Auth
+import org.appdevforall.shareyourapps.server.Compressor
+import org.appdevforall.shareyourapps.server.HttpServer
+import org.appdevforall.shareyourapps.server.StoreLog
 import java.io.File
 import java.net.InetAddress
 import java.nio.file.Files

@@ -1,8 +1,8 @@
 package soundmodemtest
 
-import org.appdevforall.localstore.server.SoundDecoder
-import org.appdevforall.localstore.server.SoundModem
-import org.appdevforall.localstore.server.SoundPayload
+import org.appdevforall.shareyourapps.server.SoundDecoder
+import org.appdevforall.shareyourapps.server.SoundModem
+import org.appdevforall.shareyourapps.server.SoundPayload
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.Random
@@ -136,9 +136,9 @@ fun runChecks(): List<String> {
     // How many bursts a player plays: as many as fit in the 30-second window, never fewer than 4.
     val plan = SoundModem()
     val addr = java.net.InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 49, 1)) as java.net.Inet4Address
-    val codeOnly = org.appdevforall.localstore.server.SoundPayload("ABCD2345").encode().size
-    val withAddress = org.appdevforall.localstore.server.SoundPayload("ABCD2345", addr, 6175).encode().size
-    val worstHotspot = org.appdevforall.localstore.server.SoundPayload("ABCD2345", addr, 6175, true, "S".repeat(32), "p".repeat(63)).encode().size
+    val codeOnly = org.appdevforall.shareyourapps.server.SoundPayload("ABCD2345").encode().size
+    val withAddress = org.appdevforall.shareyourapps.server.SoundPayload("ABCD2345", addr, 6175).encode().size
+    val worstHotspot = org.appdevforall.shareyourapps.server.SoundPayload("ABCD2345", addr, 6175, true, "S".repeat(32), "p".repeat(63)).encode().size
     fun playSeconds(n: Int) = plan.burstsFor(n) * plan.burstPeriod(n).toDouble() / plan.sampleRate
     fun burstSeconds(n: Int) = plan.burstPeriod(n).toDouble() / plan.sampleRate
     check("play plan: the window is 30 seconds", SoundModem.WINDOW_MS == 30_000L)

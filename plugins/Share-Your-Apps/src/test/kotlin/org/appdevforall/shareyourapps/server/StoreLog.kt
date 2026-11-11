@@ -1,4 +1,4 @@
-package org.appdevforall.localstore.server
+package org.appdevforall.shareyourapps.server
 
 import java.io.File
 import java.io.FileOutputStream

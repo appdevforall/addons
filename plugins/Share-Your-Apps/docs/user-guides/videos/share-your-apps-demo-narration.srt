@@ -4,7 +4,7 @@ Share Your Apps lets you share the Android apps you build in Code On The Go with
 
 2
 00:00:10,300 --> 00:00:20,145
-It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Local Store Server app, which serves them over Wi-Fi, or your phone's hotspot.
+It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot.
 
 3
 00:00:22,050 --> 00:00:23,683
@@ -56,7 +56,7 @@ Next, letting people in.
 
 15
 00:01:26,900 --> 00:01:29,917
-Local Store Server shows what it's serving, and where.
+Share Your Apps Server shows what it's serving, and where.
 
 16
 00:01:31,820 --> 00:01:39,018

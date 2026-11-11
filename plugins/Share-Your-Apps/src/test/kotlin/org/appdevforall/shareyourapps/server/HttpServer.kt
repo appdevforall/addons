@@ -1,4 +1,4 @@
-package org.appdevforall.localstore.server
+package org.appdevforall.shareyourapps.server
 
 import java.util.Base64
 
@@ -464,7 +464,7 @@ class HttpServer(
         writeHead(x.out, 200, linkedMapOf(
             "Content-Type" to "application/vnd.android.package-archive",
             "Content-Length" to apk.length().toString(),
-            "Content-Disposition" to "attachment; filename=\"local-store-server.apk\"",
+            "Content-Disposition" to "attachment; filename=\"share-your-apps-server.apk\"",
             "Cache-Control" to "no-store",
         ))
         if (req.method == "GET") { x.file = apk; x.fileOffset = 0; x.fileCount = apk.length() }

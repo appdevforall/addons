@@ -1,10 +1,10 @@
 package mcptest
 
-import org.appdevforall.localstore.server.McpHttp
-import org.appdevforall.localstore.server.McpProtocol
-import org.appdevforall.localstore.server.McpTool
-import org.appdevforall.localstore.server.McpToolError
-import org.appdevforall.localstore.server.McpTools
+import org.appdevforall.shareyourapps.server.McpHttp
+import org.appdevforall.shareyourapps.server.McpProtocol
+import org.appdevforall.shareyourapps.server.McpTool
+import org.appdevforall.shareyourapps.server.McpToolError
+import org.appdevforall.shareyourapps.server.McpTools
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -211,7 +211,7 @@ class McpProtocolTest {
 
     // ---------------------------------------------------------------- step 3: share and server tools
 
-    private val share = org.appdevforall.localstore.server.ShareControl
+    private val share = org.appdevforall.shareyourapps.server.ShareControl
 
     @Test fun shareStateBecomesOneWord() {
         assertEquals("waiting_for_phone", share.stateWord("OPEN", 0, false))
@@ -231,7 +231,7 @@ class McpProtocolTest {
 
     /** The rule MCP control rests on: ShareControl may open, poll and close a share, and never allow or deny one. */
     @Test fun shareControlCanNeverAllowOrDeny() {
-        val ipc = org.appdevforall.localstore.server.Ipc
+        val ipc = org.appdevforall.shareyourapps.server.Ipc
         val field = share.javaClass.getDeclaredField("ALLOWED_MESSAGES").apply { isAccessible = true }
         val allowed = field.get(null) as Set<*>
         assertEquals(setOf(ipc.MSG_SHARE_OPEN, ipc.MSG_SHARE_POLL, ipc.MSG_SHARE_CLOSE), allowed)

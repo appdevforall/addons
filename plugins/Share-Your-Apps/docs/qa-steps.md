@@ -3,9 +3,9 @@
 **You'll need two phones:**
 
 - **Phone A, the owner's:** Android 9 or later, with Code On The Go, and one or two apps you've built, so each has an APK.
-- **Phone B, a buyer's:** any Android phone with a browser and a camera. In section J, it's also a second seller: it gets Local Store Server from Phone A, and needs no Code On The Go.
+- **Phone B, a buyer's:** any Android phone with a browser and a camera. In section J, it's also a second seller: it gets Share Your Apps Server from Phone A, and needs no Code On The Go.
 
-Install the plugin with the tester guide attached to this ticket. For each step that fails, add a comment with the step number, what happened, a screenshot, and the logs: in Local Store Server, tap **Export logs**.
+Install the plugin with the tester guide attached to this ticket. For each step that fails, add a comment with the step number, what happened, a screenshot, and the logs: in Share Your Apps Server, tap **Export logs**.
 
 Some public and guest Wi-Fi networks stop phones reaching each other. If Phone B can't open the store on Wi-Fi, try a home network, or the hotspot tests in section F.
 
@@ -55,7 +55,7 @@ Some public and guest Wi-Fi networks stop phones reaching each other. If Phone B
    **Expected:** a plain, large-text page with every product, and *Standard version* at its top left, leading back.
 
 7. **A publish that updates the server.** Install a newer plugin, as testers do with each build, and publish.
-   **Expected:** Android asks to update Local Store Server, and the store serves again once it's done. The version line at the foot of **Manage server** shows the new version.
+   **Expected:** Android asks to update Share Your Apps Server, and the store serves again once it's done. The version line at the foot of **Manage server** shows the new version.
 
 8. **An unsigned APK.** Build an app with **assembleRelease** but no signing set up, so it makes `app-release-unsigned.apk`. Choose it for a product.
    **Expected:** the APK picker marks it *Unsigned: buyers can't install it*. Publishing goes ahead, and its message ends with a note that the APK isn't signed, so buyers can't install it. Choose a signed build again afterwards.
@@ -67,7 +67,7 @@ Some public and guest Wi-Fi networks stop phones reaching each other. If Phone B
 
 Put both phones on the same Wi-Fi network.
 
-1. **The QR codes.** On Phone A, open **Local Store Server** and tap **Show QR codes for buyers**. Enter the Wi-Fi password, then tap the keyboard's **Done** key.
+1. **The QR codes.** On Phone A, open **Share Your Apps Server** and tap **Show QR codes for buyers**. Enter the Wi-Fi password, then tap the keyboard's **Done** key.
    **Expected:** the keyboard closes, the fields shrink to `Joining "…" · Change`, and two codes appear: one to join the network, one to open the store.
 2. **Open the store.** On Phone B, scan the second code.
    **Expected:** the store opens, with a red-and-cream awning across the top, a teal header, and a card for each product. With no header image set, the octopus in the header moves.
@@ -80,7 +80,7 @@ Put both phones on the same Wi-Fi network.
 6. **Lists in descriptions.** Give a product the description `<ol><li>one</li><li>two</li></ol>`, publish, and look on Phone B.
    **Expected:** the numbers sit inside the card, not past its edge.
 7. **A stalled download.** Give a product a large source zip, over 50 MB. On Phone B, start **Download source**, then switch Phone B's Wi-Fi off. Straight away, open the store on a third device, or on Phone A's browser.
-   **Expected:** the store opens straight away. About two minutes later, Local Store Server's log shows `closed a connection … that received nothing for 120 s`.
+   **Expected:** the store opens straight away. About two minutes later, Share Your Apps Server's log shows `closed a connection … that received nothing for 120 s`.
 8. **A paused video.** On Phone B, play one of Code on the Go's videos, and pause it partway. Straight away, open the store on a third device, or on Phone A's browser, and download an APK.
    **Expected:** the store opens and the download starts straight away, with the video still paused on Phone B.
 
@@ -88,7 +88,7 @@ Put both phones on the same Wi-Fi network.
    **Expected:** the video jumps to the new position, and plays from there. The paused video carries on from where it stopped, not from the beginning.
 
 10. **Leaving Wi-Fi.** While Phone A serves on Wi-Fi, switch its Wi-Fi off.
-   **Expected:** within a few seconds, Local Store Server shows it stopped, because the Wi-Fi network was lost, and says to reconnect or tap Start to use a hotspot.
+   **Expected:** within a few seconds, Share Your Apps Server shows it stopped, because the Wi-Fi network was lost, and says to reconnect or tap Start to use a hotspot.
 11. **A missing page.** On Phone B, add `f/nothing` to the end of the store's address.
    **Expected:** a page saying **Not found**, with the awning and the octopus.
 
@@ -112,7 +112,7 @@ Put both phones on the same Wi-Fi network.
 
 ## F. The hotspot — Phone A not on Wi-Fi
 
-1. **Wi-Fi Direct.** On Phone A, switch Wi-Fi **on**, but disconnect from every network. In Local Store Server, tap **Start**, and allow **Nearby devices** if asked.
+1. **Wi-Fi Direct.** On Phone A, switch Wi-Fi **on**, but disconnect from every network. In Share Your Apps Server, tap **Start**, and allow **Nearby devices** if asked.
    **Expected:** the status panel shows a network named `DIRECT-LS-…` and its password. The log shows `Wi-Fi Direct group up`.
 2. **Join and shop.** Open **Show QR codes for buyers**. On Phone B, scan the first code, then the second.
    **Expected:** Phone B joins the network, then the store opens.
@@ -138,7 +138,7 @@ Put both phones on the same Wi-Fi network.
 11. **Location off, on Android 9 to 12,** if you have such a phone. Turn Location off, turn Wi-Fi off, and tap **Start**.
    **Expected:** the server doesn't start, and Manage Server says to turn Location on, then tap **Start**. With Location on, it starts.
 
-## G. Local Store Server
+## G. Share Your Apps Server
 
 1. **The layout.** Open the app.
    **Expected:** five raised panels: **Status**, **Server**, **When to run**, **Wi-Fi Direct hotspot** and **Logs**.
@@ -147,7 +147,7 @@ Put both phones on the same Wi-Fi network.
 3. **The full log.** Tap **View logs**. Try an older file's chip, search for `gzip`, switch between **Requests** and **Status**, and pinch to zoom.
    **Expected:** each works; the newest lines are at the top.
 4. **Exporting logs.** Tap **Export logs**, and choose Gmail or Drive.
-   **Expected:** the attachments are named `local-store-server-log….txt`.
+   **Expected:** the attachments are named `share-your-apps-server-log….txt`.
 5. **The log pane.** Swipe the small log pane sideways, and wait a few seconds.
    **Expected:** it stays where you left it.
 6. **Help.** Long-press a panel's heading, such as **Server**, or a button. Tap the underlined **+ See more**, then the button under the detail. Then long-press it again, and tap the faint **ⓘ** in the tooltip's corner.
@@ -170,14 +170,14 @@ Put both phones on the same Wi-Fi network.
 
 12. **Smaller stores.** Publish a store with at least one product whose source is ticked. Wait a minute, then, in a file manager, open `CodeOnTheGoProjects`, the `Store_…` folder, then `products` and that product's folder. Then, on Phone B, open the store, and tap **Download source** for that product.
    **Expected:** the source zip is there only as `…-source.zip.gz`, with no plain `.zip` beside it. The source downloaded on Phone B is a `.zip` that opens normally, with the project's files inside.
-13. **Start and Stop follow the server.** Open **Local Store Server** with the server stopped. Tap **Start**, wait for the address to appear in the **Status** panel, then tap **Stop**. Then tap **Start** again, leave the app, and open it again.
+13. **Start and Stop follow the server.** Open **Share Your Apps Server** with the server stopped. Tap **Start**, wait for the address to appear in the **Status** panel, then tap **Stop**. Then tap **Start** again, leave the app, and open it again.
    **Expected:** while the server is stopped, **Status** says *Stopped*, **Start** is enabled, green, with white text, and **Stop** is disabled, with the default grey background. While it's serving, **Start** is disabled, with the default grey background, and **Stop** is enabled, red, with white text. After **Stop**, it's back to the stopped look. Reopening the app while it's serving shows **Start** disabled and **Stop** enabled. A known limit: between tapping **Start** and the address appearing, **Start** stays enabled.
 14. **The button colours in both modes, and at a large font.** Look at the **Server** panel in the phone's light mode, then dark mode, with the server stopped and again while it's serving. Then set the phone's font size to its largest, and look again.
    **Expected:** in both modes, the enabled and disabled buttons are easy to tell apart, and each button's text is readable. At the largest font, **Start**, **Stop** and **Help** aren't cut off, and you can reach all three.
 
 ## H. Icons and motion
 
-1. **The launcher icon.** Look at Local Store Server on the home screen.
+1. **The launcher icon.** Look at Share Your Apps Server on the home screen.
    **Expected:** a violet octopus at a market stall, under a red-and-cream awning.
 2. **Themed icons.** Turn on themed icons. On a Samsung: **Settings → Wallpaper and style → Color palette**, then **Apply palette to app icons**.
    **Expected:** the icon becomes a one-colour silhouette of the octopus, holding up two tiles.
@@ -228,14 +228,14 @@ The four alternative templates are attached to ADFA-6207 as `.peb` files. Save t
 
 Phone A serves its own store; Phone B becomes a second seller, serving a copy. Phone B's own browser, or a third device, is the buyer of the copy.
 
-1. **The share screen.** Right after publishing, on Phone A: **Local Store Server** → **Manage server** → *Copies of this store* → **Share this store…**
-   **Expected:** it may say *Getting the store ready to share…* for a moment, then shows a QR code, a code such as `LS-FM50-ZV7G` with a copy button beside it, *This code works for one phone, for 10 more minutes*, and a smaller QR code, *No Local Store Server on the other phone?* Rotating Phone A keeps the same code. The screen stays on.
+1. **The share screen.** Right after publishing, on Phone A: **Share Your Apps Server** → **Manage server** → *Copies of this store* → **Share this store…**
+   **Expected:** it may say *Getting the store ready to share…* for a moment, then shows a QR code, a code such as `LS-FM50-ZV7G` with a copy button beside it, *This code works for one phone, for 10 more minutes*, and a smaller QR code, *No Share Your Apps Server on the other phone?* Rotating Phone A keeps the same code. The screen stays on.
 2. **Copying the code.** Tap the copy button, and paste into any text field.
    **Expected:** the code pastes exactly as shown.
-3. **The app for Phone B.** If Phone B doesn't have Local Store Server, scan the **small** QR code with its camera app, open the link, and install the download. Allow the browser to install apps if asked, and turn that off again afterwards; on some Samsung phones, turn **Auto Blocker** off first.
-   **Expected:** Local Store Server installs. Its version line, at the foot of **Manage server**, matches Phone A's.
+3. **The app for Phone B.** If Phone B doesn't have Share Your Apps Server, scan the **small** QR code with its camera app, open the link, and install the download. Allow the browser to install apps if asked, and turn that off again afterwards; on some Samsung phones, turn **Auto Blocker** off first.
+   **Expected:** Share Your Apps Server installs. Its version line, at the foot of **Manage server**, matches Phone A's.
 4. **Importing by QR code, then denying.** On Phone B, scan the **large** QR code with the camera, and open the link.
-   **Expected:** Local Store Server's import screen opens with the code filled in, and the phone's own name. Tap **Continue**: Phone B shows four digits, and Phone A shows *Allow a copy?*, with Phone B's name and the **same** four digits. Tap **Deny** on Phone A: Phone B says the owner denied it, and nothing was imported.
+   **Expected:** Share Your Apps Server's import screen opens with the code filled in, and the phone's own name. Tap **Continue**: Phone B shows four digits, and Phone A shows *Allow a copy?*, with Phone B's name and the **same** four digits. Tap **Deny** on Phone A: Phone B says the owner denied it, and nothing was imported.
 5. **Importing by typed code, and allowing.** On Phone A, tap **Share again**. On Phone B: **Manage server** → **Import a store…**, type the code in lower case, and **Continue**. On Phone A, choose **In a month**, and **Allow**.
    **Expected:** Phone B shows its progress, receiving the store, then *Imported …*, with its expiry date.
 6. **Leaving mid-transfer.** Share again, with a store large enough to take a while. As Phone B starts receiving, press Home.
@@ -262,7 +262,7 @@ Phone A serves its own store; Phone B becomes a second seller, serving a copy. P
     **Expected:** it asks first; **Keep it** changes nothing. **Remove** stops the server if it's serving the copy, and the panel disappears.
 17. **Expiry by date.** Import a fresh copy, choosing **In a week**, and serve it. Turn off **Automatic date and time**, and set the date 8 days ahead.
     **Expected:** within a minute, the server stops, and **Manage server** shows *A store has expired*, with no date. A download under way at that moment finishes first. Turn **Automatic date and time** back on, and tap **OK**.
-18. **The clock.** Import a fresh copy with **In a week**, and another time with **Never**. Each time, turn off **Automatic date and time**, set the time 10 minutes back, then open Local Store Server. The copy is checked when the app opens or while the server is serving it, not while the server is stopped and the app is closed.
+18. **The clock.** Import a fresh copy with **In a week**, and another time with **Never**. Each time, turn off **Automatic date and time**, set the time 10 minutes back, then open Share Your Apps Server. The copy is checked when the app opens or while the server is serving it, not while the server is stopped and the app is closed.
     **Expected:** the **In a week** copy is deleted, with exactly the same *A store has expired* notice as step 17, and nothing mentioning the clock, on screen or in **View logs**. The **Never** copy is kept. Turn **Automatic date and time** back on afterwards.
 19. **Optional, with a third phone that has Code On The Go:** publishing on a phone holding a copy. On Phone A, stop serving, and import a copy from the third phone. Then publish from Code On The Go on Phone A.
     **Expected:** Phone A serves its own store, not the copy, without asking. The copy's panel stays, offering **Serve this store**.
@@ -272,7 +272,7 @@ Phone A serves its own store; Phone B becomes a second seller, serving a copy. P
 
 ## K. Optional: checks that need a terminal
 
-Run these on Phone A, in Code On The Go's terminal, using the address shown in Local Store Server in place of `ADDRESS`.
+Run these on Phone A, in Code On The Go's terminal, using the address shown in Share Your Apps Server in place of `ADDRESS`.
 
 1. **Compression.** A few seconds after publishing, once the server has compressed the page in the background: `curl -sI -H 'Accept-Encoding: gzip' http://ADDRESS/`
    **Expected:** the headers include `Content-Encoding: gzip` and `Cache-Control: no-cache`.
@@ -287,14 +287,14 @@ Run these on Phone A, in Code On The Go's terminal, using the address shown in L
 
 ## L. MCP control
 
-New in Local Store Server 1.0.48. **MCP control** lets apps on the same phone, such as an AI assistant, start and stop the server, share the store and import a store. It's off until you turn it on, only apps on that phone can reach it, and they can't change the store or approve a copy. Steps 1 to 8 need only Phone A. Steps 9 and 10 are optional and need a terminal.
+New in Share Your Apps Server 1.0.48. **MCP control** lets apps on the same phone, such as an AI assistant, start and stop the server, share the store and import a store. It's off until you turn it on, only apps on that phone can reach it, and they can't change the store or approve a copy. Steps 1 to 8 need only Phone A. Steps 9 and 10 are optional and need a terminal.
 
-1. **Off by default.** On Phone A, open **Local Store Server**, and look at the **Server** panel, below **Start**, **Stop** and **Help**.
+1. **Off by default.** On Phone A, open **Share Your Apps Server**, and look at the **Server** panel, below **Start**, **Stop** and **Help**.
    **Expected:** a switch, **MCP control**, is off. The line under it says *Off. Turn on to let apps on this phone control the server.* **Copy token** and **New token** aren't shown, and there's no MCP notification.
 2. **Turning it on asks first.** Turn the switch on.
    **Expected:** a dialog, *Turn on MCP control?*, says that apps will be able to start and stop the server, share this store and import a store; that they can't change the store or approve a copy; that it also lets the app use the microphone, while receiving a handshake; and that each app needs the token. **Cancel** leaves the switch off. Turn it on again, and tap **Turn on**: the switch is on, and the line under it reads *On, at http://127.0.0.1:6176/mcp*. **Copy token** and **New token** appear, and a notification shows, with a **Turn off** button. The first time, Android then asks to allow the microphone.
 3. **The microphone line.** Allow the microphone.
-   **Expected:** the line under the switch shows only the address. Now turn MCP control off, take the microphone permission away in Android's **Settings → Apps → Local Store Server → Permissions**, turn MCP control on again, and tap **Turn on**, then **Don't allow** if asked. **Expected:** MCP control still turns on, and a second line reads *Microphone not allowed: hearing a sharing phone's tones needs a person.* Allow the microphone again afterwards. **Optional:** after you restart the phone, and before you open Local Store Server, then open it, the second line may read *Microphone: works once the app is opened.*
+   **Expected:** the line under the switch shows only the address. Now turn MCP control off, take the microphone permission away in Android's **Settings → Apps → Share Your Apps Server → Permissions**, turn MCP control on again, and tap **Turn on**, then **Don't allow** if asked. **Expected:** MCP control still turns on, and a second line reads *Microphone not allowed: hearing a sharing phone's tones needs a person.* Allow the microphone again afterwards. **Optional:** after you restart the phone, and before you open Share Your Apps Server, then open it, the second line may read *Microphone: works once the app is opened.*
 4. **Copy token.** Tap **Copy token**, and paste into any text field.
    **Expected:** a long token pastes. The token is never shown on the server screen. On Android 12 and earlier a short *Token copied* message appears; later versions show Android's own copy confirmation.
 5. **New token.** Tap **New token**.
@@ -306,15 +306,15 @@ New in Local Store Server 1.0.48. **MCP control** lets apps on the same phone, s
 8. **Turning it off.** Turn it off from the notification's **Turn off** button. Then turn it on again, and turn it off with the switch.
    **Expected:** each time, the notification goes, the switch is off, the line reads *Off. Turn on to let apps on this phone control the server.*, and **Copy token** and **New token** disappear.
 9. **Optional, in a terminal on Phone A: the token is required.** With MCP control on: `curl -si -X POST http://127.0.0.1:6176/mcp -H 'Content-Type: application/json' -d '{}'`
-   **Expected:** `HTTP/1.1 401 Unauthorized`, a `WWW-Authenticate: Bearer realm="Local Store Server"` header, and a message that begins *Missing or wrong token.* With MCP control off, the same command can't connect.
+   **Expected:** `HTTP/1.1 401 Unauthorized`, a `WWW-Authenticate: Bearer realm="Share Your Apps Server"` header, and a message that begins *Missing or wrong token.* With MCP control off, the same command can't connect.
 10. **Optional, in a terminal on Phone B: other phones can't reach it.** With MCP control on, on Phone A: use Phone A's own network address, the numbers in the store's address before the port, in `curl -m 5 http://PHONE_A_ADDRESS:6176/mcp -H 'Content-Type: application/json' -d '{}'`
-   **Expected:** the connection is refused or times out, with no reply from Local Store Server. Only apps on Phone A itself can reach MCP control.
+   **Expected:** the connection is refused or times out, with no reply from Share Your Apps Server. Only apps on Phone A itself can reach MCP control.
 
 What apps can do once they have the token, such as sharing a store or importing one, is checked with the scripts in the `mcp` folder of this pack: see `mcp/README.txt`. The same scenarios are in ADFA-6207's Steps to QA.
 
 ## M. Sound handshake
 
-New in Local Store Server 1.0.48. Instead of scanning or typing the share code, a phone can hear it: the owner taps **Play sound**, and the other phone taps **Listen**. Sound only carries the handshake; the store itself still goes over Wi-Fi. You'll need both phones close together, with the media volume up and the room fairly quiet.
+New in Share Your Apps Server 1.0.48. Instead of scanning or typing the share code, a phone can hear it: the owner taps **Play sound**, and the other phone taps **Listen**. Sound only carries the handshake; the store itself still goes over Wi-Fi. You'll need both phones close together, with the media volume up and the room fairly quiet.
 
 1. **Play sound.** On Phone A, serving a published store: **Manage server** → **Share this store…**. Tap **Play sound**.
    **Expected:** a short run of tones plays from Phone A, and the button reads **Stop sound**. The tones repeat, for up to 30 seconds, then stop by themselves. A line under the button, *Playing sound… (N attempts remaining)*, counts down the bursts of the code still to play, to none, as the tones end; it follows what you hear. Tap **Stop sound** during them: they stop at once, and the button reads **Play sound** again. In **View logs**, a `[sound]` line says the tones were played. Long-pressing **Play sound** shows its help. With Phone A's media volume at its minimum, tap **Play sound** again: a message says *The media volume is low: turn it up so the other phone hears the tones.*

@@ -205,11 +205,11 @@ class ShareYourAppsFragment : Fragment() {
     private fun versionLine(): View {
         val built = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(BuildConfig.BUILD_TIME))
         val base = "Share Your Apps ${BuildConfig.VERSION_NAME} · built $built"
-        val line = st.hint(bundledServer?.let { "$base · with Local Store Server $it" } ?: base).apply { setPadding(0, st.dp(16), 0, 0) }
+        val line = st.hint(bundledServer?.let { "$base · with Share Your Apps Server $it" } ?: base).apply { setPadding(0, st.dp(16), 0, 0) }
         if (bundledServer == null) Thread {
             val v = ServerInstaller.bundledVersionName(ctx().applicationContext) ?: return@Thread
             bundledServer = v
-            line.post { line.text = "$base · with Local Store Server $v" }
+            line.post { line.text = "$base · with Share Your Apps Server $v" }
         }.start()
         return line
     }
@@ -418,7 +418,7 @@ class ShareYourAppsFragment : Fragment() {
         try {
             launcher.launch(intent)
         } catch (e: ActivityNotFoundException) {
-            PublishFlow.onLaunchResult(0, "Local Store Server isn't installed. Build and install it first.", unchanged = true)
+            PublishFlow.onLaunchResult(0, "Share Your Apps Server isn't installed. Build and install it first.", unchanged = true)
         }
     }
 

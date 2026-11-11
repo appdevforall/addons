@@ -1,13 +1,13 @@
-# Session state: Local Store Server (Combined: MCP control + sound handshake)
+# Session state: Share Your Apps Server (Combined: MCP control + sound handshake)
 
 Current state only. No history: the older versions were deleted on purpose.
 
 ## 1. How to resume (instructions for the agent)
-- **Work folder:** /storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined (project A, the MCP server, merged
-  with project B, the sound handshake, in step C). Source: app/src/main/java/org/appdevforall/localstore/server.
+- **Work folder:** /storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined (project A, the MCP server, merged
+  with project B, the sound handshake, in step C). Source: app/src/main/java/org/appdevforall/shareyourapps/server.
   Unit tests: app/src/test/java. Help: help/build_help_db.py, built by help/build_help_db.sh.
-- **Other folders in CodeOnTheGoProjects:** "Local Store Server" = the original, the only fallback (Git isn't used).
-  "Local Store Server MCP" (A) and "Local Store Server Sound" (B) = the pre-merge projects, to be deleted by the user.
+- **Other folders in CodeOnTheGoProjects:** "Share Your Apps Server" = the original, the only fallback (Git isn't used).
+  "Share Your Apps Server MCP" (A) and "Share Your Apps Server Sound" (B) = the pre-merge projects, to be deleted by the user.
   Every copy has the same app ID: installing one replaces another on the phone.
 - **The user's standing rule: plan first.** Change nothing until the user approves. "Proceed" or "Continue" after a
   plan approves it and the agent's suggested decisions.
@@ -145,7 +145,7 @@ Current state only. No history: the older versions were deleted on purpose.
 - **WifiJoin:** reachable() (about 2 s); join() via WifiNetworkSpecifier with no INTERNET capability;
   holdUntilImportEnds(); release().
 - **SoundLog:** "[sound] …" lines, never a password. On the sharing phone they go to the server's log via MSG_LOG; on
-  the importing phone the main process writes them (nothing while serving); all go to logcat too (LocalStoreSound).
+  the importing phone the main process writes them (nothing while serving); all go to logcat too (ShareYourAppsSound).
 
 ## 7. Design: MCP (A + step C)
 - **Endpoint:**
@@ -230,7 +230,7 @@ Current state only. No history: the older versions were deleted on purpose.
 - Sharing runs in the server process. ShareActivity binds ServerService (flag 0) and polls every 500 ms. A person's
   share closes when the screen is left; the screen stays on.
 - Share codes: LS-XXXX-XXXX, 8 Crockford base32 characters = 5 bytes; normalize() forgives case, spaces, dashes, the
-  LS prefix, O→0, I/L→1. Link `localstore-share://<IPv4>:<port>/<code>`; it carries no Wi-Fi details.
+  LS prefix, O→0, I/L→1. Link `shareyourapps-share://<IPv4>:<port>/<code>`; it carries no Wi-Fi details.
 - Imported copies: files/imported/<storeId>/ + <storeId>.json, at most one per phone; swapped atomically with
   rollback (SharePackage). A copy is never replaced under a running server. The local store is never touched.
 - Hotspot: Wi-Fi Direct keeps a fixed name and password (Android 10+); the local-only fallback gets new ones each

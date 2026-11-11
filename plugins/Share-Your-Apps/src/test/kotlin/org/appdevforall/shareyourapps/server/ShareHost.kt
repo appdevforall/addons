@@ -1,4 +1,4 @@
-package org.appdevforall.localstore.server
+package org.appdevforall.shareyourapps.server
 
 import java.io.File
 import java.security.KeyPair
@@ -30,8 +30,8 @@ class ShareHost(
         TAKEN(409, "Another phone is already using that code."),
         BAD_KEY(403, "This phone's key didn't match what it promised."),
         NOT_ALLOWED(403, "The owner hasn't allowed this copy."),
-        SELLER_OLDER(426, "This phone's Local Store Server is older than the owner's. Get the newer one from the owner's share screen — the small QR code — then try again."),
-        SELLER_NEWER(426, "The owner's Local Store Server is older than this phone's. The owner needs to update it first."),
+        SELLER_OLDER(426, "This phone's Share Your Apps Server is older than the owner's. Get the newer one from the owner's share screen — the small QR code — then try again."),
+        SELLER_NEWER(426, "The owner's Share Your Apps Server is older than this phone's. The owner needs to update it first."),
         UNKNOWN(404, "That request isn't known here."),
     }
 

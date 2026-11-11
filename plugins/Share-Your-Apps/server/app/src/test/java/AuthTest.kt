@@ -1,6 +1,6 @@
 package authtest
 
-import org.appdevforall.localstore.server.*
+import org.appdevforall.shareyourapps.server.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.InetAddress

@@ -4,11 +4,11 @@
 # Run it with this phone's token exported first (Copy token, under the MCP control switch). Paste the token after
 # the first line; it isn't shown:
 #     stty -echo; read -r MCP_TOKEN; stty echo; export MCP_TOKEN
-#     sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/mcp-sound-tests-1phone.sh"
+#     sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/mcp-sound-tests-1phone.sh"
 #
 # It starts the server, opens a share, then stops the server; at the end the server is left stopped.
 # It asks a few questions (do you hear tones?), and asks you to talk or tap near the phone for 30 s.
-# While it runs, Local Store Server is off screen: so the listening tests are also the off-screen tests.
+# While it runs, Share Your Apps Server is off screen: so the listening tests are also the off-screen tests.
 # Everything goes to the screen and to mcp-sound-tests-1phone-result.txt in this folder: paste that to the agent.
 #
 #  1 tools lists share_play_sound and import_listen     9 server_stop
@@ -193,7 +193,7 @@ if has 'Nothing was listening'; then pass "14 import_listen stop with nothing li
 else fail "14 import_listen stop with nothing listening didn't say so"; fi
 
 # ---- 15. The log, which only the app can show (its folder is private).
-note "Open Local Store Server, tap View logs, and look for [sound] lines from just now: 'played ... for an MCP client', 'listening for a share code, for an MCP client', 'heard nothing in 30 s', 'stopped listening: by an MCP client'."
+note "Open Share Your Apps Server, tap View logs, and look for [sound] lines from just now: 'played ... for an MCP client', 'listening for a share code, for an MCP client', 'heard nothing in 30 s', 'stopped listening: by an MCP client'."
 if ask "Are those [sound] lines in View logs?"; then pass "15 View logs has the [sound] lines"
 else fail "15 some [sound] lines are missing from View logs: tell the agent which"; fi
 

@@ -1,4 +1,4 @@
-package org.appdevforall.localstore.server
+package org.appdevforall.shareyourapps.server
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -76,7 +76,7 @@ object SharePackage {
         val sigLen = d.readInt(); if (sigLen <= 0 || sigLen > 256) throw IOException("the copy's signature is damaged")
         val signature = ByteArray(sigLen).also { d.readFully(it) }
         val desc = try { Description(JSONObject(String(bytes, Charsets.UTF_8))) } catch (e: Exception) { throw IOException("the copy's description can't be read") }
-        if (desc.json.optInt("format") != FORMAT) throw IOException("this copy was made by a newer Local Store Server")
+        if (desc.json.optInt("format") != FORMAT) throw IOException("this copy was made by a newer Share Your Apps Server")
         val key = try { ShareCrypto.publicKey(desc.storeKey) } catch (e: Exception) { throw IOException("the copy's store key can't be read") }
         if (ShareCrypto.storeId(key) != desc.storeId) throw IOException("the copy's store identity doesn't match its key")
         if (!ShareCrypto.verify(key, bytes, signature)) throw IOException("the copy's signature doesn't match")

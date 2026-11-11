@@ -1,6 +1,6 @@
-# Copied from Local Store Server
+# Copied from Share Your Apps Server
 
-These nine files are copies of Local Store Server's own code — its HTTP server and the files it depends on, including the four for sharing a store — from its
+These nine files are copies of Share Your Apps Server's own code — its HTTP server and the files it depends on, including the four for sharing a store — from its
 `app/src/main/java/org/appdevforall/shareyourapps/server/`. The plugin's end-to-end test uses them to
 serve a published store and verify it, exactly as the real server would.
 

@@ -1,6 +1,6 @@
-# Local Store Server
+# Share Your Apps Server
 
-An Android app that serves the store published by the **Local Store** plugin for
+An Android app that serves the store published by the **Share Your Apps** plugin for
 [Code On The Go](https://github.com/appdevforall/CodeOnTheGo). People on the same Wi-Fi
 network or hotspot open the store in their phone's browser to download the owner's apps
 and their source. No internet or accounts are needed.
@@ -22,7 +22,7 @@ except to check it's running, change a setting, or read the log.
 - A hotspot when the phone isn't on Wi-Fi (Wi-Fi Direct first, then Android's local-only hotspot),
   and a Serve screen with QR codes for joining the network and opening the store (ZXing core).
 
-The full design is in the Local Store design document (ADFA-6207).
+The full design is in the Share Your Apps design document (ADFA-6207).
 
 ## Building
 
@@ -37,7 +37,7 @@ The plugin installs this app when it's missing or older than the copy it carries
 
 1. Raise `versionCode` in `app/build.gradle.kts`.
 2. Build, then copy `app/build/outputs/apk/debug/app-debug.apk` into the plugin as
-   `src/main/assets/local-store-server.apk`.
+   `src/main/assets/share-your-apps-server.apk`.
 3. Rebuild the plugin.
 
 ## Help
@@ -94,7 +94,7 @@ Unix-domain sockets, or the tests won't compile under Gradle.
 
 ## Documentation
 
-The design document, covering both this app and the Local Store plugin, is in the plugin's repository at `docs/local-store-design.md`. Its *Developer notes* cover building, signing, updating the help and running the tests.
+The design document, covering both this app and the Share Your Apps plugin, is in the plugin's repository at `docs/share-your-apps-design.md`. Its *Developer notes* cover building, signing, updating the help and running the tests.
 
 ## License
 

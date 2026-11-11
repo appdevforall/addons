@@ -2,8 +2,8 @@
 # step-c-5-soundimport.sh: step C, script 5 of 6. Adds the new file SoundImport.kt: hearing a share code for an MCP
 # client (import_listen), with no screen. Script 6 adds the import_listen tool that uses it.
 #
-# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-5-soundimport.sh"
-# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-5-soundimport.sh" undo
+# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-5-soundimport.sh"
+# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-5-soundimport.sh" undo
 #        (deletes SoundImport.kt)
 #
 # SoundImport.kt follows the import screen's Listen (project B), which stays unchanged:
@@ -71,10 +71,10 @@ fi
 "$PY" - "$STEP" "$BK" "$SUMS" <<'PYEOF'
 import hashlib, os, shutil, sys
 step, bk, sums_path = sys.argv[1], sys.argv[2], sys.argv[3]
-SRC = "app/src/main/java/org/appdevforall/localstore/server/"
+SRC = "app/src/main/java/org/appdevforall/shareyourapps/server/"
 TARGET = SRC + "SoundImport.kt"
 
-KT = r'''package org.appdevforall.localstore.server
+KT = r'''package org.appdevforall.shareyourapps.server
 
 import android.content.Context
 import android.os.Handler
@@ -123,7 +123,7 @@ object SoundImport {
         val app = context.applicationContext
         if (!SoundIo.canListen(app)) {
             SoundLog.write(app, SoundLog.microphoneRefused())
-            return "person needed: the app isn't allowed to use the microphone. Ask a person to open Local Store Server, " +
+            return "person needed: the app isn't allowed to use the microphone. Ask a person to open Share Your Apps Server, " +
                 "turn MCP control off and on again, and allow the microphone."
         }
         if (busy) return "Already listening: follow it with import_status, or stop it with import_cancel."
@@ -152,13 +152,13 @@ object SoundImport {
                             // Only silence: Android may be blocking the microphone while the app is off screen.
                             state = if (loudest <= SoundDsp.METER_FLOOR_DB)
                                 State(Phase.PERSON_NEEDED, "The microphone heard only silence for $seconds s. Android may block it while the app " +
-                                    "is off screen: ask a person to open Local Store Server, then call import_listen again.")
+                                    "is off screen: ask a person to open Share Your Apps Server, then call import_listen again.")
                             else State(Phase.NOTHING_HEARD, "Didn't hear the code in $seconds s. The phones may need to be closer, or the owner's " +
                                 "media volume higher. Call import_listen again while the owner's phone plays its sound.")
                         }
                         SoundIo.End.NO_MICROPHONE -> {
                             SoundLog.write(app, SoundLog.listenFailed(why))
-                            state = State(Phase.PERSON_NEEDED, "$why Ask a person to open Local Store Server, then call import_listen again.")
+                            state = State(Phase.PERSON_NEEDED, "$why Ask a person to open Share Your Apps Server, then call import_listen again.")
                         }
                         else -> {
                             SoundLog.write(app, SoundLog.listenFailed(why))
@@ -223,7 +223,7 @@ object SoundImport {
     }
 
     /** A person must join the owner's hotspot. The client never gets its password: the import screen shows it. */
-    private fun byHand(p: SoundPayload, why: String) = State(Phase.PERSON_NEEDED, "$why A person must open Local Store Server, " +
+    private fun byHand(p: SoundPayload, why: String) = State(Phase.PERSON_NEEDED, "$why A person must open Share Your Apps Server, " +
         "tap Import a store, then Listen while the owner's phone plays its sound again, and follow the screen: it joins the " +
         "hotspot, or shows its name and password.", code = p.code, ssid = p.ssid)
 
@@ -301,7 +301,7 @@ for f, needle in NEEDS:
         found = os.path.isfile(SRC + f) and needle in read(SRC + f)
     if not found: stop("%s doesn't have \"%s\", which SoundImport.kt calls: the script is wrong, or the file changed." % (f, needle))
 print("Every function SoundImport.kt calls is in the project (%d checked)." % len(NEEDS))
-if not KT.startswith("package org.appdevforall.localstore.server\n"): stop("SoundImport.kt's text doesn't start with its package line.")
+if not KT.startswith("package org.appdevforall.shareyourapps.server\n"): stop("SoundImport.kt's text doesn't start with its package line.")
 if not KT.endswith("}\n// END OF SoundImport.kt\n"): stop("SoundImport.kt's text is cut off: it doesn't end with its END line.")
 if bal(KT) != (0, 0): stop("SoundImport.kt's { } or ( ) don't balance %s: the script is wrong." % (bal(KT),))
 data = KT.encode("utf-8")

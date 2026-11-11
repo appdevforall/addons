@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Tests MCP control (project A, step 2) with curl, on the phone running Local Store Server.
+# Tests MCP control (project A, step 2) with curl, on the phone running Share Your Apps Server.
 #
 # Before running:
-#   1. Do a Standard Run of "Local Store Server MCP", open the app, turn on MCP control,
+#   1. Do a Standard Run of "Share Your Apps Server MCP", open the app, turn on MCP control,
 #      and wait until the line under the switch says "On, at http://127.0.0.1:6176/mcp".
 #   2. Tap Copy token.
 #
@@ -126,7 +126,7 @@ echo "== Starting a session"
 check "initialize answers with the version asked for" 200 '"protocolVersion":"2025-06-18"' POST "$INIT"
 SESSION="$(grep -i '^mcp-session-id:' "$WORK/head" | head -n 1 | cut -d: -f2- | tr -d ' \r')"
 has "…with a session id" "Mcp-Session-Id"
-has "…the server's name" '"name":"local-store-server"'
+has "…the server's name" '"name":"share-your-apps-server"'
 has "…and the tools capability" '"tools":{'
 check "initialize with an unknown version offers the newest" 200 '"protocolVersion":"2025-06-18"' POST \
   '{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{}}}'
@@ -218,7 +218,7 @@ SHOW=1 check "import_status answers" 200 '"phase":' POST \
 check "import_cancel with no import running cancels nothing" 200 '"cancelled":false' POST \
   '{"jsonrpc":"2.0","id":72,"method":"tools/call","params":{"name":"import_cancel"}}' -H "@$WORK/session"
 check "import_start refuses both code and link" 200 'exactly one' POST \
-  '{"jsonrpc":"2.0","id":73,"method":"tools/call","params":{"name":"import_start","arguments":{"code":"LS-AB12-CD34","link":"localstore-share://192.168.1.5:6175/AB12CD34"}}}' -H "@$WORK/session"
+  '{"jsonrpc":"2.0","id":73,"method":"tools/call","params":{"name":"import_start","arguments":{"code":"LS-AB12-CD34","link":"shareyourapps-share://192.168.1.5:6175/AB12CD34"}}}' -H "@$WORK/session"
 has "…as a tool error" '"isError":true'
 check "import_start refuses neither code nor link" 200 'exactly one' POST \
   '{"jsonrpc":"2.0","id":74,"method":"tools/call","params":{"name":"import_start","arguments":{}}}' -H "@$WORK/session"
@@ -257,7 +257,7 @@ if [ "${MCP_SHARE:-0}" = 1 ]; then
     wait_for_code 45
     has "…with a code" '"code":'
     # JSON may write / as \/, so only the part before the slashes is checked.
-    has "…and a link" '"link":"localstore-share:'
+    has "…and a link" '"link":"shareyourapps-share:'
     check "share_start again returns the same share, not a new one" 200 '"already_open":true' POST \
       '{"jsonrpc":"2.0","id":41,"method":"tools/call","params":{"name":"share_start"}}' -H "@$WORK/session"
     SHOW=1 check "share_status waits up to 3 seconds" 200 '"changed":false' POST \

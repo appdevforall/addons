@@ -1,5 +1,5 @@
 package logsizetest
-import org.appdevforall.localstore.server.LogSize as L
+import org.appdevforall.shareyourapps.server.LogSize as L
 
 var failures = 0
 val failedNames = mutableListOf<String>()

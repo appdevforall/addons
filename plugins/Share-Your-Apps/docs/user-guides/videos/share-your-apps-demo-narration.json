@@ -19,7 +19,7 @@
    "recording_from": 8.403,
    "recording_to": 18.248,
    "on_screen": "Title card: Two parts",
-   "text": "It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Local Store Server app, which serves them over Wi-Fi, or your phone's hotspot."
+   "text": "It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot."
   },
   {
    "scene": 3,
@@ -135,8 +135,8 @@
    "end": 89.917,
    "recording_from": 65.443,
    "recording_to": 68.46,
-   "on_screen": "Screen S01: Local Store Server",
-   "text": "Local Store Server shows what it's serving, and where."
+   "on_screen": "Screen S01: Share Your Apps Server",
+   "text": "Share Your Apps Server shows what it's serving, and where."
   },
   {
    "scene": 16,

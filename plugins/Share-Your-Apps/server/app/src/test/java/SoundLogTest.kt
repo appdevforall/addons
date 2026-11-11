@@ -2,8 +2,8 @@ package soundlogtest
 
 import java.net.Inet4Address
 import java.net.InetAddress
-import org.appdevforall.localstore.server.SoundLog
-import org.appdevforall.localstore.server.SoundPayload
+import org.appdevforall.shareyourapps.server.SoundLog
+import org.appdevforall.shareyourapps.server.SoundPayload
 
 var failures = 0
 val failedNames = mutableListOf<String>()

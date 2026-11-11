@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds web_server_documentation.db, the Local Store Server app's three-tier help.
+"""Builds web_server_documentation.db, the Share Your Apps Server app's three-tier help.
 
 Same tables and columns as CodeOnTheGo's documentation.db, so its queries work unchanged.
 Every page is plain HTML (compression 'none', templateId 0), which needs neither Brotli nor
@@ -9,7 +9,7 @@ Pebble to read. Run it, then copy the .db into app/src/main/assets/:
 """
 import sqlite3, sys, os
 
-CATEGORY = "localstore_server"
+CATEGORY = "shareyourapps_server"
 CHUNK = 1024 * 1024  # CodeOnTheGo's CONTENT_CHUNK_SIZE: longer rows continue as <path>-1, <path>-2, ...
 
 # The same pale beige as the tooltips, so every tier of help looks alike; code on a slightly deeper beige.
@@ -23,12 +23,12 @@ def page(title, body):
     return f"<!doctype html><html><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>{title}</title>{STYLE}</head><body><h1>{title}</h1>{body}</body></html>"
 
 PAGES = {
-    "index.html": page("Local Store Server", """
-<p>Local Store Server serves the store you publish with the <b>Local Store</b> plugin in Code On The Go.
+    "index.html": page("Share Your Apps Server", """
+<p>Share Your Apps Server serves the store you publish with the <b>Share Your Apps</b> plugin in Code On The Go.
 People on the same Wi-Fi network or hotspot open it in their phone's browser to download your apps and their source.</p>
 <h2>How it fits together</h2>
 <ol>
-<li>In Code On The Go, open the <b>Local Store</b> tab, fill in your catalog, and tap <b>Publish</b>.</li>
+<li>In Code On The Go, open the <b>Share Your Apps</b> tab, fill in your catalog, and tap <b>Publish</b>.</li>
 <li>The plugin builds a new copy of the store and starts this server on it. You stay in Code On The Go.</li>
 <li>This screen then shows <i>Serving</i> and the store's address, with a button beside it that copies it.</li>
 </ol>
@@ -76,7 +76,7 @@ the result code, the bytes sent, the browser, and the transfer rate. Code <code>
 <li><code>[sound] …</code> — <b>Play sound</b> and <b>Listen</b>: the tones played, a code heard (with which repeat it came from and how
 strong the start signal was), nothing heard, or the self-test's result. A hotspot password heard in the tones is never written to the log.</li>
 </ul>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "serving.html": page("Serving the store", """
 <h2 id=status>Status</h2>
 <p>The Status panel says whether the server is serving, and which store: your own, or an imported copy. While it serves, it shows
@@ -93,7 +93,7 @@ network's name and password, which are never saved. <b>Done</b> closes the scree
 have them turn on airplane mode, then turn Wi-Fi back on, and turn airplane mode off afterwards.</p>
 <h2 id=grant>Storage access</h2>
 <p>The server reads the store's files from shared storage. If <b>Grant storage access</b> shows, tap it and allow access, once.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "hotspot.html": page("Hotspots", """
 <h2 id=kinds>Which network buyers join</h2>
 <ul>
@@ -110,20 +110,20 @@ and emoji 4. Its password is 8 to 63 letters, digits, spaces and ordinary punctu
 Buyers who joined before must join again after a change.</p>
 <h2 id=location>Location, on Android 9 to 12</h2>
 <p>These versions won't start the server's own hotspot while Location is off. The server says so: turn Location on, then tap <b>Start</b>.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "sharing.html": page("Sharing your store", """
 <p>Someone nearby can serve a copy of your store from their own phone. The copy is served exactly as you published it: they can't change
 it, or pass it on. They set their own PIN, and it's deleted from their phone on the date you choose.</p>
 <h2 id=share>Sharing</h2>
 <ol>
 <li>While your own store is served, tap <b>Share this store…</b>. Right after a publish, it may first say <i>Getting the store ready to share…</i></li>
-<li>On their phone, they open Local Store Server and tap <b>Import a store</b>, then scan the large QR code, or type the code.</li>
+<li>On their phone, they open Share Your Apps Server and tap <b>Import a store</b>, then scan the large QR code, or type the code.</li>
 <li>You check the four digits and choose <b>Allow</b>, and the copy is sent.</li>
 </ol>
 <p>Each code serves one phone, for 10 minutes, and closes after five wrong codes. Both phones must be on the same Wi-Fi network, or
 theirs on your hotspot. <b>Cancel</b>, or leaving the screen, ends the share; rotating the phone doesn't. <b>Share again</b> makes a
 new code; <b>Done</b> closes the screen.</p>
-<h2 id=app>A phone without Local Store Server</h2>
+<h2 id=app>A phone without Share Your Apps Server</h2>
 <p>They scan the small QR code with the camera, and install the app it downloads from your phone. Then they scan the large one.</p>
 <h2 id=sound>Play sound</h2>
 <p><b>Play sound</b> plays the code as a short run of tones, so the other phone can hear it instead of scanning it: on their phone,
@@ -137,7 +137,7 @@ screens, tap <b>Deny</b>; nothing is sent.</p>
 <h2 id=expiry>When the copy expires</h2>
 <p>In a week, in a month, on a date you choose, or never. On or after that date, it's deleted from their phone. To give them a
 newer version, share again.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "importing.html": page("Importing a store", """
 <h2 id=import>Importing</h2>
 <ol>
@@ -175,7 +175,7 @@ import on another phone.</p>
 <h2 id=done>When it's imported</h2>
 <p><b>Serve it now</b> starts serving the copy; <b>Done</b> leaves it for later. If the import happened over the owner's own network,
 leave it before serving: join your own Wi-Fi, or turn Wi-Fi off, so the phone starts its own hotspot.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "copies.html": page("Imported copies", """
 <h2 id=panel>The copy's panel</h2>
 <p>Manage server shows an imported copy in a panel of its own, with its name and expiry. It's served exactly as published: it can't be
@@ -190,7 +190,7 @@ plugin serves your own store instead, keeping the copy.</p>
 <h2 id=expiry>When it expires</h2>
 <p>On or after its date, the copy is deleted from the phone, and Manage server says <i>A store has expired</i> until you tap <b>OK</b>.
 Downloads under way finish first. To serve it again, ask its owner for a new copy.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "running.html": page("When to run, and logs", """
 <h2 id=modes>When to run</h2>
 <p><b>Run always</b> keeps serving whatever the screen does. <b>Pause when the screen turns off</b> saves battery, and resumes when you
@@ -199,9 +199,9 @@ unlock the phone.</p>
 <p>The log records buyers' requests and what the server does. <b>Log size limit</b> sets how large each file grows; 0 turns logging
 off. <b>View logs</b> shows the newest lines first, and <b>Export logs</b> sends every log file off the phone. The log folder is
 private to the app, since it records buyers' addresses. See <a href="log.html">Reading the access log</a>.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     "mcp.html": page("MCP control", """
-<p>MCP control lets apps on this phone, such as an AI assistant, control Local Store Server through the Model Context Protocol (MCP).
+<p>MCP control lets apps on this phone, such as an AI assistant, control Share Your Apps Server through the Model Context Protocol (MCP).
 It's off until you turn it on, and only apps on this phone can reach it: other devices on the network can't.</p>
 <h2 id=on>Turning it on</h2>
 <p>Turn on <b>MCP control</b> in the Server panel. The app first says what it allows; tap <b>Turn on</b>, then allow the microphone
@@ -244,15 +244,15 @@ header <code>Authorization: Bearer</code>, followed by the token.</p>
 <h2 id=problems>If it doesn't start</h2>
 <p>If the line under the switch says <i>Failed</i>, another app may be using port 6176. Close that app, then turn MCP control off and
 on again. The store's own port can't be 6176, as that's kept for MCP control.</p>
-<p><a href="index.html">Back to Local Store Server</a></p>"""),
+<p><a href="index.html">Back to Share Your Apps Server</a></p>"""),
     # A fixed page for checking that Tier 3 works end to end.
     "x.html": page("Help test page", "<p>If you can read this, in-app help pages load from the help database.</p>"),
 }
 
 TOOLTIPS = [  # tag, summary (Tier 1), detail (Tier 2), [(button text, page)]
-    ("server.overview", "<b>Local Store Server</b><br>Serves the store you publish from Code On The Go.",
-     "<p>Publish from the <b>Local Store</b> tab in Code On The Go, and this app serves the result to phones on the same network.</p>",
-     [("About Local Store Server", "index.html")]),
+    ("server.overview", "<b>Share Your Apps Server</b><br>Serves the store you publish from Code On The Go.",
+     "<p>Publish from the <b>Share Your Apps</b> tab in Code On The Go, and this app serves the result to phones on the same network.</p>",
+     [("About Share Your Apps Server", "index.html")]),
     ("server.status", "Whether the server is running, and what it's serving.",
      "<p>While it's serving, the store's address appears below, with a button beside it that copies it.</p>", []),
     ("server.hotspot", "The hotspot buyers join when this phone isn't on Wi-Fi.",
@@ -277,14 +277,14 @@ TOOLTIPS = [  # tag, summary (Tier 1), detail (Tier 2), [(button text, page)]
      "The copy is served exactly as you published it, with their own PIN: they can't change it, or pass it on to anyone else.</p>"
      "<p>You choose when each copy expires; on that date it's deleted from their phone. To give them a newer version, share again.</p>", []),
     ("server.share", "Show a code for the other phone, then allow or deny its request.",
-     "<p>Shows a QR code, and the same as a code to type. The other phone scans or types it in Local Store Server; then you see "
+     "<p>Shows a QR code, and the same as a code to type. The other phone scans or types it in Share Your Apps Server; then you see "
      "its name and a four-digit check code, and choose when the copy expires. Nothing is sent until you tap <b>Allow</b>.</p>"
      "<p>Only works while the server is serving. Both phones must be on the same Wi-Fi network or hotspot.</p>", []),
     ("share.code", "The other phone scans this, or types the code.",
      "<p>The code works for one phone, for 10 minutes. After five wrong codes it stops working, so it can't be guessed. "
      "Keep this screen open: sharing stops when you leave it.</p>", []),
     ("share.app", "Gives the other phone the app itself, if it doesn't have it.",
-     "<p>The other phone's camera opens this in its browser, which downloads Local Store Server from this phone: the same app, "
+     "<p>The other phone's camera opens this in its browser, which downloads Share Your Apps Server from this phone: the same app, "
      "signed the same way. Android then asks to install it, and the first time, whether to let the browser install apps. "
      "Both phones must be on the same network. It's only offered while this screen is open.</p>", []),
     ("share.allow", "Check the four digits match the other screen, then choose.",
@@ -360,7 +360,7 @@ TOOLTIPS = [  # tag, summary (Tier 1), detail (Tier 2), [(button text, page)]
      "You can change the PIN there at any time.</p>", []),
     ("import.done", "Close this screen, without serving yet.",
      "<p>The copy stays on this phone. Serve it whenever you like, from Manage server.</p>", []),
-    ("serve.close", "Close this screen.", "<p>Start the server, or publish from the Local Store plugin, and the codes appear here.</p>", []),
+    ("serve.close", "Close this screen.", "<p>Start the server, or publish from the Share Your Apps plugin, and the codes appear here.</p>", []),
     ("serve.done", "Close this screen. The store keeps serving.", "<p>Open it again any time with <b>Show QR codes for buyers</b>.</p>", []),
     ("serve.show_join", "Show the QR code that joins buyers to this network.",
      "<p>Buyers scan it with their camera to join, then scan the store's own code, which appears after it.</p>", []),
@@ -415,7 +415,7 @@ TIER3 = [
     (("server.hotspot",), "Hotspots", "hotspot.html#kinds"),
     (("server.p2p_settings", "server.hotspot_name", "server.hotspot_password", "server.hotspot_save", "server.hotspot_suggest"), "The hotspot's name and password", "hotspot.html#wifi-direct"),
     (("server.copies", "server.share", "share.code", "share.cancel", "share.again", "share.done"), "Sharing your store", "sharing.html#share"),
-    (("share.app",), "A phone without Local Store Server", "sharing.html#app"),
+    (("share.app",), "A phone without Share Your Apps Server", "sharing.html#app"),
     (("share.sound",), "Play sound", "sharing.html#sound"),
     (("import.listen",), "Listen", "importing.html#listen"),
     (("share.allow", "share.deny"), "Allow or Deny", "sharing.html#allow"),

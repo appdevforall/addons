@@ -1,6 +1,6 @@
 package helptest
 
-import org.appdevforall.localstore.server.*
+import org.appdevforall.shareyourapps.server.*
 import java.io.File
 import java.sql.DriverManager
 
@@ -67,7 +67,7 @@ fun runChecks(): List<String> {
     check("…and every button's page and section exist (broken: $broken)", broken.isEmpty())
     val rows = help.debug("share.deny").toMap()
     check("the ⓘ panel names the database and its version", rows["Database"]?.any { "version 1" in it } == true)
-    check("…the tooltip's row, category and tag", rows["Tooltips"]?.let { r -> r.any { "rowid" in it } && r.any { "localstore_server" in it } && r.any { "tag share.deny" in it } } == true)
+    check("…the tooltip's row, category and tag", rows["Tooltips"]?.let { r -> r.any { "rowid" in it } && r.any { "shareyourapps_server" in it } && r.any { "tag share.deny" in it } } == true)
     check("…its button's row and target", rows["TooltipButtons"]?.any { "sharing.html#allow" in it } == true)
     check("…and the page's content row", rows["Content: sharing.html"]?.any { "text/html, compression none" in it } == true)
     check("…and says so for a tag with no row", help.debug("no.such.tag").toMap()["Tooltips"]?.single()?.contains("no row") == true)
@@ -76,7 +76,7 @@ fun runChecks(): List<String> {
     check("unknown tag gives null", help.tooltip("server.nope") == null)
 
     val p = help.page("index.html")
-    check("index.html is HTML", p != null && p.mimeType == "text/html" && String(p.bytes).contains("<title>Local Store Server</title>"))
+    check("index.html is HTML", p != null && p.mimeType == "text/html" && String(p.bytes).contains("<title>Share Your Apps Server</title>"))
     check("pages link to each other", String(p!!.bytes).contains("href=\"log.html\"") && String(help.page("log.html")!!.bytes).contains("href=\"index.html\""))
     check("the x.html test page is there", String(help.page("x.html")!!.bytes).contains("load from the help database"))
     check("unknown page gives null", help.page("nope.html") == null)

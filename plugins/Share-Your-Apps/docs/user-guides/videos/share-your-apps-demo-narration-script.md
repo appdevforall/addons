@@ -5,7 +5,7 @@ Recorded narration: `Share_Your_Apps_demo.mp3, slowed to 0.9 with atempo`. The v
 | # | Start | End | Recording | On screen | Narration |
 |---|---|---|---|---|---|
 | 1 | 00:00.400 | 00:08.402 | 0.00–8.00 s | Title card: Share Your Apps | Share Your Apps lets you share the Android apps you build in Code On The Go with people nearby. No internet, no app store, and no accounts. |
-| 2 | 00:10.300 | 00:20.145 | 8.40–18.25 s | Title card: Two parts | It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Local Store Server app, which serves them over Wi-Fi, or your phone's hotspot. |
+| 2 | 00:10.300 | 00:20.145 | 8.40–18.25 s | Title card: Two parts | It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot. |
 | 3 | 00:22.050 | 00:23.683 | 18.81–20.44 s | Title card: Creating your store | First, creating your store. |
 | 4 | 00:25.580 | 00:28.667 | 20.92–24.01 s | Screen P01: Install the plugin | Install the plugin from Code On The Go's Addons Manager. |
 | 5 | 00:30.570 | 00:36.705 | 24.45–30.59 s | Screen P02: Name your store | In the Share Your Apps tab, give your store a name. A description, a header picture and a PIN are optional. |
@@ -18,7 +18,7 @@ Recorded narration: `Share_Your_Apps_demo.mp3, slowed to 0.9 with atempo`. The v
 | 12 | 01:11.210 | 01:15.503 | 54.80–59.10 s | Screen P15: Change the look | Choose a template to change the store's look, or write your own. |
 | 13 | 01:17.400 | 01:22.005 | 59.28–63.88 s | Screen P13: Done | When it's done, every file has been checked. And the store is already being served. |
 | 14 | 01:23.900 | 01:24.912 | 64.03–65.05 s | Title card: Serving your store | Next, letting people in. |
-| 15 | 01:26.900 | 01:29.917 | 65.44–68.46 s | Screen S01: Local Store Server | Local Store Server shows what it's serving, and where. |
+| 15 | 01:26.900 | 01:29.917 | 65.44–68.46 s | Screen S01: Share Your Apps Server | Share Your Apps Server shows what it's serving, and where. |
 | 16 | 01:31.820 | 01:39.018 | 68.88–76.08 s | Screen S04: The codes | Tap Show QR codes for buyers. On a hotspot, the first code joins its network, and the second opens the store. |
 | 17 | 01:40.920 | 01:46.381 | 76.49–81.95 s | Screen S06: No Wi-Fi? No problem | With no Wi-Fi around, the server makes a hotspot of its own, with a name and password you choose. |
 | 18 | 01:48.280 | 01:50.347 | 82.34–84.41 s | Screen B01: The buyer's view | Buyers see your store in their browser. |

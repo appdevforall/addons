@@ -3,7 +3,7 @@
 A plugin for [Code On The Go](https://github.com/appdevforall/CodeOnTheGo) that publishes
 the owner's apps (APK, source, or both) to a small web store that people on the same Wi-Fi
 network or hotspot can open in their phone's browser. The store is served by the companion
-**Local Store Server** app, which this plugin installs and starts.
+**Share Your Apps Server** app, which this plugin installs and starts.
 
 ## What it does
 
@@ -31,9 +31,9 @@ compiling.
 
 ## Bundling the server
 
-The plugin carries the server as `src/main/assets/local-store-server.apk`. That file is a
+The plugin carries the server as `src/main/assets/share-your-apps-server.apk`. That file is a
 build output, so it isn't committed; copy it in before building a release (see the
-Local Store Server's README). Without it, the plugin uses whatever server is installed.
+Share Your Apps Server's README). Without it, the plugin uses whatever server is installed.
 
 ## Running the tests
 
@@ -65,7 +65,7 @@ list of named checks and, if any fail, names them. They run on a computer's Java
   project, and the setting would break the build on every computer.
 
 The end-to-end test needs the server's core, so `src/test/kotlin/org/appdevforall/shareyourapps/server/`
-holds a **copy** of five of Local Store Server's files. They're used only by the tests and never
+holds a **copy** of five of Share Your Apps Server's files. They're used only by the tests and never
 ship in the plugin. When the server's copies of those files change, copy them here again.
 
 **Writing tests:** unit tests compile against Android's version of Java's library (from
@@ -75,7 +75,7 @@ Unix-domain sockets, or the tests won't compile under Gradle.
 
 ## Documentation
 
-- [`docs/share-your-apps-design.md`](docs/share-your-apps-design.md) — the design of Share Your Apps, both the plugin and Local Store Server: how everything works, its limitations and open items, developer notes for building, releasing and testing, and the store page templates.
+- [`docs/share-your-apps-design.md`](docs/share-your-apps-design.md) — the design of Share Your Apps, both the plugin and Share Your Apps Server: how everything works, its limitations and open items, developer notes for building, releasing and testing, and the store page templates.
 - [`docs/qa-steps.md`](docs/qa-steps.md) — step-by-step checks for testers.
 - [`docs/tester-guide/`](docs/tester-guide/) — builds the one-page tester guide PDF.
 - [`docs/review-prompt.md`](docs/review-prompt.md) — a prompt for an independent review of the design.

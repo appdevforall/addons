@@ -24,7 +24,7 @@ SPECS = {
  'S06': [(1, [r'^Network name$', r'DIRECT-LS-']), (2, [r'^Password$', r'16 characters']), (3, [r'SAVE NAME'], dict(grow=True)), (4, [r'SUGGEST A PASSWORD'], dict(grow=True))],
  'S07': [(1, [r'Run always']), (2, [r'Pause when the screen'])],
  'S08': [(1, [r'SHARE THIS STORE'], dict(grow=True))],
- 'S09': [(1, [r'Or type this code'], dict(qr_above=True)), (2, [r'^LS-']), (3, [r'This code works for one phone']), (4, [r'No Local Store Server on the other', r'Scan this first', r'phone and install it'], dict(bottom=3035))],
+ 'S09': [(1, [r'Or type this code'], dict(qr_above=True)), (2, [r'^LS-']), (3, [r'This code works for one phone']), (4, [r'No Share Your Apps Server on the other', r'Scan this first', r'phone and install it'], dict(bottom=3035))],
  'S10': [(1, [r'Check that their screen', r'^22 10$']), (2, [r'In a week', r'Never', r'Oct 27, 2026']), (3, [r'^DENY$'], dict(grow=True)), (4, [r'^ALLOW$'], dict(grow=True))],
  'S11': [(1, [r'Serve a copy of someone', r'near their phone']), (2, [r'IMPORT A STORE'], dict(grow=True))],
  'S12': [(1, [r'Log size limit', r'^10$'], dict(span=(40, 1390))), (2, [r'VIEW LOGS'], dict(grow=True)), (3, [r'EXPORT LOGS'], dict(grow=True))],

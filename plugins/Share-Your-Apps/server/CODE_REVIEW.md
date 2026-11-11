@@ -1,4 +1,4 @@
-# Code Review: Local Store Server
+# Code Review: Share Your Apps Server
 
 **Scope:** Architecture, Concurrency, Audio/DSP implementation, Networking, Lifecycle & State, Error Handling, and Maintainability. *(Note: Security analysis omitted per instructions)*.
 

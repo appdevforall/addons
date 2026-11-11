@@ -14,6 +14,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Local Store Server"
+rootProject.name = "Share Your Apps Server"
 
 include(":app")

@@ -55,7 +55,7 @@ other listens, hears the code and imports the store. It uses mcp-call.sh (a curl
 
 ## Steps
 1. **Get the combined build onto the second phone.** A Standard Run only installs on the phone running Code on the
-   Go. One way: on that phone's share screen, use the small "No Local Store Server on the other phone?" QR code,
+   Go. One way: on that phone's share screen, use the small "No Share Your Apps Server on the other phone?" QR code,
    which downloads the build from it. Android may refuse to install over an older build signed differently. If so,
    uninstall the old app on the second phone first. That deletes its data, including its MCP token and any imported
    copy.
@@ -82,8 +82,8 @@ other listens, hears the code and imports the store. It uses mcp-call.sh (a curl
   rm -rf ProjectA project-b-reference
   rm -f HANDOFF.md mcp-session-state.md.old make-combined.sh mcp-sound-tests-1phone-result.txt
   ```
-- Move `qr-from-picture-plan.md` out of the "Local Store Server Sound" folder before deleting that folder.
-- Keep `step-c-backup/`, the step C scripts and the original "Local Store Server" folder until a two-phone import by
+- Move `qr-from-picture-plan.md` out of the "Share Your Apps Server Sound" folder before deleting that folder.
+- Keep `step-c-backup/`, the step C scripts and the original "Share Your Apps Server" folder until a two-phone import by
   sound has worked.
 
 <!-- END OF mcp-sound-tests-2phone-howto.md -->

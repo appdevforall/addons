@@ -1,4 +1,4 @@
-package org.appdevforall.localstore.server
+package org.appdevforall.shareyourapps.server
 
 import java.io.DataInputStream
 import java.io.EOFException
@@ -60,14 +60,14 @@ object ShareCrypto {
     fun storeId(key: PublicKey): String = Base32.encode(sha256(key.encoded).copyOf(10))
 
     /** Step 1's commitment to the seller's public key. */
-    fun commitment(sellerPublic: ByteArray): ByteArray = sha256("localstore-commit v1".toByteArray(), sellerPublic)
+    fun commitment(sellerPublic: ByteArray): ByteArray = sha256("shareyourapps-commit v1".toByteArray(), sellerPublic)
 
     fun commitmentHolds(commitment: ByteArray, sellerPublic: ByteArray): Boolean =
         MessageDigest.isEqual(commitment, commitment(sellerPublic))
 
     /** The four digits both phones show. They match only if both hold the same two public keys and code. */
     fun checkCode(ownerPublic: ByteArray, sellerPublic: ByteArray, code: String): String {
-        val h = sha256("localstore-check v1".toByteArray(), ownerPublic, sellerPublic, code.toByteArray())
+        val h = sha256("shareyourapps-check v1".toByteArray(), ownerPublic, sellerPublic, code.toByteArray())
         val n = ByteBuffer.wrap(h, 0, 4).int.toLong() and 0xffffffffL
         return "%04d".format(n % 10_000)
     }
@@ -75,7 +75,7 @@ object ShareCrypto {
     /** The key for one pair of phones: ECDH, then HKDF bound to the share code and both public keys. */
     fun sessionKey(own: PrivateKey, theirs: PublicKey, code: String, ownerPublic: ByteArray, sellerPublic: ByteArray): ByteArray {
         val secret = KeyAgreement.getInstance("ECDH").run { init(own); doPhase(theirs, true); generateSecret() }
-        return hkdf(secret, code.toByteArray(), "localstore-share v1".toByteArray() + ownerPublic + sellerPublic, 32)
+        return hkdf(secret, code.toByteArray(), "shareyourapps-share v1".toByteArray() + ownerPublic + sellerPublic, 32)
     }
 
     /** HKDF-SHA256, RFC 5869. */

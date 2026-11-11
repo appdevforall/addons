@@ -1,5 +1,5 @@
 package brandtest
-import org.appdevforall.localstore.server.Brand
+import org.appdevforall.shareyourapps.server.Brand
 import java.util.Base64
 
 var failures = 0

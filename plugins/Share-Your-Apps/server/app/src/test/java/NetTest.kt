@@ -1,5 +1,5 @@
 package nettest
-import org.appdevforall.localstore.server.*
+import org.appdevforall.shareyourapps.server.*
 import java.net.InetAddress
 
 var failures = 0

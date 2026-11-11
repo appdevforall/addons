@@ -1,4 +1,4 @@
-package org.appdevforall.localstore.server
+package org.appdevforall.shareyourapps.server
 
 import java.io.File
 import org.json.JSONObject
@@ -87,11 +87,11 @@ object StoreKeyFile {
 }
 
 /**
- * The link a share's QR code holds: localstore-share://<address>:<port>/<code>. A phone's own camera
+ * The link a share's QR code holds: shareyourapps-share://<address>:<port>/<code>. A phone's own camera
  * app recognises it, and opening it takes the seller straight to importing, with the code filled in.
  */
 object ShareLink {
-    const val SCHEME = "localstore-share"
+    const val SCHEME = "shareyourapps-share"
 
     fun make(address: String, port: Int, code: String): String = "$SCHEME://$address:$port/${ShareCodes.display(code)}"
 

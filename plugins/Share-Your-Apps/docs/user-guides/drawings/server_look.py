@@ -56,7 +56,7 @@ def bar(t): return f'<div style="background: #212121; color: #fff; padding: 0 16
 def status_bar(): return '<div style="background: #000; color: #fff; height: 24px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; font-family: Roboto, sans-serif; font-size: 12px"><span>4:05</span><span>Wi‑Fi ▾ 86%</span></div>'
 def screen(barTitle, *content):
     return status_bar() + bar(barTitle) + f'<div style="padding: 16px">{"".join(content)}</div>'
-def footer(): return text("Local Store Server 1.0.26 · built Sep 27, 2026 4:12 PM", 12, color=MUTED, center=True, extra=" margin-top: 4px;")
+def footer(): return text("Share Your Apps Server 1.0.26 · built Sep 27, 2026 4:12 PM", 12, color=MUTED, center=True, extra=" margin-top: 4px;")
 
 HINT = text("Long-press a heading or button for help.", 12, color=MUTED)
 SHARE_CAPTION = "Give someone nearby a copy to serve from their own phone. They can serve it with their own PIN. They can't change it or pass it on."

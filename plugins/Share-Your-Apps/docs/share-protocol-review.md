@@ -1,6 +1,6 @@
 # Share Your Apps — sharing a store: a review packet
 
-This is for an independent review of how **Local Store Server** shares a copy of a store with another seller's phone. It's self-contained: the protocol, the threat model, where the code is, what the tests cover, and the questions we most want answered. The wider design, including the reasons behind each decision, is Appendix E of `share-your-apps-design.md`.
+This is for an independent review of how **Share Your Apps Server** shares a copy of a store with another seller's phone. It's self-contained: the protocol, the threat model, where the code is, what the tests cover, and the questions we most want answered. The wider design, including the reasons behind each decision, is Appendix E of `share-your-apps-design.md`.
 
 ## What it's for
 
@@ -10,7 +10,7 @@ An owner runs a small store of Android apps from their phone, served over local 
 - **can't be passed on** through Share Your Apps to a third phone;
 - **expires** on a date the owner chose, and is then deleted from the seller's phone.
 
-Both phones run the same app, Local Store Server, signed with the same key. The two phones are near each other, on the same Wi-Fi network or hotspot. The owner approves each copy on their own screen, after comparing a four-digit check code with the seller's screen.
+Both phones run the same app, Share Your Apps Server, signed with the same key. The two phones are near each other, on the same Wi-Fi network or hotspot. The owner approves each copy on their own screen, after comparing a four-digit check code with the seller's screen.
 
 ## Threat model
 
@@ -25,7 +25,7 @@ Both phones run the same app, Local Store Server, signed with the same key. The 
 **Not defended against, by design:**
 
 - **Copying what a store serves.** Anything a store serves is ordinary web content, which anyone who can open it can copy and serve with other software.
-- **A modified app.** Local Store Server is open source (AGPL), so a modified build can ignore any rule, such as expiry.
+- **A modified app.** Share Your Apps Server is open source (AGPL), so a modified build can ignore any rule, such as expiry.
 - **A rooted or compromised phone,** at either end.
 - **Moving the clock back gradually,** five minutes at a time, to delay expiry. The rule deters; it can't prevent.
 - **An owner who approves a request without comparing the check code.**
@@ -51,20 +51,20 @@ All numbers are big-endian. `||` is concatenation. Public keys are X.509 Subject
 When the seller types a code, rather than scanning a QR code, their phone broadcasts over UDP to port 6176:
 
 ```
-"LSD1 " || hex(SHA-256("localstore-discover v1" || code)[0..16])
+"LSD1 " || hex(SHA-256("shareyourapps-discover v1" || code)[0..16])
 ```
 
-where `code` is the 8 normalized characters. Only a phone showing that code answers, with `"LSH1 " || httpPort`, and the seller connects to the sender's address. A QR code holds the address itself: `localstore-share://<IPv4>:<port>/LS-XXXX-XXXX`.
+where `code` is the 8 normalized characters. Only a phone showing that code answers, with `"LSH1 " || httpPort`, and the seller connects to the sender's address. A QR code holds the address itself: `shareyourapps-share://<IPv4>:<port>/LS-XXXX-XXXX`.
 
 ### The exchange
 
 Plain HTTP on the owner's store port, under `/share/`, which exists only while the owner's share screen is open.
 
-1. **Seller → owner:** `POST /share/request`, JSON: `code`; `name`, the seller's phone name, up to 40 characters; and `commitment = SHA-256("localstore-commit v1" || sellerPublic)`, base64.
+1. **Seller → owner:** `POST /share/request`, JSON: `code`; `name`, the seller's phone name, up to 40 characters; and `commitment = SHA-256("shareyourapps-commit v1" || sellerPublic)`, base64.
    The owner checks the code, then replies with `request`, 15 random bytes in base32, and `ownerKey`, the owner's one-time public key, base64. A second phone using the same code, once one is under way, is refused.
 2. **Seller → owner:** `POST /share/reveal`: `request` and `sellerKey`, the seller's one-time public key. The owner checks it against the commitment; a mismatch closes the share.
-3. **Both** compute the **check code**: the first 4 bytes of `SHA-256("localstore-check v1" || ownerPublic || sellerPublic || code)`, as an unsigned integer, modulo 10000, as four digits. The owner's screen shows it, with the seller's phone name, beside **Allow** and **Deny**; the seller's screen shows it too.
-4. **Both** derive the **session key**: `HKDF-SHA256(ikm = ECDH(own private, their public), salt = code, info = "localstore-share v1" || ownerPublic || sellerPublic, length = 32)`, an AES-256 key.
+3. **Both** compute the **check code**: the first 4 bytes of `SHA-256("shareyourapps-check v1" || ownerPublic || sellerPublic || code)`, as an unsigned integer, modulo 10000, as four digits. The owner's screen shows it, with the seller's phone name, beside **Allow** and **Deny**; the seller's screen shows it too.
+4. **Both** derive the **session key**: `HKDF-SHA256(ikm = ECDH(own private, their public), salt = code, info = "shareyourapps-share v1" || ownerPublic || sellerPublic, length = 32)`, an AES-256 key.
 5. **Seller:** polls `GET /share/status?request=…` each second, until *allowed*, *denied* or *expired*. Once allowed, the reply also carries the copy's expiry.
 6. **Seller:** `GET /share/copy?request=…`. The owner streams the copy, encrypted as it's written. After one complete download, the share is done, and the code is dead. **A failed download may be retried while the share is allowed,** each attempt with the same session key and a fresh nonce prefix.
 
@@ -128,7 +128,7 @@ Everything is plain HTTP. The app sets `android:usesCleartextTraffic="true"`, si
 
 ## Where it is in the code
 
-In Local Store Server's `app/src/main/java/org/appdevforall/shareyourapps/server/`:
+In Share Your Apps Server's `app/src/main/java/org/appdevforall/shareyourapps/server/`:
 
 | File | What's there |
 |---|---|

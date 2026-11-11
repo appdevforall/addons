@@ -1,5 +1,5 @@
 #!/bin/sh
-# Calls one tool of Local Store Server's MCP control, for testing by hand: you play the MCP client.
+# Calls one tool of Share Your Apps Server's MCP control, for testing by hand: you play the MCP client.
 #
 # Usage:
 #   sh mcp-call.sh TOOL [ARGUMENTS]

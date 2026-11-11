@@ -1,8 +1,8 @@
 #!/bin/sh
 # step-c-4-mic.sh: step C, script 4 of 6. The microphone for MCP control: manifest, McpService, the MCP switch.
 #
-# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-4-mic.sh"
-# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server Combined/step-c-4-mic.sh" undo
+# Run:   sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-4-mic.sh"
+# Undo:  sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server Combined/step-c-4-mic.sh" undo
 #
 # AndroidManifest.xml:
 #   1. RECORD_AUDIO and FOREGROUND_SERVICE_MICROPHONE.
@@ -85,7 +85,7 @@ fi
 "$PY" - "$STEP" "$BK" "$SUMS" <<'PYEOF'
 import hashlib, os, shutil, sys
 step, bk, sums_path = sys.argv[1], sys.argv[2], sys.argv[3]
-SRC = "app/src/main/java/org/appdevforall/localstore/server/"
+SRC = "app/src/main/java/org/appdevforall/shareyourapps/server/"
 MANIFEST = "app/src/main/AndroidManifest.xml"
 P = []
 def patch(f, what, old, new): P.append((f, what, old, new))

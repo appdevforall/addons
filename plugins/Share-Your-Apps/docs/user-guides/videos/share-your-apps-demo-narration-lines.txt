@@ -1,5 +1,5 @@
 Share Your Apps lets you share the Android apps you build in Code On The Go with people nearby. No internet, no app store, and no accounts.
-It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Local Store Server app, which serves them over Wi-Fi, or your phone's hotspot.
+It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot.
 First, creating your store.
 Install the plugin from Code On The Go's Addons Manager.
 In the Share Your Apps tab, give your store a name. A description, a header picture and a PIN are optional.
@@ -12,7 +12,7 @@ The first time, Android asks you to allow a few things. Each one is needed just 
 Choose a template to change the store's look, or write your own.
 When it's done, every file has been checked. And the store is already being served.
 Next, letting people in.
-Local Store Server shows what it's serving, and where.
+Share Your Apps Server shows what it's serving, and where.
 Tap Show QR codes for buyers. On a hotspot, the first code joins its network, and the second opens the store.
 With no Wi-Fi around, the server makes a hotspot of its own, with a name and password you choose.
 Buyers see your store in their browser.

@@ -186,7 +186,7 @@ share_side() {
   if [ "$ST" = done ]; then pass "S7 the copy was sent: done"
   else fail "S7 the share ended $ST, not done (see above)"; fi
 
-  note "Open Local Store Server, tap View logs, and look for: \"[sound] played the code ..., for an MCP client\" and \"[share] allowed ... a copy\"."
+  note "Open Share Your Apps Server, tap View logs, and look for: \"[sound] played the code ..., for an MCP client\" and \"[share] allowed ... a copy\"."
   if ask "Are both lines in View logs?"; then pass "S8 View logs has the played and allowed lines"
   else fail "S8 a line is missing from View logs: tell the agent which"; fi
   finish "The server is left serving."
@@ -279,7 +279,7 @@ import_side() {
   if [ "$OWNERS" = "$EXP" ]; then pass "I9 on_owners_network is $OWNERS, which matches Wi-Fi settings"
   else fail "I9 on_owners_network is $OWNERS, but Wi-Fi settings say $EXP (open item 8: tell the agent both phones' networks)"; fi
 
-  note "Open Local Store Server, tap View logs, and look for: \"[sound] listening for a share code, for an MCP client\" and \"[sound] heard code $(jget listen.code) ...\"."
+  note "Open Share Your Apps Server, tap View logs, and look for: \"[sound] listening for a share code, for an MCP client\" and \"[sound] heard code $(jget listen.code) ...\"."
   if ask "Are both lines in View logs?"; then pass "I10 View logs has the listening and heard lines"
   else fail "I10 a line is missing from View logs: tell the agent which"; fi
   finish "The server is left stopped. To serve the copy: Serve this store, or sh mcp-call.sh server_start '{\"store\":\"copy\"}'."

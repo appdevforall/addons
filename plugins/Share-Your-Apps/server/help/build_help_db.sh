@@ -1,7 +1,7 @@
 #!/bin/sh
 # Rebuilds the app's help database from build_help_db.py, then checks the MCP help is in it.
 # Run from anywhere:
-#     sh "/storage/emulated/0/CodeOnTheGoProjects/Local Store Server MCP/help/build_help_db.sh"
+#     sh "/storage/emulated/0/CodeOnTheGoProjects/Share Your Apps Server MCP/help/build_help_db.sh"
 # Then do a Standard Run, so the app picks up the new database.
 set -e
 

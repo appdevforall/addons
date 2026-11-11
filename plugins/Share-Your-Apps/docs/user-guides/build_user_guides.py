@@ -1,7 +1,7 @@
 """Builds Share Your Apps's three user guides, as PDFs, in the store's look:
 
   share-your-apps-plugin-guide.pdf    — for owners: the Share Your Apps plugin in Code On The Go
-  local-store-server-guide.pdf    — for owners: the Local Store Server app
+  share-your-apps-server-guide.pdf    — for owners: the Share Your Apps Server app
   serving-an-imported-store.pdf   — for a seller who imported a copy of someone's store
 
 Usage: python3 build_user_guides.py [output folder]             PDFs (default: beside this script)
@@ -11,7 +11,7 @@ Needs reportlab: pip install reportlab
 
 Versions and the date: each guide says which versions it describes, and when it was published. The
 builder reads the versions from the projects — the plugin's versionName from ../../build.gradle.kts,
-and the server app's versionCode from ../../../Local Store Server/app/build.gradle.kts, whose version
+and the server app's versionCode from ../../../Share Your Apps Server/app/build.gradle.kts, whose version
 is 1.0.<versionCode> — and the date is the day it runs. To set any of them yourself:
        --plugin-version 1.0.0   --server-version 1.0.57   --date 2026-09-27
 
@@ -42,11 +42,11 @@ def _read(path, pattern):
         m = re.search(pattern, open(path, encoding="utf-8").read()); return m.group(1) if m else None
     except OSError: return None
 PLUGIN_VERSION = OPTS.get("plugin-version") or _read(os.path.join(HERE, "..", "..", "build.gradle.kts"), r'versionName\s*=\s*"([^"$]+)"') or "unknown"
-_code = _read(os.path.join(HERE, "..", "..", "..", "Local Store Server", "app", "build.gradle.kts"), r"versionCode\s*=\s*(\d+)")
+_code = _read(os.path.join(HERE, "..", "..", "..", "Share Your Apps Server", "app", "build.gradle.kts"), r"versionCode\s*=\s*(\d+)")
 SERVER_VERSION = OPTS.get("server-version") or (f"1.0.{_code}" if _code else "unknown")
 PUBLISHED = datetime.date.fromisoformat(OPTS["date"]) if "date" in OPTS else datetime.date.today()
 PUBLISHED_TEXT = PUBLISHED.strftime("%B ") + str(PUBLISHED.day) + PUBLISHED.strftime(", %Y")
-STAMP = f"For Share Your Apps {PLUGIN_VERSION} and Local Store Server {SERVER_VERSION} · Published {PUBLISHED_TEXT}"
+STAMP = f"For Share Your Apps {PLUGIN_VERSION} and Share Your Apps Server {SERVER_VERSION} · Published {PUBLISHED_TEXT}"
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, ListFlowable,
                                 ListItem, KeepTogether)
@@ -191,7 +191,7 @@ def add_appendix(out, name, book):
 plugin = [
  P('Share Your Apps shares the apps you build in Code On The Go with people nearby — no internet, and no accounts. It has two parts:'),
  bullets(['The <b>Share Your Apps plugin</b>, in Code On The Go, where you describe your apps and publish them. This guide is about the plugin.',
-          'The <b>Local Store Server</b> app, which the plugin installs for you. It serves your store over Wi-Fi or a hotspot, and people open it in their phone\'s browser. It has its own guide.']),
+          'The <b>Share Your Apps Server</b> app, which the plugin installs for you. It serves your store over Wi-Fi or a hotspot, and people open it in their phone\'s browser. It has its own guide.']),
  P('<b>You\'ll need:</b> Android 9 or later, Code On The Go, and an app you\'ve built at least once, so it has an APK.'),
 
  H1('Installing the plugin'),
@@ -221,10 +221,10 @@ plugin = [
  H1('Publishing'),
  P('Tap <b>Publish</b>. A dialog asks you to confirm, saying how many products the store will have, and which are left out. Tap <b>Publish</b> in it to go ahead, or <b>Cancel</b> to change nothing.'),
  P('<b>The first time,</b> Android asks you to allow three things. Allow each one:'),
- bullets(['<b>Code On The Go installing apps</b> — needed once, to install Local Store Server.',
-          '<b>All files access</b> for Local Store Server — so it can read your store\'s files.',
+ bullets(['<b>Code On The Go installing apps</b> — needed once, to install Share Your Apps Server.',
+          '<b>All files access</b> for Share Your Apps Server — so it can read your store\'s files.',
           '<b>Nearby devices</b> — asked only when the server needs to start its own hotspot: no Wi-Fi, and no Mobile hotspot.'], True),
- P('Publishing checks every file it needs, builds a new copy of the store beside the old one, installs or updates Local Store Server if needed, then starts it on the new copy and checks every file it serves. Until the new store is ready, buyers keep the old one — unless Local Store Server is being updated, which stops it briefly.'),
+ P('Publishing checks every file it needs, builds a new copy of the store beside the old one, installs or updates Share Your Apps Server if needed, then starts it on the new copy and checks every file it serves. Until the new store is ready, buyers keep the old one — unless Share Your Apps Server is being updated, which stops it briefly.'),
  H2('What the messages mean'),
  bullets(['<i>Published … files verified</i>: buyers can use the store now.',
           '<i>Left out</i>: products with nothing to download, and why.',
@@ -232,7 +232,7 @@ plugin = [
           '<i>Couldn\'t publish</i>: nothing changed. The store still serves its previous version. The message says why.']),
 
  H1('Letting buyers in'),
- P('Open the <b>Local Store Server</b> app, and tap <b>Show QR codes for buyers</b>. Buyers scan the codes with their phone\'s camera: on a hotspot, the first joins its network, and the second opens the store. The <i>Local Store Server</i> guide covers networks, hotspots and PINs in detail.'),
+ P('Open the <b>Share Your Apps Server</b> app, and tap <b>Show QR codes for buyers</b>. Buyers scan the codes with their phone\'s camera: on a hotspot, the first joins its network, and the second opens the store. The <i>Share Your Apps Server</i> guide covers networks, hotspots and PINs in detail.'),
  tip('<b>When buyers download an APK,</b> their phone asks them to allow their browser to install apps. That\'s normal for apps from outside the Play Store: they allow it, then can turn it off again afterwards. Some Samsung phones also need <b>Auto Blocker</b> turned off first.'),
 
  H1('Changing the store\'s look'),
@@ -245,19 +245,19 @@ plugin = [
    + (' Pebble\'s own documentation, explaining every tag, filter and function, is <b>Appendix A</b> of this guide.' if os.path.exists(os.path.join(HERE, 'pebble-book.pdf')) else ''), small),
 
  H1('Sharing your store with another seller'),
- P('Someone nearby can serve a copy of your store from their own phone, so it reaches people where you aren\'t. You do this in the Local Store Server app, with <b>Share this store…</b>: its guide explains how. To give them a newer version later, publish, then share again.'),
+ P('Someone nearby can serve a copy of your store from their own phone, so it reaches people where you aren\'t. You do this in the Share Your Apps Server app, with <b>Share this store…</b>: its guide explains how. To give them a newer version later, publish, then share again.'),
 
  H1('Getting help'),
  P('Long-press any heading, button or checkbox for a short explanation. <b>+ See more</b> gives more, with a button that opens a help page. Code On The Go adds a note to each that it comes from a plugin. Long-pressing a text field selects its text, as usual; its heading has the help.'),
  H2('If something goes wrong'),
  bullets(['<b>Couldn\'t publish:</b> read the message; it says what\'s missing, such as a file that\'s been moved. Nothing changed, so buyers still have the previous store.',
           '<b>A buyer can\'t install an app:</b> check its APK isn\'t marked unsigned, and see the tip under <i>Letting buyers in</i>.',
-          '<b>A buyer can\'t open the store:</b> see the <i>Local Store Server</i> guide.']),
+          '<b>A buyer can\'t open the store:</b> see the <i>Share Your Apps Server</i> guide.']),
 ]
 
 # ------------------------------------------------------------------ 2. The server app
 server = [
- P('Local Store Server serves the store you publish with the Share Your Apps plugin, over Wi-Fi or a hotspot. People nearby open it in their phone\'s browser. The plugin installs and starts it for you, so you only open it to let buyers in, check on it, share your store, or change how it runs.'),
+ P('Share Your Apps Server serves the store you publish with the Share Your Apps plugin, over Wi-Fi or a hotspot. People nearby open it in their phone\'s browser. The plugin installs and starts it for you, so you only open it to let buyers in, check on it, share your store, or change how it runs.'),
  P('Open it from your phone\'s app list. Everything below is on its <b>Manage server</b> screen, unless it says otherwise.'),
 
  H1('Status'),
@@ -296,8 +296,8 @@ server = [
  H1('Sharing your store with another seller'),
  P('Someone nearby can serve a copy of your store from their own phone. Their copy is served exactly as you published it: they can\'t change it, or pass it on. They set their own PIN, and it\'s deleted from their phone on the date you choose.'),
  bullets(['While your store is served, tap <b>Share this store…</b>, in the <b>Copies of this store</b> panel. Just after a publish, it may first say <i>Getting the store ready to share…</i>',
-          'If their phone doesn\'t have Local Store Server, they scan the <b>small</b> QR code with its camera, and install the app it downloads from your phone.',
-          'In Local Store Server, they tap <b>Import a store…</b>, then scan the <b>large</b> QR code, or type the code shown.',
+          'If their phone doesn\'t have Share Your Apps Server, they scan the <b>small</b> QR code with its camera, and install the app it downloads from your phone.',
+          'In Share Your Apps Server, they tap <b>Import a store…</b>, then scan the <b>large</b> QR code, or type the code shown.',
           'Both phones show four digits. Check they\'re <b>the same</b>. Choose when their copy expires — in a week, in a month, on a date, or never — and tap <b>Allow</b>. If the digits differ, tap <b>Deny</b>.',
           'Keep the screen open until the copy has been sent.'], True),
  P('Both phones must be on the same Wi-Fi network, or theirs on your hotspot. Each code works for one phone, for 10 minutes. <b>Cancel</b>, or leaving the screen, ends the share. To give them a newer version later, publish, then share again: their new copy replaces the old one.'),
@@ -326,14 +326,14 @@ seller = [
  tip('<b>Your copy:</b> you can serve it to people near you, with your own PIN if you like. You can\'t change it, or pass it on to another phone. It may <b>expire</b> on a date the store\'s owner chose; then it\'s deleted from your phone.'),
 
  H1('1. Get the app'),
- P('If your phone doesn\'t have <b>Local Store Server</b> yet, the owner shows you a <b>small</b> QR code on their phone.'),
+ P('If your phone doesn\'t have <b>Share Your Apps Server</b> yet, the owner shows you a <b>small</b> QR code on their phone.'),
  bullets(['Scan it with your phone\'s camera, and open the link.',
           'Your phone downloads the app. Open the download and install it. If your phone asks, allow your browser to install apps; you can turn that off again afterwards.',
           'On some Samsung phones, turn off <b>Auto Blocker</b> in Settings first.'], True),
  P('Both phones must be on the same Wi-Fi network, or yours joined to the owner\'s hotspot.'),
 
  H1('2. Get the store'),
- bullets(['Open <b>Local Store Server</b>, and tap <b>Import a store…</b>.',
+ bullets(['Open <b>Share Your Apps Server</b>, and tap <b>Import a store…</b>.',
           'Scan the owner\'s <b>large</b> QR code with your camera, and open the link. Or type the code their phone shows, such as <i>LS-FM50-ZV7G</i>.',
           'Tap <b>Continue</b>.',
           'Your phone shows <b>four digits</b>. The owner checks their phone shows the same, and taps <b>Allow</b>.',
@@ -343,24 +343,24 @@ seller = [
  tip('<b>Did you join the owner\'s hotspot to get the store?</b> Before serving, leave it: join your own Wi-Fi, or turn Wi-Fi off, so your phone makes its own hotspot. The last screen reminds you.'),
 
  H1('3. Let people in'),
- bullets(['In <b>Local Store Server</b>, tap <b>Show QR codes for buyers</b>.',
+ bullets(['In <b>Share Your Apps Server</b>, tap <b>Show QR codes for buyers</b>.',
           'People scan the codes with their phone\'s camera. On a hotspot, the first code joins its network, and the second opens the store.',
           'They see the store in their browser, and can download its apps.'], True),
  tip('<b>Someone\'s phone can\'t open the store?</b> Have them turn on <b>airplane mode</b>, then turn <b>Wi-Fi</b> back on — and turn airplane mode off afterwards.'),
 
  H1('A PIN, if you want one'),
- P('In <b>Local Store Server</b>, the store has a panel with its name. Under <i>Set a PIN or leave blank for no PIN</i>, type up to 6 digits, then tap <b>Serve this store</b> — or, if it\'s already serving, <b>Serve it again, with this PIN</b>. People then enter your PIN before they reach the store.'),
+ P('In <b>Share Your Apps Server</b>, the store has a panel with its name. Under <i>Set a PIN or leave blank for no PIN</i>, type up to 6 digits, then tap <b>Serve this store</b> — or, if it\'s already serving, <b>Serve it again, with this PIN</b>. People then enter your PIN before they reach the store.'),
 
  H1('Starting and stopping'),
  P('<b>Stop</b> stops serving; <b>Start</b> serves the store again. To save battery, choose <b>Pause when the screen turns off</b>: it starts again when you unlock the phone.'),
 
  H1('When the store expires'),
- P('When its date comes, the store is deleted from your phone, and Local Store Server says <i>A store has expired</i>. Tap <b>OK</b>. To serve it again, ask its owner for a new copy.'),
+ P('When its date comes, the store is deleted from your phone, and Share Your Apps Server says <i>A store has expired</i>. Tap <b>OK</b>. To serve it again, ask its owner for a new copy.'),
  P('<b>A newer version:</b> tap <b>Stop</b>, then get the store again from its owner, as in step 2. The new copy replaces the old one.'),
  P('<b>No longer need it?</b> Tap <b>Remove this store</b>, in its panel.'),
 
  H1('Help'),
- P('Long-press any heading or button in Local Store Server for a short explanation, then <b>+ See more</b> for more.'),
+ P('Long-press any heading or button in Share Your Apps Server for a short explanation, then <b>+ See more</b> for more.'),
 ]
 
 # ------------------------------------------------------------------ Markdown, for Help+Manual
@@ -418,7 +418,7 @@ def markdown(folder, name, subtitle, story, steps=False):
 
 GUIDES = (
     ('share-your-apps-plugin-guide.pdf', 'Share Your Apps plugin — user guide', 'Describe your apps in Code On The Go, and publish them as a store for people nearby.', plugin),
-    ('local-store-server-guide.pdf', 'Local Store Server — user guide', 'Serve your store over Wi-Fi or a hotspot, let buyers in, and share it with other sellers.', server),
+    ('share-your-apps-server-guide.pdf', 'Share Your Apps Server — user guide', 'Serve your store over Wi-Fi or a hotspot, let buyers in, and share it with other sellers.', server),
     ('serving-an-imported-store.pdf', 'Serving an imported store', 'Share someone else\'s apps with people near you, with their permission.', seller))
 # ------------------------------------------------------------------ tutorials: one task each, step by step
 def fig(i):
@@ -435,14 +435,14 @@ tut_create = [
  *step(3, 'Add your app', 'Under <b>Products</b>, tap <b>+ Add product</b>. Give it a <b>Name</b>, then tap <b>Choose</b> beside <b>Project</b> and pick your app\'s project, and <b>Choose</b> beside <b>APK</b> and pick its build. Leave <b>Publish the APK</b> ticked.', fig('P05')),
  *step(4, 'Add a picture, and describe it', 'Tap <b>+ Add media</b> and pick a screenshot of your app. Then tap <b>Describe</b> beside it, and say what it shows, for people who use a screen reader.', fig('P08')),
  *step(5, 'Publish', 'Tap <b>Publish</b>. A dialog says how many products the store will have. Tap <b>Publish</b> in it.', fig('P11'),
-        'The first time, Android asks to let Code On The Go install apps: tap <b>Settings</b>, and allow it. It also asks for <b>All files access</b> for Local Store Server. Allow both; they\'re needed only once.', fig('P12')),
- *step(6, 'Check the result', 'When it\'s done, the bottom of the tab says <i>Published … files verified</i>. Your store is ready, and Local Store Server is already serving it.', fig('P13')),
+        'The first time, Android asks to let Code On The Go install apps: tap <b>Settings</b>, and allow it. It also asks for <b>All files access</b> for Share Your Apps Server. Allow both; they\'re needed only once.', fig('P12')),
+ *step(6, 'Check the result', 'When it\'s done, the bottom of the tab says <i>Published … files verified</i>. Your store is ready, and Share Your Apps Server is already serving it.', fig('P13')),
  H1('Next'),
  P('To let people in, follow <i>Serving your first store</i>. To change anything, edit it in the tab and publish again: buyers keep the old version until the new one is ready.'),
 ]
 tut_serve = [
  P('Your store is published. Now people nearby can open it: on the same Wi-Fi, or on your phone\'s hotspot when there\'s no Wi-Fi.'),
- *step(1, 'Open Local Store Server', 'Open <b>Local Store Server</b> from your phone\'s app list. <b>Status</b> says it\'s serving your store, with its address. If it says <i>Stopped</i>, tap <b>Start</b>.', fig('S01')),
+ *step(1, 'Open Share Your Apps Server', 'Open <b>Share Your Apps Server</b> from your phone\'s app list. <b>Status</b> says it\'s serving your store, with its address. If it says <i>Stopped</i>, tap <b>Start</b>.', fig('S01')),
  *step(2, 'Show the codes', 'Tap <b>Show QR codes for buyers</b>. On a hotspot, the first code joins its network, and the second opens the store. On ordinary Wi-Fi, buyers join the network themselves, and scan the store\'s code.', fig('S04')),
  *step(3, 'Let a buyer in', 'The buyer scans the codes with their phone\'s camera. The store opens in their browser. If you set a PIN, they type it first.', fig('B01'),
         'Each product has its pictures, its description, and its downloads. They tap <b>Download APK</b>, and their phone asks them to allow their browser to install apps.', fig('B02')),
@@ -455,11 +455,11 @@ tut_serve = [
 tut_share = [
  P('Someone nearby can serve a copy of your store from their own phone, so it reaches people where you aren\'t. They can\'t change it or pass it on, and it\'s deleted on the date you choose. You\'ll need both phones, on the same Wi-Fi network, or theirs on your hotspot.'),
  H1('On your phone'),
- *step(1, 'Start the share', 'While your store is served, open <b>Local Store Server</b>, and tap <b>Share this store…</b>, in <b>Copies of this store</b>.', fig('S08'),
+ *step(1, 'Start the share', 'While your store is served, open <b>Share Your Apps Server</b>, and tap <b>Share this store…</b>, in <b>Copies of this store</b>.', fig('S08'),
         'The screen shows a large QR code, a code to type, and a smaller QR code, for a phone that doesn\'t have the app yet.', fig('S09')),
  H1('On their phone'),
- *step(2, 'Get the app, if needed', 'If their phone doesn\'t have Local Store Server, they scan your <b>small</b> QR code with the camera, and download the app from your phone. Their browser warns about apps from outside the Play Store: they tap <b>Download anyway</b>, then install it.', fig('I01')),
- *step(3, 'Ask for the copy', 'In Local Store Server, they tap <b>Import a store…</b>. They scan your <b>large</b> QR code, or type the code, and tap <b>Continue</b>.', fig('I03')),
+ *step(2, 'Get the app, if needed', 'If their phone doesn\'t have Share Your Apps Server, they scan your <b>small</b> QR code with the camera, and download the app from your phone. Their browser warns about apps from outside the Play Store: they tap <b>Download anyway</b>, then install it.', fig('I01')),
+ *step(3, 'Ask for the copy', 'In Share Your Apps Server, they tap <b>Import a store…</b>. They scan your <b>large</b> QR code, or type the code, and tap <b>Continue</b>.', fig('I03')),
  H1('On both phones'),
  *step(4, 'Check the four digits', 'Their phone shows four digits. Yours shows <i>Allow a copy?</i> with the same four. Check they match: that proves you\'re sharing with the phone in front of you.', fig('I04')),
  H1('On your phone'),
@@ -475,7 +475,7 @@ TUTORIALS = (
     ('tutorial-serving-your-first-store.pdf', 'Tutorial: serving your first store', 'Let people nearby open your store, on Wi-Fi or your phone\'s hotspot.', tut_serve),
     ('tutorial-sharing-your-first-store.pdf', 'Tutorial: sharing your first store with another phone', 'Let someone nearby serve a copy of your store from their own phone.', tut_share))
 
-GUIDE_NAMES = {"plugin": "Share Your Apps plugin — user guide", "server": "Local Store Server — user guide", "seller": "Serving an imported store"}
+GUIDE_NAMES = {"plugin": "Share Your Apps plugin — user guide", "server": "Share Your Apps Server — user guide", "seller": "Serving an imported store"}
 
 from html import escape as _esc
 
@@ -486,7 +486,7 @@ def shot_list():
        'The list below says how to reach each screen, and what its callouts mark, so any can be captured again.' % (len(SHOTS), sum(1 for x in SHOTS if x.get("captured")), sum(1 for x in SHOTS if not x.get("captured")))),
      H2('Taking the screenshots'),
      bullets(['Use a phone with Code On The Go and Share Your Apps installed, and a store published, preferably the demo store.',
-              'Set the phone to the theme the drawings use: <b>dark</b> for the Share Your Apps tab, as Code On The Go is shown here; either for Local Store Server.',
+              'Set the phone to the theme the drawings use: <b>dark</b> for the Share Your Apps tab, as Code On The Go is shown here; either for Share Your Apps Server.',
               'Capture the whole screen, in portrait, without cropping. Scroll so the items the callouts mark are on screen; a long screen can be two screenshots.',
               'Name each file by its ID, such as <b>P05.png</b>, and send them together. I\'ll add the callouts, and swap them into the guides.',
               '<b>Drawn: a real screenshot is still needed</b> marks the screens still shown as drawings.']),

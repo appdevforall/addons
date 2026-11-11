@@ -11,7 +11,7 @@ pluginBuilder {
     pluginName = "share-your-apps"
 }
 
-// Release signing: the same key and details as Local Store Server's, from release.properties in Code On The Go's
+// Release signing: the same key and details as Share Your Apps Server's, from release.properties in Code On The Go's
 // private folder, which is never in the project. Without it, a release build still works, but isn't signed.
 val keystorePropsFile = File("/data/data/com.itsaky.androidide/files/home/keys/release.properties")
 val keystoreProps = Properties().apply {
@@ -88,10 +88,10 @@ android {
 // that make the .cgp — assemblePluginDebug, and assemblePlugin for a release — so neither kind can be made
 // without it. Compiling and running the tests don't need it.
 tasks.matching { it.name.startsWith("assemblePlugin") }.configureEach {
-    val server = layout.projectDirectory.file("src/main/assets/local-store-server.apk").asFile
+    val server = layout.projectDirectory.file("src/main/assets/share-your-apps-server.apk").asFile
     doFirst {
         check(server.isFile) {
-            "src/main/assets/local-store-server.apk is missing. Build Local Store Server's release, copy its " +
+            "src/main/assets/share-your-apps-server.apk is missing. Build Share Your Apps Server's release, copy its " +
                 "app/build/outputs/apk/release/app-release.apk there, and build again. See the README's Bundling the server."
         }
     }

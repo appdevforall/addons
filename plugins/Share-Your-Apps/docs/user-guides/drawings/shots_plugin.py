@@ -87,7 +87,7 @@ shot('P11', 'Publishing', 'Confirming a publish',
     'Tap Publish, and capture the dialog before choosing.')
 shot('P12', 'Publishing', "Android asking to allow installing apps",
     android_dialog('Allow Code On The Go to install unknown apps?', 'Your phone and personal data are more vulnerable to attack by unknown apps.', [('Cancel', None), ('Settings', 1)]),
-    [(1, 'Open the setting, and allow Code On The Go to install apps. Needed once, for Local Store Server.')],
+    [(1, 'Open the setting, and allow Code On The Go to install apps. Needed once, for Share Your Apps Server.')],
     'On a phone where Code On The Go has never installed an app, publish for the first time, and capture Android\'s prompt.', real=True)
 shot('P13', 'What the messages mean', 'A finished publish',
     plugin_screen(section('Advanced'), label('Extra JSON (optional)'), field('{\n  "announcement": "New this week"\n}', mono=True, lines=3),

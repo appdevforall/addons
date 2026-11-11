@@ -116,7 +116,7 @@ object Help {
                 "<li><code>\"website\"</code>: an https:// address.</li></ul>" +
                 "<p>Other keys reach your own template as <code>{{ p.extra.yourKey }}</code>.</p>"),
         e(PUBLISH, "Send your catalog to the store.",
-            "<p>Builds a new copy of the store, starts the Local Store Server on it, checks that everything is " +
+            "<p>Builds a new copy of the store, starts the Share Your Apps Server on it, checks that everything is " +
                 "being served correctly, and then deletes the previous copy.</p>" +
                 "<p>If anything goes wrong, nothing changes: the store keeps showing what you published last.</p>"),
     )

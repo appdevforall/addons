@@ -1,4 +1,4 @@
-Please review the attached design document, `share-your-apps-design.md`, for **Share Your Apps**: a plugin for Code On The Go, an Android IDE that runs on phones, plus a companion Android app, **Local Store Server**. Together they let a phone's owner publish the apps they've built — APKs, source, or both — to a small web store that people nearby open in their phone's browser, over the same Wi-Fi network or the owner's phone's own hotspot.
+Please review the attached design document, `share-your-apps-design.md`, for **Share Your Apps**: a plugin for Code On The Go, an Android IDE that runs on phones, plus a companion Android app, **Share Your Apps Server**. Together they let a phone's owner publish the apps they've built — APKs, source, or both — to a small web store that people nearby open in their phone's browser, over the same Wi-Fi network or the owner's phone's own hotspot.
 
 ## Where things stand
 

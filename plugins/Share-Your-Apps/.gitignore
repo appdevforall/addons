@@ -27,7 +27,7 @@ keystore.properties
 *.pfx
 
 # The bundled server APK is a build output, copied in before each release (see README)
-src/main/assets/local-store-server.apk
+src/main/assets/share-your-apps-server.apk
 
 # Media (demo video, narration recordings) is kept out of git
 *.webm

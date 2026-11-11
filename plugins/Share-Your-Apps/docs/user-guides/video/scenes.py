@@ -1,7 +1,7 @@
 # Each scene: (screen ID or 'card', the callout to zoom to — or None for the whole screen, part, title, narration).
 LONG = [
  ('card', None, '', 'Share Your Apps', "Share Your Apps lets you share the Android apps you build in Code On The Go with people nearby. No internet, no app store, and no accounts."),
- ('card', None, '', 'Two parts', "It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Local Store Server app, which serves them over Wi-Fi, or your phone's hotspot."),
+ ('card', None, '', 'Two parts', "It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot."),
  ('card', None, 'Part one', 'Creating your store', "First, creating your store."),
  ('P01', None, 'Creating your store', 'Install the plugin', "Install the plugin from Code On The Go's Addons Manager."),
  ('P02', 1, 'Creating your store', 'Name your store', "In the Share Your Apps tab, give your store a name. A description, a header picture and a PIN are optional."),
@@ -14,7 +14,7 @@ LONG = [
  ('P15', 2, 'Creating your store', 'Change the look', "Choose a template to change the store's look, or write your own."),
  ('P13', 1, 'Creating your store', 'Done', "When it's done, every file has been checked. And the store is already being served."),
  ('card', None, 'Part two', 'Serving your store', "Next, letting people in."),
- ('S01', 1, 'Serving your store', 'Local Store Server', "Local Store Server shows what it's serving, and where."),
+ ('S01', 1, 'Serving your store', 'Share Your Apps Server', "Share Your Apps Server shows what it's serving, and where."),
  ('S04', 1, 'Serving your store', 'The codes', "Tap Show QR codes for buyers. On a hotspot, the first code joins its network, and the second opens the store."),
  ('S06', 1, 'Serving your store', 'No Wi-Fi? No problem', "With no Wi-Fi around, the server makes a hotspot of its own, with a name and password you choose."),
  ('B01', 2, 'Serving your store', "The buyer's view", "Buyers see your store in their browser."),
