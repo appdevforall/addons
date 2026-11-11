@@ -42,7 +42,7 @@ chmod +x file-saved</pre></li>
 <h2>Hooks</h2>
 <table>
   <tr><th>Script name</th><th>Runs when</th><th>Arguments</th></tr>
-  <tr><td><code>ide-started</code></td><td>once each time Code on the Go starts with hooks on</td><td>none</td></tr>
+  <tr><td><code>ide-started</code></td><td>once in each launch of Code on the Go, the first time Shell Hooks starts with hooks on</td><td>none</td></tr>
   <tr><td><code>project-opened</code></td><td>a project opens (its sync does not wait for the hook)</td><td><code>$1</code> = project folder</td></tr>
   <tr><td><code>project-closed</code></td><td>a project closes</td><td><code>$1</code> = project folder</td></tr>
   <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
@@ -89,8 +89,8 @@ chmod +x file-saved</pre></li>
   Scripts run one at a time, in the order events reach the plugin, which can differ slightly from
   the order things happened: your scripts first, then the project's. A script still running after
   the timeout (60 seconds by default, set in Preferences) is stopped, together with the programs it
-  started, when the Terminal has <code>timeout</code> (coreutils). Disabling the plugin while a
-  script runs stops only the script itself. Up to 64 events can wait; after that the oldest is
+  started, when the Terminal has <code>timeout</code> (coreutils). Disabling or updating the plugin
+  while a script runs stops it the same way, within a few seconds. Up to 64 events can wait; after that the oldest is
   dropped. Run long jobs in the background: <code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>
 </p>
 
@@ -108,8 +108,12 @@ chmod +x file-saved</pre></li>
   <li>An untrusted script is skipped and listed in the Hooks tab. <b>Review</b> shows the whole
       script; <b>Trust</b> approves exactly what you read.</li>
   <li>Editing a trusted script, or adding one, needs a new review.</li>
-  <li>Invisible and control characters, which can make a script look different from what it does,
-      are shown as <code>&lt;U+XXXX&gt;</code> with a warning.</li>
+  <li>Every character outside plain ASCII is shown as <code>&lt;U+XXXX&gt;</code> with a warning:
+      a no-break space or an invisible character can make a script run differently from how it
+      reads.</li>
+  <li>Trust covers only that script. Files it runs from the project, such as
+      <code>./gradlew</code>, are not reviewed and can change later: keep project hooks
+      self-contained, or review what they run.</li>
   <li>Scripts larger than 256 KB cannot be reviewed and never run.</li>
   <li>Preferences lists the projects you trusted scripts in; <b>Revoke</b> forgets them.</li>
   <li>A trusted script runs from a private copy of what you approved, so it cannot be swapped

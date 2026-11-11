@@ -62,7 +62,8 @@ object ShellHooksHelp {
                     """
                     <p>Each switch is one hook; under it is what the script gets in <code>$1</code>. A hook that
                     is off runs none of its scripts, yours or a project's. The scripts stay where they are.</p>
-                    <p><code>ide-started</code> runs once each time Code on the Go starts with hooks on.</p>
+                    <p><code>ide-started</code> runs once in each launch of Code on the Go, the first time Shell
+                    Hooks starts with hooks on.</p>
                     """.trimIndent(),
                 buttons = guide,
             ),
@@ -98,8 +99,10 @@ object ShellHooksHelp {
                 detail =
                     """
                     <p><b>Trust</b> approves exactly the text shown. If the file changes afterwards it waits for
-                    review again. Invisible and control characters are shown as <code>&lt;U+XXXX&gt;</code>,
-                    because they can make a script look different from what it does.</p>
+                    review again. Every character outside plain ASCII is shown as <code>&lt;U+XXXX&gt;</code>,
+                    because a no-break space or an invisible character can make a script run differently
+                    from how it reads.</p>
+                    <p>Trust covers only this script: files it runs from the project are not reviewed.</p>
                     <p>Scripts larger than 256 KB cannot be reviewed here and never run.</p>
                     """.trimIndent(),
                 buttons = guide,

@@ -134,7 +134,7 @@
   <h3>Hooks and their arguments</h3>
   <table>
     <tr><th>Script name</th><th>Runs when</th><th><code>$*</code></th></tr>
-    <tr><td><code>ide-started</code></td><td>once each time Code on the Go starts with hooks on (not when the plugin is re-enabled)</td><td>none</td></tr>
+    <tr><td><code>ide-started</code></td><td>once in each launch of Code on the Go, the first time Shell Hooks starts with hooks on. If hooks are off, or the plugin is disabled, when the IDE starts, it runs later in that launch, when the plugin next starts with hooks on</td><td>none</td></tr>
     <tr><td><code>project-opened</code></td><td>the editor opens a project; its sync starts without waiting for the hook</td><td><code>$1</code> = project folder</td></tr>
     <tr><td><code>project-closed</code></td><td>the editor closes a project</td><td><code>$1</code> = project folder</td></tr>
     <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
@@ -198,8 +198,10 @@
     project scripts. The IDE reports project and save events through a thread of its own, so a save
     just before a build can be reported after the build starts. A script still running after the
     timeout (60 seconds unless you change it) is stopped, and with the Terminal's
-    <code>timeout</code> (coreutils) installed so is every program it started. Disabling the plugin
-    while a script runs stops only the script's own process. If events arrive faster than scripts
+    <code>timeout</code> (coreutils) installed so is every program it started. Disabling,
+    unloading or updating the plugin while a script runs stops it the same way within a few
+    seconds; release builds of Code on the Go ship <code>timeout</code>, and without it only the
+    script's own process is stopped. If events arrive faster than scripts
     finish, up to 64 wait; past that the oldest is dropped. Start long jobs in the background
     (<code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>).
   </p>
@@ -222,9 +224,10 @@
         therefore need two things: the <strong>Run hooks stored in projects</strong> switch (off by
         default), and your trust in that exact script. An untrusted script is skipped and listed in
         the Hooks tab; <strong>Review</strong> shows all of it before you can trust it, with
-        invisible and control characters (bidirectional overrides, zero-width characters) shown as
-        <code>&lt;U+XXXX&gt;</code> and a warning. Scripts over 256 KB never run and cannot be
-        reviewed.</li>
+        every character outside plain ASCII shown as <code>&lt;U+XXXX&gt;</code> and a warning:
+        a no-break space, an invisible character or a bidirectional override can make a script run
+        differently from how it reads. Comments in other languages show as codes too. Scripts over
+        256 KB never run and cannot be reviewed.</li>
     <li>Trust is recorded per project, per script path, against the SHA-256 of the script's bytes.
         Editing the script, or adding another, needs a new review. Settings lists the trusted
         projects, each with <strong>Revoke</strong>.</li>
@@ -236,7 +239,10 @@
         value in single quotes, which the shell never expands.</li>
     <li><strong>What review does not cover.</strong> A plugin that can run commands, or one that
         writes files from inside the IDE, can already change your own hooks folder or the record of
-        what you trusted. Install only plugins you trust.</li>
+        what you trusted. Install only plugins you trust. Trust also covers only the hook's own
+        text: files it runs from the project, such as <code>./gradlew</code> or
+        <code>./scripts/setup.sh</code>, are not reviewed and can change later. Keep project hooks
+        self-contained, or review what they call.</li>
   </ul>
 </section>
 
@@ -290,7 +296,8 @@ HookLog -> Hooks tab</div>
     Permissions: <code>system.commands</code> to run scripts, <code>filesystem.read</code> for the
     file and project listeners, and <code>filesystem.write</code> to write the sample hooks. On an
     IDE older than 26.47 the plugin still loads; project-opened, project-closed and file-saved never
-    run there.
+    run there. Actions need the Terminal service plugins got in 26.41; on an older IDE,
+    "Run &lt;name&gt;" records a run that did not start.
   </p>
   <p>
     Not hooked on purpose: editor content changes (one process per keystroke). Hooks cannot veto:

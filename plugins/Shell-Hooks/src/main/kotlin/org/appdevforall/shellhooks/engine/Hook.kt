@@ -12,7 +12,7 @@ enum class Hook(
     val title: String,
     val argsDoc: String,
 ) {
-    IDE_STARTED("ide-started", "IDE started", "no arguments; runs once each time Code on the Go starts"),
+    IDE_STARTED("ide-started", "IDE started", "no arguments; runs once per launch of Code on the Go, the first time hooks are on"),
     PROJECT_OPENED("project-opened", "Project opened", "\$1 = the project folder"),
     PROJECT_CLOSED("project-closed", "Project closed", "\$1 = the project folder"),
     FILE_OPENED("file-opened", "File opened", "\$1 = the file"),
