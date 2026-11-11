@@ -16,6 +16,7 @@ object ShellHooksHelp {
     const val TAG_PROJECT_HOOKS = "shellhooks.project_hooks"
     const val TAG_REVIEW = "shellhooks.review"
     const val TAG_ACTION = "shellhooks.action"
+    const val TAG_BACK = "shellhooks.back"
 
     private val guide = listOf(PluginTooltipButton(description = "Shell Hooks guide", uri = "index.html", order = 0))
 
@@ -57,12 +58,25 @@ object ShellHooksHelp {
             PluginTooltipEntry(
                 tag = TAG_HOOKS,
                 summary = "Turn single hooks off without deleting their scripts.",
+                detail =
+                    """
+                    <p>Each switch is one hook; under it is what the script gets in <code>$1</code>. A hook that
+                    is off runs none of its scripts, yours or a project's. The scripts stay where they are.</p>
+                    <p><code>ide-started</code> runs once each time Code on the Go starts with hooks on.</p>
+                    """.trimIndent(),
                 buttons = guide,
             ),
             PluginTooltipEntry(
                 tag = TAG_TIMEOUT,
                 summary = "A script still running after this many seconds is stopped.",
-                detail = "<p>Scripts run one at a time, so a slow one delays the next. Run long jobs in the background (<code>nohup ... &amp;</code>).</p>",
+                detail =
+                    """
+                    <p>Scripts run one at a time, so a slow one delays the next. With the Terminal's
+                    <code>timeout</code> installed, the programs a script started are stopped with it.
+                    Run long jobs in the background: <code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>.
+                    Without the redirect, the job keeps the script's output open and the script counts as
+                    still running.</p>
+                    """.trimIndent(),
                 buttons = guide,
             ),
             PluginTooltipEntry(
@@ -70,20 +84,40 @@ object ShellHooksHelp {
                 summary = "Scripts stored in a project run only after you review and trust them.",
                 detail =
                     """
-                    <p>A project can carry hooks in <code>.codeonthego/hooks/</code>. Any plugin that can write
-                    files, or an AI agent, can put a script there, so none runs until you read it in the Hooks
-                    tab and trust it. Editing a trusted script makes it untrusted again.</p>
+                    <p>A project can carry hooks in <code>.codeonthego/hooks/</code>. A script can arrive with a
+                    project, from a cloned repository or an AI agent's edit, so none runs until you read it in
+                    the Hooks tab and trust it. Editing a trusted script makes it untrusted again.</p>
+                    <p>This does not protect you from a plugin that can run commands: such a plugin can already
+                    change your own hooks folder. Install only plugins you trust.</p>
                     """.trimIndent(),
                 buttons = guide,
             ),
             PluginTooltipEntry(
                 tag = TAG_REVIEW,
                 summary = "Read the script before you trust it: it runs with the Terminal's access.",
+                detail =
+                    """
+                    <p><b>Trust</b> approves exactly the text shown. If the file changes afterwards it waits for
+                    review again. Invisible and control characters are shown as <code>&lt;U+XXXX&gt;</code>,
+                    because they can make a script look different from what it does.</p>
+                    <p>Scripts larger than 256 KB cannot be reviewed here and never run.</p>
+                    """.trimIndent(),
                 buttons = guide,
             ),
             PluginTooltipEntry(
                 tag = TAG_ACTION,
                 summary = "Runs this script from your actions folder on the file, in the Terminal.",
+                detail =
+                    """
+                    <p>Every executable script in <code>~/.config/codeonthego/hooks/actions/</code> appears here,
+                    for files only. It runs in the Terminal so you see what it prints, with the file in
+                    <code>$1</code>. If it cannot start, the Hooks tab says why.</p>
+                    """.trimIndent(),
+                buttons = guide,
+            ),
+            PluginTooltipEntry(
+                tag = TAG_BACK,
+                summary = "Back to Preferences. Your changes are already saved.",
                 buttons = guide,
             ),
         )

@@ -36,15 +36,20 @@ object HookDiscovery {
     /**
      * The scripts in [root] for [hookId]: the file `<hookId>`, then every script in
      * `<hookId>.d/` in byte order of their names (as `LC_ALL=C ls` sorts them).
+     *
+     * [requireExecutable] is false for a project's hooks: projects usually live on shared storage,
+     * which is mounted noexec and keeps no executable bits, and a trusted project script runs from
+     * a private copy the plugin marks executable itself.
      */
     fun discover(
         root: File,
         hookId: String,
+        requireExecutable: Boolean = true,
     ): List<File> {
         val scripts = mutableListOf<File>()
-        File(root, hookId).takeIf(::isRunnable)?.let(scripts::add)
+        File(root, hookId).takeIf { isRunnable(it, requireExecutable) }?.let(scripts::add)
         File(root, "$hookId.d").listFiles()
-            ?.filter(::isRunnable)
+            ?.filter { isRunnable(it, requireExecutable) }
             ?.sortedBy { it.name }
             ?.let(scripts::addAll)
         return scripts
@@ -52,15 +57,28 @@ object HookDiscovery {
 
     /** The actions offered on a file's menu, sorted by name. */
     fun actions(actionsDir: File): List<File> =
-        actionsDir.listFiles()?.filter(::isRunnable)?.sortedBy { it.name }.orEmpty()
+        actionsDir.listFiles()?.filter { isRunnable(it) }?.sortedBy { it.name }.orEmpty()
 
     /**
-     * A regular file with its executable bit set. Samples, dotfiles (editor swap files) and
-     * `name~` backups are skipped, so editing a hook in place never runs a half-written copy.
+     * The actions to offer for [target]: none for a folder, which the file tree's long-press menu
+     * also asks about, since an action's `$1` is a file.
      */
-    fun isRunnable(file: File): Boolean {
+    fun actionsFor(
+        target: File,
+        actionsDir: File,
+    ): List<File> = if (target.isFile) actions(actionsDir) else emptyList()
+
+    /**
+     * A regular file, with its executable bit set when [requireExecutable]. Samples, dotfiles
+     * (editor swap files) and `name~` backups are skipped, so editing a hook in place never runs a
+     * half-written copy.
+     */
+    fun isRunnable(
+        file: File,
+        requireExecutable: Boolean = true,
+    ): Boolean {
         val name = file.name
         if (name.startsWith(".") || name.endsWith("~") || name.endsWith(SAMPLE_SUFFIX)) return false
-        return file.isFile && file.canExecute()
+        return file.isFile && (!requireExecutable || file.canExecute())
     }
 }

@@ -26,7 +26,7 @@ fun File.script(
     executable: Boolean = true,
 ): File =
     File(this, path).apply {
-        parentFile.mkdirs()
+        parentFile?.mkdirs()
         writeText(body)
         setExecutable(executable, false)
     }

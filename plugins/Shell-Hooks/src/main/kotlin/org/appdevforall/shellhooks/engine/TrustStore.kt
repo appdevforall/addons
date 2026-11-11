@@ -18,10 +18,14 @@ interface KeyValueStore {
 }
 
 /**
- * Which project hooks the user approved. Any plugin with `filesystem.write`, or an AI agent, can
- * write into a project, so a script found there runs only once the user has read it and trusted
- * that exact content: approval is keyed on the project, the script's path inside the hooks
- * folder, and the SHA-256 of its bytes. Editing the script, or adding one, needs a new approval.
+ * Which project hooks the user approved. A script can arrive with a project (a cloned repository,
+ * an AI agent's edit, a plugin that can only write project files), so a script found there runs
+ * only once the user has read it and trusted that exact content: approval is keyed on the
+ * project, the script's path inside the hooks folder, and the SHA-256 of its bytes. Editing the
+ * script, or adding one, needs a new approval.
+ *
+ * This does not stop a plugin that can run commands or write files in-process: such a plugin can
+ * already write the global hooks folder, or these approvals, directly.
  */
 class TrustStore(
     private val store: KeyValueStore,
@@ -55,8 +59,14 @@ class TrustStore(
     /** How many scripts are trusted in [projectDir]. */
     fun trustedCount(projectDir: File): Int = read(projectDir).size
 
-    private fun read(projectDir: File): Map<String, String> {
-        val raw = store.getString(key(projectDir)) ?: return emptyMap()
+    /** Every trusted content hash, across all projects. */
+    fun trustedShas(): Set<String> =
+        store.keys().filter { it.startsWith(PREFIX) }.flatMap { readKey(it).values }.toSet()
+
+    private fun read(projectDir: File): Map<String, String> = readKey(key(projectDir))
+
+    private fun readKey(key: String): Map<String, String> {
+        val raw = store.getString(key) ?: return emptyMap()
         return raw.lineSequence()
             .mapNotNull { line ->
                 val tab = line.indexOf('\t')

@@ -12,7 +12,7 @@ enum class Hook(
     val title: String,
     val argsDoc: String,
 ) {
-    IDE_STARTED("ide-started", "IDE started", "no arguments"),
+    IDE_STARTED("ide-started", "IDE started", "no arguments; runs once each time Code on the Go starts"),
     PROJECT_OPENED("project-opened", "Project opened", "\$1 = the project folder"),
     PROJECT_CLOSED("project-closed", "Project closed", "\$1 = the project folder"),
     FILE_OPENED("file-opened", "File opened", "\$1 = the file"),
@@ -21,7 +21,7 @@ enum class Hook(
     FILE_SAVED("file-saved", "File saved", "\$1 = the file"),
     BUILD_STARTED("build-started", "Build started", "no arguments"),
     BUILD_SUCCEEDED("build-succeeded", "Build succeeded", "no arguments"),
-    BUILD_FAILED("build-failed", "Build failed", "\$1 = the error, or \"cancelled\""),
+    BUILD_FAILED("build-failed", "Build failed", "\$1 = the IDE's message saying why, also when you cancel"),
     ;
 
     companion object {
@@ -42,6 +42,8 @@ data class HookEvent(
     val target: String? get() = args.firstOrNull()?.takeIf { it.isNotEmpty() }
 
     companion object {
+        // The IDE always passes its own message, cancels included; this only covers a host that
+        // passes none, and is not part of the documented contract.
         const val BUILD_CANCELLED = "cancelled"
 
         fun ideStarted(projectDir: File?) = HookEvent(Hook.IDE_STARTED, emptyList(), projectDir)

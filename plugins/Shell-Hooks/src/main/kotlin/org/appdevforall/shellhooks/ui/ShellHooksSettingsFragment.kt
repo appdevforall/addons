@@ -19,6 +19,7 @@ import org.appdevforall.shellhooks.ShellHooksHelp
 import org.appdevforall.shellhooks.ShellHooksPlugin
 import org.appdevforall.shellhooks.ShellHooksSettings
 import org.appdevforall.shellhooks.engine.Hook
+import org.appdevforall.shellhooks.engine.TimeoutSetting
 import java.io.File
 
 /**
@@ -54,7 +55,10 @@ class ShellHooksSettingsFragment : Fragment() {
         val plugin = ShellHooksPlugin.getInstance() ?: return
         val settings = plugin.settings
 
-        view.findViewById<View>(R.id.shBack).setOnClickListener { leaveScreen() }
+        view.findViewById<View>(R.id.shBack).apply {
+            help(this, ShellHooksHelp.TAG_BACK)
+            setOnClickListener { leaveScreen() }
+        }
         listOf(R.id.shTitle, R.id.shEnable, R.id.shEnableSummary).forEach { help(view.findViewById(it), ShellHooksHelp.TAG_SETTINGS) }
         listOf(R.id.shFolderLabel, R.id.shFolderHelp, R.id.shCreateSamples).forEach { help(view.findViewById(it), ShellHooksHelp.TAG_FOLDER) }
         listOf(R.id.shTimeoutLabel, R.id.shTimeout).forEach { help(view.findViewById(it), ShellHooksHelp.TAG_TIMEOUT) }
@@ -96,8 +100,22 @@ class ShellHooksSettingsFragment : Fragment() {
         field.hint = getString(R.string.sh_timeout_hint, ShellHooksSettings.MIN_TIMEOUT_SECONDS, ShellHooksSettings.MAX_TIMEOUT_SECONDS)
         field.addTextChangedListener(
             object : TextWatcher {
+                // Stores only a valid value; anything else is flagged on the field and not stored,
+                // so the stored timeout is always the one the field showed last while valid.
                 override fun afterTextChanged(s: Editable?) {
-                    s?.toString()?.toIntOrNull()?.let { settings.timeoutSeconds = it }
+                    val seconds = TimeoutSetting.parse(s?.toString().orEmpty())
+                    if (seconds != null) {
+                        settings.timeoutSeconds = seconds
+                        field.error = null
+                    } else {
+                        field.error =
+                            getString(
+                                R.string.sh_timeout_invalid,
+                                TimeoutSetting.MIN_SECONDS,
+                                TimeoutSetting.MAX_SECONDS,
+                                settings.timeoutSeconds,
+                            )
+                    }
                 }
 
                 override fun beforeTextChanged(

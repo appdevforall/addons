@@ -37,6 +37,29 @@ class HookDiscoveryTest {
     }
 
     @Test
+    fun projectHooksNeedNoExecutableBit() {
+        // Shared storage is mounted noexec; a project's scripts run from a private copy.
+        root.script("file-saved", executable = false)
+        root.script("file-saved.d/lint", executable = false)
+        root.script("file-saved.d/lint.sample", executable = false)
+
+        assertEquals(
+            listOf("file-saved", "lint"),
+            HookDiscovery.discover(root, "file-saved", requireExecutable = false).map { it.name },
+        )
+    }
+
+    @Test
+    fun actionsAreOfferedForFilesButNotFolders() {
+        root.script("actions/count")
+        val file = root.script("notes.txt", executable = false)
+        val folder = File(root, "src").apply { mkdirs() }
+
+        assertEquals(listOf("count"), HookDiscovery.actionsFor(file, File(root, "actions")).map { it.name })
+        assertTrue(HookDiscovery.actionsFor(folder, File(root, "actions")).isEmpty())
+    }
+
+    @Test
     fun skipsSamplesDotfilesBackupsAndDirectories() {
         root.script("file-saved.sample")
         root.script("file-saved.d/run.sample")

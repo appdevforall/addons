@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import org.appdevforall.shellhooks.engine.Hook
 import org.appdevforall.shellhooks.engine.HookSwitches
 import org.appdevforall.shellhooks.engine.KeyValueStore
+import org.appdevforall.shellhooks.engine.TimeoutSetting
 
 /** What the user chose on the settings screen. Everything starts off: hooks run only once enabled. */
 class ShellHooksSettings(
@@ -24,18 +25,22 @@ class ShellHooksSettings(
         enabled: Boolean,
     ) = prefs.edit().putBoolean(hookKey(hook), enabled).apply()
 
+    /** Set only from [TimeoutSetting.parse]; a value out of range is refused, not clamped. */
     var timeoutSeconds: Int
         get() = prefs.getInt(KEY_TIMEOUT, DEFAULT_TIMEOUT_SECONDS).coerceIn(MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS)
-        set(value) = prefs.edit().putInt(KEY_TIMEOUT, value.coerceIn(MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS)).apply()
+        set(value) {
+            require(value in MIN_TIMEOUT_SECONDS..MAX_TIMEOUT_SECONDS) { "Timeout out of range: $value" }
+            prefs.edit().putInt(KEY_TIMEOUT, value).apply()
+        }
 
     private fun hookKey(hook: Hook) = "hook.${hook.id}"
 
     companion object {
         const val PREFS = "settings"
         const val TRUST_PREFS = "trust"
-        const val DEFAULT_TIMEOUT_SECONDS = 60
-        const val MIN_TIMEOUT_SECONDS = 1
-        const val MAX_TIMEOUT_SECONDS = 3600
+        const val DEFAULT_TIMEOUT_SECONDS = TimeoutSetting.DEFAULT_SECONDS
+        const val MIN_TIMEOUT_SECONDS = TimeoutSetting.MIN_SECONDS
+        const val MAX_TIMEOUT_SECONDS = TimeoutSetting.MAX_SECONDS
 
         private const val KEY_ENABLED = "enabled"
         private const val KEY_PROJECT_HOOKS = "project_hooks"

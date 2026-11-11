@@ -12,30 +12,35 @@ import com.itsaky.androidide.plugins.extensions.TabItem
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.BuildStatusListener
 import com.itsaky.androidide.plugins.services.FileChangeListener
-import com.itsaky.androidide.plugins.services.FileSaveListener
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import com.itsaky.androidide.plugins.services.IdeCommandService
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.IdeTerminalService
-import com.itsaky.androidide.plugins.services.ProjectLifecycleListener
 import com.itsaky.androidide.plugins.services.TerminalCommandResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.appdevforall.shellhooks.engine.Coalescer
+import org.appdevforall.shellhooks.engine.Hook
 import org.appdevforall.shellhooks.engine.HookDiscovery
 import org.appdevforall.shellhooks.engine.HookEvent
 import org.appdevforall.shellhooks.engine.HookLog
 import org.appdevforall.shellhooks.engine.HookPaths
 import org.appdevforall.shellhooks.engine.HookResolver
+import org.appdevforall.shellhooks.engine.HookRun
 import org.appdevforall.shellhooks.engine.HookRunner
 import org.appdevforall.shellhooks.engine.IdeCommandRunner
+import org.appdevforall.shellhooks.engine.LaunchGate
+import org.appdevforall.shellhooks.engine.Outcome
 import org.appdevforall.shellhooks.engine.SampleHooks
+import org.appdevforall.shellhooks.engine.ScriptSource
 import org.appdevforall.shellhooks.engine.ShellQuote
 import org.appdevforall.shellhooks.engine.TrustStore
+import org.appdevforall.shellhooks.engine.VerifiedCopies
 import org.appdevforall.shellhooks.ui.HooksPanelFragment
 import org.appdevforall.shellhooks.ui.ShellHooksSettingsFragment
 import java.io.File
@@ -59,6 +64,7 @@ class ShellHooksPlugin :
         private set
     lateinit var trust: TrustStore
         private set
+    private lateinit var launchGate: LaunchGate
     val log = HookLog()
 
     private var scope: CoroutineScope? = null
@@ -68,19 +74,13 @@ class ShellHooksPlugin :
     @Volatile
     private var wrapper: File? = null
 
-    private val projectListener =
-        object : ProjectLifecycleListener {
-            override fun onProjectOpened(projectDir: File) = submit(HookEvent.projectOpened(projectDir))
-
-            override fun onProjectClosed(projectDir: File) = submit(HookEvent.projectClosed(projectDir))
-        }
+    // Created inside a guarded block, never at construction: see WorkspaceHooks.
+    private var workspaceHooks: WorkspaceHooks? = null
 
     private val fileChangeListener =
         FileChangeListener { file ->
             if (isOn()) coalescer?.offer(HookEvent.fileActivated(file, currentProjectDir()))
         }
-
-    private val fileSaveListener = FileSaveListener { file -> submit(HookEvent.fileSaved(file, currentProjectDir())) }
 
     private val buildListener =
         object : BuildStatusListener {
@@ -97,6 +97,7 @@ class ShellHooksPlugin :
             paths = HookPaths(context.getAppFilesDir())
             settings = ShellHooksSettings(context.getPluginSharedPreferences(ShellHooksSettings.PREFS))
             trust = TrustStore(PrefsKeyValueStore(context.getPluginSharedPreferences(ShellHooksSettings.TRUST_PREFS)))
+            launchGate = LaunchGate(PrefsKeyValueStore(context.getPluginSharedPreferences(ShellHooksSettings.PREFS)))
             instance = this
             true
         } catch (t: Throwable) {
@@ -108,10 +109,14 @@ class ShellHooksPlugin :
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scope = it }
         wrapper = installWrapper()
         val warn: (String) -> Unit = { context.logger.warn(it) }
+        val verifiedDir = File(context.getPluginDataDir(), VERIFIED_DIR)
+        // Before the runner exists, so no copy is staged while this deletes.
+        runCatching { VerifiedCopies.prune(verifiedDir, trust.trustedShas()) }
+            .onFailure { context.logger.warn("Shell Hooks: cannot prune old trusted copies", it) }
         runner =
             HookRunner(
                 scope = scope,
-                resolver = HookResolver(paths, settings, trust, log, File(context.getPluginDataDir(), VERIFIED_DIR), warn),
+                resolver = HookResolver(paths, settings, trust, log, verifiedDir, warn),
                 commands = IdeCommandRunner { service(IdeCommandService::class.java) },
                 log = log,
                 wrapper = { wrapper },
@@ -123,19 +128,30 @@ class ShellHooksPlugin :
 
         // Each in its own try: a host without one listener, or a refused permission, must not
         // cost the others.
-        listen("project") { service(IdeProjectService::class.java)?.addProjectLifecycleListener(projectListener) }
+        listen("project") { service(IdeProjectService::class.java)?.let { workspace().addTo(it) } }
         listen("file change") { service(IdeEditorService::class.java)?.addFileChangeListener(fileChangeListener) }
-        listen("file save") { service(IdeEditorService::class.java)?.addFileSaveListener(fileSaveListener) }
+        listen("file save") { service(IdeEditorService::class.java)?.let { workspace().addTo(it) } }
         listen("build") { service(IdeBuildService::class.java)?.addBuildStatusListener(buildListener) }
 
-        submit(HookEvent.ideStarted(currentProjectDir()))
+        // activate() also runs when the user re-enables or updates the plugin mid-session.
+        if (isOn() && settings.isHookEnabled(Hook.IDE_STARTED)) {
+            val launch = launchId()
+            if (launchGate.isNewLaunch(launch)) {
+                submit(HookEvent.ideStarted(currentProjectDir()))
+                launchGate.record(launch)
+            }
+        }
         return true
     }
 
     override fun deactivate(): Boolean {
-        listen("project") { service(IdeProjectService::class.java)?.removeProjectLifecycleListener(projectListener) }
+        val workspace = workspaceHooks
+        if (workspace != null) {
+            listen("project") { service(IdeProjectService::class.java)?.let { workspace.removeFrom(it) } }
+            listen("file save") { service(IdeEditorService::class.java)?.let { workspace.removeFrom(it) } }
+        }
+        workspaceHooks = null
         listen("file change") { service(IdeEditorService::class.java)?.removeFileChangeListener(fileChangeListener) }
-        listen("file save") { service(IdeEditorService::class.java)?.removeFileSaveListener(fileSaveListener) }
         listen("build") { service(IdeBuildService::class.java)?.removeBuildStatusListener(buildListener) }
         coalescer?.cancel()
         coalescer = null
@@ -156,10 +172,13 @@ class ShellHooksPlugin :
 
     override fun onFileClosed(file: File) = submit(HookEvent.fileClosed(file, currentProjectDir()))
 
-    /** One "Run <name>" per script in the actions folder; the host shows these in the file tree too. */
+    /**
+     * One "Run <name>" per script in the actions folder, for a file only: the host also asks for
+     * folders, from the file tree's long-press menu.
+     */
     override fun getFileTabMenuItems(file: File): List<FileTabMenuItem> {
         if (!isOn()) return emptyList()
-        return HookDiscovery.actions(paths.actions).mapIndexed { index, action ->
+        return HookDiscovery.actionsFor(file, paths.actions).mapIndexed { index, action ->
             FileTabMenuItem(
                 id = "action:${action.name}",
                 title = "Run ${action.name}",
@@ -221,14 +240,40 @@ class ShellHooksPlugin :
     private fun currentProjectDir(): File? =
         runCatching { service(IdeProjectService::class.java)?.getCurrentProject()?.rootDir }.getOrNull()
 
-    /** Runs [action] on [file] in the visible Terminal, so the user sees what it prints. */
+    private fun workspace(): WorkspaceHooks =
+        workspaceHooks ?: WorkspaceHooks(::submit, ::currentProjectDir).also { workspaceHooks = it }
+
+    // Same for every activation within one IDE process, different after a restart.
+    private fun launchId(): String = "${android.os.Process.myPid()}:${android.os.Process.getStartElapsedRealtime()}"
+
+    /**
+     * Runs [action] on [file] in the visible Terminal, so the user sees what it prints. If it
+     * cannot start, the Hooks tab says so.
+     */
     private fun runAction(
         action: File,
         file: File,
     ) {
         val scope = scope ?: return
-        val runnerScript = wrapper ?: return
-        val terminal = service(IdeTerminalService::class.java) ?: return
+        val started = System.currentTimeMillis()
+        val failed = { reason: String ->
+            context.logger.warn("Shell Hooks: action ${action.name} did not start: $reason")
+            log.record(
+                HookRun(
+                    startedAtMillis = started,
+                    hook = null,
+                    script = action,
+                    source = ScriptSource.GLOBAL,
+                    target = file.path,
+                    outcome = Outcome.NOT_STARTED,
+                    exitCode = null,
+                    durationMillis = System.currentTimeMillis() - started,
+                    output = reason,
+                ),
+            )
+        }
+        val runnerScript = wrapper ?: return failed("The hook runner script is missing")
+        val terminal = service(IdeTerminalService::class.java) ?: return failed("The IDE's Terminal is not available")
         val projectDir = currentProjectDir()
         // The Terminal takes a command line, so every value is quoted as one word.
         val command =
@@ -245,11 +290,11 @@ class ShellHooksPlugin :
         scope.launch {
             try {
                 val result = terminal.runInTerminal(command)
-                if (result is TerminalCommandResult.NotStarted) {
-                    context.logger.warn("Shell Hooks: action ${action.name} did not start: ${result.reason}")
-                }
+                if (result is TerminalCommandResult.NotStarted) failed(result.reason)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                context.logger.warn("Shell Hooks: action ${action.name} failed to start", e)
+                failed(e.message ?: e.javaClass.simpleName)
             }
         }
     }

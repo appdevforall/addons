@@ -1,5 +1,6 @@
 package org.appdevforall.shellhooks.ui
 
+import android.content.DialogInterface
 import android.os.Bundle
 import android.text.format.DateFormat
 import android.view.LayoutInflater
@@ -17,16 +18,17 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.appdevforall.shellhooks.R
 import org.appdevforall.shellhooks.ShellHooksHelp
 import org.appdevforall.shellhooks.ShellHooksPlugin
 import org.appdevforall.shellhooks.engine.HookRun
 import org.appdevforall.shellhooks.engine.Outcome
 import org.appdevforall.shellhooks.engine.PendingTrust
-import org.appdevforall.shellhooks.engine.TrustStore
-import java.io.File
+import org.appdevforall.shellhooks.engine.ScriptReview
 import java.util.Date
 
 /**
@@ -126,9 +128,8 @@ class HooksPanelFragment : Fragment() {
         run: HookRun,
     ): View {
         val row = layoutInflater.inflate(R.layout.item_hook_run, parent, false)
-        val key = run.startedAtMillis * 31 + run.script.path.hashCode()
-        val target = run.target?.let { "  ${File(it).name.ifEmpty { it }}" }.orEmpty()
-        row.findViewById<TextView>(R.id.runTitle).text = "${run.hook.id}  ${scriptLabel(run)}$target"
+        val target = run.targetLabel?.let { "  $it" }.orEmpty()
+        row.findViewById<TextView>(R.id.runTitle).text = "${run.name}  ${scriptLabel(run)}$target"
 
         val detail = row.findViewById<TextView>(R.id.runDetail)
         detail.text =
@@ -148,12 +149,17 @@ class HooksPanelFragment : Fragment() {
             ),
         )
 
+        // Up to 64 KB per run: set only while the row is open, so a refresh does not lay out
+        // the output of every run in the list.
         val output = row.findViewById<TextView>(R.id.runOutput)
-        output.text = run.output.ifBlank { getString(R.string.hk_no_output) }
-        output.visibility = if (key in expanded) View.VISIBLE else View.GONE
+        val show = { open: Boolean ->
+            output.text = if (open) run.output.ifBlank { getString(R.string.hk_no_output) } else ""
+            output.visibility = if (open) View.VISIBLE else View.GONE
+        }
+        show(run.id in expanded)
         row.setOnClickListener {
-            if (!expanded.add(key)) expanded.remove(key)
-            output.visibility = if (key in expanded) View.VISIBLE else View.GONE
+            if (!expanded.add(run.id)) expanded.remove(run.id)
+            show(run.id in expanded)
         }
         help(row, ShellHooksHelp.TAG_TAB)
         return row
@@ -177,35 +183,59 @@ class HooksPanelFragment : Fragment() {
 
     /**
      * Shows the whole script before it can be trusted, and trusts exactly the bytes shown: if the
-     * file changes after this, its hash no longer matches and it waits for review again.
+     * file changes after this, its hash no longer matches and it waits for review again. Read off
+     * the main thread, and never more than [ScriptReview.MAX_BYTES].
      */
     private fun review(
         plugin: ShellHooksPlugin,
         entry: PendingTrust,
     ) {
-        val context = requireContext()
-        val bytes =
-            try {
-                entry.file.readBytes()
-            } catch (e: Exception) {
-                showMessage(entry, getString(R.string.hk_review_unreadable, e.message ?: e.javaClass.simpleName))
-                return
-            }
-        if (bytes.size > MAX_REVIEW_BYTES) {
-            showMessage(entry, getString(R.string.hk_review_too_large, MAX_REVIEW_BYTES / 1024))
+        if (entry.tooLarge) {
+            showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
             return
         }
-        val sha = TrustStore.sha256(bytes)
+        viewLifecycleOwner.lifecycleScope.launch {
+            when (val loaded = withContext(Dispatchers.IO) { ScriptReview.load(entry.file) }) {
+                is ScriptReview.Loaded.TooLarge ->
+                    showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
+                is ScriptReview.Loaded.Unreadable ->
+                    showMessage(entry, getString(R.string.hk_review_unreadable, loaded.reason))
+                is ScriptReview.Loaded.Script -> showScript(plugin, entry, loaded)
+            }
+        }
+    }
 
+    private fun showScript(
+        plugin: ShellHooksPlugin,
+        entry: PendingTrust,
+        loaded: ScriptReview.Loaded.Script,
+    ) {
+        val context = requireContext()
+        val revealed = ScriptReview.reveal(String(loaded.bytes, Charsets.UTF_8))
         val padding = resources.getDimensionPixelSize(R.dimen.space_lg)
         val body =
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(padding, padding / 2, padding, 0)
-                addView(TextView(context).apply { text = getString(R.string.hk_review_intro, entry.projectDir.path) })
                 addView(
                     TextView(context).apply {
-                        text = String(bytes, Charsets.UTF_8)
+                        text = getString(R.string.hk_review_intro, entry.projectDir.path)
+                        help(this, ShellHooksHelp.TAG_REVIEW)
+                    },
+                )
+                if (revealed.hidden > 0) {
+                    addView(
+                        TextView(context).apply {
+                            text = getString(R.string.hk_review_hidden, revealed.hidden)
+                            setTextColor(context.getColor(R.color.plugin_error))
+                            setPadding(0, padding / 2, 0, 0)
+                            help(this, ShellHooksHelp.TAG_REVIEW)
+                        },
+                    )
+                }
+                addView(
+                    TextView(context).apply {
+                        text = revealed.text
                         typeface = android.graphics.Typeface.MONOSPACE
                         setTextIsSelectable(true)
                         setPadding(0, padding / 2, 0, 0)
@@ -218,11 +248,15 @@ class HooksPanelFragment : Fragment() {
                 .setTitle(getString(R.string.hk_review_title, entry.relativePath))
                 .setView(ScrollView(context).apply { addView(body) })
                 .setPositiveButton(R.string.hk_trust) { _, _ ->
-                    plugin.trust.trust(entry.projectDir, entry.relativePath, sha)
+                    plugin.trust.trust(entry.projectDir, entry.relativePath, loaded.sha256)
                     plugin.log.removePending(entry.projectDir, entry.relativePath)
                 }.setNegativeButton(R.string.hk_cancel, null)
                 .setOnDismissListener { reviewDialog = null }
                 .show()
+                .also { dialog ->
+                    dialog.getButton(DialogInterface.BUTTON_POSITIVE)?.let { help(it, ShellHooksHelp.TAG_REVIEW) }
+                    dialog.getButton(DialogInterface.BUTTON_NEGATIVE)?.let { help(it, ShellHooksHelp.TAG_REVIEW) }
+                }
     }
 
     private fun showMessage(
@@ -248,9 +282,5 @@ class HooksPanelFragment : Fragment() {
             service.showTooltip(anchor, ShellHooksPlugin.TOOLTIP_CATEGORY, tag)
             true
         }
-    }
-
-    companion object {
-        private const val MAX_REVIEW_BYTES = 256 * 1024
     }
 }

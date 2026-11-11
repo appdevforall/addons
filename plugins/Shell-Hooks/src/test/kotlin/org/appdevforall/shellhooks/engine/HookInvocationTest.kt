@@ -48,6 +48,14 @@ class HookInvocationTest {
     }
 
     @Test
+    fun theTimeoutIsPassedToTheWrapperOnlyWhenGiven() {
+        val event = HookEvent.buildStarted(project)
+
+        assertEquals("30", HookInvocation.spec(wrapper, script, event, null, timeoutSeconds = 30).environment["COGO_TIMEOUT_SECONDS"])
+        assertFalse(HookInvocation.spec(wrapper, script, event, null).environment.containsKey("COGO_TIMEOUT_SECONDS"))
+    }
+
+    @Test
     fun noProjectIsAnEmptyProjectDirAndAnUnknownVersionIsOmitted() {
         val env = HookInvocation.environment(script, HookEvent.buildStarted(null), null)
 

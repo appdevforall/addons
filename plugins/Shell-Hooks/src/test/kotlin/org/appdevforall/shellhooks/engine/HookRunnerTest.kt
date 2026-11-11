@@ -63,7 +63,7 @@ class HookRunnerTest {
             val order = mutableListOf<String>()
             val runner =
                 runner(
-                    CommandRunner { spec, _ ->
+                    CommandRunner { spec, _, _ ->
                         mostAtOnce = maxOf(mostAtOnce, running.incrementAndGet())
                         order += spec.arguments.drop(2).firstOrNull() ?: ""
                         delay(100)
@@ -88,7 +88,7 @@ class HookRunnerTest {
             val warnings = mutableListOf<String>()
             val runner =
                 runner(
-                    CommandRunner { spec, _ ->
+                    CommandRunner { spec, _, _ ->
                         val file = spec.arguments[2]
                         if (file == "first") release.await()
                         ran += file
@@ -114,7 +114,7 @@ class HookRunnerTest {
             var cancelled = false
             val runner =
                 runner(
-                    CommandRunner { _, _ ->
+                    CommandRunner { _, _, _ ->
                         try {
                             awaitCancellation()
                         } finally {
@@ -125,7 +125,7 @@ class HookRunnerTest {
                 )
 
             runner.submit(HookEvent.buildStarted(project))
-            advanceTimeBy(1_000 + HookRunner.TIMEOUT_GRACE_MS + 1)
+            advanceTimeBy(1_000 + HookRunner.WRAPPER_KILL_GRACE_MS + HookRunner.TIMEOUT_GRACE_MS + 1)
             runCurrent()
 
             assertTrue("the hung command was cancelled", cancelled)
@@ -133,22 +133,120 @@ class HookRunnerTest {
         }
 
     @Test
-    fun theTimeoutSettingReachesTheHost() =
+    fun aRunStoppedForItsTimeoutKeepsWhatItPrinted() =
         runTest {
-            var limit = 0L
-            val runner = runner(CommandRunner { _, timeout -> limit = timeout; success }, timeoutMs = 42_000)
+            val runner =
+                runner(
+                    CommandRunner { _, _, output ->
+                        output.append("step 1 done")
+                        output.append("waiting for the server")
+                        awaitCancellation()
+                    },
+                    timeoutMs = 1_000,
+                )
 
             runner.submit(HookEvent.buildStarted(project))
             settle()
 
-            assertEquals(42_000L, limit)
+            val run = log.runs.value.single()
+            assertEquals(Outcome.TIMED_OUT, run.outcome)
+            assertEquals("step 1 done\nwaiting for the server\nStopped after 1 s", run.output)
+        }
+
+    @Test
+    fun theWrappersTimeoutExitIsRecordedAsTimedOut() =
+        runTest {
+            val runner =
+                runner(
+                    CommandRunner { _, _, _ ->
+                        delay(1_000)
+                        CommandResult.Failure(HookRunner.TIMEOUT_EXIT, "partial", "", null, 1_000)
+                    },
+                    timeoutMs = 1_000,
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            val run = log.runs.value.single()
+            assertEquals(Outcome.TIMED_OUT, run.outcome)
+            assertEquals("partial\nStopped after 1 s", run.output)
+        }
+
+    @Test
+    fun aKillAfterTheLimitIsATimeoutButAnEarlyKillIsAFailure() =
+        runTest {
+            var elapsed = 0L
+            val runner =
+                runner(
+                    CommandRunner { _, _, _ ->
+                        delay(elapsed)
+                        CommandResult.Failure(HookRunner.TIMEOUT_KILL_EXIT, "", "", null, elapsed)
+                    },
+                    timeoutMs = 1_000,
+                )
+
+            elapsed = 6_000
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+            elapsed = 10
+            runner.submit(HookEvent.buildSucceeded(project))
+            settle()
+
+            assertEquals(listOf(Outcome.TIMED_OUT, Outcome.FAILED), log.runs.value.reversed().map { it.outcome })
+        }
+
+    @Test
+    fun anErrorWhileListingScriptsDoesNotStopTheWorker() =
+        runTest {
+            var calls = 0
+            val warnings = mutableListOf<String>()
+            val runner =
+                runner(
+                    CommandRunner { _, _, _ -> success },
+                    resolver =
+                        ScriptResolver { event ->
+                            if (calls++ == 0) throw OutOfMemoryError("a huge script")
+                            oneScriptPerEvent.resolve(event)
+                        },
+                    warnings = warnings,
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            runner.submit(HookEvent.buildSucceeded(project))
+            settle()
+
+            assertEquals(listOf(Hook.BUILD_SUCCEEDED), log.runs.value.map { it.hook })
+            assertTrue(warnings.single().contains("OutOfMemoryError"))
+        }
+
+    @Test
+    fun theTimeoutSettingReachesTheWrapperAndTheHostGetsLonger() =
+        runTest {
+            var limit = 0L
+            var env = emptyMap<String, String>()
+            val runner =
+                runner(
+                    CommandRunner { spec, timeout, _ ->
+                        limit = timeout
+                        env = spec.environment
+                        success
+                    },
+                    timeoutMs = 42_000,
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            assertEquals("42", env[HookInvocation.TIMEOUT_VARIABLE])
+            assertEquals(42_000L + HookRunner.WRAPPER_KILL_GRACE_MS, limit)
         }
 
     @Test
     fun theHostsOwnTimeoutIsRecordedAsTimedOut() =
         runTest {
             val runner =
-                runner(CommandRunner { _, _ -> CommandResult.Failure(-1, "partial", "", "Command timed out after 60000ms: x", 60_000) })
+                runner(CommandRunner { _, _, _ -> CommandResult.Failure(-1, "partial", "", "Command timed out after 60000ms: x", 60_000) })
 
             runner.submit(HookEvent.buildStarted(project))
             settle()
@@ -162,7 +260,7 @@ class HookRunnerTest {
             var calls = 0
             val runner =
                 runner(
-                    CommandRunner { _, _ ->
+                    CommandRunner { _, _, _ ->
                         if (calls++ == 0) throw IllegalStateException("maximum of 3 concurrent commands")
                         success
                     },
@@ -179,7 +277,7 @@ class HookRunnerTest {
     @Test
     fun aNonZeroExitIsAFailureWithItsCodeAndOutput() =
         runTest {
-            val runner = runner(CommandRunner { _, _ -> CommandResult.Failure(3, "out", "err", null, 5) })
+            val runner = runner(CommandRunner { _, _, _ -> CommandResult.Failure(3, "out", "err", null, 5) })
 
             runner.submit(HookEvent.buildFailed("BUILD_FAILED", project))
             settle()
@@ -199,7 +297,7 @@ class HookRunnerTest {
                 HookRunner(
                     scope = backgroundScope,
                     resolver = oneScriptPerEvent,
-                    commands = CommandRunner { _, _ -> calls++; success },
+                    commands = CommandRunner { _, _, _ -> calls++; success },
                     log = log,
                     wrapper = { null },
                     timeoutMs = { 1_000 },
@@ -218,7 +316,7 @@ class HookRunnerTest {
             var cancelled = false
             val runner =
                 runner(
-                    CommandRunner { _, _ ->
+                    CommandRunner { _, _, _ ->
                         try {
                             awaitCancellation()
                         } finally {

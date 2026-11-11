@@ -50,7 +50,9 @@ class HookResolver(
         val projectDir = event.projectDir
         if (!switches.projectHooksEnabled || projectDir == null) return global
         val root = HookPaths.projectHooks(projectDir)
-        val project = HookDiscovery.discover(root, event.hook.id).mapNotNull { verify(projectDir, root, it) }
+        val project =
+            HookDiscovery.discover(root, event.hook.id, requireExecutable = false)
+                .mapNotNull { verify(projectDir, root, it) }
         return global + project
     }
 
@@ -59,15 +61,20 @@ class HookResolver(
         root: File,
         script: File,
     ): ResolvedScript? {
+        val relativePath = script.relativeTo(root).path
         val bytes =
             try {
-                script.readBytes()
+                ScriptReview.readAtMost(script, ScriptReview.MAX_BYTES)
             } catch (e: IOException) {
                 warn("Shell Hooks: cannot read ${script.path}: ${e.message}")
                 return null
             }
+        if (bytes == null) {
+            warn("Shell Hooks: ${script.path} is larger than ${ScriptReview.MAX_BYTES / 1024} KB; it never runs")
+            log.addPending(PendingTrust(projectDir, relativePath, script, sha256 = "", tooLarge = true))
+            return null
+        }
         val sha = TrustStore.sha256(bytes)
-        val relativePath = script.relativeTo(root).path
         if (!trust.isTrusted(projectDir, relativePath, sha)) {
             log.addPending(PendingTrust(projectDir, relativePath, script, sha))
             return null
@@ -86,8 +93,9 @@ class HookResolver(
         try {
             verifiedDir.mkdirs()
             val copy = File(verifiedDir, sha)
-            if (!copy.isFile || TrustStore.sha256(copy.readBytes()) != sha) {
-                val temp = File(verifiedDir, "$sha.tmp")
+            val existing = if (copy.isFile) ScriptReview.readAtMost(copy, ScriptReview.MAX_BYTES) else null
+            if (existing == null || TrustStore.sha256(existing) != sha) {
+                val temp = File(verifiedDir, "$sha$TEMP_SUFFIX")
                 temp.writeBytes(bytes)
                 temp.setExecutable(true, true)
                 if (!temp.renameTo(copy)) throw IOException("rename failed")
@@ -98,4 +106,24 @@ class HookResolver(
             warn("Shell Hooks: cannot stage a trusted copy: ${e.message}")
             null
         }
+
+    companion object {
+        const val TEMP_SUFFIX = ".tmp"
+    }
+}
+
+/** The private copies of trusted project scripts, one per content hash. */
+object VerifiedCopies {
+    /**
+     * Deletes every copy in [dir] whose hash no trust entry still names, and any half-written
+     * temporary file. Returns how many files it deleted.
+     */
+    fun prune(
+        dir: File,
+        trusted: Set<String>,
+    ): Int =
+        dir.listFiles()
+            ?.filter { it.isFile && (it.name.endsWith(HookResolver.TEMP_SUFFIX) || it.name !in trusted) }
+            ?.count { it.delete() }
+            ?: 0
 }

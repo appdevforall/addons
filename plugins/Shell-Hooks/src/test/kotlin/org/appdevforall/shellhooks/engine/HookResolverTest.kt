@@ -96,6 +96,43 @@ class HookResolverTest {
     }
 
     @Test
+    fun aTrustedProjectScriptWithoutTheExecutableBitStillRuns() {
+        // Projects live on shared storage, which keeps no executable bits.
+        val script = projectHooks.script("file-saved", executable = false)
+        trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
+
+        val resolved = resolver.resolve(saved()).single()
+
+        assertTrue(resolved.executable.canExecute())
+    }
+
+    @Test
+    fun anOversizedProjectScriptNeverRunsEvenIfItsContentIsTrusted() {
+        val big = "#!/bin/sh\n" + "#".repeat(ScriptReview.MAX_BYTES) + "\n"
+        val script = projectHooks.script("file-saved", big)
+        trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
+
+        assertTrue(resolver.resolve(saved()).isEmpty())
+        assertTrue(log.pending.value.single().tooLarge)
+        assertTrue(verified.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun pruningKeepsOnlyCopiesOfTrustedContent() {
+        val kept = projectHooks.script("file-saved", "#!/bin/sh\necho kept\n")
+        val keptSha = TrustStore.sha256(kept.readBytes())
+        trust.trust(project, "file-saved", keptSha)
+        resolver.resolve(saved())
+        File(verified, "0".repeat(64)).writeText("stale")
+        File(verified, keptSha + HookResolver.TEMP_SUFFIX).writeText("half")
+
+        val deleted = VerifiedCopies.prune(verified, trust.trustedShas())
+
+        assertEquals(2, deleted)
+        assertEquals(listOf(keptSha), verified.list().orEmpty().toList())
+    }
+
+    @Test
     fun editingATrustedProjectScriptMakesItUntrustedAgain() {
         val script = projectHooks.script("file-saved")
         trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
