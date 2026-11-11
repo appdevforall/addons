@@ -47,6 +47,14 @@ jobs:
           cache-disabled: true
           add-job-summary: 'never'
 
+      - name: Put Share Your Apps Server's release key in place
+        env:
+          SERVER_SIGNING_KEYSTORE_BASE64: ${{ secrets.SERVER_SIGNING_KEYSTORE_BASE64 }}
+          SERVER_SIGNING_STORE_PASSWORD: ${{ secrets.SERVER_SIGNING_STORE_PASSWORD }}
+          SERVER_SIGNING_KEY_ALIAS: ${{ secrets.SERVER_SIGNING_KEY_ALIAS }}
+          SERVER_SIGNING_KEY_PASSWORD: ${{ secrets.SERVER_SIGNING_KEY_PASSWORD }}
+        run: ./scripts/server-signing-key.sh
+
       - name: Refresh libs and build plugins
         env:
           CODEONTHEGO_REF: ${{ inputs.codeonthego_ref }}

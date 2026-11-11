@@ -71,6 +71,14 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
         run: echo "name=build-$(date -u +%Y-%m-%d)-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
+      - name: Put Share Your Apps Server's release key in place
+        env:
+          SERVER_SIGNING_KEYSTORE_BASE64: ${{ secrets.SERVER_SIGNING_KEYSTORE_BASE64 }}
+          SERVER_SIGNING_STORE_PASSWORD: ${{ secrets.SERVER_SIGNING_STORE_PASSWORD }}
+          SERVER_SIGNING_KEY_ALIAS: ${{ secrets.SERVER_SIGNING_KEY_ALIAS }}
+          SERVER_SIGNING_KEY_PASSWORD: ${{ secrets.SERVER_SIGNING_KEY_PASSWORD }}
+        run: ./scripts/server-signing-key.sh
+
       # Refreshes libs/ from CodeOnTheGo@stage, then proves every plugin still
       # compiles against the new jars. Templates use no jars, so none are built.
       - name: Refresh libs and build plugins

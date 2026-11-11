@@ -6,22 +6,23 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+// Release signing. CI sets the four SERVER_SIGNING_* variables from repository secrets (see the
+// design document's "The release signing key"). Without them, the values come from release.properties
+// in Code On The Go's private folder, for a build on the phone. Neither is ever in the project.
 val keystorePropsFile = File("/data/data/com.itsaky.androidide/files/home/keys/release.properties")
 val keystoreProps = Properties()
 
-if (keystorePropsFile.exists()) {
-    keystoreProps.load(FileInputStream(keystorePropsFile))
+if (System.getenv("SERVER_SIGNING_STORE_FILE") != null) {
+    keystoreProps["storeFile"] = System.getenv("SERVER_SIGNING_STORE_FILE")
+    System.getenv("SERVER_SIGNING_STORE_PASSWORD")?.let { keystoreProps["storePassword"] = it }
+    System.getenv("SERVER_SIGNING_KEY_ALIAS")?.let { keystoreProps["keyAlias"] = it }
+    System.getenv("SERVER_SIGNING_KEY_PASSWORD")?.let { keystoreProps["keyPassword"] = it }
+} else if (keystorePropsFile.exists()) {
+    FileInputStream(keystorePropsFile).use { keystoreProps.load(it) }
 }
 
-val hasValidSigningProps = keystorePropsFile.exists().also { exists ->
-    if (exists) {
-        FileInputStream(keystorePropsFile).use { keystoreProps.load(it) }
-    }
-}.let {
-    listOf("storeFile", "storePassword", 
-            "keyAlias", "keyPassword").all { key ->
-        keystoreProps[key] != null
-    }
+val hasValidSigningProps = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { key ->
+    keystoreProps[key] != null
 }
 
 

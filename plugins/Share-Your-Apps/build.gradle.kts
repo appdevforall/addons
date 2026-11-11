@@ -91,10 +91,32 @@ tasks.matching { it.name.startsWith("assemblePlugin") }.configureEach {
     val server = layout.projectDirectory.file("src/main/assets/share-your-apps-server.apk").asFile
     doFirst {
         check(server.isFile) {
-            "src/main/assets/share-your-apps-server.apk is missing. Build Share Your Apps Server's release, copy its " +
-                "app/build/outputs/apk/release/app-release.apk there, and build again. See the README's Bundling the server."
+            "src/main/assets/share-your-apps-server.apk is missing. Run ./gradlew downloadAssets, or build Share Your " +
+                "Apps Server's release, copy its app/build/outputs/apk/release/app-release.apk there, and build again. " +
+                "See the README's Bundling the server."
         }
     }
+}
+
+// Builds Share Your Apps Server's release from server/ and bundles it. scripts/build-plugins.sh runs any task named
+// downloadAssets before assemblePlugin, as its own invocation, so CI makes the APK this way. In CI the server must be
+// signed with its release key, from the SERVER_SIGNING_* variables: an unsigned or differently signed server can't
+// update the one already on owners' phones, so the build stops instead.
+val downloadAssets by tasks.registering(Exec::class) {
+    val serverDir = layout.projectDirectory.dir("server").asFile
+    val built = layout.projectDirectory.file("server/app/build/outputs/apk/release/app-release.apk").asFile
+    val bundled = layout.projectDirectory.file("src/main/assets/share-your-apps-server.apk").asFile
+    val ci = System.getenv("CI") == "true"
+    val signed = System.getenv("SERVER_SIGNING_STORE_FILE") != null
+    workingDir = serverDir
+    commandLine("sh", "gradlew", "--console=plain", ":app:assembleRelease")
+    doFirst {
+        check(!ci || signed) {
+            "SERVER_SIGNING_STORE_FILE isn't set. In CI the server is signed with its release key, from the " +
+                "SERVER_SIGNING_* repository secrets. See the design document's The release signing key."
+        }
+    }
+    doLast { built.copyTo(bundled, overwrite = true) }
 }
 
 // The Kotlin library comes from Code On The Go at run time. AndroidX brings its own copies (Fragment depends on

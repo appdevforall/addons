@@ -32,8 +32,10 @@ compiling.
 ## Bundling the server
 
 The plugin carries the server as `src/main/assets/share-your-apps-server.apk`. That file is a
-build output, so it isn't committed; copy it in before building a release (see the
-Share Your Apps Server's README). Without it, the plugin uses whatever server is installed.
+build output, so it isn't committed. `./gradlew downloadAssets`, run as its own command before
+`assemblePlugin`, builds the server's release from `server/` and copies it there. CI runs it for every
+build and signs the server with its release key, from repository secrets (see *The release signing key*
+in the design document).
 
 ## Running the tests
 

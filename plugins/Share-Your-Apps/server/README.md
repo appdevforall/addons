@@ -28,8 +28,9 @@ The full design is in the Share Your Apps design document (ADFA-6207).
 
 Open the project in Code On The Go and build it. `minSdk` is 28, the same as Code On The Go.
 
-For now the app is signed with Code On The Go's debug key. The copy the plugin bundles and
-the copy installed on a phone must always be signed with the same key.
+Release builds are signed in CI with the server's own release key, from repository secrets; see
+*The release signing key* in the design document. The copy the plugin bundles and the copy
+installed on a phone must always be signed with the same key.
 
 ## Releasing a new build through the plugin
 
