@@ -1,0 +1,8 @@
+Every function SoundImport.kt calls is in the project (20 checked).
+Checks passed: SoundImport.kt, 193 lines, 11142 bytes.
+  added app/src/main/java/org/appdevforall/localstore/server/SoundImport.kt: 11142 bytes, sha256 92f82f3c72d1...
+It reads back as written.
+
+Record: step-c-backup/5   Checksums: step-c-checksums.txt
+Next: a Standard Run (nothing uses SoundImport yet: this checks it compiles). Script 6 adds import_listen.
+Paste all of this output, and the build result, to the agent.

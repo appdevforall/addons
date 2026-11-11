@@ -1,0 +1,887 @@
+[
+ {
+  "id": "P01",
+  "guide": "plugin",
+  "section": "Installing the plugin",
+  "title": "Code On The Go's Addons Manager, installing the plugin",
+  "key": [
+   [
+    1,
+    "Install the plugin."
+   ]
+  ],
+  "how": "In Code On The Go, open the Addons Manager, and choose the Share Your Apps .cgp file. Capture the screen that asks to install it.",
+  "real": true,
+  "captured": true
+ },
+ {
+  "id": "P02",
+  "guide": "plugin",
+  "section": "Your store",
+  "title": "The Store section",
+  "key": [
+   [
+    1,
+    "The store's name, at the top of its page."
+   ],
+   [
+    2,
+    "An optional description, in HTML."
+   ],
+   [
+    3,
+    "<b>Change</b> the header picture or video, or <b>Default</b> for the built-in one."
+   ],
+   [
+    4,
+    "An optional PIN, of up to 6 digits."
+   ]
+  ],
+  "how": "Open the Share Your Apps tab, and scroll to the top. Fill in a name, a description and a PIN, so each field shows something.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P03",
+  "guide": "plugin",
+  "section": "Store description",
+  "title": "A description with an HTML problem",
+  "key": [
+   [
+    1,
+    "The warning: here, a bold tag that's never closed. It won't stop a publish, but may spoil the page."
+   ]
+  ],
+  "how": "In the store description, type <p>Hello <b>world</p>, leaving the <b> unclosed. Capture the red warning under the field.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P04",
+  "guide": "plugin",
+  "section": "Products",
+  "title": "The product list",
+  "key": [
+   [
+    1,
+    "Add a product."
+   ],
+   [
+    2,
+    "A product in the store, with what buyers can download: here, its source. Tap it to open it."
+   ],
+   [
+    3,
+    "<i>draft: not published</i>: nothing to download, so it's left out."
+   ]
+  ],
+  "how": "In the Share Your Apps tab, scroll to Products, with at least two products, one of them a draft: no APK chosen, and Publish the source unticked.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P05",
+  "guide": "plugin",
+  "section": "Project and APK",
+  "title": "A product's name, project and APK",
+  "key": [
+   [
+    1,
+    "The name buyers see."
+   ],
+   [
+    2,
+    "The Code On The Go project it comes from."
+   ],
+   [
+    3,
+    "The APK buyers download."
+   ],
+   [
+    4,
+    "What buyers can download: the app, its source, or both."
+   ]
+  ],
+  "how": "Open a product, and scroll to its top: its name, project, APK and the two checkboxes.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P06",
+  "guide": "plugin",
+  "section": "Project and APK",
+  "title": "Choosing an APK, with an unsigned build",
+  "key": [
+   [
+    1,
+    "A signed build: choose this kind."
+   ],
+   [
+    2,
+    "An unsigned build, marked: buyers can't install it."
+   ]
+  ],
+  "how": "Build a project that has no release signing with assembleDebug and assembleRelease, so it has app-debug.apk and app-release-unsigned.apk. In a product using that project, tap Choose beside APK. Two builds are enough: one signed, one unsigned.",
+  "real": false,
+  "captured": false
+ },
+ {
+  "id": "P07",
+  "guide": "plugin",
+  "section": "Pictures and video",
+  "title": "Pictures and video",
+  "key": [
+   [
+    1,
+    "The pictures and video, by file name."
+   ],
+   [
+    2,
+    "<b>Describe</b>: say what it shows, and, for a video, add captions."
+   ],
+   [
+    3,
+    "<b>Remove</b> it from the product."
+   ],
+   [
+    4,
+    "Add pictures, videos or sounds."
+   ]
+  ],
+  "how": "Open a product with two pictures and a video, one picture described and the video with captions.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P08",
+  "guide": "plugin",
+  "section": "Pictures and video",
+  "title": "Describing a picture",
+  "key": [
+   [
+    1,
+    "What to write."
+   ],
+   [
+    2,
+    "The description, which screen readers read aloud in place of the picture."
+   ]
+  ],
+  "how": "Tap Describe beside a picture, and type a description, before tapping Save.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P09",
+  "guide": "plugin",
+  "section": "Pictures and video",
+  "title": "Captions for a video",
+  "key": [
+   [
+    1,
+    "The captions file chosen."
+   ],
+   [
+    2,
+    "Choose a WebVTT captions file, ending .vtt."
+   ],
+   [
+    3,
+    "Remove the captions."
+   ]
+  ],
+  "how": "Tap Describe beside a video, then Choose captions file, and pick a .vtt file.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P10",
+  "guide": "plugin",
+  "section": "Order, and removing a product",
+  "title": "A product's description, order and removal",
+  "key": [
+   [
+    1,
+    "What buyers read about it, in HTML."
+   ],
+   [
+    2,
+    "Optional details: whatsNew, license, author and website."
+   ],
+   [
+    3,
+    "<b>Move up</b> and <b>Move down</b> set the order buyers see."
+   ],
+   [
+    4,
+    "<b>Remove</b> the product, after asking."
+   ]
+  ],
+  "how": "Open a product, and scroll to its end: description, Extra JSON, and the three buttons.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P11",
+  "guide": "plugin",
+  "section": "Publishing",
+  "title": "Confirming a publish",
+  "key": [
+   [
+    1,
+    "How many products the store will have."
+   ],
+   [
+    2,
+    "Any left out, and why."
+   ]
+  ],
+  "how": "Tap Publish, and capture the dialog before choosing.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P12",
+  "guide": "plugin",
+  "section": "Publishing",
+  "title": "Android asking to allow installing apps",
+  "key": [
+   [
+    1,
+    "Open <b>Settings</b>, and allow Code On The Go to install apps. Needed once, for Local Store Server."
+   ]
+  ],
+  "how": "On a phone where Code On The Go has never installed an app, publish for the first time, and capture Android's prompt.",
+  "real": true,
+  "captured": true
+ },
+ {
+  "id": "P13",
+  "guide": "plugin",
+  "section": "What the messages mean",
+  "title": "A finished publish",
+  "key": [
+   [
+    1,
+    "The result: <i>Published \u2026 files verified</i>, then any left out, and any notes."
+   ]
+  ],
+  "how": "Publish, and capture the bottom of the tab when it finishes, with at least one product left out.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P14",
+  "guide": "plugin",
+  "section": "What the messages mean",
+  "title": "A publish that couldn't finish",
+  "key": [
+   [
+    1,
+    "What went wrong. Nothing changed: buyers keep the previous store."
+   ]
+  ],
+  "how": "Move a product's chosen APK away, then publish, and capture the red message.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P15",
+  "guide": "plugin",
+  "section": "Changing the store's look",
+  "title": "Templates and Extra JSON",
+  "key": [
+   [
+    1,
+    "Your own template, or empty for the built-in one."
+   ],
+   [
+    2,
+    "Choose a template file, such as an alternative."
+   ],
+   [
+    3,
+    "Start from the built-in template, or go back to it."
+   ],
+   [
+    4,
+    "Settings for the whole store: an announcement, a colour, the page's language."
+   ]
+  ],
+  "how": "In the Share Your Apps tab, scroll to Advanced, with a template and Extra JSON filled in.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "P16",
+  "guide": "plugin",
+  "section": "Getting help",
+  "title": "Long-press help, in the Share Your Apps tab",
+  "key": [
+   [
+    1,
+    "A short explanation, after long-pressing a heading. Code On The Go adds a note that it comes from a plugin."
+   ],
+   [
+    2,
+    "<b>+ See more</b>, for detail and a help page."
+   ]
+  ],
+  "how": "Long-press the PIN (optional) heading. Code On The Go draws this: capture its real look.",
+  "real": true,
+  "captured": true
+ },
+ {
+  "id": "S01",
+  "guide": "server",
+  "section": "Status",
+  "title": "Manage server, serving",
+  "key": [
+   [
+    1,
+    "What the server is doing, and which store."
+   ],
+   [
+    2,
+    "The store's address. The button beside it copies it."
+   ],
+   [
+    3,
+    "The codes buyers scan."
+   ],
+   [
+    4,
+    "What <b>Start</b> will serve."
+   ]
+  ],
+  "how": "Open Local Store Server while it serves your store, and capture the top of Manage server.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S02",
+  "guide": "server",
+  "section": "Status",
+  "title": "Storage access still needed",
+  "key": [
+   [
+    1,
+    "Tap it and allow access, once: the server needs it to read your store's files."
+   ]
+  ],
+  "how": "Before allowing All files access to Local Store Server, open it. (Or turn the access off in Android's Settings, capture, then turn it on again.)",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S03",
+  "guide": "server",
+  "section": "Starting and stopping",
+  "title": "The Server panel",
+  "key": [
+   [
+    1,
+    "The port, the number in the store's address. Its label has help; the field keeps its long-press for text."
+   ],
+   [
+    2,
+    "<b>Start</b> serving."
+   ],
+   [
+    3,
+    "<b>Stop</b> serving."
+   ],
+   [
+    4,
+    "The help pages."
+   ]
+  ],
+  "how": "In Manage server, capture the Server panel.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S04",
+  "guide": "server",
+  "section": "Letting buyers in",
+  "title": "The codes buyers scan, on a hotspot",
+  "key": [
+   [
+    1,
+    "The first code joins buyers to the hotspot."
+   ],
+   [
+    2,
+    "The second opens the store."
+   ],
+   [
+    3,
+    "The tip for a buyer whose phone can't open it."
+   ]
+  ],
+  "how": "Turn Wi-Fi off, tap Start, then Show QR codes for buyers. Capture the whole screen, scrolling if needed.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S05",
+  "guide": "server",
+  "section": "Letting buyers in",
+  "title": "Making a join code for ordinary Wi-Fi",
+  "key": [
+   [
+    1,
+    "What this is for: making a code that joins buyers to your Wi-Fi."
+   ],
+   [
+    2,
+    "The network's password, never saved."
+   ],
+   [
+    3,
+    "Show the code."
+   ]
+  ],
+  "how": "On ordinary Wi-Fi, open Show QR codes for buyers, and capture the part asking for the network's password.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S06",
+  "guide": "server",
+  "section": "The Wi-Fi Direct hotspot's name and password",
+  "title": "The Wi-Fi Direct hotspot panel",
+  "key": [
+   [
+    1,
+    "Its name, after DIRECT-LS-."
+   ],
+   [
+    2,
+    "Its password, 8 to 63 characters."
+   ],
+   [
+    3,
+    "Keep them, for the next time the hotspot starts."
+   ],
+   [
+    4,
+    "Fill in a strong password."
+   ]
+  ],
+  "how": "In Manage server, capture the Wi-Fi Direct hotspot panel.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S07",
+  "guide": "server",
+  "section": "When to run",
+  "title": "When to run",
+  "key": [
+   [
+    1,
+    "Keep serving whatever the screen does."
+   ],
+   [
+    2,
+    "Save battery: pause when the screen turns off, and resume on unlocking."
+   ]
+  ],
+  "how": "In Manage server, capture the When to run panel.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S08",
+  "guide": "server",
+  "section": "Sharing your store with another seller",
+  "title": "Starting a share",
+  "key": [
+   [
+    1,
+    "Share a copy of your store, while it serves."
+   ]
+  ],
+  "how": "While your store serves, capture the Copies of this store panel.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S09",
+  "guide": "server",
+  "section": "Sharing your store with another seller",
+  "title": "The share code",
+  "key": [
+   [
+    1,
+    "The large code: the other phone scans it to import."
+   ],
+   [
+    2,
+    "Or the other phone types this code; the icon copies it."
+   ],
+   [
+    3,
+    "One phone, for 10 minutes."
+   ],
+   [
+    4,
+    "For a phone without the app: a small code, or a link to open in its browser, with a button that copies it, to download Local Store Server from this phone."
+   ]
+  ],
+  "how": "Tap Share this store\u2026, and capture the whole screen, scrolling if needed.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S10",
+  "guide": "server",
+  "section": "Sharing your store with another seller",
+  "title": "Allowing a copy",
+  "key": [
+   [
+    1,
+    "These four digits must match the other phone's."
+   ],
+   [
+    2,
+    "When their copy expires."
+   ],
+   [
+    3,
+    "<b>Deny</b>, if the digits don't match."
+   ],
+   [
+    4,
+    "<b>Allow</b>, if they do."
+   ]
+  ],
+  "how": "With a second phone importing, capture the Allow a copy? screen, before choosing.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S11",
+  "guide": "server",
+  "section": "Importing someone else's store",
+  "title": "The Import a store panel",
+  "key": [
+   [
+    1,
+    "Serve a copy of someone else's store, with their permission."
+   ],
+   [
+    2,
+    "Start importing. It's disabled, saying why, while the phone serves a store."
+   ]
+  ],
+  "how": "With the server stopped, capture the Import a store panel.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S12",
+  "guide": "server",
+  "section": "Logs",
+  "title": "The Logs panel",
+  "key": [
+   [
+    1,
+    "How large each log file grows; 0 turns logging off."
+   ],
+   [
+    2,
+    "Read the logs, newest first."
+   ],
+   [
+    3,
+    "Send the log files off the phone."
+   ]
+  ],
+  "how": "In Manage server, capture the Logs panel.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S13",
+  "guide": "server",
+  "section": "Getting help",
+  "title": "A tooltip",
+  "key": [
+   [
+    1,
+    "A short explanation, after long-pressing <b>Start</b>."
+   ],
+   [
+    2,
+    "<b>+ See more</b>, for more."
+   ]
+  ],
+  "how": "In Manage server, long-press the START button, and capture the tooltip.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S14",
+  "guide": "server",
+  "section": "Getting help",
+  "title": "After + See more",
+  "key": [
+   [
+    1,
+    "The short explanation, and more."
+   ],
+   [
+    2,
+    "The help page, opening at this topic."
+   ]
+  ],
+  "how": "Long-press the START button, tap + See more, and capture the tooltip.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "S15",
+  "guide": "server",
+  "section": "Getting help",
+  "title": "A help page",
+  "captured": true,
+  "real": false,
+  "how": "Long-press the START button, tap + See more, then tap Serving the store, and capture the page.",
+  "key": [
+   [
+    1,
+    "The section the button opened: here, <i>Start, Stop and the port</i>. Scroll for the rest of the page."
+   ]
+  ]
+ },
+ {
+  "id": "I01",
+  "guide": "seller",
+  "section": "1. Get the app",
+  "title": "Downloading the app",
+  "key": [
+   [
+    1,
+    "<b>Download anyway</b>. Browsers warn about any app from outside the Play Store."
+   ]
+  ],
+  "how": "On the second phone, scan the owner's small QR code with the camera, open the link, and capture the browser's download prompt.",
+  "real": true,
+  "captured": true
+ },
+ {
+  "id": "I02",
+  "guide": "seller",
+  "section": "2. Get the store",
+  "title": "Starting an import",
+  "key": [
+   [
+    1,
+    "Tap <b>Import a store\u2026</b>."
+   ]
+  ],
+  "how": "On a phone with Local Store Server but no store, open Manage server.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "I03",
+  "guide": "seller",
+  "section": "2. Get the store",
+  "title": "The code, and your phone's name",
+  "key": [
+   [
+    1,
+    "The owner's code, filled in from their QR code, or typed."
+   ],
+   [
+    2,
+    "What the owner sees."
+   ],
+   [
+    3,
+    "Ask for the copy."
+   ]
+  ],
+  "how": "Tap Import a store\u2026, type a code, and capture the screen before tapping Continue.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "I04",
+  "guide": "seller",
+  "section": "2. Get the store",
+  "title": "The four digits, then its progress",
+  "key": [
+   [
+    1,
+    "These digits must match the owner's screen."
+   ],
+   [
+    2,
+    "Its progress: here, waiting for the owner to allow it."
+   ]
+  ],
+  "how": "After Continue, and the owner allowing it, capture the screen while it receives the store.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "I05",
+  "guide": "seller",
+  "section": "2. Get the store",
+  "title": "Imported",
+  "key": [
+   [
+    1,
+    "Shown only if you joined the owner's hotspot: leave it first."
+   ],
+   [
+    2,
+    "Start serving the store."
+   ]
+  ],
+  "how": "Import over the owner's hotspot, and capture the last screen.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "I06",
+  "guide": "seller",
+  "section": "2. Get the store",
+  "title": "If it stops partway",
+  "key": [
+   [
+    1,
+    "Try again, while the owner's phone still shows the code."
+   ]
+  ],
+  "how": "Start an import, turn Wi-Fi off on the second phone partway, then on, and capture the screen.",
+  "real": false,
+  "captured": false
+ },
+ {
+  "id": "I07",
+  "guide": "seller",
+  "section": "A PIN, if you want one",
+  "title": "Your copy, and its PIN",
+  "key": [
+   [
+    1,
+    "Serve it, with the PIN below."
+   ],
+   [
+    2,
+    "Your own PIN, or none."
+   ],
+   [
+    3,
+    "Remove it from this phone."
+   ]
+  ],
+  "how": "With a copy imported and not serving, capture the store's panel in Manage server.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "I08",
+  "guide": "seller",
+  "section": "3. Let people in",
+  "title": "The codes, for your buyers",
+  "key": [
+   [
+    1,
+    "Show the codes people scan."
+   ]
+  ],
+  "how": "While serving the copy, capture the top of Manage server.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "I09",
+  "guide": "seller",
+  "section": "When the store expires",
+  "title": "After the store expires",
+  "key": [
+   [
+    1,
+    "Close the notice."
+   ]
+  ],
+  "how": "After a copy's date has passed, open Manage server. To see it sooner, import with In a week, then move the phone's date 8 days ahead; turn automatic date and time back on afterwards.",
+  "real": false,
+  "captured": true
+ },
+ {
+  "id": "B01",
+  "guide": "buyer",
+  "section": "",
+  "title": "The store, in a buyer's browser",
+  "captured": true,
+  "real": false,
+  "how": "Not captured on a phone: the demo store, published with the plugin's code and served with the server's code, then shown in a phone-sized browser.",
+  "key": [
+   [
+    1,
+    "<b>Accessible version</b>: the same store, plain and in large text."
+   ],
+   [
+    2,
+    "The store's name and description."
+   ],
+   [
+    3,
+    "<b>Download APK</b>: download the app."
+   ]
+  ]
+ },
+ {
+  "id": "B02",
+  "guide": "buyer",
+  "section": "",
+  "title": "A product, with pictures",
+  "captured": true,
+  "real": false,
+  "how": "Not captured on a phone: the demo store, published with the plugin's code and served with the server's code, then shown in a phone-sized browser.",
+  "key": [
+   [
+    1,
+    "The product's pictures and videos: swipe, or tap the arrow."
+   ],
+   [
+    2,
+    "What the app is, and which version."
+   ],
+   [
+    3,
+    "<b>Download APK</b>."
+   ],
+   [
+    4,
+    "Which phones this version is for."
+   ]
+  ]
+ },
+ {
+  "id": "B03",
+  "guide": "buyer",
+  "section": "",
+  "title": "The accessible version",
+  "captured": true,
+  "real": false,
+  "how": "Not captured on a phone: the demo store, published with the plugin's code and served with the server's code, then shown in a phone-sized browser.",
+  "key": [
+   [
+    1,
+    "<b>Standard version</b>: back to the usual page."
+   ],
+   [
+    2,
+    "Every app, as a list."
+   ]
+  ]
+ }
+]

@@ -1,0 +1,238 @@
+{
+  "storeDir": null,
+  "pendingDir": null,
+  "storeName": "Top Android apps",
+  "storeDescriptionHtml": "<p>The ten most downloaded apps on F-Droid, with App Dev for All's Code on the Go and Knowledge to Go.</p><p><b>This is a demo store:</b> every download is a small placeholder, not the real app or its source. Follow each app's link to get the real one.</p>",
+  "headerImage": null,
+  "pin": null,
+  "templateOverride": null,
+  "extra": {},
+  "products": [
+    {
+      "name": "F-Droid",
+      "project": "Documents/ShareYourAppsDemo/source/f-droid",
+      "apk": "Documents/ShareYourAppsDemo/apks/f-droid.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/f-droid/icon.png",
+        "Pictures/ShareYourAppsDemo/f-droid/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/f-droid/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>The app store for free and open-source Android apps. It installs apps from F-Droid's catalogue and keeps them up to date.</p><p>Get it from <a href=\"https://f-droid.org/packages/org.fdroid.fdroid/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 1
+    },
+    {
+      "name": "Termux",
+      "project": "Documents/ShareYourAppsDemo/source/termux",
+      "apk": "Documents/ShareYourAppsDemo/apks/termux.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/termux/icon.png",
+        "Pictures/ShareYourAppsDemo/termux/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/termux/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>A terminal emulator with a full Linux package collection. Run shells, editors, compilers and command-line tools on your phone.</p><p>Get it from <a href=\"https://f-droid.org/packages/com.termux/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 2
+    },
+    {
+      "name": "Aurora Store",
+      "project": "Documents/ShareYourAppsDemo/source/aurora-store",
+      "apk": "Documents/ShareYourAppsDemo/apks/aurora-store.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/aurora-store/icon.png",
+        "Pictures/ShareYourAppsDemo/aurora-store/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/aurora-store/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>An unofficial, open-source client for Google Play. Search for, download and update Play Store apps, with or without Google services.</p><p>Get it from <a href=\"https://f-droid.org/packages/com.aurora.store/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 3
+    },
+    {
+      "name": "Fennec F-Droid",
+      "project": "Documents/ShareYourAppsDemo/source/fennec",
+      "apk": "Documents/ShareYourAppsDemo/apks/fennec.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/fennec/icon.png",
+        "Pictures/ShareYourAppsDemo/fennec/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/fennec/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>A web browser built from Firefox's source, packaged for F-Droid. Private browsing, add-ons and tracking protection.</p><p>Get it from <a href=\"https://f-droid.org/packages/org.mozilla.fennec_fdroid/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 4
+    },
+    {
+      "name": "DAVx⁵",
+      "project": "Documents/ShareYourAppsDemo/source/davx5",
+      "apk": "Documents/ShareYourAppsDemo/apks/davx5.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/davx5/icon.png",
+        "Pictures/ShareYourAppsDemo/davx5/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/davx5/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>Syncs calendars, contacts and tasks with your own server over CalDAV and CardDAV, so they work in your phone's usual apps.</p><p>Get it from <a href=\"https://f-droid.org/packages/at.bitfire.davdroid/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 5
+    },
+    {
+      "name": "Thunderbird",
+      "project": "Documents/ShareYourAppsDemo/source/thunderbird",
+      "apk": "Documents/ShareYourAppsDemo/apks/thunderbird.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/thunderbird/icon.png",
+        "Pictures/ShareYourAppsDemo/thunderbird/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/thunderbird/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>The open-source email app from the makers of Thunderbird for desktop. Several accounts, one inbox, and no tracking.</p><p>Get it from <a href=\"https://f-droid.org/packages/net.thunderbird.android/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 6
+    },
+    {
+      "name": "Proton VPN",
+      "project": "Documents/ShareYourAppsDemo/source/proton-vpn",
+      "apk": "Documents/ShareYourAppsDemo/apks/proton-vpn.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/proton-vpn/icon.png",
+        "Pictures/ShareYourAppsDemo/proton-vpn/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/proton-vpn/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>A VPN from the makers of Proton Mail, with a free plan and a no-logs policy. Encrypts your connection on public Wi-Fi.</p><p>Get it from <a href=\"https://f-droid.org/packages/ch.protonvpn.android/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 7
+    },
+    {
+      "name": "PipePipe",
+      "project": "Documents/ShareYourAppsDemo/source/pipepipe",
+      "apk": "Documents/ShareYourAppsDemo/apks/pipepipe.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/pipepipe/icon.png",
+        "Pictures/ShareYourAppsDemo/pipepipe/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/pipepipe/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>A lightweight, privacy-friendly player for YouTube and other video sites, without ads or an account. It began as a fork of NewPipe.</p><p>Get it from <a href=\"https://f-droid.org/packages/InfinityLoop1309.NewPipeEnhanced/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 8
+    },
+    {
+      "name": "Organic Maps",
+      "project": "Documents/ShareYourAppsDemo/source/organic-maps",
+      "apk": "Documents/ShareYourAppsDemo/apks/organic-maps.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/organic-maps/icon.png",
+        "Pictures/ShareYourAppsDemo/organic-maps/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/organic-maps/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>Offline maps and navigation from OpenStreetMap data, for walking, cycling and driving, with no tracking or ads.</p><p>Get it from <a href=\"https://f-droid.org/packages/app.organicmaps/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 9
+    },
+    {
+      "name": "Librera Reader",
+      "project": "Documents/ShareYourAppsDemo/source/librera",
+      "apk": "Documents/ShareYourAppsDemo/apks/librera.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/librera/icon.png",
+        "Pictures/ShareYourAppsDemo/librera/screenshot-1.png",
+        "Pictures/ShareYourAppsDemo/librera/screenshot-2.png"
+      ],
+      "descriptionHtml": "<p>A reader for ebooks and documents — PDF, EPUB, MOBI and more — with bookmarks, notes and text-to-speech.</p><p>Get it from <a href=\"https://f-droid.org/packages/com.foobnix.pro.pdf.reader/\">F-Droid</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 10
+    },
+    {
+      "name": "Code on the Go (32-bit)",
+      "project": "Documents/ShareYourAppsDemo/source/code-on-the-go",
+      "apk": "Documents/ShareYourAppsDemo/apks/code-on-the-go-32-bit.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/code-on-the-go/logo.png",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/demo.mp4",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/sketch-to-ui-button.webm",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/sketch-to-ui.png",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/plugin-manager.png"
+      ],
+      "descriptionHtml": "<p>A complete Android development environment that runs on your phone. Write, debug and build Kotlin and Java apps with no computer and no internet.</p><p><b>32-bit version:</b> for phones that run only 32-bit apps, such as many low-cost and Android Go phones. If the 64-bit version won't install, use this one.</p><p>Get it from <a href=\"https://appdevforall.org/code-on-the-go/\">App Dev for All</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 11
+    },
+    {
+      "name": "Code on the Go (64-bit)",
+      "project": "Documents/ShareYourAppsDemo/source/code-on-the-go",
+      "apk": "Documents/ShareYourAppsDemo/apks/code-on-the-go-64-bit.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/code-on-the-go/logo.png",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/demo.mp4",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/sketch-to-ui-button.webm",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/sketch-to-ui.png",
+        "Pictures/ShareYourAppsDemo/code-on-the-go/plugin-manager.png"
+      ],
+      "descriptionHtml": "<p>A complete Android development environment that runs on your phone. Write, debug and build Kotlin and Java apps with no computer and no internet.</p><p><b>64-bit version:</b> for most phones from recent years. If Android says it isn't compatible with your phone, use the 32-bit version.</p><p>Get it from <a href=\"https://appdevforall.org/code-on-the-go/\">App Dev for All</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 12
+    },
+    {
+      "name": "Knowledge to Go (32-bit)",
+      "project": "Documents/ShareYourAppsDemo/source/knowledge-to-go",
+      "apk": "Documents/ShareYourAppsDemo/apks/knowledge-to-go-32-bit.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/knowledge-to-go/logo.png",
+        "Pictures/ShareYourAppsDemo/knowledge-to-go/announcement.png"
+      ],
+      "descriptionHtml": "<p>Turns an Android phone into an offline library for everyone nearby: Wikipedia, books, maps, lessons and more, shared over local Wi-Fi. Built on Internet-in-a-Box.</p><p><b>32-bit version:</b> for phones that run only 32-bit apps, such as many low-cost and Android Go phones. If the 64-bit version won't install, use this one.</p><p>Get it from <a href=\"https://appdevforall.org/\">App Dev for All</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 13
+    },
+    {
+      "name": "Knowledge to Go (64-bit)",
+      "project": "Documents/ShareYourAppsDemo/source/knowledge-to-go",
+      "apk": "Documents/ShareYourAppsDemo/apks/knowledge-to-go-64-bit.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/knowledge-to-go/logo.png",
+        "Pictures/ShareYourAppsDemo/knowledge-to-go/announcement.png"
+      ],
+      "descriptionHtml": "<p>Turns an Android phone into an offline library for everyone nearby: Wikipedia, books, maps, lessons and more, shared over local Wi-Fi. Built on Internet-in-a-Box.</p><p><b>64-bit version:</b> for most phones from recent years. If Android says it isn't compatible with your phone, use the 32-bit version.</p><p>Get it from <a href=\"https://appdevforall.org/\">App Dev for All</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 14
+    },
+    {
+      "name": "Knowledge to Go (universal)",
+      "project": "Documents/ShareYourAppsDemo/source/knowledge-to-go",
+      "apk": "Documents/ShareYourAppsDemo/apks/knowledge-to-go-universal.apk",
+      "apkPublished": true,
+      "sourceZipPublished": true,
+      "carousel": [
+        "Pictures/ShareYourAppsDemo/knowledge-to-go/logo.png",
+        "Pictures/ShareYourAppsDemo/knowledge-to-go/announcement.png"
+      ],
+      "descriptionHtml": "<p>Turns an Android phone into an offline library for everyone nearby: Wikipedia, books, maps, lessons and more, shared over local Wi-Fi. Built on Internet-in-a-Box.</p><p><b>Universal version:</b> works on any phone, 32-bit or 64-bit, but it's a larger download.</p><p>Get it from <a href=\"https://appdevforall.org/\">App Dev for All</a>.</p>",
+      "dateAdded": "2026-09-24T12:00:00Z",
+      "ordinal": 15
+    }
+  ]
+}
