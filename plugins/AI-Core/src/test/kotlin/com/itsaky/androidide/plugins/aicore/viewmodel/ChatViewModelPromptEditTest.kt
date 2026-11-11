@@ -62,6 +62,9 @@ class ChatViewModelPromptEditTest {
 
     private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Every ViewModel a test made, cleared before Main is reset; see [clearAndAwait]. */
+    private val viewModels = mutableListOf<ChatViewModel>()
+
     @Before
     fun setUp() {
         // ChatViewModel's stateIn() calls run on viewModelScope, i.e. Dispatchers.Main.
@@ -87,6 +90,7 @@ class ChatViewModelPromptEditTest {
 
     @After
     fun tearDown() {
+        clearAndAwait(viewModels)
         SharedServices.clear()
         Dispatchers.resetMain()
         sharedPromptConfig.clear()
@@ -384,7 +388,7 @@ class ChatViewModelPromptEditTest {
 
     private fun newViewModel() = ChatViewModel { null }.apply {
         initializeStorage(context, TEST_PROJECT_KEY)
-    }
+    }.also(viewModels::add)
 
     /**
      * A ViewModel whose selected backend is ready and generates by calling [reply] with the
