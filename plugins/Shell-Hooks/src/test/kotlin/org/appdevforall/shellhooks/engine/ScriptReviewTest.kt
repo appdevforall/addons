@@ -54,6 +54,55 @@ class ScriptReviewTest {
     }
 
     @Test
+    fun aNoBreakSpaceFunctionNameTrickIsShown() {
+        // Under bash these two lines run `touch`, though they read as a no-op and a comment.
+        val script = "true\u00A0#() { \"\$@\"; }   # placeholder\ntrue\u00A0# touch \"\$COGO_PROJECT_DIR/pwned\"\n"
+
+        val revealed = ScriptReview.reveal(script)
+
+        assertEquals(
+            "true<U+00A0>#() { \"\$@\"; }   # placeholder\ntrue<U+00A0># touch \"\$COGO_PROJECT_DIR/pwned\"\n",
+            revealed.text,
+        )
+        assertEquals(2, revealed.hidden)
+    }
+
+    @Test
+    fun spacesSeparatorsFillersAndSoftHyphensAreShown() {
+        val revealed = ScriptReview.reveal("a\u2028b\u3164c\u00ADd\u2003e\u202Ff\u3000g\u1680h\u115Fi\u2061j\u180Ek\uFE0Fl")
+
+        assertEquals(
+            "a<U+2028>b<U+3164>c<U+00AD>d<U+2003>e<U+202F>f<U+3000>g<U+1680>h<U+115F>i<U+2061>j<U+180E>k<U+FE0F>l",
+            revealed.text,
+        )
+        assertEquals(11, revealed.hidden)
+    }
+
+    @Test
+    fun aSupplementaryTagCharacterIsOneEscape() {
+        val tagA = String(Character.toChars(0xE0041))
+
+        val revealed = ScriptReview.reveal("x${tagA}y")
+
+        assertEquals("x<U+E0041>y", revealed.text)
+        assertEquals(1, revealed.hidden)
+    }
+
+    @Test
+    fun anUnpairedSurrogateIsShown() {
+        assertEquals("a<U+D800>b", ScriptReview.reveal("a\uD800b").text)
+    }
+
+    @Test
+    fun nonAsciiLettersAreShownToo() {
+        // Letters are not dangerous, but homoglyphs are, and an allow-list cannot tell them apart.
+        val revealed = ScriptReview.reveal("# caf\u00e9\n")
+
+        assertEquals("# caf<U+00E9>\n", revealed.text)
+        assertEquals(1, revealed.hidden)
+    }
+
+    @Test
     fun controlCharactersAreShownButTabsNewlinesAndWindowsLineEndingsAreNot() {
         val revealed = ScriptReview.reveal("a\tb\r\nc\rd\u001B[2Je\u007F\u0085\uFFFD")
 
@@ -62,9 +111,16 @@ class ScriptReviewTest {
     }
 
     @Test
-    fun anOrdinaryScriptIsUnchanged() {
-        val script = "#!/usr/bin/env bash\n# caf\u00e9 \u65e5\u672c\nprintf '%s\\n' \"${'$'}1\"\n"
+    fun anOrdinaryAsciiScriptIsUnchanged() {
+        val script = "#!/usr/bin/env bash\n# run the linter\nprintf '%s\\n' \"\$1\" | tr -d '~'\n"
 
         assertEquals(ScriptReview.Revealed(script, 0), ScriptReview.reveal(script))
+    }
+
+    @Test
+    fun bytesThatAreNotUtf8AreShownAsReplacementCharacters() {
+        val revealed = ScriptReview.revealBytes(byteArrayOf('a'.code.toByte(), 0xFF.toByte(), 'b'.code.toByte()))
+
+        assertEquals("a<U+FFFD>b", revealed.text)
     }
 }

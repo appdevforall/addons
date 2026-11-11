@@ -32,10 +32,10 @@
     <string name="hk_clear">Clear</string>
     <string name="hk_empty">No hook has run yet.</string>
     <string name="hk_review_title">Trust %1$s?</string>
-    <string name="hk_review_intro">This script is stored in the project %1$s. It runs with the same access as the Terminal, including the network. Trust it only if you have read it and know what it does.</string>
+    <string name="hk_review_intro">This script is stored in the project %1$s. It runs with the same access as the Terminal, including the network. Trust covers only this script, not other project files it runs. Trust it only if you have read it and know what it does.</string>
     <string name="hk_review_too_large">This script is larger than %1$d KB, too large to review here. Read it in the editor; it will not run from here.</string>
     <string name="hk_review_unreadable">Could not read the script: %1$s</string>
-    <string name="hk_review_hidden">This script contains %1$d invisible or control characters, shown as &lt;U+XXXX&gt;. Characters like these can make a script look different from what it does. Do not trust it unless you know why they are there.</string>
+    <string name="hk_review_hidden">This script contains %1$d characters outside plain ASCII, shown as &lt;U+XXXX&gt;. A no-break space or an invisible character can make a script run differently from how it reads. Do not trust it unless you know why each one is there.</string>
     <string name="hk_trust">Trust</string>
     <string name="hk_cancel">Cancel</string>
     <string name="hk_outcome_ok">OK</string>

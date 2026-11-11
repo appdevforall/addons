@@ -62,40 +62,35 @@ object ScriptReview {
     )
 
     /**
-     * Makes characters that change how a script looks without looking like anything visible as
-     * `<U+XXXX>`: bidirectional controls (the "Trojan Source" trick, which can make a command read
-     * as a comment), zero-width characters, the byte-order mark, the replacement character that
-     * stands in for bytes that are not UTF-8, and control characters other than tab and newline.
-     * A carriage return directly before a newline is a Windows line ending and stays as it is.
+     * Shows everything outside plain ASCII as `<U+XXXX>`. A script can use such characters to read
+     * differently from how it runs: bidirectional controls that make a command read as a comment
+     * ("Trojan Source"), zero-width characters, or a no-break space, which bash takes as part of a
+     * word, so `true<NBSP># cmd` defines or calls a function named `true<NBSP>#` while looking
+     * like a comment. Rather than list the dangerous ones, only printable ASCII, tab and newline
+     * are shown as they are, plus a carriage return directly before a newline (a Windows line
+     * ending). Characters are taken one code point at a time, so a supplementary character such
+     * as a tag (U+E0041) shows as one escape, and an unpaired surrogate is shown too.
      */
     fun reveal(text: String): Revealed {
         val out = StringBuilder(text.length)
         var hidden = 0
         var i = 0
         while (i < text.length) {
-            val c = text[i]
-            val crlf = c == '\r' && i + 1 < text.length && text[i + 1] == '\n'
-            if (!crlf && isDeceptive(c)) {
-                out.append("<U+").append("%04X".format(c.code)).append('>')
-                hidden++
+            val cp = text.codePointAt(i)
+            val crlf = cp == '\r'.code && i + 1 < text.length && text[i + 1] == '\n'
+            if (crlf || isPlain(cp)) {
+                out.appendCodePoint(cp)
             } else {
-                out.append(c)
+                out.append("<U+").append(Integer.toHexString(cp).uppercase().padStart(4, '0')).append('>')
+                hidden++
             }
-            i++
+            i += Character.charCount(cp)
         }
         return Revealed(out.toString(), hidden)
     }
 
-    private fun isDeceptive(c: Char): Boolean {
-        val code = c.code
-        return when {
-            c == '\t' || c == '\n' -> false
-            code < 0x20 || code in 0x7F..0x9F -> true
-            code in 0x202A..0x202E || code in 0x2066..0x2069 -> true
-            code == 0x200E || code == 0x200F || code == 0x061C -> true
-            code in 0x200B..0x200D || code == 0x2060 || code == 0xFEFF -> true
-            code == 0xFFFD -> true
-            else -> false
-        }
-    }
+    /** [bytes] decoded as UTF-8 and revealed: what the review dialog shows. */
+    fun revealBytes(bytes: ByteArray): Revealed = reveal(String(bytes, Charsets.UTF_8))
+
+    private fun isPlain(cp: Int): Boolean = cp == '\t'.code || cp == '\n'.code || cp in 0x20..0x7E
 }

@@ -39,6 +39,9 @@ class HooksPanelFragment : Fragment() {
     private var tooltips: IdeTooltipService? = null
     private var reviewDialog: AlertDialog? = null
 
+    /** A script is being read for review; further taps on Review wait for it. */
+    private var reviewLoading = false
+
     /** Rows the user expanded, so a refresh keeps them open. */
     private val expanded = mutableSetOf<Long>()
 
@@ -108,8 +111,9 @@ class HooksPanelFragment : Fragment() {
         root.findViewById<View>(R.id.hkPendingTitle).visibility = if (pending.isEmpty()) View.GONE else View.VISIBLE
         for (entry in pending) {
             val row = layoutInflater.inflate(R.layout.item_pending_trust, pendingList, false)
+            // Names come from the project too, so they are revealed like the script.
             row.findViewById<TextView>(R.id.pendingName).text =
-                getString(R.string.hk_pending_item, entry.relativePath, entry.projectDir.name)
+                getString(R.string.hk_pending_item, ScriptReview.reveal(entry.relativePath).text, ScriptReview.reveal(entry.projectDir.name).text)
             row.findViewById<Button>(R.id.pendingReview).apply {
                 help(this, ShellHooksHelp.TAG_REVIEW)
                 setOnClickListener { review(plugin, entry) }
@@ -183,8 +187,8 @@ class HooksPanelFragment : Fragment() {
 
     /**
      * Shows the whole script before it can be trusted, and trusts exactly the bytes shown: if the
-     * file changes after this, its hash no longer matches and it waits for review again. Read off
-     * the main thread, and never more than [ScriptReview.MAX_BYTES].
+     * file changes after this, its hash no longer matches and it waits for review again. Read,
+     * decoded and revealed off the main thread, and never more than [ScriptReview.MAX_BYTES].
      */
     private fun review(
         plugin: ShellHooksPlugin,
@@ -194,13 +198,24 @@ class HooksPanelFragment : Fragment() {
             showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
             return
         }
+        if (reviewLoading) return
+        reviewLoading = true
         viewLifecycleOwner.lifecycleScope.launch {
-            when (val loaded = withContext(Dispatchers.IO) { ScriptReview.load(entry.file) }) {
-                is ScriptReview.Loaded.TooLarge ->
-                    showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
-                is ScriptReview.Loaded.Unreadable ->
-                    showMessage(entry, getString(R.string.hk_review_unreadable, loaded.reason))
-                is ScriptReview.Loaded.Script -> showScript(plugin, entry, loaded)
+            try {
+                val (loaded, revealed) =
+                    withContext(Dispatchers.IO) {
+                        val loaded = ScriptReview.load(entry.file)
+                        loaded to (loaded as? ScriptReview.Loaded.Script)?.let { ScriptReview.revealBytes(it.bytes) }
+                    }
+                when (loaded) {
+                    is ScriptReview.Loaded.TooLarge ->
+                        showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
+                    is ScriptReview.Loaded.Unreadable ->
+                        showMessage(entry, getString(R.string.hk_review_unreadable, loaded.reason))
+                    is ScriptReview.Loaded.Script -> showScript(plugin, entry, loaded, revealed ?: ScriptReview.revealBytes(loaded.bytes))
+                }
+            } finally {
+                reviewLoading = false
             }
         }
     }
@@ -209,9 +224,9 @@ class HooksPanelFragment : Fragment() {
         plugin: ShellHooksPlugin,
         entry: PendingTrust,
         loaded: ScriptReview.Loaded.Script,
+        revealed: ScriptReview.Revealed,
     ) {
         val context = requireContext()
-        val revealed = ScriptReview.reveal(String(loaded.bytes, Charsets.UTF_8))
         val padding = resources.getDimensionPixelSize(R.dimen.space_lg)
         val body =
             LinearLayout(context).apply {
@@ -219,7 +234,7 @@ class HooksPanelFragment : Fragment() {
                 setPadding(padding, padding / 2, padding, 0)
                 addView(
                     TextView(context).apply {
-                        text = getString(R.string.hk_review_intro, entry.projectDir.path)
+                        text = getString(R.string.hk_review_intro, ScriptReview.reveal(entry.projectDir.path).text)
                         help(this, ShellHooksHelp.TAG_REVIEW)
                     },
                 )
@@ -245,13 +260,13 @@ class HooksPanelFragment : Fragment() {
         reviewDialog?.dismiss()
         reviewDialog =
             MaterialAlertDialogBuilder(context)
-                .setTitle(getString(R.string.hk_review_title, entry.relativePath))
+                .setTitle(title(entry))
                 .setView(ScrollView(context).apply { addView(body) })
                 .setPositiveButton(R.string.hk_trust) { _, _ ->
                     plugin.trust.trust(entry.projectDir, entry.relativePath, loaded.sha256)
                     plugin.log.removePending(entry.projectDir, entry.relativePath)
                 }.setNegativeButton(R.string.hk_cancel, null)
-                .setOnDismissListener { reviewDialog = null }
+                .setOnDismissListener(::forget)
                 .show()
                 .also { dialog ->
                     dialog.getButton(DialogInterface.BUTTON_POSITIVE)?.let { help(it, ShellHooksHelp.TAG_REVIEW) }
@@ -266,11 +281,20 @@ class HooksPanelFragment : Fragment() {
         reviewDialog?.dismiss()
         reviewDialog =
             MaterialAlertDialogBuilder(requireContext())
-                .setTitle(getString(R.string.hk_review_title, entry.relativePath))
+                .setTitle(title(entry))
                 .setMessage(message)
                 .setNegativeButton(R.string.hk_cancel, null)
-                .setOnDismissListener { reviewDialog = null }
+                .setOnDismissListener(::forget)
                 .show()
+    }
+
+    // The path is the project's to choose, so it is revealed like the script.
+    private fun title(entry: PendingTrust): String = getString(R.string.hk_review_title, ScriptReview.reveal(entry.relativePath).text)
+
+    // A dialog dismissed by showing the next one reports it after the next is already showing;
+    // only the current one is forgotten, so onDestroyView can still dismiss that.
+    private fun forget(dialog: DialogInterface) {
+        if (reviewDialog === dialog) reviewDialog = null
     }
 
     private fun help(
