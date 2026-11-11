@@ -1,4 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Shell Hooks</string>
+
+    <!-- Settings screen -->
+    <string name="sh_title">Shell Hooks</string>
+    <string name="sh_back">Back</string>
+    <string name="sh_enable">Run hooks</string>
+    <string name="sh_enable_summary">Runs your scripts when the IDE opens or closes a project, opens, saves or closes a file, or builds. Off until you turn it on.</string>
+    <string name="sh_folder_label">Your hooks folder</string>
+    <string name="sh_folder_help">Name an executable script after a hook, or put several in &lt;hook&gt;.d/. Scripts in actions/ appear as Run &lt;name&gt; on a file\'s menu. In the Terminal this folder is ~/.config/codeonthego/hooks.</string>
+    <string name="sh_create_samples">Create sample hooks</string>
+    <string name="sh_samples_created">Wrote %1$d sample files. Drop .sample from a name and make the file executable to use it.</string>
+    <string name="sh_samples_failed">Could not write the samples: %1$s</string>
+    <string name="sh_timeout_label">Stop a script after this many seconds</string>
+    <string name="sh_timeout_hint">%1$d to %2$d</string>
+    <string name="sh_hooks_label">Hooks</string>
+    <string name="sh_project_hooks">Run hooks stored in projects</string>
+    <string name="sh_project_hooks_summary">Scripts in a project\'s .codeonthego/hooks folder run only after you read and trust them in the Hooks tab. Any plugin that can write files, or an AI agent, can put a script there.</string>
+    <string name="sh_trusted_label">Projects with trusted scripts</string>
+    <string name="sh_trusted_none">None</string>
+    <string name="sh_trusted_count">%1$d trusted scripts</string>
+    <string name="sh_revoke">Revoke</string>
+
+    <!-- Hooks tab -->
+    <string name="hk_off">Shell Hooks is off. Turn it on in Preferences, Shell Hooks.</string>
+    <string name="hk_pending_title">Project scripts waiting for your review</string>
+    <string name="hk_pending_item">%1$s in %2$s</string>
+    <string name="hk_review">Review</string>
+    <string name="hk_runs_title">Recent runs</string>
+    <string name="hk_clear">Clear</string>
+    <string name="hk_empty">No hook has run yet.</string>
+    <string name="hk_review_title">Trust %1$s?</string>
+    <string name="hk_review_intro">This script is stored in the project %1$s. It runs with the same access as the Terminal, including the network. Trust it only if you have read it and know what it does.</string>
+    <string name="hk_review_too_large">This script is larger than %1$d KB, too large to review here. Read it in the editor; it will not run from here.</string>
+    <string name="hk_review_unreadable">Could not read the script: %1$s</string>
+    <string name="hk_trust">Trust</string>
+    <string name="hk_cancel">Cancel</string>
+    <string name="hk_outcome_ok">OK</string>
+    <string name="hk_outcome_failed">Failed, exit %1$d</string>
+    <string name="hk_outcome_timed_out">Timed out</string>
+    <string name="hk_outcome_cancelled">Stopped</string>
+    <string name="hk_outcome_not_started">Did not start</string>
+    <string name="hk_run_detail">%1$s · %2$s · %3$d ms</string>
+    <string name="hk_no_output">(no output)</string>
 </resources>

@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shell Hooks settings. A toolbar row, then scrolling content, like the other plugin screens in
+  Preferences. Heights are minimums, never fixed, so every row grows with the font scale.
+  Only android: attributes: app: ones on library widgets are dropped inside the host.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/plugin_surface"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/plugin_surface_variant"
+        android:gravity="center_vertical"
+        android:minHeight="@dimen/toolbar_min_height"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageButton
+            android:id="@+id/shBack"
+            android:layout_width="@dimen/toolbar_icon_size"
+            android:layout_height="@dimen/toolbar_icon_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/sh_back"
+            android:padding="@dimen/toolbar_icon_padding"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_arrow_back"
+            android:tint="@color/plugin_on_surface" />
+
+        <TextView
+            android:id="@+id/shTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:paddingTop="@dimen/space_sm"
+            android:paddingBottom="@dimen/space_sm"
+            android:text="@string/sh_title"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="@dimen/title_text_size"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/space_lg">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/shEnable"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/touch_target_min"
+                android:text="@string/sh_enable"
+                android:textColor="@color/plugin_on_surface"
+                android:textSize="@dimen/text_body" />
+
+            <TextView
+                android:id="@+id/shEnableSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/sh_enable_summary"
+                android:textColor="@color/plugin_on_surface_variant"
+                android:textSize="@dimen/text_small" />
+
+            <TextView
+                android:id="@+id/shFolderLabel"
+                style="@style/SectionLabel"
+                android:text="@string/sh_folder_label" />
+
+            <TextView
+                android:id="@+id/shFolderPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textColor="@color/plugin_on_surface"
+                android:textIsSelectable="true"
+                android:textSize="@dimen/text_mono" />
+
+            <TextView
+                android:id="@+id/shFolderHelp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="@string/sh_folder_help"
+                android:textColor="@color/plugin_on_surface_variant"
+                android:textSize="@dimen/text_small" />
+
+            <Button
+                android:id="@+id/shCreateSamples"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:minHeight="@dimen/touch_target_min"
+                android:text="@string/sh_create_samples"
+                android:textSize="@dimen/text_body" />
+
+            <TextView
+                android:id="@+id/shSamplesResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/plugin_on_surface_variant"
+                android:textSize="@dimen/text_small"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/shTimeoutLabel"
+                style="@style/SectionLabel"
+                android:text="@string/sh_timeout_label" />
+
+            <EditText
+                android:id="@+id/shTimeout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:maxLength="4"
+                android:minHeight="@dimen/touch_target_min"
+                android:textColor="@color/plugin_on_surface"
+                android:textSize="@dimen/text_body" />
+
+            <TextView
+                android:id="@+id/shHooksLabel"
+                style="@style/SectionLabel"
+                android:text="@string/sh_hooks_label" />
+
+            <LinearLayout
+                android:id="@+id/shHookList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/shProjectHooks"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_lg"
+                android:minHeight="@dimen/touch_target_min"
+                android:text="@string/sh_project_hooks"
+                android:textColor="@color/plugin_on_surface"
+                android:textSize="@dimen/text_body" />
+
+            <TextView
+                android:id="@+id/shProjectHooksSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/sh_project_hooks_summary"
+                android:textColor="@color/plugin_on_surface_variant"
+                android:textSize="@dimen/text_small" />
+
+            <TextView
+                android:id="@+id/shTrustedLabel"
+                style="@style/SectionLabel"
+                android:text="@string/sh_trusted_label" />
+
+            <LinearLayout
+                android:id="@+id/shTrustedList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
