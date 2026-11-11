@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shell Hooks</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Shell Hooks</h1>
+  <p class="subtitle">Run your own shell scripts when Code on the Go opens a project, saves a file, or finishes a build</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.shellhooks</code> &middot; Needs Code on the Go 26.47 or later</div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#security">Security Model</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Shell Hooks lets anyone who can write a shell script fit Code on the Go into the workflow they
+    already have, with no Android development. Drop an executable script named after a hook into
+    <code>~/.config/codeonthego/hooks/</code> and it runs at that moment: when a project opens, when
+    a file is saved, when a build fails. The file or project arrives in <code>$1</code>, exactly as a
+    git hook gets its arguments.
+  </p>
+  <p>
+    Typical uses: pull the latest changes when a project opens, run a linter or formatter on save,
+    copy a fresh APK to a shared folder when a build succeeds, or post a message when one fails.
+  </p>
+  <div class="callout">
+    The plugin is <strong>off until you turn it on</strong> in Preferences &rarr; Shell Hooks.
+    Hooks only report what happened: a script cannot stop a save or a build.
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Hooks and their arguments</h3>
+  <table>
+    <tr><th>Script name</th><th>Runs when</th><th><code>$*</code></th></tr>
+    <tr><td><code>ide-started</code></td><td>Code on the Go starts with hooks on</td><td>none</td></tr>
+    <tr><td><code>project-opened</code></td><td>the editor opens a project, before it syncs</td><td><code>$1</code> = project folder</td></tr>
+    <tr><td><code>project-closed</code></td><td>the editor closes a project</td><td><code>$1</code> = project folder</td></tr>
+    <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
+    <tr><td><code>file-closed</code></td><td>a file's tab is closed</td><td><code>$1</code> = file</td></tr>
+    <tr><td><code>file-activated</code></td><td>you switch to another tab (the last of a quick burst only)</td><td><code>$1</code> = file, or empty when no file is open</td></tr>
+    <tr><td><code>file-saved</code></td><td>the editor writes a file to disk</td><td><code>$1</code> = file</td></tr>
+    <tr><td><code>build-started</code></td><td>a Gradle build starts</td><td>none</td></tr>
+    <tr><td><code>build-succeeded</code></td><td>a Gradle build succeeds</td><td>none</td></tr>
+    <tr><td><code>build-failed</code></td><td>a Gradle build fails or is cancelled</td><td><code>$1</code> = the error, or <code>cancelled</code></td></tr>
+  </table>
+
+  <h3>Environment</h3>
+  <table>
+    <tr><th>Variable</th><th>Value</th></tr>
+    <tr><td><code>COGO_HOOK</code></td><td>the hook's name, e.g. <code>file-saved</code> (<code>action</code> for an action)</td></tr>
+    <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder, or empty when none is open</td></tr>
+    <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
+    <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
+    <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code>, or <code>project</code> for a script stored in a project</td></tr>
+    <tr><td><code>COGO_IDE_VERSION</code></td><td>Code on the Go's version, when known</td></tr>
+  </table>
+  <p>
+    <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code> are the Terminal's, so every
+    Terminal package is available. A script runs in the project's folder.
+  </p>
+
+  <h3>Folder layout</h3>
+  <pre><code>~/.config/codeonthego/hooks/
+  file-saved            runs first
+  file-saved.d/
+    10-format           then these, in name order
+    20-lint
+  build-failed.sample   never runs: rename it and chmod +x to use it
+  actions/
+    word-count          "Run word-count" on a file's menu</code></pre>
+  <ul>
+    <li>Only files with the executable bit run (<code>chmod +x</code>).</li>
+    <li>Names ending in <code>.sample</code> or <code>~</code>, and names starting with <code>.</code>, never run, so an editor's swap file is never executed.</li>
+    <li>A shebang such as <code>#!/usr/bin/env python3</code> or <code>#!/bin/bash</code> is resolved to the Terminal's program, as in the Terminal. A script with no shebang runs with <code>bash</code>.</li>
+    <li><strong>Create sample hooks</strong> in settings writes one <code>.sample</code> per hook, documenting its arguments.</li>
+  </ul>
+
+  <h3>Actions</h3>
+  <p>
+    Executable scripts in <code>hooks/actions/</code> appear as <strong>Run &lt;name&gt;</strong>
+    when you long-press a file in the file tree or an editor tab. They run in the visible Terminal,
+    with the file in <code>$1</code>, so you see what they print.
+  </p>
+
+  <h3>Hooks tab</h3>
+  <p>
+    The <strong>Hooks</strong> tab in the editor's bottom panel lists the last 100 runs: hook,
+    script, file, outcome, exit code, time and duration. Tap a run to see its output (the last 64 KB).
+    Project scripts waiting for review are listed above the runs.
+  </p>
+
+  <h3>Timeouts and ordering</h3>
+  <p>
+    Scripts run one at a time, in the order their events happened, global scripts before project
+    scripts. A script still running after the timeout (60 seconds unless you change it) is stopped.
+    If events arrive faster than scripts finish, up to 64 wait; past that the oldest is dropped.
+    Start long jobs in the background (<code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>).
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="security">
+  <h2>3. Security Model</h2>
+  <p>
+    A hook runs with Code on the Go's own access, the same as a command typed in the Terminal: it
+    can read and change your projects and use the network. Who wrote the script decides whether it
+    can run.
+  </p>
+  <ul>
+    <li><strong>Your hooks</strong> in <code>~/.config/codeonthego/hooks/</code> are scripts you
+        put there yourself, so they run once hooks are on.</li>
+    <li><strong>Project hooks</strong> in a project's <code>.codeonthego/hooks/</code> come with the
+        project. Any plugin that can write files, or an AI agent, can put a script there, so a
+        project hook would otherwise let them run commands you never approved. They therefore need
+        two things: the <strong>Run hooks stored in projects</strong> switch (off by default), and
+        your trust in that exact script. An untrusted script is skipped and listed in the Hooks tab;
+        <strong>Review</strong> shows all of it before you can trust it.</li>
+    <li>Trust is recorded per project, per script path, against the SHA-256 of the script's bytes.
+        Editing the script, or adding another, needs a new review. Settings lists the trusted
+        projects, each with <strong>Revoke</strong>.</li>
+    <li>A trusted project script runs from a private copy of the bytes you trusted, so it cannot be
+        swapped between the check and the run.</li>
+    <li>File names and other values reach scripts as separate arguments, never through a shell
+        command line, so a file named <code>$(rm -rf ~)</code> is just a name.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>4. Technical Architecture</h2>
+  <div class="diagram">IDE event (listener / extension callback)
+        |
+        v
+ShellHooksPlugin.submit()      -- off? hook disabled? drop it
+        |
+        v
+HookRunner queue (64, drop oldest) -- one worker, one script at a time
+        |
+        v
+HookResolver                   -- global scripts, then trusted project scripts
+        |
+        v
+IdeCommandService: sh cogo-hook-run.sh SCRIPT ARG...
+        |
+        v
+HookLog -> Hooks tab</div>
+  <table>
+    <tr><th>Class</th><th>Role</th></tr>
+    <tr><td><code>ShellHooksPlugin</code></td><td>Lifecycle; registers the listeners in <code>activate()</code>, removes them in <code>deactivate()</code>; settings, tab and file-menu contributions.</td></tr>
+    <tr><td><code>engine/HookRunner</code></td><td>The bounded queue and its single worker; timeouts; outcome recording.</td></tr>
+    <tr><td><code>engine/HookResolver</code></td><td>Turns an event into scripts; enforces the switches and project trust.</td></tr>
+    <tr><td><code>engine/HookDiscovery</code></td><td>The git-hooks layout: <code>&lt;hook&gt;</code>, then <code>&lt;hook&gt;.d/*</code>.</td></tr>
+    <tr><td><code>engine/TrustStore</code></td><td>Approvals keyed on project, path and SHA-256.</td></tr>
+    <tr><td><code>engine/ShellQuote</code></td><td>Quoting for the Terminal, which takes a command line.</td></tr>
+    <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a script's shebang onto <code>$PREFIX/bin</code> and changes to the event's project folder.</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>5. Integration Points</h2>
+  <table>
+    <tr><th>Hook</th><th>Plugin API</th></tr>
+    <tr><td>project-opened / project-closed</td><td><code>IdeProjectService.addProjectLifecycleListener</code> (26.47)</td></tr>
+    <tr><td>file-saved</td><td><code>IdeEditorService.addFileSaveListener</code> (26.47)</td></tr>
+    <tr><td>file-activated</td><td><code>IdeEditorService.addFileChangeListener</code></td></tr>
+    <tr><td>file-opened / file-closed</td><td><code>FileOpenExtension.onFileOpened</code> / <code>onFileClosed</code></td></tr>
+    <tr><td>build-*</td><td><code>IdeBuildService.addBuildStatusListener</code></td></tr>
+    <tr><td>Running scripts</td><td><code>IdeCommandService.executeCommand</code> with <code>CommandSpec.ShellCommand</code></td></tr>
+    <tr><td>Actions</td><td><code>FileOpenExtension.getFileTabMenuItems</code>, <code>IdeTerminalService.runInTerminal</code></td></tr>
+    <tr><td>Settings, tab, help</td><td><code>SettingsExtension</code>, <code>UIExtension.getEditorTabs</code>, <code>DocumentationExtension</code></td></tr>
+  </table>
+  <p>
+    Permissions: <code>system.commands</code> to run scripts, and <code>filesystem.read</code> for
+    the file and project listeners.
+  </p>
+  <p>
+    Not hooked on purpose: editor content changes (one process per keystroke). Hooks cannot veto:
+    every IDE callback here reports something that already happened.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>6. Deployment &amp; Usage</h2>
+  <p>Build the installable plugin from the plugin folder:</p>
+  <pre><code>cd plugins/Shell-Hooks
+../../gradlew assemblePlugin</code></pre>
+  <p>
+    The <code>.cgp</code> lands in <code>build/plugin/shell-hooks.cgp</code>. Install it with the
+    Plugin Manager, then:
+  </p>
+  <ol>
+    <li>Open Preferences &rarr; Shell Hooks and turn on <strong>Run hooks</strong>.</li>
+    <li>Tap <strong>Create sample hooks</strong>.</li>
+    <li>In the Terminal: <code>cd ~/.config/codeonthego/hooks &amp;&amp; mv file-saved.sample file-saved &amp;&amp; chmod +x file-saved</code></li>
+    <li>Save a file, then open the <strong>Hooks</strong> tab to see the run. The sample appends a line to <code>~/codeonthego-hooks.log</code>.</li>
+  </ol>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>7. Key Benefits</h2>
+  <ul>
+    <li><strong>No Android development.</strong> Anything a shell script can do becomes an IDE integration.</li>
+    <li><strong>Familiar model.</strong> Named scripts and <code>.d</code> folders, as in git hooks and run-parts.</li>
+    <li><strong>Safe by default.</strong> Off until enabled; project scripts need your review; values never pass through a shell parser.</li>
+    <li><strong>Visible.</strong> Every run's outcome and output in one tab.</li>
+  </ul>
+</section>
+
+<footer>
+  Shell Hooks Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.shellhooks
+</footer>
+
+</body>
+</html>

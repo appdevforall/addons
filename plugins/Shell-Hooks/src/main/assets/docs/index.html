@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shell Hooks guide</title>
+<style>
+  body { background: #ffffff; color: #000000; font-family: sans-serif; line-height: 1.5; margin: 0 auto; max-width: 48rem; padding: 1rem; }
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.25rem; margin-top: 1.6rem; border-bottom: 1px solid #cccccc; }
+  code, pre { font-family: monospace; background: #f2f2f2; }
+  pre { padding: 0.6rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #cccccc; padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+  .note { border-left: 4px solid #000000; padding-left: 0.6rem; }
+</style>
+</head>
+<body>
+
+<h1>Shell Hooks guide</h1>
+<p>
+  Shell Hooks runs your own shell scripts when Code on the Go opens a project, opens, saves or
+  closes a file, or starts or finishes a build. If you can write a shell script, you can fit the
+  IDE into your workflow.
+</p>
+<p class="note">
+  Nothing runs until you turn on <b>Run hooks</b> in Preferences &gt; Shell Hooks. Hooks only
+  report what happened: a script cannot stop a save or a build.
+</p>
+
+<h2>Your first hook</h2>
+<ol>
+  <li>Preferences &gt; Shell Hooks: turn on <b>Run hooks</b>, then tap <b>Create sample hooks</b>.</li>
+  <li>In the Terminal:
+    <pre>cd ~/.config/codeonthego/hooks
+mv file-saved.sample file-saved
+chmod +x file-saved</pre></li>
+  <li>Save a file. The <b>Hooks</b> tab in the bottom panel shows the run; tap it to see the output.
+      The sample adds a line to <code>~/codeonthego-hooks.log</code>.</li>
+</ol>
+
+<h2>Hooks</h2>
+<table>
+  <tr><th>Script name</th><th>Runs when</th><th>Arguments</th></tr>
+  <tr><td><code>ide-started</code></td><td>Code on the Go starts with hooks on</td><td>none</td></tr>
+  <tr><td><code>project-opened</code></td><td>a project opens, before it syncs</td><td><code>$1</code> = project folder</td></tr>
+  <tr><td><code>project-closed</code></td><td>a project closes</td><td><code>$1</code> = project folder</td></tr>
+  <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
+  <tr><td><code>file-closed</code></td><td>a file's tab closes</td><td><code>$1</code> = file</td></tr>
+  <tr><td><code>file-activated</code></td><td>you switch tabs (the last of a quick burst)</td><td><code>$1</code> = file, or empty</td></tr>
+  <tr><td><code>file-saved</code></td><td>a file is written to disk</td><td><code>$1</code> = file</td></tr>
+  <tr><td><code>build-started</code></td><td>a build starts</td><td>none</td></tr>
+  <tr><td><code>build-succeeded</code></td><td>a build succeeds</td><td>none</td></tr>
+  <tr><td><code>build-failed</code></td><td>a build fails or is cancelled</td><td><code>$1</code> = the error, or <code>cancelled</code></td></tr>
+</table>
+<p>Every script also gets these environment variables:</p>
+<table>
+  <tr><th>Variable</th><th>Value</th></tr>
+  <tr><td><code>COGO_HOOK</code></td><td>the hook's name (<code>action</code> for an action)</td></tr>
+  <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder, or empty</td></tr>
+  <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
+  <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
+  <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code> or <code>project</code></td></tr>
+  <tr><td><code>COGO_IDE_VERSION</code></td><td>the IDE's version, when known</td></tr>
+</table>
+<p>The script runs in the project's folder, with the Terminal's <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code>.</p>
+
+<h2>Where scripts go</h2>
+<pre>~/.config/codeonthego/hooks/
+  file-saved          runs first
+  file-saved.d/       then every script here, in name order
+  actions/            "Run &lt;name&gt;" on a file's menu</pre>
+<ul>
+  <li>Only executable files run: <code>chmod +x</code>.</li>
+  <li>Files ending in <code>.sample</code> or <code>~</code>, or starting with <code>.</code>, never run.</li>
+  <li><code>#!/usr/bin/env python3</code> or <code>#!/bin/bash</code> use the Terminal's programs. No shebang means <code>bash</code>.</li>
+  <li>Settings can turn single hooks off without deleting their scripts.</li>
+</ul>
+
+<h2>Actions</h2>
+<p>
+  An executable script in <code>hooks/actions/</code> appears as <b>Run &lt;name&gt;</b> when you
+  long-press a file in the file tree or an editor tab. It runs in the Terminal with the file in
+  <code>$1</code>, so you see its output.
+</p>
+
+<h2>Timeouts and order</h2>
+<p>
+  Scripts run one at a time, in the order things happened: your scripts first, then the
+  project's. A script still running after the timeout (60 seconds by default, set in Preferences)
+  is stopped. Up to 64 events can wait; after that the oldest is dropped. Run long jobs in the
+  background: <code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>
+</p>
+
+<h2>Hooks stored in a project</h2>
+<p>
+  A project can carry its own hooks in <code>.codeonthego/hooks/</code>, with the same layout. They
+  run only if you turn on <b>Run hooks stored in projects</b> and trust each script.
+</p>
+<p>
+  Why: a hook runs with the same access as the Terminal, including your files and the network. Any
+  plugin that can write files, or an AI agent, can put a script into a project. If such scripts
+  ran by themselves, they could run commands you never approved.
+</p>
+<ul>
+  <li>An untrusted script is skipped and listed in the Hooks tab. <b>Review</b> shows the whole
+      script; <b>Trust</b> approves exactly what you read.</li>
+  <li>Editing a trusted script, or adding one, needs a new review.</li>
+  <li>Preferences lists the projects you trusted scripts in; <b>Revoke</b> forgets them.</li>
+  <li>A trusted script runs from a private copy of what you approved, so it cannot be swapped
+      after you approve it. Use <code>$COGO_HOOK_SCRIPT</code> to find the original.</li>
+</ul>
+
+<h2>Your own hooks are trusted</h2>
+<p>
+  Scripts in <code>~/.config/codeonthego/hooks/</code> are yours, so they run without review once
+  hooks are on. Like anything you run in the Terminal, they can read and change your projects and
+  use the network.
+</p>
+
+</body>
+</html>
