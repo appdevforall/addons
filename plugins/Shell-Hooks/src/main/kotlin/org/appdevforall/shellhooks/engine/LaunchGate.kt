@@ -20,3 +20,20 @@ class LaunchGate(
         const val KEY = "ide_started.launch"
     }
 }
+
+/**
+ * What activate() does about ide-started: run it once per launch, the first time the plugin starts
+ * with it switched on. A start with hooks off records nothing, so turning them on and restarting
+ * the plugin later in the same launch still runs it.
+ */
+class IdeStartedTrigger(
+    private val gate: LaunchGate,
+    private val enabled: () -> Boolean,
+    private val submit: () -> Unit,
+) {
+    fun onActivate(launchId: String) {
+        if (!enabled() || !gate.isNewLaunch(launchId)) return
+        submit()
+        gate.record(launchId)
+    }
+}

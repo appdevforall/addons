@@ -211,9 +211,10 @@ class HookRunner(
                         Triple(Outcome.TIMED_OUT, null, listOf(output, error).filter { it.isNotBlank() }.joinToString("\n"))
                     error != null && result.exitCode == -1 ->
                         Triple(Outcome.NOT_STARTED, null, error)
-                    // GNU timeout: 124 after TERM, 137 when it had to KILL. A script's own 137
-                    // (killed for memory, say) before the limit is an ordinary failure.
-                    result.exitCode == TIMEOUT_EXIT || (result.exitCode == TIMEOUT_KILL_EXIT && elapsed >= limit) ->
+                    // GNU timeout: 124 after TERM, 137 when it had to KILL. Only once the run reached
+                    // its limit: a script's own 124 (passed on from an inner timeout, say) or 137
+                    // (killed for memory) before then is an ordinary failure.
+                    (result.exitCode == TIMEOUT_EXIT || result.exitCode == TIMEOUT_KILL_EXIT) && elapsed >= limit ->
                         Triple(Outcome.TIMED_OUT, null, stopped(output, limit))
                     else -> Triple(Outcome.FAILED, result.exitCode, output)
                 }

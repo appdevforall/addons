@@ -34,6 +34,7 @@ import org.appdevforall.shellhooks.engine.HookResolver
 import org.appdevforall.shellhooks.engine.HookRun
 import org.appdevforall.shellhooks.engine.HookRunner
 import org.appdevforall.shellhooks.engine.IdeCommandRunner
+import org.appdevforall.shellhooks.engine.IdeStartedTrigger
 import org.appdevforall.shellhooks.engine.LaunchGate
 import org.appdevforall.shellhooks.engine.Outcome
 import org.appdevforall.shellhooks.engine.SampleHooks
@@ -134,13 +135,9 @@ class ShellHooksPlugin :
         listen("build") { service(IdeBuildService::class.java)?.addBuildStatusListener(buildListener) }
 
         // activate() also runs when the user re-enables or updates the plugin mid-session.
-        if (isOn() && settings.isHookEnabled(Hook.IDE_STARTED)) {
-            val launch = launchId()
-            if (launchGate.isNewLaunch(launch)) {
-                submit(HookEvent.ideStarted(currentProjectDir()))
-                launchGate.record(launch)
-            }
-        }
+        IdeStartedTrigger(launchGate, { isOn() && settings.isHookEnabled(Hook.IDE_STARTED) }) {
+            submit(HookEvent.ideStarted(currentProjectDir()))
+        }.onActivate(launchId())
         return true
     }
 
@@ -273,7 +270,13 @@ class ShellHooksPlugin :
             )
         }
         val runnerScript = wrapper ?: return failed("The hook runner script is missing")
-        val terminal = service(IdeTerminalService::class.java) ?: return failed("The IDE's Terminal is not available")
+        val terminal =
+            try {
+                service(IdeTerminalService::class.java)
+            } catch (e: LinkageError) {
+                // The class itself is missing: plugins got a Terminal service in Code on the Go 26.41.
+                return failed("This IDE has no Terminal service for plugins; Code on the Go 26.41 or later is needed")
+            } ?: return failed("The IDE's Terminal is not available")
         val projectDir = currentProjectDir()
         // The Terminal takes a command line, so every value is quoted as one word.
         val command =

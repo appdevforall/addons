@@ -142,12 +142,76 @@ class WrapperScriptTest(
         assertEquals("foreign\n[${script.path}]\n[v]\n", run(script, "v"))
     }
 
-    @Test
-    fun aTimeoutStopsTheScriptAndEveryProcessItStarted() {
+    /** Links a coreutils `timeout` into $PREFIX/bin, as the Terminal's bootstrap ships it. */
+    private fun linkTimeout() {
         val timeout = listOf("/usr/bin/gnutimeout", "/usr/bin/timeout", "/bin/timeout").map(::File).firstOrNull { it.canExecute() }
         assumeTrue("needs a coreutils timeout", timeout != null)
         Files.createDirectories(File(prefix, "bin").toPath())
         Files.createSymbolicLink(File(prefix, "bin/timeout").toPath(), timeout!!.toPath())
+    }
+
+    /** Processes still running with [mark] in their environment: what a run left behind. */
+    private fun leftBehind(mark: String): List<Long> =
+        File("/proc").listFiles().orEmpty().mapNotNull { it.name.toLongOrNull() }.filter { pid ->
+            runCatching { File("/proc/$pid/environ").readBytes().toString(Charsets.ISO_8859_1) }
+                .getOrDefault("")
+                .split('\u0000')
+                .contains("COGO_TEST_MARK=$mark") && isRunning(pid)
+        }
+
+    private fun waitUntil(
+        seconds: Long,
+        done: () -> Boolean,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds)
+        while (!done() && System.nanoTime() < deadline) Thread.sleep(50)
+        return done()
+    }
+
+    @Test
+    fun killingTheWrapperStopsTheScriptAndWhatItStarted() {
+        // The IDE stops a hook on disable, unload or update by SIGKILLing the process it started.
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        linkTimeout()
+        val mark = java.util.UUID.randomUUID().toString()
+        val scriptPid = File(work, "script.pid")
+        val childPid = File(work, "child.pid")
+        val script = work.script("hook", "#!/bin/sh\necho \$\$ > \"\$1\"\nsleep 30 &\necho \$! > \"\$2\"\nwait\n")
+
+        val process = start(script, listOf(scriptPid.path, childPid.path), mapOf("COGO_TIMEOUT_SECONDS" to "60", "COGO_TEST_MARK" to mark))
+        try {
+            assertTrue("the script started", waitUntil(10) { childPid.length() > 0 && scriptPid.length() > 0 })
+            process.destroyForcibly()
+            process.waitFor(5, TimeUnit.SECONDS)
+            val pids = listOf(scriptPid, childPid).map { it.readText().trim().toLong() }
+
+            assertTrue("the script and its child outlived the wrapper: ${leftBehind(mark)}", waitUntil(4) { pids.none(::isRunning) })
+            assertTrue("left behind: ${leftBehind(mark)}", waitUntil(2) { leftBehind(mark).isEmpty() })
+        } finally {
+            leftBehind(mark).forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+        }
+    }
+
+    @Test
+    fun aRunUnderTimeoutReturnsTheScriptsStatusAndLeavesNothingRunning() {
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        linkTimeout()
+        val mark = java.util.UUID.randomUUID().toString()
+        val script = work.script("hook", "#!/bin/sh\necho done\nexit 3\n")
+
+        val process = start(script, emptyList(), mapOf("COGO_TIMEOUT_SECONDS" to "60", "COGO_TEST_MARK" to mark))
+        val out = process.inputStream.readBytes().toString(Charsets.UTF_8)
+        val exited = process.waitFor(10, TimeUnit.SECONDS)
+
+        assertTrue(exited)
+        assertEquals("done\n", out)
+        assertEquals(3, process.exitValue())
+        assertTrue("left behind: ${leftBehind(mark)}", waitUntil(2) { leftBehind(mark).isEmpty() })
+    }
+
+    @Test
+    fun aTimeoutStopsTheScriptAndEveryProcessItStarted() {
+        linkTimeout()
         val pidFile = File(work, "child.pid")
         // The child runs in the foreground: a plain kill of the script's own process misses it.
         val script = work.script("hook", "#!/bin/sh\nsh -c 'echo \$\$ > \"\$1\"; exec sleep 60' child \"\$1\"\n")

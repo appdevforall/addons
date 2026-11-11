@@ -197,6 +197,28 @@ class HookRunnerTest {
         }
 
     @Test
+    fun anEarlyExit124IsAFailureWithItsCode() =
+        runTest {
+            val runner =
+                runner(
+                    // A lint hook passing on an inner timeout's 124 long before its own limit.
+                    CommandRunner { _, _, _ ->
+                        delay(6)
+                        CommandResult.Failure(HookRunner.TIMEOUT_EXIT, "lint timed out\n", "", null, 6)
+                    },
+                    timeoutMs = 60_000,
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            val run = log.runs.value.single()
+            assertEquals(Outcome.FAILED, run.outcome)
+            assertEquals(HookRunner.TIMEOUT_EXIT, run.exitCode)
+            assertEquals("lint timed out", run.output.trimEnd())
+        }
+
+    @Test
     fun anErrorWhileListingScriptsDoesNotStopTheWorker() =
         runTest {
             var calls = 0

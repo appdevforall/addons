@@ -15,13 +15,36 @@ fi
 
 # With COGO_TIMEOUT_SECONDS set and the Terminal's GNU timeout installed, the script runs under
 # it: timeout puts the script in its own process group and stops the whole group at the limit
-# (KILL 5 s after TERM), so programs the script started do not outlive it. Without it, the IDE's
-# own timeout stops only the script's first process.
+# (KILL 5 s after TERM), so programs the script started do not outlive it. timeout runs as a child,
+# not in place of this shell: the IDE stops a hook (on disable, unload or update) by killing the
+# process it started, and if that were timeout the script would run on with no limit. A watchdog
+# notices this shell is gone and sends timeout TERM, which stops the whole group the same way.
+# Without timeout, the IDE's own stop ends only the script's first process.
 run() {
 	if [ -n "${COGO_TIMEOUT_SECONDS:-}" ] && [ -n "${PREFIX:-}" ] && [ -f "$PREFIX/bin/timeout" ] && [ -x "$PREFIX/bin/timeout" ]; then
-		exec "$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@"
+		"$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@" &
+		child=$!
+		# Its output goes nowhere, so it never keeps the IDE's pipes open.
+		watch "$$" "$child" </dev/null >/dev/null 2>&1 &
+		watchdog=$!
+		wait "$child"
+		status=$?
+		kill "$watchdog" 2>/dev/null
+		exit "$status"
 	fi
 	exec "$@"
+}
+
+# Waits while process $1 (this wrapper) lives, then sends TERM to $2 (timeout). Killed by the
+# wrapper when the script ends normally; the trap stops its pending sleep with it.
+watch() {
+	trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+	while kill -0 "$1" 2>/dev/null; do
+		sleep 1 &
+		nap=$!
+		wait "$nap"
+	done
+	kill -s TERM "$2" 2>/dev/null
 }
 
 in_prefix() {
