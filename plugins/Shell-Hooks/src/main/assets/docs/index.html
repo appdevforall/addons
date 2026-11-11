@@ -43,7 +43,7 @@ chmod +x file-saved</pre></li>
 <table>
   <tr><th>Script name</th><th>Runs when</th><th>Arguments</th></tr>
   <tr><td><code>ide-started</code></td><td>once each time Code on the Go starts with hooks on</td><td>none</td></tr>
-  <tr><td><code>project-opened</code></td><td>a project opens, before it syncs</td><td><code>$1</code> = project folder</td></tr>
+  <tr><td><code>project-opened</code></td><td>a project opens (its sync does not wait for the hook)</td><td><code>$1</code> = project folder</td></tr>
   <tr><td><code>project-closed</code></td><td>a project closes</td><td><code>$1</code> = project folder</td></tr>
   <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
   <tr><td><code>file-closed</code></td><td>a file's tab closes</td><td><code>$1</code> = file</td></tr>

@@ -135,7 +135,7 @@
   <table>
     <tr><th>Script name</th><th>Runs when</th><th><code>$*</code></th></tr>
     <tr><td><code>ide-started</code></td><td>once each time Code on the Go starts with hooks on (not when the plugin is re-enabled)</td><td>none</td></tr>
-    <tr><td><code>project-opened</code></td><td>the editor opens a project, before it syncs</td><td><code>$1</code> = project folder</td></tr>
+    <tr><td><code>project-opened</code></td><td>the editor opens a project; its sync starts without waiting for the hook</td><td><code>$1</code> = project folder</td></tr>
     <tr><td><code>project-closed</code></td><td>the editor closes a project</td><td><code>$1</code> = project folder</td></tr>
     <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
     <tr><td><code>file-closed</code></td><td>a file's tab is closed</td><td><code>$1</code> = file</td></tr>
