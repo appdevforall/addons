@@ -19,7 +19,6 @@ import org.appdevforall.shellhooks.ShellHooksHelp
 import org.appdevforall.shellhooks.ShellHooksPlugin
 import org.appdevforall.shellhooks.ShellHooksSettings
 import org.appdevforall.shellhooks.engine.Hook
-import org.appdevforall.shellhooks.engine.ScriptReview
 import org.appdevforall.shellhooks.engine.TimeoutSetting
 import java.io.File
 
@@ -172,8 +171,8 @@ class ShellHooksSettingsFragment : Fragment() {
         }
         for (path in projects) {
             val row = layoutInflater.inflate(R.layout.item_trusted_project, list, false)
-            // A project path is the project's to choose, so it is revealed like a script.
-            row.findViewById<TextView>(R.id.trustedPath).text = ScriptReview.reveal(path).text
+            // A project path is the project's to choose, so it is revealed.
+            row.findViewById<TextView>(R.id.trustedPath).text = RevealedNames.show(row.context, path)
             row.findViewById<TextView>(R.id.trustedCount).text =
                 plugin.trust.trustedCount(File(path)).let { count -> resources.getQuantityString(R.plurals.sh_trusted_count, count, count) }
             row.findViewById<Button>(R.id.trustedRevoke).apply {

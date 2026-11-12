@@ -2,22 +2,21 @@ package org.appdevforall.shellhooks.ui
 
 import android.content.DialogInterface
 import android.os.Bundle
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.BackgroundColorSpan
+import android.text.SpannableStringBuilder
 import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -114,13 +113,22 @@ class HooksPanelFragment : Fragment() {
         root.findViewById<View>(R.id.hkPendingTitle).visibility = if (pending.isEmpty()) View.GONE else View.VISIBLE
         for (entry in pending) {
             val row = layoutInflater.inflate(R.layout.item_pending_trust, pendingList, false)
-            // Names come from the project too, so they are revealed like the script.
-            row.findViewById<TextView>(R.id.pendingName).text =
-                getString(R.string.hk_pending_item, ScriptReview.reveal(entry.relativePath).text, ScriptReview.reveal(entry.projectDir.name).text)
+            // Names come from the project, so they are revealed.
+            val name =
+                SpannableStringBuilder()
+                    .append(RevealedNames.show(row.context, entry.relativePath))
+                    .append(getString(R.string.hk_pending_in))
+                    .append(RevealedNames.show(row.context, entry.projectDir.name))
+            val reason = entry.notReviewable
+            if (reason != null) name.append(getString(R.string.hk_pending_not_reviewable, reason))
+            row.findViewById<TextView>(R.id.pendingName).text = name
             row.findViewById<Button>(R.id.pendingReview).apply {
+                // A script that cannot be reviewed cannot be trusted, so it has nothing to review.
+                visibility = if (reason == null) View.VISIBLE else View.GONE
                 help(this, ShellHooksHelp.TAG_REVIEW)
                 setOnClickListener { review(plugin, entry) }
             }
+            help(row, ShellHooksHelp.TAG_REVIEW)
             pendingList.addView(row)
         }
 
@@ -135,9 +143,10 @@ class HooksPanelFragment : Fragment() {
         run: HookRun,
     ): View {
         val row = layoutInflater.inflate(R.layout.item_hook_run, parent, false)
-        // Script and file names can come from a project, so they are revealed like a script.
-        val target = run.targetLabel?.let { "  ${ScriptReview.reveal(it).text}" }.orEmpty()
-        row.findViewById<TextView>(R.id.runTitle).text = "${run.name}  ${ScriptReview.reveal(scriptLabel(run)).text}$target"
+        // Script and file names can come from a project, so they are revealed.
+        val title = SpannableStringBuilder(run.name).append("  ").append(RevealedNames.show(row.context, scriptLabel(run)))
+        run.targetLabel?.let { title.append("  ").append(RevealedNames.show(row.context, it)) }
+        row.findViewById<TextView>(R.id.runTitle).text = title
 
         val detail = row.findViewById<TextView>(R.id.runDetail)
         detail.text =
@@ -191,32 +200,34 @@ class HooksPanelFragment : Fragment() {
 
     /**
      * Shows the whole script before it can be trusted, and trusts exactly the bytes shown: if the
-     * file changes after this, its hash no longer matches and it waits for review again. Read,
-     * decoded and revealed off the main thread, and never more than [ScriptReview.MAX_BYTES].
+     * file changes after this, its hash no longer matches and it waits for review again. Only a
+     * script [ScriptReview] finds reviewable is shown; it is read off the main thread, never more
+     * than [ScriptReview.MAX_BYTES].
      */
     private fun review(
         plugin: ShellHooksPlugin,
         entry: PendingTrust,
     ) {
-        if (entry.tooLarge) {
-            showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
-            return
-        }
         if (reviewLoading) return
         reviewLoading = true
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val (loaded, revealed) =
+                val (assessed, lines) =
                     withContext(Dispatchers.IO) {
-                        val loaded = ScriptReview.load(entry.file)
-                        loaded to (loaded as? ScriptReview.Loaded.Script)?.let { ScriptReview.revealBytes(it.bytes) }
+                        val assessed = ScriptReview.assess(entry.file, entry.relativePath)
+                        assessed to (assessed as? ScriptReview.Assessment.Reviewable)?.lines
                     }
-                when (loaded) {
-                    is ScriptReview.Loaded.TooLarge ->
-                        showMessage(entry, getString(R.string.hk_review_too_large, ScriptReview.MAX_BYTES / 1024))
-                    is ScriptReview.Loaded.Unreadable ->
-                        showMessage(entry, getString(R.string.hk_review_unreadable, loaded.reason))
-                    is ScriptReview.Loaded.Script -> showScript(plugin, entry, loaded, revealed ?: ScriptReview.revealBytes(loaded.bytes))
+                when (assessed) {
+                    is ScriptReview.Assessment.NotReviewable ->
+                        showMessage(entry, getString(R.string.hk_review_not_reviewable, assessed.reason.message))
+                    // Never the exception's message: it starts with the path, which the project chose.
+                    is ScriptReview.Assessment.Unreadable ->
+                        showMessage(
+                            entry,
+                            SpannableStringBuilder(getString(R.string.hk_review_unreadable))
+                                .append(RevealedNames.show(requireContext(), entry.file.path)),
+                        )
+                    is ScriptReview.Assessment.Reviewable -> showScript(plugin, entry, assessed, lines.orEmpty())
                 }
             } finally {
                 reviewLoading = false
@@ -227,57 +238,37 @@ class HooksPanelFragment : Fragment() {
     private fun showScript(
         plugin: ShellHooksPlugin,
         entry: PendingTrust,
-        loaded: ScriptReview.Loaded.Script,
-        revealed: ScriptReview.Revealed,
+        script: ScriptReview.Assessment.Reviewable,
+        lines: List<String>,
     ) {
         val context = requireContext()
         val padding = resources.getDimensionPixelSize(R.dimen.space_lg)
-        val body =
-            LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
+        val intro =
+            listOf<CharSequence>(
+                SpannableStringBuilder(getString(R.string.hk_review_intro_project))
+                    .append(RevealedNames.show(context, entry.projectDir.path))
+                    .append(getString(R.string.hk_review_intro)),
+                // A reviewable name is letters, digits, '.', '_', '-' and '/' only: shown as it is.
+                getString(R.string.hk_review_path, entry.relativePath),
+            )
+        // One list, so at a large font the explanation scrolls away with the script.
+        val list =
+            RecyclerView(context).apply {
+                layoutManager = LinearLayoutManager(context)
+                adapter = ScriptAdapter(intro, lines, ::help)
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
                 setPadding(padding, padding / 2, padding, 0)
-                addView(
-                    TextView(context).apply {
-                        text = getString(R.string.hk_review_intro, ScriptReview.reveal(entry.projectDir.path).text)
-                        help(this, ShellHooksHelp.TAG_REVIEW)
-                    },
-                )
-                // In full and wrapping here: the title may cut a long path off.
-                addView(
-                    TextView(context).apply {
-                        text = getString(R.string.hk_review_path, ScriptReview.reveal(entry.relativePath).text)
-                        leftToRight()
-                        setPadding(0, padding / 2, 0, 0)
-                    },
-                )
-                if (revealed.hidden > 0) {
-                    addView(
-                        TextView(context).apply {
-                            text = resources.getQuantityString(R.plurals.hk_review_hidden, revealed.hidden, revealed.hidden)
-                            setTextColor(context.getColor(R.color.plugin_error))
-                            setPadding(0, padding / 2, 0, 0)
-                            help(this, ShellHooksHelp.TAG_REVIEW)
-                        },
-                    )
-                }
-                addView(
-                    TextView(context).apply {
-                        text = highlighted(revealed)
-                        typeface = android.graphics.Typeface.MONOSPACE
-                        leftToRight()
-                        setTextIsSelectable(true)
-                        setPadding(0, padding / 2, 0, 0)
-                    },
-                )
+                clipToPadding = false
             }
         reviewDialog?.dismiss()
         reviewDialog =
             MaterialAlertDialogBuilder(context)
                 .setTitle(title(entry))
-                .setView(ScrollView(context).apply { addView(body) })
+                .setView(list)
                 .setPositiveButton(R.string.hk_trust) { _, _ ->
-                    plugin.trust.trust(entry.projectDir, entry.relativePath, loaded.sha256)
-                    plugin.log.removePending(entry.projectDir, entry.relativePath)
+                    if (plugin.trust.trust(entry.projectDir, entry.relativePath, script.bytes)) {
+                        plugin.log.removePending(entry.projectDir, entry.relativePath)
+                    }
                 }.setNegativeButton(R.string.hk_cancel, null)
                 .setOnDismissListener(::forget)
                 .show()
@@ -289,7 +280,7 @@ class HooksPanelFragment : Fragment() {
 
     private fun showMessage(
         entry: PendingTrust,
-        message: String,
+        message: CharSequence,
     ) {
         reviewDialog?.dismiss()
         reviewDialog =
@@ -301,27 +292,7 @@ class HooksPanelFragment : Fragment() {
                 .show()
     }
 
-    // A script reads left to right whatever the device's language: in a right-to-left layout,
-    // lines without letters would be aligned right and their punctuation reordered.
-    private fun TextView.leftToRight() {
-        layoutDirection = View.LAYOUT_DIRECTION_LTR
-        textDirection = View.TEXT_DIRECTION_LTR
-        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-    }
-
-    // Marks each <U+XXXX> the reveal added, so it cannot be mistaken for the same six characters
-    // typed in the script.
-    private fun highlighted(revealed: ScriptReview.Revealed): CharSequence {
-        if (revealed.escapes.isEmpty()) return revealed.text
-        val color = requireContext().getColor(R.color.reveal_escape_background)
-        return SpannableString(revealed.text).apply {
-            for (range in revealed.escapes) {
-                setSpan(BackgroundColorSpan(color), range.first, range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
-    }
-
-    // The path is the project's to choose, so it is revealed like the script.
+    // The path is the project's to choose; one that cannot be reviewed may hold anything.
     private fun title(entry: PendingTrust): String = getString(R.string.hk_review_title, ScriptReview.reveal(entry.relativePath).text)
 
     // A dialog dismissed by showing the next one reports it after the next is already showing;
@@ -341,3 +312,57 @@ class HooksPanelFragment : Fragment() {
         }
     }
 }
+
+/**
+ * The review dialog's content: the explanation, then the script one numbered row per line. Line
+ * numbers are padded to one width in a monospace font, so the text column starts in the same place
+ * on every row and wrapped text stays clear of the number column.
+ */
+private class ScriptAdapter(
+    private val intro: List<CharSequence>,
+    private val lines: List<String>,
+    private val help: (View, String) -> Unit,
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private val numberWidth = lines.size.toString().length
+
+    override fun getItemCount(): Int = intro.size + lines.size
+
+    override fun getItemViewType(position: Int): Int = if (position < intro.size) INTRO else LINE
+
+    override fun onCreateViewHolder(
+        parent: ViewGroup,
+        viewType: Int,
+    ): RecyclerView.ViewHolder {
+        val view =
+            if (viewType == INTRO) {
+                TextView(parent.context).apply {
+                    val gap = resources.getDimensionPixelSize(R.dimen.space_sm)
+                    setPadding(0, 0, 0, gap)
+                    layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    help(this, ShellHooksHelp.TAG_REVIEW)
+                }
+            } else {
+                LayoutInflater.from(parent.context).inflate(R.layout.item_script_line, parent, false)
+            }
+        return object : RecyclerView.ViewHolder(view) {}
+    }
+
+    override fun onBindViewHolder(
+        holder: RecyclerView.ViewHolder,
+        position: Int,
+    ) {
+        if (position < intro.size) {
+            (holder.itemView as TextView).text = intro[position]
+            return
+        }
+        val index = position - intro.size
+        holder.itemView.findViewById<TextView>(R.id.lineNumber).text = (index + 1).toString().padStart(numberWidth)
+        holder.itemView.findViewById<TextView>(R.id.lineText).text = lines[index]
+    }
+
+    private companion object {
+        const val INTRO = 0
+        const val LINE = 1
+    }
+}
+

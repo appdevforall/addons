@@ -22,7 +22,8 @@ interface KeyValueStore {
  * an AI agent's edit, a plugin that can only write project files), so a script found there runs
  * only once the user has read it and trusted that exact content: approval is keyed on the
  * project, the script's path inside the hooks folder, and the SHA-256 of its bytes. Editing the
- * script, or adding one, needs a new approval.
+ * script, or adding one, needs a new approval. Only a script [ScriptReview] can show as it runs can
+ * be trusted at all.
  *
  * This does not stop a plugin that can run commands or write files in-process: such a plugin can
  * already write the global hooks folder, or these approvals, directly.
@@ -36,8 +37,22 @@ class TrustStore(
         sha256: String,
     ): Boolean = read(projectDir)[relativePath] == sha256
 
-    /** Trusts this content of [relativePath]; a previous approval of other content is replaced. */
+    /**
+     * Trusts these [bytes] of [relativePath], replacing an approval of other content. Refuses, and
+     * stores nothing, when they cannot be reviewed: returns false.
+     */
     fun trust(
+        projectDir: File,
+        relativePath: String,
+        bytes: ByteArray,
+    ): Boolean {
+        if (ScriptReview.check(relativePath, bytes) != null) return false
+        put(projectDir, relativePath, sha256(bytes))
+        return true
+    }
+
+    /** Records an approval of [sha256] for [relativePath], unchecked. */
+    internal fun put(
         projectDir: File,
         relativePath: String,
         sha256: String,

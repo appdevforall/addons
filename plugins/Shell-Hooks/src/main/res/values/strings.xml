@@ -20,7 +20,7 @@
     <string name="sh_timeout_invalid">Enter a whole number of seconds from %1$d to %2$d. The timeout stays at %3$d until you do.</string>
     <string name="sh_hooks_label">Hooks</string>
     <string name="sh_project_hooks">Run hooks stored in projects</string>
-    <string name="sh_project_hooks_summary">Scripts in a project\'s .codeonthego/hooks folder run only after you read and trust them in the Hooks tab, because a script can arrive with a project: a cloned repository, or an AI agent\'s edit. They need no executable bit.</string>
+    <string name="sh_project_hooks_summary">Scripts in a project\'s .codeonthego/hooks folder run only after you read and trust them in the Hooks tab, because a script can arrive with a project: a cloned repository, or an AI agent\'s edit. Only plain scripts can be trusted: printable ASCII and newlines, no tabs, no line over 100 characters or ending in a space, at most 64 KB. They need no executable bit.</string>
     <string name="sh_trusted_label">Projects with trusted scripts</string>
     <string name="sh_trusted_none">None</string>
     <plurals name="sh_trusted_count">
@@ -32,19 +32,20 @@
     <!-- Hooks tab -->
     <string name="hk_off">Shell Hooks is off. Turn it on in Preferences, Shell Hooks.</string>
     <string name="hk_pending_title">Project scripts waiting for your review</string>
-    <string name="hk_pending_item">%1$s in %2$s</string>
+    <!-- Between a script's name and its project's, which come from the project and are inserted in code. -->
+    <string name="hk_pending_in">" in "</string>
+    <string name="hk_pending_not_reviewable">". Can\'t be reviewed: %1$s. It never runs."</string>
     <string name="hk_review">Review</string>
     <string name="hk_runs_title">Recent runs</string>
     <string name="hk_clear">Clear</string>
     <string name="hk_empty">No hook has run yet.</string>
     <string name="hk_review_title">Trust %1$s?</string>
-    <string name="hk_review_intro">This script is stored in the project %1$s. It runs with the same access as the Terminal, including the network. Trust covers only this script, not other project files it runs. Trust it only if you have read it and know what it does.</string>
-    <string name="hk_review_too_large">This script is larger than %1$d KB, too large to review here. Read it in the editor; it will not run from here.</string>
-    <string name="hk_review_unreadable">Could not read the script: %1$s</string>
-    <plurals name="hk_review_hidden">
-        <item quantity="one">%1$d character is shown as &lt;U+XXXX&gt;, highlighted: a character outside plain ASCII, a carriage return, or a space or tab at the end of a line. Any of these can make a script run differently from how it reads; after a backslash, a hidden one turns what looks like a line continuation into a separate command. Do not trust the script unless you know why it is there.</item>
-        <item quantity="other">%1$d characters are shown as &lt;U+XXXX&gt;, highlighted: characters outside plain ASCII, carriage returns, and spaces or tabs at the end of a line. Any of these can make a script run differently from how it reads; after a backslash, a hidden one turns what looks like a line continuation into a separate command. Do not trust the script unless you know why each one is there.</item>
-    </plurals>
+    <!-- The project folder, which the project chose, is inserted in code between these two. -->
+    <string name="hk_review_intro_project">"This script is stored in the project "</string>
+    <string name="hk_review_intro">". It runs with the same access as the Terminal, including the network. Trust covers only this script, not other project files it runs. Each numbered row below is one line of the script; text that wraps continues on the same number. Trust it only if you have read it and know what it does."</string>
+    <string name="hk_review_not_reviewable">Can\'t be reviewed: %1$s. A project script can be trusted only if it is plain: printable ASCII and newlines, no tabs or carriage returns, no line over 100 characters or ending in a space, at most 64 KB, and a name of letters, digits, \'.\', \'_\', \'-\' and \'/\'. Anything else could look different here from how it runs, so it never runs.</string>
+    <!-- The script's path, revealed, is inserted in code after this. -->
+    <string name="hk_review_unreadable">"Could not read the script "</string>
     <string name="hk_review_path">Script: %1$s</string>
     <string name="hk_trust">Trust</string>
     <string name="hk_cancel">Cancel</string>

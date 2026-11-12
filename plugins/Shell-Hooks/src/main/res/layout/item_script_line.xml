@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One line of a script under review: its number, then its text. Text that wraps continues under
+  the text column with nothing in the number column, so a wrap never reads as a new line.
+  Left to right and monospace whatever the device's language.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layoutDirection="ltr"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/lineNumber"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingEnd="@dimen/space_sm"
+        android:textAlignment="viewStart"
+        android:textColor="@color/plugin_text_muted"
+        android:textDirection="ltr"
+        android:textSize="@dimen/text_mono"
+        android:typeface="monospace" />
+
+    <TextView
+        android:id="@+id/lineText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textAlignment="viewStart"
+        android:textColor="@color/plugin_on_surface"
+        android:textDirection="ltr"
+        android:textSize="@dimen/text_mono"
+        android:typeface="monospace" />
+
+</LinearLayout>

@@ -25,6 +25,6 @@
 
     <color name="plugin_text_muted">#737373</color>
 
-    <!-- Behind each <U+XXXX> the review dialog adds, so it cannot be mistaken for the same text typed in a script. -->
+    <!-- Behind each <U+XXXX> shown in a name the project chose, so it cannot be mistaken for the same text typed in the name. -->
     <color name="reveal_escape_background">#FDE68A</color>
 </resources>

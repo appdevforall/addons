@@ -2,36 +2,167 @@ package org.appdevforall.shellhooks.engine
 
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 
 /**
- * Reading a project script for the trust check and for the user's review. A project can ship a
- * script of any size, so neither ever reads more than [MAX_BYTES]: a larger script is never read,
- * never run, and cannot be reviewed in the IDE.
+ * Whether a project script can be reviewed, and reading it to find out.
+ *
+ * The review dialog shows a project script so the user can see what will run, and only a plain
+ * script can be shown so that what it displays is what the shell reads. Each review of this plugin
+ * found another way to make a script read differently from how it runs: a no-break space bash
+ * takes as part of a word, a backslash before an invisible carriage return or trailing blank that
+ * reads as a line continuation, a run of spaces whose soft wrap looks like a new line, a tab that
+ * looks like a space where `<<-` tells them apart. Rather than display each such trick, a project
+ * script can be trusted only when it is plain:
+ * - at most [MAX_BYTES] bytes;
+ * - every byte printable ASCII (0x20-0x7E) or a newline: no tab, carriage return, other control
+ *   byte or byte outside ASCII;
+ * - no line longer than [MAX_LINE] characters, and none ending in a space (a last line without a
+ *   newline is fine);
+ * - a name inside the hooks folder of letters, digits, `.`, `_`, `-` and `/`, with no part starting
+ *   with `.`.
+ * Anything else is listed with the reason it cannot be reviewed, and never runs.
  */
 object ScriptReview {
-    const val MAX_BYTES = 256 * 1024
+    const val MAX_BYTES = 64 * 1024
+    const val MAX_LINE = 100
 
-    /** What [load] found. */
-    sealed interface Loaded {
-        data class Script(
-            val bytes: ByteArray,
-            val sha256: String,
-        ) : Loaded
+    private val SAFE_NAME = Regex("[A-Za-z0-9._/-]+")
 
-        data object TooLarge : Loaded
+    /** Why a script cannot be reviewed; [message] completes "Can't be reviewed: ". */
+    sealed interface Reason {
+        val message: String
 
-        data class Unreadable(
-            val reason: String,
-        ) : Loaded
+        data object TooLarge : Reason {
+            override val message = "it is larger than ${MAX_BYTES / 1024} KB"
+        }
+
+        data object UnsafeName : Reason {
+            override val message = "its name uses characters other than letters, digits, '.', '_', '-' and '/'"
+        }
+
+        data object HiddenName : Reason {
+            override val message = "its name has a part that starts with '.'"
+        }
+
+        data class BadByte(
+            val line: Int,
+            val column: Int,
+            val value: Int,
+        ) : Reason {
+            override val message: String
+                get() {
+                    val what =
+                        when (value) {
+                            0x09 -> "a tab"
+                            0x0D -> "a carriage return"
+                            in 0x00..0x1F, 0x7F -> "a control character (0x%02X)".format(value)
+                            else -> "byte 0x%02X (not plain ASCII)".format(value)
+                        }
+                    return "line $line, column $column: $what"
+                }
+        }
+
+        data class LongLine(
+            val line: Int,
+        ) : Reason {
+            override val message = "line $line is longer than $MAX_LINE characters"
+        }
+
+        data class TrailingSpace(
+            val line: Int,
+        ) : Reason {
+            override val message = "line $line ends in a space"
+        }
     }
 
-    fun load(file: File): Loaded =
-        try {
-            val bytes = readAtMost(file, MAX_BYTES)
-            if (bytes == null) Loaded.TooLarge else Loaded.Script(bytes, TrustStore.sha256(bytes))
-        } catch (e: IOException) {
-            Loaded.Unreadable(e.message ?: e.javaClass.simpleName)
+    /** What [assess] found. */
+    sealed interface Assessment {
+        /** A plain script: these [bytes] can be shown, as [lines], and trusted. */
+        data class Reviewable(
+            val bytes: ByteArray,
+            val sha256: String,
+        ) : Assessment {
+            val lines: List<String> get() = lines(bytes)
         }
+
+        data class NotReviewable(
+            val reason: Reason,
+        ) : Assessment
+
+        /**
+         * The file could not be read. [cause] is for the log only: an IOException's message starts
+         * with the path, which the project chose, so it is never shown as it is.
+         */
+        data class Unreadable(
+            val cause: String,
+        ) : Assessment
+    }
+
+    /**
+     * Whether [file], at [relativePath] inside its hooks folder, can be reviewed. The name is
+     * checked before anything is read, and no more than [MAX_BYTES] + 1 bytes ever are.
+     */
+    fun assess(
+        file: File,
+        relativePath: String,
+    ): Assessment {
+        checkName(relativePath)?.let { return Assessment.NotReviewable(it) }
+        val bytes =
+            try {
+                readAtMost(file, MAX_BYTES)
+            } catch (e: IOException) {
+                return Assessment.Unreadable(e.message ?: e.javaClass.simpleName)
+            } ?: return Assessment.NotReviewable(Reason.TooLarge)
+        checkBytes(bytes)?.let { return Assessment.NotReviewable(it) }
+        return Assessment.Reviewable(bytes, TrustStore.sha256(bytes))
+    }
+
+    /** Why [relativePath] and [bytes] cannot be reviewed, or null when they can. */
+    fun check(
+        relativePath: String,
+        bytes: ByteArray,
+    ): Reason? = checkName(relativePath) ?: checkBytes(bytes)
+
+    /** Why a script named [relativePath] inside its hooks folder cannot be reviewed, or null. */
+    fun checkName(relativePath: String): Reason? {
+        if (!SAFE_NAME.matches(relativePath)) return Reason.UnsafeName
+        if (relativePath.split('/').any { it.startsWith(".") }) return Reason.HiddenName
+        return null
+    }
+
+    /** The first reason [bytes] cannot be reviewed, by position, or null when they can. */
+    fun checkBytes(bytes: ByteArray): Reason? {
+        if (bytes.size > MAX_BYTES) return Reason.TooLarge
+        var line = 1
+        var column = 0
+        var last = -1
+        for (b in bytes) {
+            val value = b.toInt() and 0xFF
+            when {
+                value == 0x0A -> {
+                    if (last == 0x20) return Reason.TrailingSpace(line)
+                    line++
+                    column = 0
+                }
+                value in 0x20..0x7E -> {
+                    column++
+                    if (column > MAX_LINE) return Reason.LongLine(line)
+                }
+                else -> return Reason.BadByte(line, column + 1, value)
+            }
+            last = value
+        }
+        if (last == 0x20) return Reason.TrailingSpace(line)
+        return null
+    }
+
+    /** The lines of a reviewable script, without their newlines; no empty last line for a final newline. */
+    fun lines(bytes: ByteArray): List<String> {
+        val text = String(bytes, Charsets.US_ASCII)
+        val lines = text.split('\n')
+        return if (text.endsWith('\n')) lines.dropLast(1) else lines
+    }
 
     /**
      * [file]'s bytes, or null when it holds more than [max]. Checks the length first and never
@@ -41,9 +172,17 @@ object ScriptReview {
     fun readAtMost(
         file: File,
         max: Int,
+    ): ByteArray? = readAtMost(file.length(), { file.inputStream() }, max)
+
+    /** [readAtMost] given the file's reported [length] and a way to [open] it. */
+    @Throws(IOException::class)
+    internal fun readAtMost(
+        length: Long,
+        open: () -> InputStream,
+        max: Int,
     ): ByteArray? {
-        if (file.length() > max) return null
-        file.inputStream().use { input ->
+        if (length > max) return null
+        open().use { input ->
             val buffer = ByteArray(max + 1)
             var read = 0
             while (read < buffer.size) {
@@ -56,9 +195,8 @@ object ScriptReview {
     }
 
     /**
-     * [text] as shown for review, how many characters in it were made visible, and where each
-     * `<U+XXXX>` it put in sits in [text], so a view can mark them apart from the same six
-     * characters typed in the script.
+     * A name as shown, how many characters in it were made visible, and where each `<U+XXXX>` it
+     * put in sits in [text], so a view can mark it apart from the same characters typed in a name.
      */
     data class Revealed(
         val text: String,
@@ -67,19 +205,14 @@ object ScriptReview {
     )
 
     /**
-     * Shows as `<U+XXXX>` every character that could make a script read differently from how it
-     * runs:
-     * - everything outside plain ASCII: bidirectional controls that make a command read as a
-     *   comment ("Trojan Source"), zero-width characters, or a no-break space, which bash takes as
-     *   part of a word, so `true<NBSP># cmd` defines or calls a function named `true<NBSP>#` while
-     *   looking like a comment;
-     * - every carriage return, Windows line endings included;
-     * - every space, tab or carriage return at the end of a line. After a backslash these turn
-     *   what reads as a line continuation (`: comment \`) into two commands: the shell escapes the
-     *   invisible character, and the next line runs on its own.
-     * Rather than list the dangerous characters, only printable ASCII, tab and newline are shown as
-     * they are. Characters are taken one code point at a time, so a supplementary character such as
-     * a tag (U+E0041) shows as one escape, and an unpaired surrogate is shown too.
+     * Shows as `<U+XXXX>` every character of a name the project chose (a project folder, a file
+     * the run was about, a script that cannot be reviewed) that could make it read differently
+     * from what it is: everything outside plain ASCII (bidirectional controls, zero-width
+     * characters, no-break spaces), every control character, and every space, tab or carriage
+     * return at the end of a line. Only printable ASCII, tab and newline are shown as they are.
+     * Characters are taken one code point at a time, so a supplementary character shows as one
+     * escape and an unpaired surrogate is shown too. Scripts themselves are not revealed: one that
+     * would need it cannot be reviewed at all.
      */
     fun reveal(text: String): Revealed {
         val trailing = trailingBlanks(text)
@@ -101,8 +234,7 @@ object ScriptReview {
     }
 
     // Marks each space, tab or carriage return in the run that ends a line (before a newline, or
-    // at the end of the text). All of the run, not only its last character: after `\` the first
-    // blank is escaped and the rest is just as invisible.
+    // at the end of the text).
     private fun trailingBlanks(text: String): BooleanArray {
         val marks = BooleanArray(text.length)
         var inTrail = true
@@ -116,9 +248,6 @@ object ScriptReview {
         }
         return marks
     }
-
-    /** [bytes] decoded as UTF-8 and revealed: what the review dialog shows. */
-    fun revealBytes(bytes: ByteArray): Revealed = reveal(String(bytes, Charsets.UTF_8))
 
     private fun isPlain(cp: Int): Boolean = cp == '\t'.code || cp == '\n'.code || cp in 0x20..0x7E
 }

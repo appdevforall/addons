@@ -66,14 +66,14 @@ data class HookRun(
 
 /**
  * A project hook that was skipped because the user has not trusted this content of it, or because
- * it is larger than [ScriptReview.MAX_BYTES] ([tooLarge]), which never runs.
+ * it cannot be reviewed ([notReviewable] says why), which never runs.
  */
 data class PendingTrust(
     val projectDir: File,
     val relativePath: String,
     val file: File,
     val sha256: String,
-    val tooLarge: Boolean = false,
+    val notReviewable: String? = null,
 )
 
 /** The recent runs and the project hooks awaiting review, observed by the Hooks tab. */

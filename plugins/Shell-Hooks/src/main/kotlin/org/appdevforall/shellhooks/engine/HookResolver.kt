@@ -30,8 +30,9 @@ interface HookSwitches {
 
 /**
  * Finds the user's global scripts for an event, then the project's own, which run only when
- * project hooks are on and the user trusted their exact content. An untrusted project script is
- * skipped and listed in [log] for review.
+ * project hooks are on, they can be reviewed ([ScriptReview]), and the user trusted their exact
+ * content. Any other project script is skipped and listed in [log], for review or with the reason
+ * it cannot be reviewed.
  */
 class HookResolver(
     private val paths: HookPaths,
@@ -56,25 +57,26 @@ class HookResolver(
         return global + project
     }
 
+    // Runs a project script only if its bytes now can be reviewed AND are trusted: an approval of
+    // bytes that cannot be reviewed (say, from an older version of this plugin) never runs.
     private fun verify(
         projectDir: File,
         root: File,
         script: File,
     ): ResolvedScript? {
         val relativePath = script.relativeTo(root).path
-        val bytes =
-            try {
-                ScriptReview.readAtMost(script, ScriptReview.MAX_BYTES)
-            } catch (e: IOException) {
-                warn("Shell Hooks: cannot read ${script.path}: ${e.message}")
-                return null
+        val (bytes, sha) =
+            when (val assessed = ScriptReview.assess(script, relativePath)) {
+                is ScriptReview.Assessment.Unreadable -> {
+                    warn("Shell Hooks: cannot read a project script: ${assessed.cause}")
+                    return null
+                }
+                is ScriptReview.Assessment.NotReviewable -> {
+                    log.addPending(PendingTrust(projectDir, relativePath, script, sha256 = "", notReviewable = assessed.reason.message))
+                    return null
+                }
+                is ScriptReview.Assessment.Reviewable -> assessed.bytes to assessed.sha256
             }
-        if (bytes == null) {
-            warn("Shell Hooks: ${script.path} is larger than ${ScriptReview.MAX_BYTES / 1024} KB; it never runs")
-            log.addPending(PendingTrust(projectDir, relativePath, script, sha256 = "", tooLarge = true))
-            return null
-        }
-        val sha = TrustStore.sha256(bytes)
         if (!trust.isTrusted(projectDir, relativePath, sha)) {
             log.addPending(PendingTrust(projectDir, relativePath, script, sha))
             return null
