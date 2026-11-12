@@ -103,11 +103,71 @@ class ScriptReviewTest {
     }
 
     @Test
-    fun controlCharactersAreShownButTabsNewlinesAndWindowsLineEndingsAreNot() {
+    fun controlCharactersAndEveryCarriageReturnAreShownButInteriorTabsAndNewlinesAreNot() {
         val revealed = ScriptReview.reveal("a\tb\r\nc\rd\u001B[2Je\u007F\u0085\uFFFD")
 
-        assertEquals("a\tb\r\nc<U+000D>d<U+001B>[2Je<U+007F><U+0085><U+FFFD>", revealed.text)
-        assertEquals(5, revealed.hidden)
+        assertEquals("a\tb<U+000D>\nc<U+000D>d<U+001B>[2Je<U+007F><U+0085><U+FFFD>", revealed.text)
+        assertEquals(6, revealed.hidden)
+    }
+
+    @Test
+    fun aWindowsEditedScriptShowsItsCarriageReturns() {
+        val revealed = ScriptReview.reveal("echo one\r\necho two\r\n")
+
+        assertEquals("echo one<U+000D>\necho two<U+000D>\n", revealed.text)
+        assertEquals(2, revealed.hidden)
+    }
+
+    @Test
+    fun aBackslashBeforeACarriageReturnDoesNotReadAsALineContinuation() {
+        // Reads as one inert `:` command continued onto the next line. The shell escapes the CR
+        // instead, so the second line runs on its own. Pinned as text only; never executed.
+        val script = ": Disabled, kept for reference: \\\r\nrm -rf \"\$HOME\"\n"
+
+        val revealed = ScriptReview.reveal(script)
+
+        assertEquals(": Disabled, kept for reference: \\<U+000D>\nrm -rf \"\$HOME\"\n", revealed.text)
+        assertEquals(1, revealed.hidden)
+    }
+
+    @Test
+    fun aBackslashBeforeATrailingSpaceDoesNotReadAsALineContinuation() {
+        val revealed = ScriptReview.reveal(": kept for reference: \\ \ntouch pwned\n")
+
+        assertEquals(": kept for reference: \\<U+0020>\ntouch pwned\n", revealed.text)
+        assertEquals(1, revealed.hidden)
+    }
+
+    @Test
+    fun aBackslashBeforeATrailingTabDoesNotReadAsALineContinuation() {
+        val revealed = ScriptReview.reveal(": kept for reference: \\\t\ntouch pwned\n")
+
+        assertEquals(": kept for reference: \\<U+0009>\ntouch pwned\n", revealed.text)
+        assertEquals(1, revealed.hidden)
+    }
+
+    @Test
+    fun theWholeBlankRunEndingALineIsShownIncludingAtTheEndOfTheText() {
+        // After a backslash the first blank is escaped; the ones after it are just as invisible.
+        val revealed = ScriptReview.reveal("a \\ \t \r\nb\t ")
+
+        assertEquals("a \\<U+0020><U+0009><U+0020><U+000D>\nb<U+0009><U+0020>", revealed.text)
+        assertEquals(6, revealed.hidden)
+    }
+
+    @Test
+    fun interiorSpacesAndTabsAreUnchanged() {
+        val script = "if [ -n \"\$1\" ];\tthen echo  \"\$1\"; fi\n\techo indented\n"
+
+        assertEquals(ScriptReview.Revealed(script, 0), ScriptReview.reveal(script))
+    }
+
+    @Test
+    fun eachEscapeIsLocatedInTheShownText() {
+        val revealed = ScriptReview.reveal("a\u00A0b \n")
+
+        assertEquals("a<U+00A0>b<U+0020>\n", revealed.text)
+        assertEquals(listOf("<U+00A0>", "<U+0020>"), revealed.escapes.map { revealed.text.substring(it) })
     }
 
     @Test

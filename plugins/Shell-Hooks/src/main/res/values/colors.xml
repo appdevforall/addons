@@ -24,4 +24,7 @@
     <color name="plugin_warning">#B45309</color>
 
     <color name="plugin_text_muted">#737373</color>
+
+    <!-- Behind each <U+XXXX> the review dialog adds, so it cannot be mistaken for the same text typed in a script. -->
+    <color name="reveal_escape_background">#FDE68A</color>
 </resources>

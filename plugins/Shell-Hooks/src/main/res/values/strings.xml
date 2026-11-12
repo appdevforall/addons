@@ -10,7 +10,10 @@
     <string name="sh_folder_label">Your hooks folder</string>
     <string name="sh_folder_help">Name an executable script after a hook, or put several in &lt;hook&gt;.d/. Scripts in actions/ appear as Run &lt;name&gt; on a file\'s menu. In the Terminal this folder is ~/.config/codeonthego/hooks.</string>
     <string name="sh_create_samples">Create sample hooks</string>
-    <string name="sh_samples_created">Wrote %1$d sample files. Drop .sample from a name and make the file executable to use it.</string>
+    <plurals name="sh_samples_created">
+        <item quantity="one">Wrote %1$d sample file. Drop .sample from its name and make the file executable to use it.</item>
+        <item quantity="other">Wrote %1$d sample files. Drop .sample from a name and make the file executable to use it.</item>
+    </plurals>
     <string name="sh_samples_failed">Could not write the samples: %1$s</string>
     <string name="sh_timeout_label">Stop a script after this many seconds</string>
     <string name="sh_timeout_hint">%1$d to %2$d</string>
@@ -20,7 +23,10 @@
     <string name="sh_project_hooks_summary">Scripts in a project\'s .codeonthego/hooks folder run only after you read and trust them in the Hooks tab, because a script can arrive with a project: a cloned repository, or an AI agent\'s edit. They need no executable bit.</string>
     <string name="sh_trusted_label">Projects with trusted scripts</string>
     <string name="sh_trusted_none">None</string>
-    <string name="sh_trusted_count">%1$d trusted scripts</string>
+    <plurals name="sh_trusted_count">
+        <item quantity="one">%1$d trusted script</item>
+        <item quantity="other">%1$d trusted scripts</item>
+    </plurals>
     <string name="sh_revoke">Revoke</string>
 
     <!-- Hooks tab -->
@@ -35,7 +41,11 @@
     <string name="hk_review_intro">This script is stored in the project %1$s. It runs with the same access as the Terminal, including the network. Trust covers only this script, not other project files it runs. Trust it only if you have read it and know what it does.</string>
     <string name="hk_review_too_large">This script is larger than %1$d KB, too large to review here. Read it in the editor; it will not run from here.</string>
     <string name="hk_review_unreadable">Could not read the script: %1$s</string>
-    <string name="hk_review_hidden">This script contains %1$d characters outside plain ASCII, shown as &lt;U+XXXX&gt;. A no-break space or an invisible character can make a script run differently from how it reads. Do not trust it unless you know why each one is there.</string>
+    <plurals name="hk_review_hidden">
+        <item quantity="one">%1$d character is shown as &lt;U+XXXX&gt;, highlighted: a character outside plain ASCII, a carriage return, or a space or tab at the end of a line. Any of these can make a script run differently from how it reads; after a backslash, a hidden one turns what looks like a line continuation into a separate command. Do not trust the script unless you know why it is there.</item>
+        <item quantity="other">%1$d characters are shown as &lt;U+XXXX&gt;, highlighted: characters outside plain ASCII, carriage returns, and spaces or tabs at the end of a line. Any of these can make a script run differently from how it reads; after a backslash, a hidden one turns what looks like a line continuation into a separate command. Do not trust the script unless you know why each one is there.</item>
+    </plurals>
+    <string name="hk_review_path">Script: %1$s</string>
     <string name="hk_trust">Trust</string>
     <string name="hk_cancel">Cancel</string>
     <string name="hk_outcome_ok">OK</string>

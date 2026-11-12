@@ -55,38 +55,66 @@ object ScriptReview {
         }
     }
 
-    /** [text] as shown for review, and how many characters in it were made visible. */
+    /**
+     * [text] as shown for review, how many characters in it were made visible, and where each
+     * `<U+XXXX>` it put in sits in [text], so a view can mark them apart from the same six
+     * characters typed in the script.
+     */
     data class Revealed(
         val text: String,
         val hidden: Int,
+        val escapes: List<IntRange> = emptyList(),
     )
 
     /**
-     * Shows everything outside plain ASCII as `<U+XXXX>`. A script can use such characters to read
-     * differently from how it runs: bidirectional controls that make a command read as a comment
-     * ("Trojan Source"), zero-width characters, or a no-break space, which bash takes as part of a
-     * word, so `true<NBSP># cmd` defines or calls a function named `true<NBSP>#` while looking
-     * like a comment. Rather than list the dangerous ones, only printable ASCII, tab and newline
-     * are shown as they are, plus a carriage return directly before a newline (a Windows line
-     * ending). Characters are taken one code point at a time, so a supplementary character such
-     * as a tag (U+E0041) shows as one escape, and an unpaired surrogate is shown too.
+     * Shows as `<U+XXXX>` every character that could make a script read differently from how it
+     * runs:
+     * - everything outside plain ASCII: bidirectional controls that make a command read as a
+     *   comment ("Trojan Source"), zero-width characters, or a no-break space, which bash takes as
+     *   part of a word, so `true<NBSP># cmd` defines or calls a function named `true<NBSP>#` while
+     *   looking like a comment;
+     * - every carriage return, Windows line endings included;
+     * - every space, tab or carriage return at the end of a line. After a backslash these turn
+     *   what reads as a line continuation (`: comment \`) into two commands: the shell escapes the
+     *   invisible character, and the next line runs on its own.
+     * Rather than list the dangerous characters, only printable ASCII, tab and newline are shown as
+     * they are. Characters are taken one code point at a time, so a supplementary character such as
+     * a tag (U+E0041) shows as one escape, and an unpaired surrogate is shown too.
      */
     fun reveal(text: String): Revealed {
+        val trailing = trailingBlanks(text)
         val out = StringBuilder(text.length)
-        var hidden = 0
+        val escapes = mutableListOf<IntRange>()
         var i = 0
         while (i < text.length) {
             val cp = text.codePointAt(i)
-            val crlf = cp == '\r'.code && i + 1 < text.length && text[i + 1] == '\n'
-            if (crlf || isPlain(cp)) {
+            if (isPlain(cp) && !trailing[i]) {
                 out.appendCodePoint(cp)
             } else {
+                val start = out.length
                 out.append("<U+").append(Integer.toHexString(cp).uppercase().padStart(4, '0')).append('>')
-                hidden++
+                escapes += start until out.length
             }
             i += Character.charCount(cp)
         }
-        return Revealed(out.toString(), hidden)
+        return Revealed(out.toString(), escapes.size, escapes)
+    }
+
+    // Marks each space, tab or carriage return in the run that ends a line (before a newline, or
+    // at the end of the text). All of the run, not only its last character: after `\` the first
+    // blank is escaped and the rest is just as invisible.
+    private fun trailingBlanks(text: String): BooleanArray {
+        val marks = BooleanArray(text.length)
+        var inTrail = true
+        for (j in text.indices.reversed()) {
+            val c = text[j]
+            when {
+                c == '\n' -> inTrail = true
+                inTrail && (c == ' ' || c == '\t' || c == '\r') -> marks[j] = true
+                else -> inTrail = false
+            }
+        }
+        return marks
     }
 
     /** [bytes] decoded as UTF-8 and revealed: what the review dialog shows. */

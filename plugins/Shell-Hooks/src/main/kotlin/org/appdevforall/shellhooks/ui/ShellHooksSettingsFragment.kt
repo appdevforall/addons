@@ -19,6 +19,7 @@ import org.appdevforall.shellhooks.ShellHooksHelp
 import org.appdevforall.shellhooks.ShellHooksPlugin
 import org.appdevforall.shellhooks.ShellHooksSettings
 import org.appdevforall.shellhooks.engine.Hook
+import org.appdevforall.shellhooks.engine.ScriptReview
 import org.appdevforall.shellhooks.engine.TimeoutSetting
 import java.io.File
 
@@ -81,7 +82,7 @@ class ShellHooksSettingsFragment : Fragment() {
             samplesResult.visibility = View.VISIBLE
             samplesResult.text =
                 try {
-                    getString(R.string.sh_samples_created, plugin.writeSamples())
+                    plugin.writeSamples().let { count -> resources.getQuantityString(R.plurals.sh_samples_created, count, count) }
                 } catch (e: Exception) {
                     getString(R.string.sh_samples_failed, e.message ?: e.javaClass.simpleName)
                 }
@@ -171,9 +172,10 @@ class ShellHooksSettingsFragment : Fragment() {
         }
         for (path in projects) {
             val row = layoutInflater.inflate(R.layout.item_trusted_project, list, false)
-            row.findViewById<TextView>(R.id.trustedPath).text = path
+            // A project path is the project's to choose, so it is revealed like a script.
+            row.findViewById<TextView>(R.id.trustedPath).text = ScriptReview.reveal(path).text
             row.findViewById<TextView>(R.id.trustedCount).text =
-                getString(R.string.sh_trusted_count, plugin.trust.trustedCount(File(path)))
+                plugin.trust.trustedCount(File(path)).let { count -> resources.getQuantityString(R.plurals.sh_trusted_count, count, count) }
             row.findViewById<Button>(R.id.trustedRevoke).apply {
                 help(this, ShellHooksHelp.TAG_PROJECT_HOOKS)
                 setOnClickListener {

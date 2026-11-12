@@ -20,4 +20,6 @@
     <color name="plugin_warning">#FCD34D</color>
 
     <color name="plugin_text_muted">#A3A3A3</color>
+
+    <color name="reveal_escape_background">#78350F</color>
 </resources>

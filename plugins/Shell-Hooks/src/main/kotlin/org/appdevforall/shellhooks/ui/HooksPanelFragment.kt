@@ -2,6 +2,9 @@ package org.appdevforall.shellhooks.ui
 
 import android.content.DialogInterface
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.BackgroundColorSpan
 import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.View
@@ -132,8 +135,9 @@ class HooksPanelFragment : Fragment() {
         run: HookRun,
     ): View {
         val row = layoutInflater.inflate(R.layout.item_hook_run, parent, false)
-        val target = run.targetLabel?.let { "  $it" }.orEmpty()
-        row.findViewById<TextView>(R.id.runTitle).text = "${run.name}  ${scriptLabel(run)}$target"
+        // Script and file names can come from a project, so they are revealed like a script.
+        val target = run.targetLabel?.let { "  ${ScriptReview.reveal(it).text}" }.orEmpty()
+        row.findViewById<TextView>(R.id.runTitle).text = "${run.name}  ${ScriptReview.reveal(scriptLabel(run)).text}$target"
 
         val detail = row.findViewById<TextView>(R.id.runDetail)
         detail.text =
@@ -238,10 +242,18 @@ class HooksPanelFragment : Fragment() {
                         help(this, ShellHooksHelp.TAG_REVIEW)
                     },
                 )
+                // In full and wrapping here: the title may cut a long path off.
+                addView(
+                    TextView(context).apply {
+                        text = getString(R.string.hk_review_path, ScriptReview.reveal(entry.relativePath).text)
+                        leftToRight()
+                        setPadding(0, padding / 2, 0, 0)
+                    },
+                )
                 if (revealed.hidden > 0) {
                     addView(
                         TextView(context).apply {
-                            text = getString(R.string.hk_review_hidden, revealed.hidden)
+                            text = resources.getQuantityString(R.plurals.hk_review_hidden, revealed.hidden, revealed.hidden)
                             setTextColor(context.getColor(R.color.plugin_error))
                             setPadding(0, padding / 2, 0, 0)
                             help(this, ShellHooksHelp.TAG_REVIEW)
@@ -250,8 +262,9 @@ class HooksPanelFragment : Fragment() {
                 }
                 addView(
                     TextView(context).apply {
-                        text = revealed.text
+                        text = highlighted(revealed)
                         typeface = android.graphics.Typeface.MONOSPACE
+                        leftToRight()
                         setTextIsSelectable(true)
                         setPadding(0, padding / 2, 0, 0)
                     },
@@ -286,6 +299,26 @@ class HooksPanelFragment : Fragment() {
                 .setNegativeButton(R.string.hk_cancel, null)
                 .setOnDismissListener(::forget)
                 .show()
+    }
+
+    // A script reads left to right whatever the device's language: in a right-to-left layout,
+    // lines without letters would be aligned right and their punctuation reordered.
+    private fun TextView.leftToRight() {
+        layoutDirection = View.LAYOUT_DIRECTION_LTR
+        textDirection = View.TEXT_DIRECTION_LTR
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+    }
+
+    // Marks each <U+XXXX> the reveal added, so it cannot be mistaken for the same six characters
+    // typed in the script.
+    private fun highlighted(revealed: ScriptReview.Revealed): CharSequence {
+        if (revealed.escapes.isEmpty()) return revealed.text
+        val color = requireContext().getColor(R.color.reveal_escape_background)
+        return SpannableString(revealed.text).apply {
+            for (range in revealed.escapes) {
+                setSpan(BackgroundColorSpan(color), range.first, range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
     }
 
     // The path is the project's to choose, so it is revealed like the script.
