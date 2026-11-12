@@ -15,7 +15,7 @@ Two apps are needed because a plugin can't run a long-lived server; the server a
 ## Scope and background
 
 - **Not goals, by decision:** no payment, pricing or licensing; local networks only — Wi-Fi or the phone's own hotspot, never the internet; no accounts, and no tracking of buyers. **Buyers need only a browser.** Features that would need Code On The Go on the buyer's phone are out of scope, not merely deferred.
-- **Deliberate simplifications:** plain HTTP, no minimum PIN length, and no limit on PIN guesses (see *Limitations*).
+- **Deliberate simplifications:** plain HTTP, no minimum PIN length, and a PIN-guess limit per buyer's address only (see *Limitations*).
 - **References:** Code On The Go is at `github.com/appdevforall/CodeOnTheGo` (working branch `stage`); its wiki has the plugin developer guide. Example plugins are at `github.com/appdevforall/plugin-examples`. The Serve screen's design follows the **Share Access** screen in KnowledgeToGo. The ticket is ADFA-6207.
 
 ## Files
@@ -154,7 +154,7 @@ Routes:
 | any page or file, PIN set, not authenticated | redirect to `/pin` |
 | `GET /pin`, authenticated | redirect to `/` |
 | `GET /pin`, not authenticated | PIN entry page, showing `storeName` |
-| `POST /pin` | correct → set the `ls_auth` cookie, redirect to `/`; wrong → PIN page with an error |
+| `POST /pin` | correct → set the `ls_auth` cookie, redirect to `/`; wrong → PIN page with an error; after 5 wrong PINs from one address → 429 and a wait of 30 seconds, doubling with each further wrong PIN up to an hour |
 | `GET /` or `/index.html` | `index.html`, or its `.gz` copy (see below) |
 | `GET /f/<path>` | the file at `<path>` inside the Store directory, or its `.gz` copy (see below); 404 if there's no such file |
 | anything else | 404 |
@@ -283,7 +283,7 @@ Manage Catalog, per the wireframes: store name, store description, header image,
 - **Phones put up obstacles to installing apps from outside an app store,** and Share Your Apps can't remove them. They meet buyers installing an APK from a store, and new sellers installing Share Your Apps Server (Appendix E.2):
   - **Android asks to allow the app doing the installing,** usually the browser, to install unknown apps. Allow it, install, then turn that setting off again, in **Settings → Apps → Special app access → Install unknown apps**.
   - **Some Samsung phones have Auto Blocker,** which blocks installing apps that don't come from a small set of allowed sources, such as Galaxy Store and Google Play. On those phones, turn Auto Blocker off to install — in **Settings → Security and privacy → Auto Blocker** — then install. Auto Blocker turns itself back on automatically.
-- Plain HTTP, so a PIN a buyer types crosses the network in plaintext; no limit on PIN guesses; no minimum PIN length, so a one-digit PIN is allowed.
+- Plain HTTP, so a PIN a buyer types crosses the network in plaintext; PIN guesses are limited per address only — after 5 wrong PINs an address waits 30 seconds, doubling up to an hour — so many addresses guessing together aren't slowed; no minimum PIN length, so a one-digit PIN is allowed.
 - Right after a publish, until background compression finishes, buyers download uncompressed files.
 - Anything in shared storage can be read or changed by other apps on the device.
 - A download in progress at the moment the server switches directories is cut off and must be retried; buyers viewing the old page reload.
@@ -311,7 +311,6 @@ Worth doing only if testing shows a need:
 Handled elsewhere, or later:
 
 - **Developer verification:** registering the server's package with Google, and the wider question for Code On The Go, are handled outside this project.
-- **Signing in CI,** which would take the server's key off the phone. It needs the projects on GitHub first.
 
 ## Automated tests
 
