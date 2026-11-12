@@ -1,0 +1,22 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// AGP 9 compiles Kotlin itself, using the Kotlin Gradle plugin on this classpath; the IDE supplies
+// both versions so they always match its offline bundle.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${{KOTLIN_VERSION}}")
+    }
+}
+
+// Pre-declaring AGP here (apply false) puts it on the classpath before CoGo's LogSenderPlugin is
+// applied; without it that plugin fails with "com/android/build/api/variant/ApplicationVariant".
+plugins {
+    id("com.android.application") apply false version "${{AGP_VERSION}}"
+}
+
+tasks.register<Delete>("clean") {
+    delete(rootProject.layout.buildDirectory)
+}

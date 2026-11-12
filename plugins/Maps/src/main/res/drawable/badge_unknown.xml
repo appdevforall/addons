@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Neutral "still probing" pill background. Same shape as the
+    reachable / unreachable variants; only the colour differs.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="8dp" />
+    <solid android:color="?attr/colorSurfaceVariant" />
+</shape>

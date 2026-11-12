@@ -1,0 +1,384 @@
+package ${{PACKAGE_NAME}};
+
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationManager;
+import android.os.Bundle;
+import android.widget.ImageButton;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.maplibre.android.MapLibre;
+import org.maplibre.android.camera.CameraPosition;
+import org.maplibre.android.camera.CameraUpdateFactory;
+import org.maplibre.android.geometry.LatLng;
+import org.maplibre.android.geometry.LatLngBounds;
+import org.maplibre.android.location.LocationComponent;
+import org.maplibre.android.location.LocationComponentActivationOptions;
+import org.maplibre.android.location.modes.CameraMode;
+import org.maplibre.android.location.modes.RenderMode;
+import org.maplibre.android.maps.MapLibreMap;
+import org.maplibre.android.maps.MapView;
+import org.maplibre.android.maps.Style;
+import org.maplibre.android.net.ConnectivityReceiver;
+import org.maplibre.android.style.layers.LineLayer;
+import org.maplibre.android.style.layers.PropertyFactory;
+import org.maplibre.android.style.sources.GeoJsonSource;
+
+/**
+ * Offline region-map Activity.
+ *
+ * <p>Renders ONE bundled OpenStreetMap region from a fixed, flat asset layout:
+ *
+ * <pre>
+ *   assets/maps/tiles.pmtiles    — vector OSM tiles
+ *   assets/maps/basemap.pmtiles  — low-zoom Natural Earth raster fallback
+ *   assets/maps/style.json       — MapLibre style with PMTILES_URL_* placeholders
+ *   assets/maps/meta.json        — { "bbox": [s, w, n, e] } for the initial camera
+ * </pre>
+ *
+ * <p>A region is bundled by the Maps tab in Code on the Go: download a region,
+ * then "apply" it — that copies those files in, OVERWRITING any previous region.
+ * Until a region is applied the assets are empty and the map shows a blank
+ * background with the "no region configured" banner.
+ *
+ * <p><b>PMTiles loading strategy.</b> MapLibre 13.1.0 OpenGL ES on Android only
+ * reliably dispatches the {@code pmtiles://http(s)://...} URL scheme —
+ * {@code file://} silently no-ops and {@code asset://} mishandles the path. So
+ * this activity starts an in-process loopback HTTP server ({@link
+ * PmtilesHttpServer}) serving the bundled {@code maps/} assets with Range
+ * support, then substitutes {@code pmtiles://http://127.0.0.1:<port>/maps/...}
+ * into the style at runtime.
+ *
+ * <p><b>build.gradle.kts requirement</b>: pmtiles assets MUST be uncompressed
+ * ({@code androidResources { noCompress.add("pmtiles") }}) so the server can seek
+ * with {@code AssetManager.openFd}.
+ *
+ * <p><b>AndroidManifest</b>: needs INTERNET + a {@code networkSecurityConfig}
+ * whitelisting cleartext to 127.0.0.1 (modern Android blocks it by default).
+ *
+ * <p>Lifecycle delegates to the {@link MapView} per upstream docs — missing a
+ * forward leaks GPU memory / crashes the renderer.
+ */
+public class MapRegionActivity extends AppCompatActivity {
+
+    private static final int LOCATION_PERMISSION_REQUEST = 4011;
+
+    private MapView mapView;
+    private MapLibreMap map;
+    private PmtilesHttpServer pmtilesServer;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // MapLibre native init must run BEFORE setContentView() inflates a MapView.
+        MapLibre.getInstance(this);
+        // Force connectivity to "connected" so the loopback HTTP server keeps
+        // serving in airplane mode — ConnectivityReceiver otherwise fires
+        // connected=false and drops ALL HTTP, even to 127.0.0.1. The tiles are
+        // bundled in the APK, so no external internet is ever needed.
+        ConnectivityReceiver.instance(getApplicationContext()).setConnected(true);
+
+        // Start the loopback server before loading the style so its port can be
+        // substituted into the PMTiles URLs.
+        pmtilesServer = new PmtilesHttpServer(getAssets(), "maps/");
+        int port;
+        try {
+            port = pmtilesServer.start();
+        } catch (java.io.IOException e) {
+            android.util.Log.e("MapRegionActivity", "PmtilesHttpServer start failed", e);
+            port = -1;
+        }
+
+        setContentView(R.layout.activity_map_region);
+
+        mapView = findViewById(R.id.mapView);
+        mapView.onCreate(savedInstanceState);
+
+        ImageButton recenter = findViewById(R.id.recenterButton);
+        if (recenter != null) {
+            recenter.setOnClickListener(v -> recenterOnUser());
+        }
+
+        // Empty-state banner: shown only when NO region is bundled. Key off the
+        // region's tiles so a real region (which always ships tiles) hides it.
+        if (hasBundledRegion()) {
+            findViewById(R.id.empty_state_banner)
+                .setVisibility(android.view.View.GONE);
+        }
+
+        applyBottomInsets();
+
+        // Substitute the loopback port + fixed flat paths into the style.
+        String styleJson = loadStyleFromAssets();
+        if (styleJson != null && port > 0) {
+            String base = "pmtiles://http://127.0.0.1:" + port + "/maps";
+            styleJson = styleJson
+                .replace("PMTILES_URL_TILES", base + "/tiles.pmtiles")
+                .replace("PMTILES_URL_BASEMAP", base + "/basemap.pmtiles")
+                // Glyphs (fonts for place/street labels) are served as plain HTTP
+                // (NOT pmtiles://) off the same loopback server; {fontstack}/{range}
+                // are MapLibre template tokens it fills in per glyph request.
+                .replace("GLYPHS_URL",
+                    "http://127.0.0.1:" + port + "/maps/fonts/{fontstack}/{range}.pbf");
+        }
+        final String finalStyle = styleJson;
+
+        mapView.addOnDidFailLoadingMapListener(reason ->
+            android.util.Log.e("MapRegionActivity", "MAP FAIL: " + reason));
+
+        mapView.getMapAsync(m -> {
+            map = m;
+            if (finalStyle != null) {
+                m.setStyle(new Style.Builder().fromJson(finalStyle), style -> {
+                    android.util.Log.i("MapRegionActivity",
+                        "style loaded. sources=" + style.getSources().size()
+                            + " layers=" + style.getLayers().size());
+                    enableLocationDot(style);
+                    addBboxOutline(style);
+                    applyInitialCamera();
+                });
+            } else {
+                applyInitialCamera();
+            }
+        });
+    }
+
+    // ----- Current-location dot + recenter button -----
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            || ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * Activate MapLibre's location dot via its built-in default location engine
+     * (no Play Services needed). No-op without permission.
+     */
+    @SuppressLint("MissingPermission")
+    private void enableLocationDot(@NonNull Style style) {
+        if (map == null || !hasLocationPermission()) return;
+        LocationComponent lc = map.getLocationComponent();
+        lc.activateLocationComponent(
+            LocationComponentActivationOptions.builder(this, style)
+                .useDefaultLocationEngine(true)
+                .build());
+        lc.setLocationComponentEnabled(true);
+        lc.setCameraMode(CameraMode.NONE);
+        lc.setRenderMode(RenderMode.NORMAL);
+    }
+
+    /** Animate the camera to the user's last known location; request permission on first tap. */
+    @SuppressLint("MissingPermission")
+    private void recenterOnUser() {
+        if (!hasLocationPermission()) {
+            ActivityCompat.requestPermissions(this,
+                new String[]{ Manifest.permission.ACCESS_FINE_LOCATION },
+                LOCATION_PERMISSION_REQUEST);
+            return;
+        }
+        if (map == null) return;
+        LocationComponent lc = map.getLocationComponent();
+        if (!lc.isLocationComponentActivated() && map.getStyle() != null) {
+            enableLocationDot(map.getStyle());
+        }
+        Location last = lc.getLastKnownLocation();
+        if (last != null) {
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(
+                new LatLng(last.getLatitude(), last.getLongitude()), 14.0));
+        } else {
+            android.util.Log.i("MapRegionActivity", "recenter: no location fix yet");
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+            @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST && hasLocationPermission()
+                && map != null && map.getStyle() != null) {
+            enableLocationDot(map.getStyle());
+            recenterOnUser();
+        }
+    }
+
+    // ----- Assets: style + bbox center -----
+
+    /** True if a region's vector tiles are bundled (assets/maps/tiles.pmtiles present). */
+    private boolean hasBundledRegion() {
+        try (java.io.InputStream is = getAssets().open("maps/tiles.pmtiles")) {
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Read assets/maps/style.json verbatim — caller substitutes URL placeholders. */
+    private String loadStyleFromAssets() {
+        try {
+            return new String(readAsset("maps/style.json"), "UTF-8");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Position the initial camera: center on the user's location if a fix is already
+     * available, otherwise frame the whole bundled region (its bbox). Falls back to a
+     * world view if there's no region. We do NOT prompt for location here — only use a
+     * fix we already have — so launch never blocks on a permission dialog.
+     */
+    private void applyInitialCamera() {
+        if (map == null) return;
+        LatLng here = lastKnownLatLng();
+        if (here != null) {
+            map.setCameraPosition(new CameraPosition.Builder().target(here).zoom(14.0).build());
+            return;
+        }
+        LatLngBounds bounds = readBboxBounds();
+        if (bounds != null) {
+            int pad = (int) (48 * getResources().getDisplayMetrics().density);
+            try {
+                map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, pad));
+                return;
+            } catch (Exception e) {
+                android.util.Log.w("MapRegionActivity", "fit bounds failed: " + e.getMessage());
+            }
+        }
+        map.setCameraPosition(new CameraPosition.Builder().target(new LatLng(0.0, 0.0)).zoom(1.0).build());
+    }
+
+    /** The OS's most recent cached fix across providers, or null (no permission / no fix). */
+    @SuppressLint("MissingPermission")
+    private LatLng lastKnownLatLng() {
+        if (!hasLocationPermission()) return null;
+        LocationManager lm = getSystemService(LocationManager.class);
+        if (lm == null) return null;
+        Location best = null;
+        for (String p : new String[]{
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER,
+        }) {
+            try {
+                Location l = lm.getLastKnownLocation(p);
+                if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
+            } catch (Exception ignored) {}
+        }
+        return best != null ? new LatLng(best.getLatitude(), best.getLongitude()) : null;
+    }
+
+    /** assets/maps/meta.json's bbox ([s, w, n, e]) as MapLibre bounds, or null. */
+    private LatLngBounds readBboxBounds() {
+        try {
+            JSONObject meta = new JSONObject(new String(readAsset("maps/meta.json"), "UTF-8"));
+            JSONArray bbox = meta.optJSONArray("bbox");
+            if (bbox != null && bbox.length() == 4) {
+                double s = bbox.getDouble(0);
+                double w = bbox.getDouble(1);
+                double n = bbox.getDouble(2);
+                double e = bbox.getDouble(3);
+                return new LatLngBounds.Builder()
+                    .include(new LatLng(n, e))
+                    .include(new LatLng(s, w))
+                    .build();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private byte[] readAsset(String path) throws java.io.IOException {
+        java.io.InputStream in = getAssets().open(path);
+        try {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return out.toByteArray();
+        } finally {
+            in.close();
+        }
+    }
+
+    /**
+     * Lift the recenter button above the system navigation bar. The app draws
+     * edge-to-edge (enforced for targetSdk 35+ on Android 15/16), so without this
+     * the button would sit UNDER the nav bar. We add the nav-bar inset to the
+     * button's bottom margin.
+     */
+    private void applyBottomInsets() {
+        final android.view.View root = findViewById(android.R.id.content);
+        final ImageButton recenter = findViewById(R.id.recenterButton);
+        final float density = getResources().getDisplayMetrics().density;
+        final int baseRecenterMarginPx = (int) (16 * density);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            int navBottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            if (recenter != null
+                    && recenter.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+                android.view.ViewGroup.MarginLayoutParams lp =
+                    (android.view.ViewGroup.MarginLayoutParams) recenter.getLayoutParams();
+                lp.bottomMargin = baseRecenterMarginPx + navBottom;
+                recenter.setLayoutParams(lp);
+            }
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(root);
+    }
+
+    // ----- Region boundary outline -----
+
+    private static final String BBOX_SOURCE = "region-bbox-src";
+    private static final String BBOX_LAYER = "region-bbox-outline";
+
+    /**
+     * Draw the bundled region's bbox as a dashed rectangle so the user can see the
+     * downloaded extent at any zoom — the framed area when zoomed out over Natural
+     * Earth, and the edges when zoomed in. Reads the same {@code bbox} ([s, w, n, e])
+     * as the camera framing.
+     */
+    private void addBboxOutline(Style style) {
+        try {
+            JSONObject meta = new JSONObject(new String(readAsset("maps/meta.json"), "UTF-8"));
+            JSONArray bbox = meta.optJSONArray("bbox");
+            if (bbox == null || bbox.length() != 4) return;
+            double s = bbox.getDouble(0), w = bbox.getDouble(1), n = bbox.getDouble(2), e = bbox.getDouble(3);
+            // GeoJSON coords are [lon, lat]; closed ring NW -> NE -> SE -> SW -> NW.
+            String geo = "{\"type\":\"Feature\",\"geometry\":{\"type\":\"LineString\",\"coordinates\":"
+                + "[[" + w + "," + n + "],[" + e + "," + n + "],[" + e + "," + s + "],["
+                + w + "," + s + "],[" + w + "," + n + "]]}}";
+            style.addSource(new GeoJsonSource(BBOX_SOURCE, geo));
+            style.addLayer(new LineLayer(BBOX_LAYER, BBOX_SOURCE).withProperties(
+                PropertyFactory.lineColor(Color.parseColor("#1f6feb")),
+                PropertyFactory.lineWidth(2.5f),
+                PropertyFactory.lineDasharray(new Float[]{ 3f, 2f })));
+        } catch (Exception ignored) {}
+    }
+
+    // ----- Lifecycle (every callback must reach the MapView) -----
+
+    @Override protected void onStart() { super.onStart(); mapView.onStart(); }
+    @Override protected void onResume() { super.onResume(); mapView.onResume(); }
+    @Override protected void onPause() { super.onPause(); mapView.onPause(); }
+    @Override protected void onStop() { super.onStop(); mapView.onStop(); }
+    @Override public void onLowMemory() { super.onLowMemory(); mapView.onLowMemory(); }
+    @Override protected void onDestroy() {
+        super.onDestroy();
+        mapView.onDestroy();
+        if (pmtilesServer != null) pmtilesServer.stop();
+    }
+    @Override protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        mapView.onSaveInstanceState(outState);
+    }
+}

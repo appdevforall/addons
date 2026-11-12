@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        PluginTheme — the theme applied to the Maps plugin's OWN views.
+
+        Why this file exists: CoGo's PluginResourceContext (since ADFA-3260) looks
+        up a style literally named "PluginTheme" in the plugin package and applies
+        it onto the context the plugin inflates its fragments with. So this is what
+        colors the plugin's own screens (region manager, source picker, save-region,
+        download-progress, bbox picker) and — via the DayNight parent + the
+        values-night color variants — makes them dark-mode correct. Keep the name.
+
+        Deliberately small, NOT a full M3 palette. The plugin does not brand
+        host-loaded Material widgets (buttons take the host's colors — see the note
+        below), so the only theme items here are the ones the plugin's own views
+        actually resolve:
+          - the surface / on-surface / outline + error color attrs its layouts and
+            drawables reference via ?attr/* ;
+          - the framework android:textColor* attrs, which are implicit defaults for
+            plain TextView / RadioButton (non-Material widgets that look up
+            android:textColorPrimary rather than the M3 colorOnSurface attr).
+    -->
+    <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Error -->
+        <item name="colorError">@color/plugin_error</item>
+        <!-- Surface / outline family — resolved by the plugin's own layouts via ?attr/* -->
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+
+        <!-- Framework attrs (android: ids are global, so these reach non-Material
+             widgets that plugin color* attrs can't). Implicit text-color defaults
+             for plain TextView / RadioButton. Mirrors the Forms plugin pattern. -->
+        <item name="android:textColorPrimary">@color/plugin_on_surface</item>
+        <item name="android:textColorSecondary">@color/plugin_on_surface_variant</item>
+        <item name="android:textColorHint">@color/plugin_outline</item>
+    </style>
+
+    <!--
+        NOTE — no button styles, and no primary/secondary/tertiary color attrs,
+        deliberately. Buttons (and all Material widgets) take the HOST's default
+        colors, like every other plugin in this repo. Branding them isn't just
+        unconventional here, it's structurally impossible from the plugin side:
+        plugin resources compile at a custom package id (Maps: 0x5d) while
+        MaterialButton & friends load from the host APK (parent-first plugin
+        classloader) and resolve M3 color attrs by the host's 0x7f attr ids — so
+        plugin-side theme/overlay items can never recolor them; only framework
+        android:* attrs or programmatic ColorStateLists get through (verified
+        on-device 2026-07-06; full mechanism in ThemedInflater.kt's KDoc). A
+        forest-green branding route was built and verified, then dropped to stay
+        consistent with the repo's host-themed-widgets convention. The plugin keeps
+        its forest-green accent only where it draws its OWN pixels (bbox handle,
+        active-region badge) — see @color/plugin_primary in colors.xml.
+    -->
+</resources>
