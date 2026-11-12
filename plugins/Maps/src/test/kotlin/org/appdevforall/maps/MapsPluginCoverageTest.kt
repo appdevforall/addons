@@ -401,13 +401,15 @@ class MapsPluginCoverageTest {
         server.start()
         try {
             val clients = listOf(RegionDownloader.httpClient, IiabArchiveResolver.catalogClient)
-            val failures = java.util.concurrent.ConcurrentLinkedQueue<String>()
+            // Whether each call was canceled when it failed. The exception text is not checked:
+            // OkHttp reports "Canceled" on macOS but "Socket closed" on Linux for the same cancel.
+            val canceledAtFailure = java.util.concurrent.ConcurrentLinkedQueue<Boolean>()
             val done = java.util.concurrent.CountDownLatch(clients.size)
             val calls = clients.map { client ->
                 client.newCall(okhttp3.Request.Builder().url(server.url("/")).build()).also { call ->
                     call.enqueue(object : okhttp3.Callback {
                         override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                            failures += e.message.orEmpty()
+                            canceledAtFailure += call.isCanceled()
                             done.countDown()
                         }
 
@@ -426,7 +428,7 @@ class MapsPluginCoverageTest {
 
             assertTrue("both calls end well before the 5 s timeouts", done.await(3, java.util.concurrent.TimeUnit.SECONDS))
             assertEquals(listOf(true, true), calls.map { it.isCanceled() })
-            assertEquals(listOf("Canceled", "Canceled"), failures.toList())
+            assertEquals(listOf(true, true), canceledAtFailure.toList())
         } finally {
             server.shutdown()
         }
