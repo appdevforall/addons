@@ -11,9 +11,14 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.appdevforall.shellhooks.R
 import org.appdevforall.shellhooks.ShellHooksHelp
 import org.appdevforall.shellhooks.ShellHooksPlugin
@@ -89,7 +94,8 @@ class ShellHooksSettingsFragment : Fragment() {
 
         bindTimeout(view.findViewById(R.id.shTimeout), settings)
         bindHooks(view.findViewById(R.id.shHookList), settings)
-        bindTrusted(view.findViewById(R.id.shTrustedList), plugin)
+        val trustedList = view.findViewById<LinearLayout>(R.id.shTrustedList)
+        viewLifecycleOwner.lifecycleScope.launch { bindTrusted(trustedList, plugin) }
     }
 
     private fun bindTimeout(
@@ -153,12 +159,19 @@ class ShellHooksSettingsFragment : Fragment() {
         }
     }
 
-    private fun bindTrusted(
+    /**
+     * Lists the projects with trusted scripts. The trust store is read off the main thread: listing
+     * and counting resolve each project's canonical path, which can wait on storage.
+     */
+    private suspend fun bindTrusted(
         list: LinearLayout,
         plugin: ShellHooksPlugin,
     ) {
+        val projects =
+            withContext(Dispatchers.IO) {
+                plugin.trust.trustedProjects().map { path -> path to plugin.trust.trustedCount(File(path)) }
+            }
         list.removeAllViews()
-        val projects = plugin.trust.trustedProjects()
         if (projects.isEmpty()) {
             list.addView(
                 (layoutInflater.inflate(R.layout.item_trusted_project, list, false)).apply {
@@ -169,17 +182,21 @@ class ShellHooksSettingsFragment : Fragment() {
             )
             return
         }
-        for (path in projects) {
+        for ((path, count) in projects) {
             val row = layoutInflater.inflate(R.layout.item_trusted_project, list, false)
             // A project path is the project's to choose, so it is revealed.
             row.findViewById<TextView>(R.id.trustedPath).text = RevealedNames.show(row.context, path)
-            row.findViewById<TextView>(R.id.trustedCount).text =
-                plugin.trust.trustedCount(File(path)).let { count -> resources.getQuantityString(R.plurals.sh_trusted_count, count, count) }
+            row.findViewById<TextView>(R.id.trustedCount).text = resources.getQuantityString(R.plurals.sh_trusted_count, count, count)
             row.findViewById<Button>(R.id.trustedRevoke).apply {
                 help(this, ShellHooksHelp.TAG_PROJECT_HOOKS)
-                setOnClickListener {
-                    plugin.trust.revoke(File(path))
-                    bindTrusted(list, plugin)
+                setOnClickListener { button ->
+                    // Off the main thread: revoking resolves the project's canonical path and writes
+                    // to disk before returning. Disabled meanwhile, so a second tap does nothing.
+                    button.isEnabled = false
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        withContext(Dispatchers.IO + NonCancellable) { plugin.trust.revoke(File(path)) }
+                        bindTrusted(list, plugin)
+                    }
                 }
             }
             list.addView(row)

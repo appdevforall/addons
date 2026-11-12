@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  One line of a script under review: its number, then its text. Text that wraps continues under
-  the text column with nothing in the number column, so a wrap never reads as a new line.
-  Left to right and monospace whatever the device's language.
+  One line of a script under review. The adapter puts a LineGutter in front of the text: the line's
+  number on its first row and a continuation mark on every row the text wraps onto, so a wrap never
+  reads as a new line. Left to right and monospace whatever the device's language. No hyphenation
+  and simple line breaking: Android 8 and 9 hyphenate by default, which would show a '-' that is
+  not in the script.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -11,21 +13,12 @@
     android:orientation="horizontal">
 
     <TextView
-        android:id="@+id/lineNumber"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingEnd="@dimen/space_sm"
-        android:textAlignment="viewStart"
-        android:textColor="@color/plugin_text_muted"
-        android:textDirection="ltr"
-        android:textSize="@dimen/text_mono"
-        android:typeface="monospace" />
-
-    <TextView
         android:id="@+id/lineText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
+        android:breakStrategy="simple"
+        android:hyphenationFrequency="none"
         android:textAlignment="viewStart"
         android:textColor="@color/plugin_on_surface"
         android:textDirection="ltr"

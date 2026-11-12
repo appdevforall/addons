@@ -2,8 +2,12 @@ package org.appdevforall.shellhooks.ui
 
 import android.content.DialogInterface
 import android.os.Bundle
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.format.DateFormat
+import android.text.style.ForegroundColorSpan
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -21,6 +25,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,6 +35,7 @@ import org.appdevforall.shellhooks.ShellHooksPlugin
 import org.appdevforall.shellhooks.engine.HookRun
 import org.appdevforall.shellhooks.engine.Outcome
 import org.appdevforall.shellhooks.engine.PendingTrust
+import org.appdevforall.shellhooks.engine.ScriptHints
 import org.appdevforall.shellhooks.engine.ScriptReview
 import java.util.Date
 
@@ -111,7 +117,8 @@ class HooksPanelFragment : Fragment() {
         val pendingList = root.findViewById<LinearLayout>(R.id.hkPendingList)
         pendingList.removeAllViews()
         root.findViewById<View>(R.id.hkPendingTitle).visibility = if (pending.isEmpty()) View.GONE else View.VISIBLE
-        for (entry in pending) {
+        // Built on the main thread, so a project with thousands of scripts shows only the first ones.
+        for (entry in pending.take(MAX_PENDING_ROWS)) {
             val row = layoutInflater.inflate(R.layout.item_pending_trust, pendingList, false)
             // Names come from the project, so they are revealed.
             val name =
@@ -130,6 +137,17 @@ class HooksPanelFragment : Fragment() {
             }
             help(row, ShellHooksHelp.TAG_REVIEW)
             pendingList.addView(row)
+        }
+        val more = pending.size - MAX_PENDING_ROWS
+        if (more > 0) {
+            pendingList.addView(
+                TextView(requireContext()).apply {
+                    text = resources.getQuantityString(R.plurals.hk_pending_more, more, more)
+                    setTextColor(context.getColor(R.color.plugin_on_surface_variant))
+                    setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.text_body))
+                    help(this, ShellHooksHelp.TAG_REVIEW)
+                },
+            )
         }
 
         val runList = root.findViewById<LinearLayout>(R.id.hkRunList)
@@ -212,10 +230,11 @@ class HooksPanelFragment : Fragment() {
         reviewLoading = true
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val (assessed, lines) =
+                val (assessed, lines, marks) =
                     withContext(Dispatchers.IO) {
                         val assessed = ScriptReview.assess(entry.file, entry.relativePath)
-                        assessed to (assessed as? ScriptReview.Assessment.Reviewable)?.lines
+                        val lines = (assessed as? ScriptReview.Assessment.Reviewable)?.lines.orEmpty()
+                        Triple(assessed, lines, ScriptHints.find(lines))
                     }
                 when (assessed) {
                     is ScriptReview.Assessment.NotReviewable ->
@@ -227,7 +246,7 @@ class HooksPanelFragment : Fragment() {
                             SpannableStringBuilder(getString(R.string.hk_review_unreadable))
                                 .append(RevealedNames.show(requireContext(), entry.file.path)),
                         )
-                    is ScriptReview.Assessment.Reviewable -> showScript(plugin, entry, assessed, lines.orEmpty())
+                    is ScriptReview.Assessment.Reviewable -> showScript(plugin, entry, assessed, lines, marks)
                 }
             } finally {
                 reviewLoading = false
@@ -240,6 +259,7 @@ class HooksPanelFragment : Fragment() {
         entry: PendingTrust,
         script: ScriptReview.Assessment.Reviewable,
         lines: List<String>,
+        marks: ScriptHints.Marks,
     ) {
         val context = requireContext()
         val padding = resources.getDimensionPixelSize(R.dimen.space_lg)
@@ -250,12 +270,12 @@ class HooksPanelFragment : Fragment() {
                     .append(getString(R.string.hk_review_intro)),
                 // A reviewable name is letters, digits, '.', '_', '-' and '/' only: shown as it is.
                 getString(R.string.hk_review_path, entry.relativePath),
-            )
+            ) + checks(marks)
         // One list, so at a large font the explanation scrolls away with the script.
         val list =
             RecyclerView(context).apply {
                 layoutManager = LinearLayoutManager(context)
-                adapter = ScriptAdapter(intro, lines, ::help)
+                adapter = ScriptAdapter(intro, lines, marks.lines, ::help)
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
                 setPadding(padding, padding / 2, padding, 0)
                 clipToPadding = false
@@ -265,17 +285,64 @@ class HooksPanelFragment : Fragment() {
             MaterialAlertDialogBuilder(context)
                 .setTitle(title(entry))
                 .setView(list)
-                .setPositiveButton(R.string.hk_trust) { _, _ ->
-                    if (plugin.trust.trust(entry.projectDir, entry.relativePath, script.bytes)) {
-                        plugin.log.removePending(entry.projectDir, entry.relativePath)
-                    }
-                }.setNegativeButton(R.string.hk_cancel, null)
+                .setPositiveButton(R.string.hk_trust) { _, _ -> trustShown(plugin, entry, script.bytes) }
+                .setNegativeButton(R.string.hk_cancel, null)
                 .setOnDismissListener(::forget)
                 .show()
                 .also { dialog ->
                     dialog.getButton(DialogInterface.BUTTON_POSITIVE)?.let { help(it, ShellHooksHelp.TAG_REVIEW) }
                     dialog.getButton(DialogInterface.BUTTON_NEGATIVE)?.let { help(it, ShellHooksHelp.TAG_REVIEW) }
                 }
+    }
+
+    /**
+     * The best-effort checks above the script: one row per kind of syntax [ScriptHints] marks, with
+     * every line that has it, so no kind can push another out of view. A kind marked on more than
+     * [ScriptHints.MAX_LISTED] lines lists that many and counts the rest, which are marked `!` beside
+     * their numbers all the same.
+     */
+    private fun checks(marks: ScriptHints.Marks): List<CharSequence> {
+        if (marks.isEmpty) return emptyList()
+        val title =
+            SpannableString(getString(R.string.hk_review_checks_title)).apply {
+                setSpan(ForegroundColorSpan(requireContext().getColor(R.color.plugin_warning)), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        val rows =
+            listOf(
+                ScriptHints.Kind.HERE_DOCUMENT to R.string.hk_review_check_here_document,
+                ScriptHints.Kind.CONTINUATION to R.string.hk_review_check_continuation,
+                ScriptHints.Kind.COMMAND to R.string.hk_review_check_command,
+            ).mapNotNull { (kind, text) ->
+                val lines = marks.of(kind)
+                if (lines.isEmpty()) return@mapNotNull null
+                val (shown, more) = ScriptHints.listed(lines)
+                val numbers =
+                    shown.joinToString(", ") +
+                        if (more > 0) resources.getQuantityString(R.plurals.hk_review_check_more, more, more) else ""
+                "! " + getString(text, numbers)
+            }
+        return listOf<CharSequence>(title) + rows
+    }
+
+    /**
+     * Trusts exactly the [bytes] the dialog showed. Off the main thread: the trust store resolves
+     * the project's canonical path and writes its approval to disk before returning. In the
+     * fragment's scope, not the view's, and not cancellable once started: the approval and taking
+     * the script off the pending list both happen inside the non-cancellable block, so closing the
+     * tab mid-way can neither drop an approval the user gave nor leave the script listed as waiting.
+     */
+    private fun trustShown(
+        plugin: ShellHooksPlugin,
+        entry: PendingTrust,
+        bytes: ByteArray,
+    ) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO + NonCancellable) {
+                if (plugin.trust.trust(entry.projectDir, entry.relativePath, bytes)) {
+                    plugin.log.removePending(entry.projectDir, entry.relativePath)
+                }
+            }
+        }
     }
 
     private fun showMessage(
@@ -311,19 +378,31 @@ class HooksPanelFragment : Fragment() {
             true
         }
     }
+
+    private companion object {
+        /** Pending scripts listed by name; the rest are counted. */
+        const val MAX_PENDING_ROWS = 50
+    }
 }
 
 /**
- * The review dialog's content: the explanation, then the script one numbered row per line. Line
- * numbers are padded to one width in a monospace font, so the text column starts in the same place
- * on every row and wrapped text stays clear of the number column.
+ * The review dialog's content: the explanation and checks, then the script one row per line. Each
+ * line has a [LineGutter] in front: its number, `!` before it when a check names the line, and a
+ * continuation mark on every row the text wraps onto.
  */
 private class ScriptAdapter(
     private val intro: List<CharSequence>,
     private val lines: List<String>,
+    private val marked: Set<Int>,
     private val help: (View, String) -> Unit,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-    private val numberWidth = lines.size.toString().length
+    private val digits = lines.size.toString().length
+
+    private class LineHolder(
+        view: View,
+        val gutter: LineGutter,
+        val text: TextView,
+    ) : RecyclerView.ViewHolder(view)
 
     override fun getItemCount(): Int = intro.size + lines.size
 
@@ -333,31 +412,41 @@ private class ScriptAdapter(
         parent: ViewGroup,
         viewType: Int,
     ): RecyclerView.ViewHolder {
-        val view =
-            if (viewType == INTRO) {
+        if (viewType == INTRO) {
+            val view =
                 TextView(parent.context).apply {
                     val gap = resources.getDimensionPixelSize(R.dimen.space_sm)
                     setPadding(0, 0, 0, gap)
                     layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                     help(this, ShellHooksHelp.TAG_REVIEW)
                 }
-            } else {
-                LayoutInflater.from(parent.context).inflate(R.layout.item_script_line, parent, false)
-            }
-        return object : RecyclerView.ViewHolder(view) {}
+            return object : RecyclerView.ViewHolder(view) {}
+        }
+        val row = LayoutInflater.from(parent.context).inflate(R.layout.item_script_line, parent, false) as LinearLayout
+        val text = row.findViewById<TextView>(R.id.lineText)
+        val gutter = LineGutter(parent.context, text, digits)
+        row.addView(gutter, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        return LineHolder(row, gutter, text)
     }
 
     override fun onBindViewHolder(
         holder: RecyclerView.ViewHolder,
         position: Int,
     ) {
-        if (position < intro.size) {
+        if (holder !is LineHolder) {
             (holder.itemView as TextView).text = intro[position]
             return
         }
-        val index = position - intro.size
-        holder.itemView.findViewById<TextView>(R.id.lineNumber).text = (index + 1).toString().padStart(numberWidth)
-        holder.itemView.findViewById<TextView>(R.id.lineText).text = lines[index]
+        val number = position - intro.size + 1
+        val context = holder.itemView.context
+        val isMarked = number in marked
+        holder.text.text = lines[number - 1]
+        holder.gutter.bind(
+            number = number,
+            marked = isMarked,
+            color = context.getColor(if (isMarked) R.color.plugin_warning else R.color.plugin_text_muted),
+            description = context.getString(if (isMarked) R.string.hk_review_line_marked else R.string.hk_review_line, number),
+        )
     }
 
     private companion object {
@@ -365,4 +454,3 @@ private class ScriptAdapter(
         const val LINE = 1
     }
 }
-

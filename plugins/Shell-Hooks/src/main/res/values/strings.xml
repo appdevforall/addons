@@ -35,6 +35,10 @@
     <!-- Between a script's name and its project's, which come from the project and are inserted in code. -->
     <string name="hk_pending_in">" in "</string>
     <string name="hk_pending_not_reviewable">". Can\'t be reviewed: %1$s. It never runs."</string>
+    <plurals name="hk_pending_more">
+        <item quantity="one">And %1$d more project script.</item>
+        <item quantity="other">And %1$d more project scripts.</item>
+    </plurals>
     <string name="hk_review">Review</string>
     <string name="hk_runs_title">Recent runs</string>
     <string name="hk_clear">Clear</string>
@@ -42,8 +46,19 @@
     <string name="hk_review_title">Trust %1$s?</string>
     <!-- The project folder, which the project chose, is inserted in code between these two. -->
     <string name="hk_review_intro_project">"This script is stored in the project "</string>
-    <string name="hk_review_intro">". It runs with the same access as the Terminal, including the network. Trust covers only this script, not other project files it runs. Each numbered row below is one line of the script; text that wraps continues on the same number. Trust it only if you have read it and know what it does."</string>
-    <string name="hk_review_not_reviewable">Can\'t be reviewed: %1$s. A project script can be trusted only if it is plain: printable ASCII and newlines, no tabs or carriage returns, no line over 100 characters or ending in a space, at most 64 KB, and a name of letters, digits, \'.\', \'_\', \'-\' and \'/\'. Anything else could look different here from how it runs, so it never runs.</string>
+    <string name="hk_review_intro">". It runs with the same access as the Terminal, including the network. Each numbered row below is one line of the script, and a row marked ↳ continues the line above it. You see every character, but reviewing is reading code: read it as the shell will. Watch for three things. A backslash at the end of a line of code joins the next line to it, so a # starting that line does not begin a comment; at the end of a comment, a backslash does nothing. A here-document ends at the first line that exactly matches its delimiter, which may not be the line you expect. And backticks or $( in here-document text run commands unless the delimiter is quoted. Trust covers only this script: not other project files it runs, and not settings that tools read by themselves, such as hooks in .git/config (core.fsmonitor runs a program on git status) or the project\'s Gradle and npm files. Trust it only if you have read it and know what it does."</string>
+    <string name="hk_review_checks_title">Best-effort check, not a guarantee. Lines that use the syntax below are marked ! beside their numbers, wherever it appears, comments and strings included. A line without a mark can still do anything, so read every line.</string>
+    <!-- Each check is followed in code by the numbers of the lines it marks. -->
+    <string name="hk_review_check_here_document">Lines with &lt;&lt;: %1$s. Each may start a here-document. Find the line that ends it, and check whether its text is expanded: unless the word after &lt;&lt; is quoted, $ in the text is expanded, and backticks and $( in it run commands.</string>
+    <string name="hk_review_check_continuation">Lines ending in a backslash: %1$s. In code, the shell joins the next line to such a line, so a # starting the next line does not begin a comment. At the end of a comment the backslash does nothing, and the next line is a command of its own.</string>
+    <string name="hk_review_check_command">Lines with a backtick or $(: %1$s. Each may run a command, even inside double quotes or here-document text.</string>
+    <plurals name="hk_review_check_more">
+        <item quantity="one">" and %1$d more, marked ! beside its number"</item>
+        <item quantity="other">" and %1$d more, each marked ! beside its number"</item>
+    </plurals>
+    <string name="hk_review_line">Line %1$d</string>
+    <string name="hk_review_line_marked">Line %1$d, marked for a check above</string>
+    <string name="hk_review_not_reviewable">Can\'t be reviewed: %1$s. A project script can be trusted only if it is plain: printable ASCII and newlines, no tabs or carriage returns, no line over 100 characters or ending in a space, at most 64 KB, and a name of letters, digits, \'.\', \'_\', \'-\' and \'/\' with no part starting with \'.\'. Anything else could look different here from how it runs, so it never runs.</string>
     <!-- The script's path, revealed, is inserted in code after this. -->
     <string name="hk_review_unreadable">"Could not read the script "</string>
     <string name="hk_review_path">Script: %1$s</string>
