@@ -93,9 +93,9 @@ mounted noexec, and a trusted project script runs from a private copy the plugin
   comment; `<<E"O"F`, which ends at the line `EOF` rather than `E"O"F`; backticks or `$(` in an
   unquoted here-document's "help text"; and `(( n = 1 << 1 ))`, which dash and busybox read as a
   here-document. The dialog's intro tells the reader to read the script as the shell will, and
-  names these tricks, including that a backslash ending a comment does nothing.
+  names these tricks, including that a backslash ending a comment, or escaped by another backslash, joins nothing.
 - **A best-effort check, not a guarantee** (`ScriptHints`). Above the script the dialog lists, by
-  kind, every line that contains `<<` (may start a here-document), ends in `\` (in code, joins the
+  kind, every line that contains `<<` (may start a here-document), ends in `\` (in code, usually joins the
   next line), or contains a backtick or `$(` (may run a command), and marks each `!` beside its
   number. Each line is judged on its own: nothing is carried from line to line, and no quotes,
   comments or here-documents are tracked, so no line can change how later lines are marked. That

@@ -10,7 +10,7 @@ package org.appdevforall.shellhooks.engine
  * lines after it are marked. A line is marked for each of these it contains, wherever it appears,
  * in a comment or string too:
  * - [Kind.HERE_DOCUMENT]: `<<`, which may start a here-document;
- * - [Kind.CONTINUATION]: a backslash as its last character, which in code joins the next line to it;
+ * - [Kind.CONTINUATION]: a backslash as its last character, which in code usually joins the next line to it;
  * - [Kind.COMMAND]: a backtick or `$(`, which may run a command.
  *
  * That is the whole rule. It marks many lines that are harmless, and it says nothing about the many

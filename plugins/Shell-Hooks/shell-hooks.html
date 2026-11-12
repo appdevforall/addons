@@ -239,12 +239,12 @@
         hooks have no such limits.</li>
     <li><strong>Reviewing is reading code.</strong> Plain text guarantees you see every byte, not
         that a quick look tells you what the shell does, so read the script as the shell will. A
-        plain script can still mislead a skim: a backslash ending a line of code joins the next
-        one to it, so a <code>#</code> starting that line is no comment (a backslash ending a
-        comment does nothing); a here-document ends at the first line exactly matching its
-        delimiter (<code>&lt;&lt;E"O"F</code> ends at <code>EOF</code>, and the lines after it
-        run); and backticks, or <code>$(</code> in an unquoted here-document's text, run a command
-        inside what looks like text.</li>
+        plain script can still mislead a skim: a backslash ending a line of code usually joins the
+        next one to it, and a <code>#</code> starting that line may then be no comment (a
+        backslash that ends a comment, or is escaped by another backslash, joins nothing); a
+        here-document ends at a line matching its delimiter (<code>&lt;&lt;E"O"F</code> ends at
+        <code>EOF</code>, and the lines after it run); and backticks, or <code>$(</code> in an
+        unquoted here-document's text, can run a command inside what looks like text.</li>
     <li><strong>A best-effort check, not a guarantee.</strong> The dialog marks <strong>!</strong>
         beside its number every line that contains <code>&lt;&lt;</code>, a backtick or
         <code>$(</code>, or ends in a backslash, and lists them above the script by kind. It judges

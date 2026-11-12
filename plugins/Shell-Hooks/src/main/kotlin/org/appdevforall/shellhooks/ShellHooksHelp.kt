@@ -109,13 +109,14 @@ object ShellHooksHelp {
                     <p>Only a plain script can be reviewed: at most 64 KB of printable ASCII and newlines, with
                     no tabs, carriage returns or other characters, no line over 100 characters or ending in a
                     space, and a name with no part starting with a dot. Those could make a script run
-                    differently from how it reads, so a script that has them is listed with the reason and
-                    never runs.</p>
+                    differently from how it reads, so a script that has them never runs. It is listed with
+                    the reason, except a name starting with a dot, which is skipped and not listed.</p>
                     <p>You see every character, but reviewing is reading code: read it as the shell will. A
-                    backslash ending a line of code joins the next line to it, so a <code>#</code> starting
-                    that line is no comment (a backslash ending a comment does nothing); a here-document ends
-                    at the first line exactly matching its delimiter, which may not be the one you expect;
-                    backticks, or <code>$(</code> in here-document text, run commands.</p>
+                    backslash ending a line of code usually joins the next line to it, and a
+                    <code>#</code> starting that line may then be no comment (a backslash that ends a
+                    comment, or is escaped by another backslash, joins nothing); a here-document ends at a
+                    line matching its delimiter, which may not be the one you expect; backticks, or
+                    <code>$(</code> in the text of an unquoted here-document, can run commands.</p>
                     <p>A best-effort check, not a guarantee, marks <b>!</b> every line that contains
                     <code>&lt;&lt;</code>, a backtick or <code>$(</code>, or ends in a backslash, and lists
                     them above the script by kind. It judges each line on its own, in comments and strings

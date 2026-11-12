@@ -121,14 +121,14 @@ chmod +x file-saved</pre></li>
   <li><b>Reviewing is reading code.</b> Plain text means you see every character, not that a
       quick look tells you what runs: read the script as the shell will. Watch for three things:
       <ul>
-        <li>A backslash at the end of a line of code joins the next line to it, so a
-            <code>#</code> starting that line does not begin a comment. At the end of a comment,
-            a backslash does nothing.</li>
-        <li>A here-document ends at the first line that exactly matches its delimiter, which may
-            not be the one you expect: <code>&lt;&lt;E"O"F</code> ends at <code>EOF</code>, and the
+        <li>A backslash at the end of a line of code usually joins the next line to it, and a
+            <code>#</code> starting that line may then not begin a comment. A backslash that ends
+            a comment, or is escaped by another backslash, joins nothing.</li>
+        <li>A here-document ends at a line matching its delimiter, which may not be the one you
+            expect: <code>&lt;&lt;E"O"F</code> ends at <code>EOF</code>, and the
             lines after that run.</li>
         <li>Backticks, or <code>$(</code> in the text of a here-document whose delimiter is not
-            quoted, run a command inside what looks like text.</li>
+            quoted, can run a command inside what looks like text.</li>
       </ul>
       A best-effort check, not a guarantee, marks <b>!</b> beside its number every line that
       contains <code>&lt;&lt;</code>, a backtick or <code>$(</code>, or ends in a backslash, and

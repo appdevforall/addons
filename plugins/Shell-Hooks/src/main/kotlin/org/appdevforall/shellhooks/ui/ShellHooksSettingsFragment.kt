@@ -16,6 +16,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,6 +34,10 @@ import java.io.File
  */
 class ShellHooksSettingsFragment : Fragment() {
     private var tooltips: IdeTooltipService? = null
+
+    // The trusted list's latest reload; an older one still reading is cancelled, so it can't show
+    // a project that a later Revoke already removed.
+    private var trustedLoad: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,7 +100,7 @@ class ShellHooksSettingsFragment : Fragment() {
         bindTimeout(view.findViewById(R.id.shTimeout), settings)
         bindHooks(view.findViewById(R.id.shHookList), settings)
         val trustedList = view.findViewById<LinearLayout>(R.id.shTrustedList)
-        viewLifecycleOwner.lifecycleScope.launch { bindTrusted(trustedList, plugin) }
+        loadTrusted(trustedList, plugin)
     }
 
     private fun bindTimeout(
@@ -159,6 +164,14 @@ class ShellHooksSettingsFragment : Fragment() {
         }
     }
 
+    private fun loadTrusted(
+        list: LinearLayout,
+        plugin: ShellHooksPlugin,
+    ) {
+        trustedLoad?.cancel()
+        trustedLoad = viewLifecycleOwner.lifecycleScope.launch { bindTrusted(list, plugin) }
+    }
+
     /**
      * Lists the projects with trusted scripts. The trust store is read off the main thread: listing
      * and counting resolve each project's canonical path, which can wait on storage.
@@ -195,7 +208,7 @@ class ShellHooksSettingsFragment : Fragment() {
                     button.isEnabled = false
                     viewLifecycleOwner.lifecycleScope.launch {
                         withContext(Dispatchers.IO + NonCancellable) { plugin.trust.revoke(File(path)) }
-                        bindTrusted(list, plugin)
+                        loadTrusted(list, plugin)
                     }
                 }
             }
