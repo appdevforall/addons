@@ -20,6 +20,12 @@ class HookPaths(
     /** Scripts offered as "Run <name>" on a file's menu. */
     val actions = File(globalHooks, ACTIONS_DIR)
 
+    /**
+     * Whether the Terminal has `timeout`, which the wrapper then runs each script under: the same
+     * test the wrapper makes, so only then is its exit 124 or 137 the wrapper's own timeout.
+     */
+    fun hasTimeout(): Boolean = File(prefix, "bin/timeout").let { it.isFile && it.canExecute() }
+
     companion object {
         const val ACTIONS_DIR = "actions"
         const val PROJECT_HOOKS = ".codeonthego/hooks"

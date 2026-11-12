@@ -24,8 +24,10 @@ run() {
 	if [ -n "${COGO_TIMEOUT_SECONDS:-}" ] && [ -n "${PREFIX:-}" ] && [ -f "$PREFIX/bin/timeout" ] && [ -x "$PREFIX/bin/timeout" ]; then
 		"$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@" &
 		child=$!
-		# Its output goes nowhere, so it never keeps the IDE's pipes open.
-		watch "$$" "$child" </dev/null >/dev/null 2>&1 &
+		# Its output goes nowhere, so it never keeps the IDE's pipes open. Redirected with exec inside
+		# a subshell: dash and busybox, given `watch ... >/dev/null &`, keep a saved copy of the
+		# original stdout open in the background job. ($$ in a subshell is still this wrapper.)
+		(exec </dev/null >/dev/null 2>&1; watch "$$" "$child") &
 		watchdog=$!
 		wait "$child"
 		status=$?

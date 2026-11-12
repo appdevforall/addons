@@ -122,6 +122,7 @@ class ShellHooksPlugin :
                 log = log,
                 wrapper = { wrapper },
                 timeoutMs = { settings.timeoutSeconds * 1000L },
+                timeoutAvailable = paths::hasTimeout,
                 ideVersion = ideVersion(),
                 warn = warn,
             )
@@ -274,8 +275,8 @@ class ShellHooksPlugin :
             try {
                 service(IdeTerminalService::class.java)
             } catch (e: LinkageError) {
-                // The class itself is missing: plugins got a Terminal service in Code on the Go 26.41.
-                return failed("This IDE has no Terminal service for plugins; Code on the Go 26.41 or later is needed")
+                // The class itself is missing: plugins got a Terminal service in Code on the Go 26.42.
+                return failed("This IDE has no Terminal service for plugins; Code on the Go 26.42 or later is needed")
             } ?: return failed("The IDE's Terminal is not available")
         val projectDir = currentProjectDir()
         // The Terminal takes a command line, so every value is quoted as one word.

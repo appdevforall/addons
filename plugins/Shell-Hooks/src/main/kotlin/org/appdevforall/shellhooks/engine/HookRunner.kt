@@ -107,9 +107,12 @@ object HookInvocation {
  * keeps a burst of saves from starting a burst of processes.
  *
  * A script gets the user's timeout three times over. The wrapper stops it, and every process it
- * started, at the limit when the Terminal has GNU `timeout`. The host is asked to stop it
- * [WRAPPER_KILL_GRACE_MS] later, which a blocking wait in the host does not always honour. This
- * runner gives up [TIMEOUT_GRACE_MS] after that and cancels the command.
+ * started, at the limit when the Terminal has GNU `timeout` ([timeoutAvailable]). The host is asked
+ * to stop it [WRAPPER_KILL_GRACE_MS] later, which a blocking wait in the host does not always
+ * honour. This runner gives up [TIMEOUT_GRACE_MS] after that and cancels the command.
+ *
+ * [clock] is wall time, for when a run started. How long a run took comes from [elapsedClock],
+ * which must not jump: a clock set back mid-run must not make a timeout look like an early exit.
  */
 class HookRunner(
     scope: CoroutineScope,
@@ -118,8 +121,10 @@ class HookRunner(
     private val log: HookLog,
     private val wrapper: () -> File?,
     private val timeoutMs: () -> Long,
+    private val timeoutAvailable: () -> Boolean = { false },
     private val ideVersion: String? = null,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val elapsedClock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val warn: (String) -> Unit = {},
     capacity: Int = DEFAULT_QUEUE_CAPACITY,
 ) {
@@ -161,7 +166,10 @@ class HookRunner(
         script: ResolvedScript,
     ) {
         val started = clock()
+        val startedElapsed = elapsedClock()
         val limit = timeoutMs()
+        // Checked per run, as the wrapper checks: `timeout` can be installed or removed between runs.
+        val underTimeout = timeoutAvailable()
         val wrapperFile = wrapper()
         val tail = OutputTail()
         val (outcome, exitCode, output) =
@@ -172,7 +180,7 @@ class HookRunner(
                 val hostLimit = limit + WRAPPER_KILL_GRACE_MS
                 try {
                     withTimeoutOrNull(hostLimit + TIMEOUT_GRACE_MS) { commands.run(spec, hostLimit, tail) }
-                        ?.let { describe(it, elapsed = clock() - started, limit = limit) }
+                        ?.let { describe(it, elapsed = elapsedClock() - startedElapsed, limit = limit, underTimeout = underTimeout) }
                         ?: Triple(Outcome.TIMED_OUT, null, stopped(tail.text(), limit))
                 } catch (e: CancellationException) {
                     throw e
@@ -190,7 +198,7 @@ class HookRunner(
                 target = event.target,
                 outcome = outcome,
                 exitCode = exitCode,
-                durationMillis = clock() - started,
+                durationMillis = elapsedClock() - startedElapsed,
                 output = output,
             ),
         )
@@ -200,6 +208,7 @@ class HookRunner(
         result: CommandResult,
         elapsed: Long,
         limit: Long,
+        underTimeout: Boolean,
     ): Triple<Outcome, Int?, String> =
         when (result) {
             is CommandResult.Success -> Triple(Outcome.SUCCEEDED, result.exitCode, HookLog.combineOutput(result.stdout, result.stderr))
@@ -211,10 +220,11 @@ class HookRunner(
                         Triple(Outcome.TIMED_OUT, null, listOf(output, error).filter { it.isNotBlank() }.joinToString("\n"))
                     error != null && result.exitCode == -1 ->
                         Triple(Outcome.NOT_STARTED, null, error)
-                    // GNU timeout: 124 after TERM, 137 when it had to KILL. Only once the run reached
-                    // its limit: a script's own 124 (passed on from an inner timeout, say) or 137
-                    // (killed for memory) before then is an ordinary failure.
-                    (result.exitCode == TIMEOUT_EXIT || result.exitCode == TIMEOUT_KILL_EXIT) && elapsed >= limit ->
+                    // GNU timeout: 124 after TERM, 137 when it had to KILL. Only when the wrapper ran
+                    // the script under timeout, and only once the run reached its limit: otherwise a
+                    // 124 or 137 is the script's own (passed on from an inner timeout, or a kill for
+                    // memory), an ordinary failure.
+                    (result.exitCode == TIMEOUT_EXIT || result.exitCode == TIMEOUT_KILL_EXIT) && underTimeout && elapsed >= limit ->
                         Triple(Outcome.TIMED_OUT, null, stopped(output, limit))
                     else -> Triple(Outcome.FAILED, result.exitCode, output)
                 }

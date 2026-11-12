@@ -10,6 +10,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -162,9 +163,14 @@ class WrapperScriptTest(
     private fun waitUntil(
         seconds: Long,
         done: () -> Boolean,
+    ): Boolean = waitUntilMillis(TimeUnit.SECONDS.toMillis(seconds), done)
+
+    private fun waitUntilMillis(
+        millis: Long,
+        done: () -> Boolean,
     ): Boolean {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds)
-        while (!done() && System.nanoTime() < deadline) Thread.sleep(50)
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(millis)
+        while (!done() && System.nanoTime() < deadline) Thread.sleep(20)
         return done()
     }
 
@@ -197,16 +203,49 @@ class WrapperScriptTest(
         assumeTrue("needs /proc", File("/proc/self/stat").exists())
         linkTimeout()
         val mark = java.util.UUID.randomUUID().toString()
-        val script = work.script("hook", "#!/bin/sh\necho done\nexit 3\n")
+        // Ends 0.2 s in. The watchdog checks on the wrapper once a second, so one the wrapper did
+        // not kill would live about 0.8 s longer; the wrapper's own kill ends it at once.
+        val script = work.script("hook", "#!/bin/sh\necho done\nsleep 0.2\nexit 3\n")
 
         val process = start(script, emptyList(), mapOf("COGO_TIMEOUT_SECONDS" to "60", "COGO_TEST_MARK" to mark))
-        val out = process.inputStream.readBytes().toString(Charsets.UTF_8)
-        val exited = process.waitFor(10, TimeUnit.SECONDS)
+        try {
+            // Read on the side: waiting for end of output first would also wait for anything that
+            // holds the pipe, and hide a watchdog that outlives the wrapper.
+            val out = CompletableFuture.supplyAsync { process.inputStream.readBytes().toString(Charsets.UTF_8) }
+            val exited = process.waitFor(10, TimeUnit.SECONDS)
 
-        assertTrue(exited)
-        assertEquals("done\n", out)
-        assertEquals(3, process.exitValue())
-        assertTrue("left behind: ${leftBehind(mark)}", waitUntil(2) { leftBehind(mark).isEmpty() })
+            assertTrue(exited)
+            assertTrue("left behind: ${leftBehind(mark)}", waitUntilMillis(300) { leftBehind(mark).isEmpty() })
+            assertEquals("done\n", out.get(5, TimeUnit.SECONDS))
+            assertEquals(3, process.exitValue())
+        } finally {
+            leftBehind(mark).forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+        }
+    }
+
+    @Test
+    fun killingTheWrapperStopsAScriptThatIgnoresTerm() {
+        // TERM is ignored by the script and, inherited, by its child: only timeout's KILL, 5 s
+        // after the watchdog's TERM (`-k 5`), stops them.
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        linkTimeout()
+        val mark = java.util.UUID.randomUUID().toString()
+        val scriptPid = File(work, "script.pid")
+        val childPid = File(work, "child.pid")
+        val script = work.script("hook", "#!/bin/sh\ntrap '' TERM\necho \$\$ > \"\$1\"\nsleep 30 &\necho \$! > \"\$2\"\nwait\n")
+
+        val process = start(script, listOf(scriptPid.path, childPid.path), mapOf("COGO_TIMEOUT_SECONDS" to "60", "COGO_TEST_MARK" to mark))
+        try {
+            assertTrue("the script started", waitUntil(10) { childPid.length() > 0 && scriptPid.length() > 0 })
+            process.destroyForcibly()
+            process.waitFor(5, TimeUnit.SECONDS)
+            val pids = listOf(scriptPid, childPid).map { it.readText().trim().toLong() }
+
+            assertTrue("a TERM-ignoring script outlived the wrapper: ${leftBehind(mark)}", waitUntil(9) { pids.none(::isRunning) })
+            assertTrue("left behind: ${leftBehind(mark)}", waitUntil(2) { leftBehind(mark).isEmpty() })
+        } finally {
+            leftBehind(mark).forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+        }
     }
 
     @Test

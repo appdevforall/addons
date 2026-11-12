@@ -43,6 +43,8 @@ class HookRunnerTest {
         timeoutMs: Long = 60_000,
         capacity: Int = HookRunner.DEFAULT_QUEUE_CAPACITY,
         warnings: MutableList<String> = mutableListOf(),
+        timeoutAvailable: Boolean = true,
+        clock: () -> Long = { testScheduler.currentTime },
     ) = HookRunner(
         scope = backgroundScope,
         resolver = resolver,
@@ -50,7 +52,9 @@ class HookRunnerTest {
         log = log,
         wrapper = { wrapper },
         timeoutMs = { timeoutMs },
-        clock = { testScheduler.currentTime },
+        timeoutAvailable = { timeoutAvailable },
+        clock = clock,
+        elapsedClock = { testScheduler.currentTime },
         warn = { warnings += it },
         capacity = capacity,
     )
@@ -216,6 +220,53 @@ class HookRunnerTest {
             assertEquals(Outcome.FAILED, run.outcome)
             assertEquals(HookRunner.TIMEOUT_EXIT, run.exitCode)
             assertEquals("lint timed out", run.output.trimEnd())
+        }
+
+    @Test
+    fun withoutTimeoutInstalledA124AfterTheLimitIsTheScriptsOwnFailure() =
+        runTest {
+            val runner =
+                runner(
+                    // No `timeout` in the Terminal: the wrapper ran the script directly, so its 124
+                    // is the script's own, however long it ran.
+                    CommandRunner { _, _, _ ->
+                        delay(2_000)
+                        CommandResult.Failure(HookRunner.TIMEOUT_EXIT, "inner timeout\n", "", null, 2_000)
+                    },
+                    timeoutMs = 1_000,
+                    timeoutAvailable = false,
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            val run = log.runs.value.single()
+            assertEquals(Outcome.FAILED, run.outcome)
+            assertEquals(HookRunner.TIMEOUT_EXIT, run.exitCode)
+        }
+
+    @Test
+    fun aWallClockSetBackMidRunDoesNotHideATimeout() =
+        runTest {
+            // Wall time goes back an hour while the run takes its full limit on the monotonic clock.
+            var wall = 10_000_000L
+            val runner =
+                runner(
+                    CommandRunner { _, _, _ ->
+                        wall -= 3_600_000
+                        delay(1_000)
+                        CommandResult.Failure(HookRunner.TIMEOUT_EXIT, "", "", null, 1_000)
+                    },
+                    timeoutMs = 1_000,
+                    clock = { wall },
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            val run = log.runs.value.single()
+            assertEquals(Outcome.TIMED_OUT, run.outcome)
+            assertEquals(1_000, run.durationMillis)
         }
 
     @Test
