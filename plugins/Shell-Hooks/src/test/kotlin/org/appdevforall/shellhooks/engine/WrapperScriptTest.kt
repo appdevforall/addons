@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Runs the bundled wrapper under each POSIX shell this machine has. Android runs it with mksh
- * (/system/bin/sh), which is not here; dash and busybox ash are the strictest stand-ins.
+ * (/system/bin/sh), which is not tested; dash and busybox ash are the strictest stand-ins.
  */
 @RunWith(Parameterized::class)
 class WrapperScriptTest(
@@ -380,6 +380,120 @@ class WrapperScriptTest(
         } finally {
             sentinelPid()?.let { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
             process.destroyForcibly()
+        }
+    }
+
+    /**
+     * Runs the wrapper's own `watch` function on its own, with `kill` replaced by a function that
+     * logs each call to [log] before making it, so a test can see every signal the watchdog sends.
+     */
+    private fun startWatch(
+        watched: Long,
+        target: Long,
+        log: File,
+    ): Child {
+        val text = wrapper.readText()
+        val from = text.indexOf("\nwatch() {\n") + 1
+        val to = text.indexOf("\n}\n", from) + 3
+        assertTrue("watch() is in the wrapper", from > 0 && to > from)
+        val harness =
+            work.script(
+                "watch-harness",
+                "echo \$\$\n" + text.substring(from, to) +
+                    "kill() { printf '%s\\n' \"\$*\" >> '${log.path}'; command kill \"\$@\"; }\n" +
+                    "watch \"\$1\" \"\$2\"\n",
+            )
+        val command = if (shell.endsWith("busybox")) listOf(shell, "sh") else listOf(shell)
+        return Child(
+            ProcessBuilder(command + listOf(harness.path, watched.toString(), target.toString()))
+                .directory(work)
+                .redirectErrorStream(true)
+                .start(),
+        )
+    }
+
+    /** A process this test started, with the process ID it printed first (unit tests run on an API without Process.pid()). */
+    private class Child(
+        val process: Process,
+    ) {
+        val pid: Long = process.inputStream.bufferedReader().readLine().trim().toLong()
+    }
+
+    /** `[program] 30` in a process of its own, named after [program]. */
+    private fun sleeper(program: String = "sleep"): Child =
+        Child(ProcessBuilder("/bin/sh", "-c", "echo \$\$; exec \"\$0\" 30", program).start())
+
+    @Test
+    fun theWatchdogNeverSignalsASleepThatWasKilledFromOutside() {
+        // Killed from outside, the watchdog's sleep is reaped by its `wait`, which returns over 128
+        // just as when TERM interrupts it. Only the TERM case leaves a sleep to stop; signalling the
+        // reaped one could hit another process that took its ID.
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        val log = File(work, "kills").apply { createNewFile() }
+        val watched = sleeper()
+        val target = sleeper()
+        val watch = startWatch(watched.pid, target.pid, log)
+        try {
+            var nap = -1L
+            assertTrue("the watchdog napped", waitUntil(10) { childrenOf(watch.pid).firstOrNull()?.also { nap = it } != null })
+            ProcessHandle.of(nap).ifPresent { it.destroyForcibly() }
+            // The next nap starting means the loop went round, past where it would signal the old one.
+            assertTrue("the watchdog napped again", waitUntil(10) { childrenOf(watch.pid).any { it != nap } })
+
+            assertFalse("signalled its reaped sleep $nap: ${log.readLines()}", log.readLines().any { it.trim() == nap.toString() })
+        } finally {
+            watched.process.destroyForcibly()
+            watch.process.waitFor(5, TimeUnit.SECONDS)
+            watch.process.destroyForcibly()
+            target.process.destroyForcibly()
+        }
+    }
+
+    @Test
+    fun theWatchdogSignalsOnlyAProcessThatIsStillTimeout() {
+        // Once the wrapper is gone the watchdog sends TERM to timeout's process ID. If timeout ended
+        // first, that ID may be another process's: here, a sleep, which must be left alone.
+        assumeTrue("needs /proc", File("/proc/self/comm").exists())
+        val log = File(work, "kills").apply { createNewFile() }
+        val stranger = sleeper()
+        val watched = sleeper()
+        val watch = startWatch(watched.pid, stranger.pid, log)
+        try {
+            assertTrue("the watchdog napped", waitUntil(10) { childrenOf(watch.pid).isNotEmpty() })
+            watched.process.destroyForcibly()
+
+            assertTrue("the watchdog ended", watch.process.waitFor(10, TimeUnit.SECONDS))
+            assertTrue("a process that is not timeout was stopped", stranger.process.isAlive)
+            val signals = log.readLines().filter { it.endsWith(" ${stranger.pid}") && !it.startsWith("-0") }
+            assertTrue("signalled ${stranger.pid}: $signals", signals.isEmpty())
+        } finally {
+            watch.process.destroyForcibly()
+            stranger.process.destroyForcibly()
+        }
+    }
+
+    @Test
+    fun theWatchdogStopsAProcessThatIsStillTimeout() {
+        // The same, with a stand-in whose name is timeout: it gets the TERM. A script, as a process
+        // started from one is named after it (a copied sleep may be a multi-call binary that then
+        // acts as timeout).
+        assumeTrue("needs /proc", File("/proc/self/comm").exists())
+        val timeout = work.script("bin/timeout", "#!/bin/sh\nwhile :; do sleep 1; done\n")
+        val log = File(work, "kills").apply { createNewFile() }
+        val standIn = sleeper(timeout.path)
+        val watched = sleeper()
+        val watch = startWatch(watched.pid, standIn.pid, log)
+        try {
+            assertTrue("the stand-in is named timeout", waitUntil(5) { comm(standIn.pid) == "timeout" })
+            assertTrue("the watchdog napped", waitUntil(10) { childrenOf(watch.pid).isNotEmpty() })
+            watched.process.destroyForcibly()
+
+            assertTrue("the watchdog ended", watch.process.waitFor(10, TimeUnit.SECONDS))
+            assertTrue("timeout was not stopped: ${log.readLines()}", standIn.process.waitFor(5, TimeUnit.SECONDS))
+            assertTrue(log.readLines().toString(), log.readLines().contains("-s TERM ${standIn.pid}"))
+        } finally {
+            watch.process.destroyForcibly()
+            standIn.process.destroyForcibly()
         }
     }
 

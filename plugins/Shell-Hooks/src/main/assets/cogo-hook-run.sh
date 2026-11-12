@@ -61,8 +61,9 @@ shares_group() {
 
 # Waits while process $1 (this wrapper) lives, then sends TERM to $2 (timeout). The wrapper sends
 # it TERM when the script ends normally; the trap only notes that, so the loop never signals a
-# sleep it has already waited for, whose ID may belong to another process by then. A TERM that
-# interrupts the wait makes it return over 128 with that sleep still running, and it is stopped.
+# sleep it has already waited for, whose ID may belong to another process by then. Only a TERM
+# that interrupts the wait leaves that sleep running, and only then is it stopped: a wait over 128
+# can also mean the sleep itself was killed from outside and already reaped.
 watch() {
 	stop=
 	trap 'stop=1' TERM
@@ -70,7 +71,8 @@ watch() {
 		sleep 1 &
 		nap=$!
 		wait "$nap"
-		if [ $? -gt 128 ]; then
+		napped=$?
+		if [ -n "$stop" ] && [ "$napped" -gt 128 ]; then
 			kill "$nap" 2>/dev/null
 		fi
 	done

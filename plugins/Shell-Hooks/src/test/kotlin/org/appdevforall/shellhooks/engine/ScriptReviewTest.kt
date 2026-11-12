@@ -156,8 +156,11 @@ class ScriptReviewTest {
     }
 
     @Test
-    fun aLongRunOfSpacesHidingACommandBehindAWrapIsNotReviewable() {
-        // In a wrapping view the payload looks like the first line of an inert notes block.
+    fun theThreeHundredSpaceWrapTrickIsOverTheLineLimit() {
+        // In a wrapping view the payload looks like the first line of an inert notes block. Only the
+        // line limit refuses it: a shorter version fits, and is marked for its << instead
+        // (ScriptHintsTest.everyTrickFromTheReviewsIsMarkedOnTheLineItNeeds). The dialog's continuation
+        // mark is what shows its wrap; that mark is Android UI and has no unit test.
         val script = ": <<'NOTES'" + " ".repeat(300) + "; touch marker\nThese notes are documentation only.\nNOTES\n"
 
         assertEquals("line 1 is longer than 100 characters", reason(script))
@@ -249,11 +252,12 @@ class ScriptReviewTest {
     }
 
     @Test
-    fun controlCharactersAndBlanksEndingALineInANameAreShown() {
-        val revealed = ScriptReview.reveal("a\u001Bb \nc\r")
+    fun controlCharactersNewlinesTabsAndBlanksEndingALineInANameAreShown() {
+        // A name is one line: a newline in a folder name must not add a line of text to a dialog.
+        val revealed = ScriptReview.reveal("a\u001Bb \nc\r\td")
 
-        assertEquals("a<U+001B>b<U+0020>\nc<U+000D>", revealed.text)
-        assertEquals(3, revealed.hidden)
+        assertEquals("a<U+001B>b<U+0020><U+000A>c<U+000D><U+0009>d", revealed.text)
+        assertEquals(5, revealed.hidden)
     }
 
     @Test

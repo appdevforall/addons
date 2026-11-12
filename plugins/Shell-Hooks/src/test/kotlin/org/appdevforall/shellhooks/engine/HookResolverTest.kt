@@ -139,6 +139,28 @@ class HookResolverTest {
     }
 
     @Test
+    fun aProjectScriptApprovedUnderAnUnsafeNameNeverRuns() {
+        val script = projectHooks.script("file-saved.d/with space")
+        // An approval recorded without the check, as an older version of this plugin could have.
+        trust.put(project, "file-saved.d/with space", TrustStore.sha256(script.readBytes()))
+
+        assertTrue(resolver.resolve(saved()).isEmpty())
+        assertEquals(ScriptReview.Reason.UnsafeName.message, log.pending.value.single().notReviewable)
+        assertTrue(verified.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun aProjectScriptApprovedUnderAHiddenNameNeverRunsAndIsNotListed() {
+        // Discovery skips names starting with '.', so the name rule is never reached for them.
+        val script = projectHooks.script("file-saved.d/.lint")
+        trust.put(project, "file-saved.d/.lint", TrustStore.sha256(script.readBytes()))
+
+        assertTrue(resolver.resolve(saved()).isEmpty())
+        assertTrue(log.pending.value.isEmpty())
+        assertTrue(verified.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
     fun aReviewableUntrustedScriptIsListedForReviewWithoutAReason() {
         projectHooks.script("file-saved")
 

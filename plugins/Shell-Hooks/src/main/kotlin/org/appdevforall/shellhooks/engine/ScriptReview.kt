@@ -22,6 +22,10 @@ import java.io.InputStream
  * - a name inside the hooks folder of letters, digits, `.`, `_`, `-` and `/`, with no part starting
  *   with `.`.
  * Anything else is listed with the reason it cannot be reviewed, and never runs.
+ *
+ * Plain text shows the reader every byte; it does not show how the shell parses them. A plain
+ * script can still read as inert and run a command. [ScriptHints] marks, as a best effort, lines that
+ * use syntax worth a closer look.
  */
 object ScriptReview {
     const val MAX_BYTES = 64 * 1024
@@ -208,11 +212,12 @@ object ScriptReview {
      * Shows as `<U+XXXX>` every character of a name the project chose (a project folder, a file
      * the run was about, a script that cannot be reviewed) that could make it read differently
      * from what it is: everything outside plain ASCII (bidirectional controls, zero-width
-     * characters, no-break spaces), every control character, and every space, tab or carriage
-     * return at the end of a line. Only printable ASCII, tab and newline are shown as they are.
-     * Characters are taken one code point at a time, so a supplementary character shows as one
-     * escape and an unpaired surrogate is shown too. Scripts themselves are not revealed: one that
-     * would need it cannot be reviewed at all.
+     * characters, no-break spaces), every control character including tab and newline, and every
+     * space at the end of the name or before a newline. Only printable ASCII is shown as it is: a
+     * name is one line, so a newline in one must not add a line of text to a dialog. Characters
+     * are taken one code point at a time, so a supplementary character shows as one escape and an
+     * unpaired surrogate is shown too. Scripts themselves are not revealed: one that would need it
+     * cannot be reviewed at all.
      */
     fun reveal(text: String): Revealed {
         val trailing = trailingBlanks(text)
@@ -249,5 +254,5 @@ object ScriptReview {
         return marks
     }
 
-    private fun isPlain(cp: Int): Boolean = cp == '\t'.code || cp == '\n'.code || cp in 0x20..0x7E
+    private fun isPlain(cp: Int): Boolean = cp in 0x20..0x7E
 }
