@@ -224,10 +224,13 @@
         therefore need two things: the <strong>Run hooks stored in projects</strong> switch (off by
         default), and your trust in that exact script. An untrusted script is skipped and listed in
         the Hooks tab; <strong>Review</strong> shows all of it before you can trust it, with
-        every character outside plain ASCII shown as <code>&lt;U+XXXX&gt;</code> and a warning:
-        a no-break space, an invisible character or a bidirectional override can make a script run
-        differently from how it reads. Comments in other languages show as codes too. Scripts over
-        256 KB never run and cannot be reviewed.</li>
+        a warning and, highlighted as <code>&lt;U+XXXX&gt;</code>, every character outside plain
+        ASCII, every carriage return, and every space or tab at the end of a line. A no-break space,
+        an invisible character or a bidirectional override can make a script run differently from
+        how it reads, and so can a backslash before an invisible carriage return or trailing space:
+        it reads as a line continuation, but the next line runs as its own command. Comments in
+        other languages show as codes too, so a large script in another alphabet may be slow to
+        open. Scripts over 256 KB never run and cannot be reviewed.</li>
     <li>Trust is recorded per project, per script path, against the SHA-256 of the script's bytes.
         Editing the script, or adding another, needs a new review. Settings lists the trusted
         projects, each with <strong>Revoke</strong>.</li>
@@ -296,7 +299,7 @@ HookLog -> Hooks tab</div>
     Permissions: <code>system.commands</code> to run scripts, <code>filesystem.read</code> for the
     file and project listeners, and <code>filesystem.write</code> to write the sample hooks. On an
     IDE older than 26.47 the plugin still loads; project-opened, project-closed and file-saved never
-    run there. Actions need the Terminal service plugins got in 26.41; on an older IDE,
+    run there. Actions need the Terminal service plugins got in 26.42; on an older IDE,
     "Run &lt;name&gt;" records a run that did not start.
   </p>
   <p>

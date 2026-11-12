@@ -99,9 +99,11 @@ object ShellHooksHelp {
                 detail =
                     """
                     <p><b>Trust</b> approves exactly the text shown. If the file changes afterwards it waits for
-                    review again. Every character outside plain ASCII is shown as <code>&lt;U+XXXX&gt;</code>,
-                    because a no-break space or an invisible character can make a script run differently
-                    from how it reads.</p>
+                    review again. Every character outside plain ASCII, every carriage return, and every
+                    space or tab at the end of a line is shown, highlighted, as <code>&lt;U+XXXX&gt;</code>:
+                    a no-break space or an invisible character can make a script run differently from how
+                    it reads, and a backslash before an invisible one looks like a line continuation while
+                    the next line runs as its own command.</p>
                     <p>Trust covers only this script: files it runs from the project are not reviewed.</p>
                     <p>Scripts larger than 256 KB cannot be reviewed here and never run.</p>
                     """.trimIndent(),

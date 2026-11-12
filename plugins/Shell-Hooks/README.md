@@ -62,10 +62,19 @@ mounted noexec, and a trusted project script runs from a private copy the plugin
   a trusted script runs from a private copy of the trusted bytes (`<plugin data>/verified/<sha>`,
   pruned of untrusted hashes on activation) to close the check-then-run window. Scripts over
   256 KB are never read or run; they are listed for review, which only says they are too large.
-  The review dialog shows every code point outside printable ASCII (tab, newline and CRLF
-  excepted) as `<U+XXXX>` and warns. An allow-list, because the dangerous set is open-ended: a
+  The review dialog shows as a highlighted `<U+XXXX>`, and warns about, every code point outside
+  printable ASCII (tab and newline excepted), every carriage return, and every space, tab or
+  carriage return that ends a line. An allow-list, because the dangerous set is open-ended: a
   no-break space lets bash read `true<NBSP>#` as a function name on a line that looks like a
-  comment. The dialog title and the pending list reveal the script's path the same way.
+  comment, and a backslash before an invisible carriage return or trailing space reads as a line
+  continuation while the next line runs as its own command. Plain ASCII alone is therefore not
+  shown as it is. The script's path is revealed the same way in the dialog (in its title and,
+  wrapping, in its body), the pending list, the run log and Settings' trusted projects. The code
+  view is left-to-right and monospace whatever the device's language.
+- **Large non-Latin scripts.** Every character outside ASCII becomes an 8-10 character code, and
+  the review lays the whole text out at once, so a large script with comments in another script
+  (Cyrillic, CJK) shows as codes and may be slow to open in Review. Accepted: the dialog must show
+  every byte that will run.
 - **What trust does not cover.** A plugin with `system.commands`, or one that writes files
   in-process, can already write the global hooks folder or the trust store. Global hooks run
   without review because they live in the user's own home folder; install only trusted plugins.
@@ -77,7 +86,7 @@ mounted noexec, and a trusted project script runs from a private copy the plugin
   `TermuxProcessEnvironment` gives every command, derived from `PluginContext.getAppFilesDir()`.
 - **Older IDEs.** The 26.47 listeners live in `WorkspaceHooks`, which only loads inside a guarded
   block, so on an older IDE the plugin still loads and runs every hook except project-opened,
-  project-closed and file-saved. Actions need the plugin Terminal service from 26.41; before that
+  project-closed and file-saved. Actions need the plugin Terminal service from 26.42; before that
   "Run <name>" records a run that did not start instead of failing. (The host does not enforce
   `min_ide_version`.)
 - **Permissions.** `system.commands` runs scripts; `filesystem.read` covers the open file, the
