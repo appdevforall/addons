@@ -88,6 +88,8 @@ object ShellHooksHelp {
                     <p>A project can carry hooks in <code>.codeonthego/hooks/</code>. A script can arrive with a
                     project, from a cloned repository or an AI agent's edit, so none runs until you read it in
                     the Hooks tab and trust it. Editing a trusted script makes it untrusted again.</p>
+                    <p>Only plain scripts can be trusted: at most 64 KB of printable ASCII and newlines, no tabs,
+                    no line over 100 characters or ending in a space. Anything else never runs.</p>
                     <p>This does not protect you from a plugin that can run commands: such a plugin can already
                     change your own hooks folder. Install only plugins you trust.</p>
                     """.trimIndent(),
@@ -98,14 +100,13 @@ object ShellHooksHelp {
                 summary = "Read the script before you trust it: it runs with the Terminal's access.",
                 detail =
                     """
-                    <p><b>Trust</b> approves exactly the text shown. If the file changes afterwards it waits for
-                    review again. Every character outside plain ASCII, every carriage return, and every
-                    space or tab at the end of a line is shown, highlighted, as <code>&lt;U+XXXX&gt;</code>:
-                    a no-break space or an invisible character can make a script run differently from how
-                    it reads, and a backslash before an invisible one looks like a line continuation while
-                    the next line runs as its own command.</p>
+                    <p><b>Trust</b> approves exactly the text shown, one numbered row per line; text that wraps
+                    continues on the same number. If the file changes afterwards it waits for review again.</p>
+                    <p>Only a plain script can be reviewed: at most 64 KB of printable ASCII and newlines, with
+                    no tabs, carriage returns or other characters, no line over 100 characters or ending in a
+                    space. Those could make a script run differently from how it reads, so a script that has
+                    them is listed with the reason and never runs.</p>
                     <p>Trust covers only this script: files it runs from the project are not reviewed.</p>
-                    <p>Scripts larger than 256 KB cannot be reviewed here and never run.</p>
                     """.trimIndent(),
                 buttons = guide,
             ),

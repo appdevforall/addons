@@ -106,17 +106,19 @@ chmod +x file-saved</pre></li>
 </p>
 <ul>
   <li>An untrusted script is skipped and listed in the Hooks tab. <b>Review</b> shows the whole
-      script; <b>Trust</b> approves exactly what you read.</li>
+      script, one numbered row per line; <b>Trust</b> approves exactly what you read.</li>
   <li>Editing a trusted script, or adding one, needs a new review.</li>
-  <li>Every character outside plain ASCII, every carriage return, and every space or tab at the
-      end of a line is shown, highlighted, as <code>&lt;U+XXXX&gt;</code> with a warning. A
-      no-break space or an invisible character can make a script run differently from how it
-      reads; so can a backslash before an invisible carriage return or trailing space, which looks
-      like a line continuation while the next line runs as its own command.</li>
+  <li>Only plain scripts can be trusted: at most 64 KB of printable ASCII and newlines, with no
+      tabs, carriage returns or other control or non-ASCII characters, no line longer than 100
+      characters or ending in a space, and a name of letters, digits, <code>.</code>,
+      <code>_</code>, <code>-</code> and <code>/</code>. Anything else is listed with the reason it
+      can't be reviewed, and never runs: such characters can make a script run differently from
+      how it reads, for example a backslash before an invisible carriage return that looks like a
+      line continuation while the next line runs as its own command. Your own hooks have no such
+      limits.</li>
   <li>Trust covers only that script. Files it runs from the project, such as
       <code>./gradlew</code>, are not reviewed and can change later: keep project hooks
       self-contained, or review what they run.</li>
-  <li>Scripts larger than 256 KB cannot be reviewed and never run.</li>
   <li>Preferences lists the projects you trusted scripts in; <b>Revoke</b> forgets them.</li>
   <li>A trusted script runs from a private copy of what you approved, so it cannot be swapped
       after you approve it. Use <code>$COGO_HOOK_SCRIPT</code> to find the original.</li>
