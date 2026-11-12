@@ -21,7 +21,7 @@ fi
 # notices this shell is gone and sends timeout TERM, which stops the whole group the same way.
 # Without timeout, the IDE's own stop ends only the script's first process.
 run() {
-	if [ -n "${COGO_TIMEOUT_SECONDS:-}" ] && [ -n "${PREFIX:-}" ] && [ -f "$PREFIX/bin/timeout" ] && [ -x "$PREFIX/bin/timeout" ]; then
+	if [ -n "${COGO_TIMEOUT_SECONDS:-}" ] && in_prefix timeout; then
 		"$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@" &
 		child=$!
 		# Its output goes nowhere, so it never keeps the IDE's pipes open. Redirected with exec inside
@@ -34,18 +34,53 @@ run() {
 		kill "$watchdog" 2>/dev/null
 		exit "$status"
 	fi
+	# Without timeout the script would share the IDE's process group, so one that signals its own
+	# group (`trap 'kill 0' EXIT`) would signal Code on the Go. setsid gives it a session and group
+	# of its own; as this shell does not lead its group, setsid does not fork, and the script keeps
+	# this process ID, which the IDE stops it by. Not when run in the Terminal (input from a
+	# terminal): there the script stays in the Terminal's foreground group, so Ctrl-C reaches it.
+	if [ ! -t 0 ] && shares_group; then
+		if in_prefix setsid; then
+			exec "$PREFIX/bin/setsid" "$@"
+		fi
+		if command -v setsid >/dev/null 2>&1; then
+			exec setsid "$@"
+		fi
+	fi
 	exec "$@"
 }
 
-# Waits while process $1 (this wrapper) lives, then sends TERM to $2 (timeout). Killed by the
-# wrapper when the script ends normally; the trap stops its pending sleep with it.
+# True when this shell is in a process group it does not lead, such as the IDE's.
+shares_group() {
+	[ -r "/proc/$$/stat" ] || return 1
+	IFS= read -r stat < "/proc/$$/stat" || return 1
+	# Fields after the command name, which may itself hold spaces or parentheses: state, ppid, pgrp.
+	set -- ${stat##*") "}
+	[ "${3:-}" != "$$" ]
+}
+
+# Waits while process $1 (this wrapper) lives, then sends TERM to $2 (timeout). The wrapper sends
+# it TERM when the script ends normally; the trap only notes that, so the loop never signals a
+# sleep it has already waited for, whose ID may belong to another process by then. A TERM that
+# interrupts the wait makes it return over 128 with that sleep still running, and it is stopped.
 watch() {
-	trap 'kill "$nap" 2>/dev/null; exit 0' TERM
-	while kill -0 "$1" 2>/dev/null; do
+	stop=
+	trap 'stop=1' TERM
+	while [ -z "$stop" ] && kill -0 "$1" 2>/dev/null; do
 		sleep 1 &
 		nap=$!
 		wait "$nap"
+		if [ $? -gt 128 ]; then
+			kill "$nap" 2>/dev/null
+		fi
 	done
+	[ -z "$stop" ] || exit 0
+	# Only while $2 is still timeout: if timeout ended in the last second, its process ID may
+	# already be another process's.
+	if [ -r "/proc/$2/comm" ]; then
+		IFS= read -r comm < "/proc/$2/comm" || comm=
+		[ "$comm" = timeout ] || exit 0
+	fi
 	kill -s TERM "$2" 2>/dev/null
 }
 

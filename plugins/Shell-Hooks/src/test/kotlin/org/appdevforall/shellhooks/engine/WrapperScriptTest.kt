@@ -271,6 +271,118 @@ class WrapperScriptTest(
         }
     }
 
+    /** The fields of /proc/<pid>/stat after the command name: state, ppid, pgrp, session, ... */
+    private fun stat(pid: Long): List<String>? =
+        runCatching { File("/proc/$pid/stat").readText() }.getOrNull()?.substringAfterLast(") ")?.split(' ')
+
+    private fun childrenOf(pid: Long): List<Long> =
+        File("/proc").listFiles().orEmpty().mapNotNull { it.name.toLongOrNull() }.filter { stat(it)?.getOrNull(1)?.toLongOrNull() == pid }
+
+    private fun comm(pid: Long): String = runCatching { File("/proc/$pid/comm").readText().trim() }.getOrDefault("")
+
+    /** This test's own process: the JVM that started the wrapper, as the IDE does. */
+    private val jvmPid: Long = File("/proc/self").canonicalFile.name.toLong()
+
+    /** The wrapper this test started with [mark]: the JVM's child carrying it. */
+    private fun wrapperPid(mark: String): Long? = leftBehind(mark).firstOrNull { stat(it)?.getOrNull(1)?.toLongOrNull() == jvmPid }
+
+    /** Where each of [pid]'s file descriptors points, e.g. `pipe:[123]`. */
+    private fun fdTargets(pid: Long): List<String> =
+        File("/proc/$pid/fd").listFiles().orEmpty().mapNotNull { runCatching { Files.readSymbolicLink(it.toPath()).toString() }.getOrNull() }
+
+    @Test
+    fun theWatchdogKeepsNoCopyOfTheIdesOutput() {
+        // A watchdog holding the IDE's output open would make the host wait for it after the script
+        // ends. dash and busybox keep a saved copy of stdout for `watch ... >/dev/null &`.
+        assumeTrue("needs /proc", File("/proc/self/fd").isDirectory)
+        linkTimeout()
+        val mark = java.util.UUID.randomUUID().toString()
+        val script = work.script("hook", "#!/bin/sh\nsleep 5\n")
+
+        val process = start(script, emptyList(), mapOf("COGO_TIMEOUT_SECONDS" to "60", "COGO_TEST_MARK" to mark))
+        try {
+            var wrapper = -1L
+            assertTrue("the wrapper started", waitUntil(10) { wrapperPid(mark)?.also { wrapper = it } != null })
+            val output = Files.readSymbolicLink(File("/proc/$wrapper/fd/1").toPath()).toString()
+            var watchdog = -1L
+            // Its sleep running means it is past its redirections and in its loop.
+            val started =
+                waitUntil(10) {
+                    childrenOf(wrapper).firstOrNull { comm(it) != "timeout" }?.also { watchdog = it } != null &&
+                        childrenOf(watchdog).isNotEmpty()
+                }
+            assertTrue("the watchdog started", started)
+
+            val holders = (listOf(watchdog) + childrenOf(watchdog)).filter { output in fdTargets(it) }
+            assertTrue("the watchdog holds the IDE's output $output: $holders", holders.isEmpty())
+        } finally {
+            process.destroyForcibly()
+            process.waitFor(5, TimeUnit.SECONDS)
+            waitUntil(10) { leftBehind(mark).isEmpty() }
+            leftBehind(mark).forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+        }
+    }
+
+    /** Links util-linux `setsid` into $PREFIX/bin, as the Terminal's bootstrap ships it. */
+    private fun linkSetsid(): File {
+        val setsid = File("/usr/bin/setsid")
+        assumeTrue("needs util-linux setsid", setsid.canExecute())
+        Files.createDirectories(File(prefix, "bin").toPath())
+        Files.createSymbolicLink(File(prefix, "bin/setsid").toPath(), setsid.toPath())
+        return setsid
+    }
+
+    @Test
+    fun withoutTimeoutTheScriptKeepsTheWrappersProcessIdInASessionOfItsOwn() {
+        // The IDE stops a hook by its process ID, so setsid must not fork; and the script must lead
+        // a session and group of its own rather than share the IDE's.
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        linkSetsid()
+        val script = work.script("hook", "#!/bin/sh\nset -- \$(sed 's/.*) //' /proc/\$\$/stat)\necho \"\$\$ \$2 \$3 \$4\"\n")
+
+        val (pid, parent, group, session) = run(script).trim().split(' ')
+
+        // Its parent is still this JVM: it is the very process started, not a fork of it.
+        assertEquals("parent", jvmPid.toString(), parent)
+        assertEquals("process group", pid, group)
+        assertEquals("session", pid, session)
+    }
+
+    @Test
+    fun withoutTimeoutAScriptThatSignalsItsGroupDoesNotSignalItsCaller() {
+        // Without timeout the script would share its caller's group, which in the IDE is Code on the
+        // Go's, and `trap 'kill 0' EXIT` would signal it. Here the caller is a stand-in shell in a
+        // session of its own (never the test's), with a sentinel in its group.
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        val setsid = linkSetsid()
+        val sentinel = File(work, "sentinel.pid")
+        val status = File(work, "status")
+        val script = work.script("hook", "#!/bin/sh\ntrap 'kill 0' EXIT\necho ran\n")
+        val sh = if (shell.endsWith("busybox")) "'$shell' sh" else "'$shell'"
+        val caller =
+            "sleep 30 & echo \$! > '${sentinel.path}'; " +
+                "$sh '${wrapper.absolutePath}' '${script.path}' > '${work.path}/out' 2>&1; echo \$? > '${status.path}'"
+
+        val process =
+            ProcessBuilder(setsid.path, "/bin/sh", "-c", caller)
+                .directory(work)
+                .redirectErrorStream(true)
+                .apply { environment()["PREFIX"] = prefix.path }
+                .start()
+        val sentinelPid = { sentinel.readText().trim().toLongOrNull() }
+        try {
+            assertTrue("the caller finished", process.waitFor(15, TimeUnit.SECONDS))
+
+            // The script's `kill 0` ends the script itself (143); its caller must live on to record that.
+            assertTrue("the caller was signalled and never finished", status.exists())
+            assertTrue("the sentinel in the caller's group was signalled", sentinelPid()?.let(::isRunning) == true)
+            assertTrue("the script ran", File(work, "out").readText().startsWith("ran\n"))
+        } finally {
+            sentinelPid()?.let { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+            process.destroyForcibly()
+        }
+    }
+
     @Test
     fun withoutATimeoutVariableTheScriptIsNotWrapped() {
         interpreter("timeout")

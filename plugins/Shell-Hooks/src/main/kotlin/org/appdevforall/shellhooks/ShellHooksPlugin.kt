@@ -30,9 +30,9 @@ import org.appdevforall.shellhooks.engine.HookDiscovery
 import org.appdevforall.shellhooks.engine.HookEvent
 import org.appdevforall.shellhooks.engine.HookLog
 import org.appdevforall.shellhooks.engine.HookPaths
-import org.appdevforall.shellhooks.engine.HookResolver
 import org.appdevforall.shellhooks.engine.HookRun
 import org.appdevforall.shellhooks.engine.HookRunner
+import org.appdevforall.shellhooks.engine.HookRunners
 import org.appdevforall.shellhooks.engine.IdeCommandRunner
 import org.appdevforall.shellhooks.engine.IdeStartedTrigger
 import org.appdevforall.shellhooks.engine.LaunchGate
@@ -115,14 +115,16 @@ class ShellHooksPlugin :
         runCatching { VerifiedCopies.prune(verifiedDir, trust.trustedShas()) }
             .onFailure { context.logger.warn("Shell Hooks: cannot prune old trusted copies", it) }
         runner =
-            HookRunner(
+            HookRunners.create(
                 scope = scope,
-                resolver = HookResolver(paths, settings, trust, log, verifiedDir, warn),
-                commands = IdeCommandRunner { service(IdeCommandService::class.java) },
+                paths = paths,
+                switches = settings,
+                trust = trust,
                 log = log,
+                verifiedDir = verifiedDir,
+                commands = IdeCommandRunner { service(IdeCommandService::class.java) },
                 wrapper = { wrapper },
                 timeoutMs = { settings.timeoutSeconds * 1000L },
-                timeoutAvailable = paths::hasTimeout,
                 ideVersion = ideVersion(),
                 warn = warn,
             )
