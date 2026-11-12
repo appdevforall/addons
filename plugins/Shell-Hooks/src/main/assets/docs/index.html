@@ -106,18 +106,41 @@ chmod +x file-saved</pre></li>
 </p>
 <ul>
   <li>An untrusted script is skipped and listed in the Hooks tab. <b>Review</b> shows the whole
-      script, one numbered row per line; <b>Trust</b> approves exactly what you read.</li>
+      script, one numbered row per line, and a row marked &#x21B3; continues the line above it;
+      <b>Trust</b> approves exactly what you read.</li>
   <li>Editing a trusted script, or adding one, needs a new review.</li>
   <li>Only plain scripts can be trusted: at most 64 KB of printable ASCII and newlines, with no
       tabs, carriage returns or other control or non-ASCII characters, no line longer than 100
       characters or ending in a space, and a name of letters, digits, <code>.</code>,
-      <code>_</code>, <code>-</code> and <code>/</code>. Anything else is listed with the reason it
+      <code>_</code>, <code>-</code> and <code>/</code> with no part starting with a dot (such
+      names are skipped altogether). Anything else is listed with the reason it
       can't be reviewed, and never runs: such characters can make a script run differently from
       how it reads, for example a backslash before an invisible carriage return that looks like a
       line continuation while the next line runs as its own command. Your own hooks have no such
       limits.</li>
+  <li><b>Reviewing is reading code.</b> Plain text means you see every character, not that a
+      quick look tells you what runs: read the script as the shell will. Watch for three things:
+      <ul>
+        <li>A backslash at the end of a line of code joins the next line to it, so a
+            <code>#</code> starting that line does not begin a comment. At the end of a comment,
+            a backslash does nothing.</li>
+        <li>A here-document ends at the first line that exactly matches its delimiter, which may
+            not be the one you expect: <code>&lt;&lt;E"O"F</code> ends at <code>EOF</code>, and the
+            lines after that run.</li>
+        <li>Backticks, or <code>$(</code> in the text of a here-document whose delimiter is not
+            quoted, run a command inside what looks like text.</li>
+      </ul>
+      A best-effort check, not a guarantee, marks <b>!</b> beside its number every line that
+      contains <code>&lt;&lt;</code>, a backtick or <code>$(</code>, or ends in a backslash, and
+      lists them above the script by kind. It judges each line on its own, in comments and strings
+      too, so it marks many harmless lines, and it misses every other kind of trick, such as an
+      alias or <code>IFS</code>. A line without a mark can still do anything, so read every
+      line.</li>
   <li>Trust covers only that script. Files it runs from the project, such as
-      <code>./gradlew</code>, are not reviewed and can change later: keep project hooks
+      <code>./gradlew</code>, are not reviewed and can change later. Neither are settings that
+      tools read by themselves from the project: a hook in <code>.git/config</code> (such as
+      <code>core.fsmonitor</code>) runs a program when the script calls <code>git status</code>,
+      and Gradle and npm read the project's build files and scripts. Keep project hooks
       self-contained, or review what they run.</li>
   <li>Preferences lists the projects you trusted scripts in; <b>Revoke</b> forgets them.</li>
   <li>A trusted script runs from a private copy of what you approved, so it cannot be swapped

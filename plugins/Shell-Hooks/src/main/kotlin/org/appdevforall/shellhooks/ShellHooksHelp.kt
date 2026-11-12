@@ -89,7 +89,10 @@ object ShellHooksHelp {
                     project, from a cloned repository or an AI agent's edit, so none runs until you read it in
                     the Hooks tab and trust it. Editing a trusted script makes it untrusted again.</p>
                     <p>Only plain scripts can be trusted: at most 64 KB of printable ASCII and newlines, no tabs,
-                    no line over 100 characters or ending in a space. Anything else never runs.</p>
+                    no line over 100 characters or ending in a space, and a name with no part starting with a
+                    dot. Anything else never runs.</p>
+                    <p>Trust covers the script's own text, not project files or settings it uses, such as
+                    <code>.git/config</code> or Gradle and npm files.</p>
                     <p>This does not protect you from a plugin that can run commands: such a plugin can already
                     change your own hooks folder. Install only plugins you trust.</p>
                     """.trimIndent(),
@@ -100,13 +103,26 @@ object ShellHooksHelp {
                 summary = "Read the script before you trust it: it runs with the Terminal's access.",
                 detail =
                     """
-                    <p><b>Trust</b> approves exactly the text shown, one numbered row per line; text that wraps
-                    continues on the same number. If the file changes afterwards it waits for review again.</p>
+                    <p><b>Trust</b> approves exactly the text shown, one numbered row per line; a row marked
+                    &#x21B3; continues the line above it. If the file changes afterwards it waits for review
+                    again.</p>
                     <p>Only a plain script can be reviewed: at most 64 KB of printable ASCII and newlines, with
                     no tabs, carriage returns or other characters, no line over 100 characters or ending in a
-                    space. Those could make a script run differently from how it reads, so a script that has
-                    them is listed with the reason and never runs.</p>
-                    <p>Trust covers only this script: files it runs from the project are not reviewed.</p>
+                    space, and a name with no part starting with a dot. Those could make a script run
+                    differently from how it reads, so a script that has them is listed with the reason and
+                    never runs.</p>
+                    <p>You see every character, but reviewing is reading code: read it as the shell will. A
+                    backslash ending a line of code joins the next line to it, so a <code>#</code> starting
+                    that line is no comment (a backslash ending a comment does nothing); a here-document ends
+                    at the first line exactly matching its delimiter, which may not be the one you expect;
+                    backticks, or <code>$(</code> in here-document text, run commands.</p>
+                    <p>A best-effort check, not a guarantee, marks <b>!</b> every line that contains
+                    <code>&lt;&lt;</code>, a backtick or <code>$(</code>, or ends in a backslash, and lists
+                    them above the script by kind. It judges each line on its own, in comments and strings
+                    too, so it marks many harmless lines, and it misses every other kind of trick: a line
+                    without a mark can still do anything. Read every line.</p>
+                    <p>Trust covers only this script: not files it runs from the project, nor settings tools
+                    read by themselves, such as hooks in <code>.git/config</code> or Gradle and npm files.</p>
                     """.trimIndent(),
                 buttons = guide,
             ),
