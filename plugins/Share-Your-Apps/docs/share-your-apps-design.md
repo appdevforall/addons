@@ -409,7 +409,7 @@ Every server build the plugin installs must be signed with the **same key** as t
   - `SERVER_SIGNING_STORE_PASSWORD` and `SERVER_SIGNING_KEY_PASSWORD`: the same password
   - `SERVER_SIGNING_KEY_ALIAS`: `shareyourapps-server`
 
-  Without the secrets, a CI build of this plugin stops at `downloadAssets` rather than bundle an unsigned server; other plugins build as before.
+  Each of those workflows starts with a **Pre-flight checks** step, which names every missing or empty secret and then fails the run, before anything is built. That stops builds of every addon, not only this one. Behind it, `downloadAssets` still stops a CI build that has no key rather than bundle an unsigned server.
 - **Building on the phone:** without the `SERVER_SIGNING_*` variables, `app/build.gradle.kts` reads all four values from `~/keys/release.properties` in Code On The Go's private home folder (`/data/data/com.itsaky.androidide/files/home/keys/`), so no app with storage access can read them. Its `storeFile` is the key's absolute path. **Never put a path or password in the build file itself**, which is committed. The project itself is in shared storage, so an app with All-files access could change its build files or git hooks, and the next build — run as Code On The Go, which can read the key — could steal it. So keep the key off the phone and let CI sign releases; a build on the phone without `release.properties` is unsigned, which is fine for testing.
 - **Check which key signed an APK** by certificate fingerprint, never by file hash:
   ```

@@ -5,15 +5,9 @@
 # SERVER_SIGNING_* variables that plugins/Share-Your-Apps/server/app/build.gradle.kts reads, through
 # $GITHUB_ENV. The workflow passes the four repository secrets in as environment variables.
 #
-# Without the secrets it does nothing: plugins other than Share-Your-Apps build as before, and
-# Share-Your-Apps' downloadAssets stops in CI rather than bundle an unsigned server.
+# Each workflow's Pre-flight checks step has already failed the run if any of the four is missing.
 
 set -euo pipefail
-
-if [ -z "${SERVER_SIGNING_KEYSTORE_BASE64:-}" ]; then
-    echo "No SERVER_SIGNING_KEYSTORE_BASE64 secret: Share Your Apps Server can't be signed in this run."
-    exit 0
-fi
 
 store="$RUNNER_TEMP/share-your-apps-server.p12"
 printf '%s' "$SERVER_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$store"

@@ -20,6 +20,41 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # Every prerequisite is checked here, first, and all failures are reported
+      # together, so a missing secret fails the run in seconds, not after the build.
+      - name: Pre-flight checks
+        env:
+          R2_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET_NAME }}
+          SERVER_SIGNING_KEYSTORE_BASE64: ${{ secrets.SERVER_SIGNING_KEYSTORE_BASE64 }}
+          SERVER_SIGNING_STORE_PASSWORD: ${{ secrets.SERVER_SIGNING_STORE_PASSWORD }}
+          SERVER_SIGNING_KEY_ALIAS: ${{ secrets.SERVER_SIGNING_KEY_ALIAS }}
+          SERVER_SIGNING_KEY_PASSWORD: ${{ secrets.SERVER_SIGNING_KEY_PASSWORD }}
+        run: |
+          failed=0
+          # Share Your Apps Server's release key (scripts/server-signing-key.sh).
+          for v in SERVER_SIGNING_KEYSTORE_BASE64 SERVER_SIGNING_STORE_PASSWORD SERVER_SIGNING_KEY_ALIAS SERVER_SIGNING_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Repository secret $v is missing or empty. See The release signing key in plugins/Share-Your-Apps/docs/share-your-apps-design.md."
+              failed=1
+            fi
+          done
+          # Cloudflare R2, for the publish at the end. Without this, a renamed
+          # variable is only discovered after the whole build, inside boto3.
+          for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is empty. Check the repository secrets and variables."
+              failed=1
+            fi
+          done
+          if [ "$failed" != 0 ]; then
+            echo "Pre-flight checks failed; see the errors above." >&2
+            exit 1
+          fi
+          echo "Pre-flight checks passed. Publishing to bucket '$R2_BUCKET'."
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
@@ -30,23 +65,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - uses: astral-sh/setup-uv@v5
-
-      - name: Verify the R2 configuration
-        # The build below takes a long time. Without this, a renamed variable
-        # is only discovered after all of it, inside boto3.
-        env:
-          R2_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET_NAME }}
-        run: |
-          for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
-            if [ -z "${!v}" ]; then
-              echo "$v is empty. Check the repository secrets and variables." >&2
-              exit 1
-            fi
-          done
-          echo "Publishing to bucket '$R2_BUCKET'."
 
       - name: Check names and metadata
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check

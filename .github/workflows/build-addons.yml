@@ -29,6 +29,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Every prerequisite is checked here, first, and all failures are reported
+      # together, so a missing secret fails the run in seconds, not after the build.
+      - name: Pre-flight checks
+        env:
+          SERVER_SIGNING_KEYSTORE_BASE64: ${{ secrets.SERVER_SIGNING_KEYSTORE_BASE64 }}
+          SERVER_SIGNING_STORE_PASSWORD: ${{ secrets.SERVER_SIGNING_STORE_PASSWORD }}
+          SERVER_SIGNING_KEY_ALIAS: ${{ secrets.SERVER_SIGNING_KEY_ALIAS }}
+          SERVER_SIGNING_KEY_PASSWORD: ${{ secrets.SERVER_SIGNING_KEY_PASSWORD }}
+        run: |
+          failed=0
+          # Share Your Apps Server's release key (scripts/server-signing-key.sh).
+          for v in SERVER_SIGNING_KEYSTORE_BASE64 SERVER_SIGNING_STORE_PASSWORD SERVER_SIGNING_KEY_ALIAS SERVER_SIGNING_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Repository secret $v is missing or empty. See The release signing key in plugins/Share-Your-Apps/docs/share-your-apps-design.md."
+              failed=1
+            fi
+          done
+          if [ "$failed" != 0 ]; then
+            echo "Pre-flight checks failed; see the errors above." >&2
+            exit 1
+          fi
+          echo "Pre-flight checks passed."
+
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
 
