@@ -84,7 +84,10 @@ public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExten
     }
 
     @Override
-    public void dispose() {}
+    public void dispose() {
+        projectService = null;
+        context = null;
+    }
 
     @Nullable
     @Override

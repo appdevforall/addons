@@ -26,7 +26,7 @@ import dev.omar.plugin.iconsrepo.data.models.IconModel;
 
 public class IconRepository {
 
-    private final Context context;
+    private Context context;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final List<IconModel> iconsList;
 
@@ -45,8 +45,15 @@ public class IconRepository {
         void onError(Throwable th);
     }
 
+    public void shutdown() {
+        executor.shutdownNow();
+        iconsList.clear();
+        context = null;
+    }
+
     public void loadAllIconsAsync(final LoadIconsCallback callback) {
         if (callback == null) return;
+        if (executor.isShutdown()) return;
         executor.submit(
                 () -> {
                     try {

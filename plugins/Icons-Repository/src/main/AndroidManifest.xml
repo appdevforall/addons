@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="IconsRepository"
+        android:label="Icons Repository"
         android:theme="@style/PluginTheme"
         tools:ignore="MissingApplicationIcon">
 
@@ -14,7 +14,7 @@
 
         <meta-data
             android:name="plugin.name"
-            android:value="IconsRepository" />
+            android:value="Icons Repository" />
 
         <meta-data
             android:name="plugin.icon_day"
@@ -25,7 +25,7 @@
             android:value="assets/icon_night.png" />
         <meta-data
             android:name="plugin.version"
-            android:value="2.0.3" />
+            android:value="${pluginVersion}" />
 
         <meta-data
             android:name="plugin.description"
@@ -39,6 +39,10 @@
             android:name="plugin.min_ide_version"
             android:value="26.42" />
 
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
         <!-- Available permissions (comma-separated): - filesystem.read : Read files from the filesystem - filesystem.write : Write files to the filesystem - network.access : Access the network - system.commands : Execute system commands - ide.settings : Access IDE settings - project.structure : Access project structure -->
         <meta-data
             android:name="plugin.permissions"
@@ -50,6 +54,10 @@
 
         <meta-data
             android:name="plugin.sidebar_items"
+            android:value="1" />
+
+        <meta-data
+            android:name="plugin.editor_tabs"
             android:value="1" />
 
     </application>

@@ -58,7 +58,7 @@
     Icons Repository is a sidebar extension for the Code on the Go IDE that lets developers browse a bundled library of Material-style icons and import any of them into the current Android project as a Vector Drawable XML. The plugin replaces the manual "find an SVG, convert it, copy it into <code>res/drawable</code>, fix the colors" loop with a single dialog: pick an icon, optionally pick a tint, hit Import. The result is committed-ready XML in the project's <code>res/drawable</code> directory with no external network calls and no SDK changes required.
 </p>
 <p>
-    The plugin targets Code on the Go versions <strong>26.17 through 26.22</strong> and runs on Android API 26 and above.
+    The plugin targets Code on the Go versions <strong>26.42 through 26.99</strong> and runs on Android API 26 and above.
 </p>
 <p>
     Originally created by <a href="https://github.com/omar-haidar">OMAR HAIDAR</a> (<a href="https://github.com/omar-haidar/IconsRepository-Plugin">upstream repository</a>) and included in this collection with attribution.
@@ -83,11 +83,13 @@
 <ul>
     <li><code>Main</code> — implements <code>IPlugin</code> via <code>BasePlugin</code>; registers one sidebar item and one editor tab; owns the singleton <code>IconRepository</code>.</li>
     <li><code>BasePlugin</code> — common lifecycle plumbing on top of the <code>plugin-api</code>; exposes <code>PluginContext</code>, <code>ServiceRegistry</code>, and a logger to subclasses, and clears references in <code>dispose()</code>.</li>
-    <li><code>repository.IconRepository</code> — loads icons from the bundled <code>material_icon.zip</code> asset on a background thread, caches them in memory, and exposes an asynchronous load API. Provides <code>shutdown()</code> to terminate the executor on plugin disposal.</li>
-    <li><code>ui.fragments.MainFragment</code> — the catalog UI: a grid <code>RecyclerView</code> driven by <code>IconsAdapter</code>, with a debounced search input and an import dialog.</li>
+    <li><code>data.repository.IconRepository</code> — loads icons from the bundled <code>material_icon.zip</code> asset on a background thread, caches them in memory, and exposes an asynchronous load API. Provides <code>shutdown()</code> to terminate the executor on plugin disposal.</li>
+    <li><code>ui.fragments.MainFragment</code> — the catalog UI: a grid <code>RecyclerView</code> driven by <code>IconsAdapter</code>, with a debounced search input. It observes <code>ui.viewmodel.MainViewModel</code>, which loads the catalog through <code>IconRepository</code> and publishes a <code>MainUiState</code> (loading, loaded, empty or error).</li>
+    <li><code>ui.dialog.IconImportDialogManager</code> — the import dialog (icon name, tint color, and a target module or all modules); hands the result to <code>domain.IconImportUseCase</code>, which runs the importer.</li>
     <li><code>ui.adapter.IconsAdapter</code> — owns the search index, the SVG render executor pool, the main-thread handler, and the bitmap <code>LruCache</code>. All resources are released in <code>onDetachedFromRecyclerView</code>.</li>
     <li><code>data.importer.SvgToVectorImporter</code> — extracts SVG <code>d</code> path data, builds a Vector Drawable document with <code>XmlPullParser</code>, and writes it to the project's resource directory.</li>
     <li><code>data.importer.AppPathResolver</code> — resolves the active project's <code>app/src/main/res/drawable</code> through the IDE's <code>IProject</code>/<code>IModule</code> APIs (with a Gradle-plugin-project fallback).</li>
+    <li><code>data.importer.ModuleDiscoveryEngine</code> — lists the project's Android modules from the IDE's module list, the <code>include</code> lines in <code>settings.gradle</code>, and a bounded scan of the project tree, so the import dialog can target any module.</li>
     <li><code>data.validation</code> — small validation framework (<code>Validator</code>, <code>ValidationRule</code>, <code>IconNameRule</code>, <code>HexColorRule</code>, <code>RequiredRule</code>) used by the import dialog.</li>
 </ul>
 

@@ -1,6 +1,6 @@
 ### **Icons Repository**
 
-**Version:** 1.0.1
+**Version:** 2.0.3
 
 **License:** (e.g., MIT, Apache 2.0)
 
@@ -14,7 +14,7 @@ A plugin to help add drawable icons to your Android project on the Code on the G
 
 ### **Requirements and dependencies**
 
-*   **Supported Code on the Go versions:** 26.17 – 26.22
+*   **Supported Code on the Go versions:** 26.42 – 26.99
 
 ### **Installation**
 
@@ -25,7 +25,7 @@ Install using the Plugin Manager in Code on the Go.
 Requires:
 
 *   JDK 17
-*   Android SDK with build-tools 37.0.0 and platform 35 (the Gradle build will fetch these automatically if missing)
+*   Android SDK platform 36 (the Gradle build will fetch these automatically if missing)
 *   `local.properties` at the repo root with `sdk.dir=<path-to-android-sdk>`
 
 Build command:

@@ -1,6 +1,7 @@
 package dev.omar.plugin.iconsrepo.ui.adapter;
 
 import android.annotation.SuppressLint;
+import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
@@ -12,6 +13,7 @@ import android.widget.Filter;
 import android.widget.Filterable;
 
 import androidx.annotation.NonNull;
+import androidx.collection.LruCache;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -31,7 +33,9 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
     private List<IconModel> originalList;
     private FastSearchIndexV2 searchIndex;
     private final ExecutorService searchExecutor;
+    private final ExecutorService renderExecutor;
     private final Handler mainHandler;
+    private final LruCache<String, Bitmap> iconsCache;
     OnItemClickListener itemClickListener;
     private String currentQuery = "";
 
@@ -42,7 +46,26 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
         super(new IconModelDiffCallback());
         originalList = new ArrayList<>();
         searchExecutor = Executors.newSingleThreadExecutor();
+        renderExecutor = Executors.newFixedThreadPool(4);
         mainHandler = new Handler(Looper.getMainLooper());
+        iconsCache = new LruCache<String, Bitmap>(8 * 1024) {
+            @Override
+            protected int sizeOf(String keyword, @NonNull Bitmap bitmap) {
+                return bitmap.getByteCount() / 1024;
+            }
+        };
+    }
+
+    ExecutorService getRenderExecutor() {
+        return renderExecutor;
+    }
+
+    Handler getMainHandler() {
+        return mainHandler;
+    }
+
+    LruCache<String, Bitmap> getIconsCache() {
+        return iconsCache;
     }
 
     public void setOriginalList(List<IconModel> fullList) {
@@ -132,7 +155,13 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
     @Override
     public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
         super.onDetachedFromRecyclerView(recyclerView);
-        searchExecutor.shutdown();
+        if (pendingSearch != null) {
+            mainHandler.removeCallbacks(pendingSearch);
+            pendingSearch = null;
+        }
+        searchExecutor.shutdownNow();
+        renderExecutor.shutdownNow();
+        iconsCache.evictAll();
     }
 
     @Override

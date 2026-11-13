@@ -83,7 +83,16 @@ public class Main extends BasePlugin {
     @Override
     public void onInitialized(PluginContext context) {
         instance = this;
-        
+    }
+
+    @Override
+    public void dispose() {
+        if (iconRepository != null) {
+            iconRepository.shutdown();
+            iconRepository = null;
+        }
+        instance = null;
+        super.dispose();
     }
 
     @Override
