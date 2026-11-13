@@ -1,8 +1,9 @@
 package dev.omar.plugin.iconsrepo;
 
 import android.content.Context;
-import android.view.LayoutInflater;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.itsaky.androidide.plugins.IPlugin;
@@ -16,12 +17,12 @@ import com.itsaky.androidide.plugins.extensions.EditorTabItem;
 import com.itsaky.androidide.plugins.extensions.FabAction;
 import com.itsaky.androidide.plugins.extensions.MenuItem;
 import com.itsaky.androidide.plugins.extensions.NavigationItem;
-import com.itsaky.androidide.plugins.extensions.ProjectType;
 import com.itsaky.androidide.plugins.extensions.TabItem;
 import com.itsaky.androidide.plugins.extensions.ToolbarAction;
 import com.itsaky.androidide.plugins.extensions.UIExtension;
 
 import com.itsaky.androidide.plugins.services.IdeProjectService;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -33,7 +34,7 @@ public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExten
     
     
     @Override
-    public boolean initialize(PluginContext context) {
+    public boolean initialize(@NonNull PluginContext context) {
         try {
             this.context = context;
             this.projectService = getServices().get(IdeProjectService.class);
@@ -83,16 +84,15 @@ public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExten
     }
 
     @Override
-    public void dispose() {
-        projectService = null;
-        context = null;
-    }
+    public void dispose() {}
 
+    @Nullable
     @Override
     public List<EditorTabItem> getMainEditorTabs() {
         return null;
     }
 
+    @Nullable
     @Override
     public List<NavigationItem> getSideMenuItems() {
         return null;
@@ -100,41 +100,47 @@ public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExten
 
 
     @Override
-    public void onEditorTabSelected(String tabId, Fragment fragment) {}
+    public void onEditorTabSelected(@NonNull String tabId, @NonNull Fragment fragment) {}
 
     @Override
-    public void onEditorTabClosed(String tabId) {}
+    public void onEditorTabClosed(@NonNull String tabId) {}
 
     @Override
-    public boolean canCloseEditorTab(String tabId) {
+    public boolean canCloseEditorTab(@NonNull String tabId) {
         return true;
     }
 
+    @Nullable
     @Override
     public List<MenuItem> getMainMenuItems() {
         return null;
     }
 
+    @Nullable
     @Override
-    public List<MenuItem> getContextMenuItems(ContextMenuContext _context) {
+    public List<MenuItem> getContextMenuItems(@NonNull ContextMenuContext _context) {
         return null;
     }
 
+    @Nullable
     @Override
     public List<TabItem> getEditorTabs() {
         return null;
     }
 
+    @Nullable
     @Override
     public List<ToolbarAction> getToolbarActions() {
         return null;
     }
 
+    @Nullable
     @Override
     public List<FabAction> getFabActions() {
         return null;
     }
-
+    @NonNull
+    @Override
     public Set<String> getHiddenToolbarActionIds() {
         return Collections.emptySet();
     }

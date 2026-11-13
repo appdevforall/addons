@@ -1,18 +1,16 @@
-package dev.omar.plugin.iconsrepo.repository;
+package dev.omar.plugin.iconsrepo.data.repository;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-
 import android.os.Handler;
 import android.os.Looper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 
-import com.caverock.androidsvg.SVG;
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper;
-import dev.omar.plugin.iconsrepo.Main;
-import java.io.ByteArrayInputStream;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -23,15 +21,14 @@ import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import dev.omar.plugin.iconsrepo.models.IconModel;
-import dev.omar.plugin.iconsrepo.utils.Utils;
+import dev.omar.plugin.iconsrepo.Main;
+import dev.omar.plugin.iconsrepo.data.models.IconModel;
 
 public class IconRepository {
 
-    private Context context;
-    private final String zipFileName = "material_icon.zip";
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
-    private List<IconModel> iconsList;
+    private final Context context;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final List<IconModel> iconsList;
 
     public IconRepository(Context context) {
         if (context == null) {
@@ -39,39 +36,26 @@ public class IconRepository {
         } else {
             this.context = context;
         }
-        iconsList = new LinkedList<IconModel>();
+        iconsList = new LinkedList<>();
     }
 
     public interface LoadIconsCallback {
-        public void onLoadded(List<IconModel> list);
+        void onLoaded(List<IconModel> list);
 
-        public void onError(Throwable th);
-    }
-
-    public void shutdown() {
-        executor.shutdownNow();
-        if (iconsList != null) {
-            iconsList.clear();
-        }
-        context = null;
+        void onError(Throwable th);
     }
 
     public void loadAllIconsAsync(final LoadIconsCallback callback) {
         if (callback == null) return;
-        if (executor.isShutdown()) return;
         executor.submit(
                 () -> {
                     try {
                         final List<IconModel> list = loadAllIcons();
                         runOnUiThread(
-                                () -> {
-                                    callback.onLoadded(list);
-                                });
+                                () -> callback.onLoaded(list));
                     } catch (Exception err) {
                         runOnUiThread(
-                                () -> {
-                                    callback.onError(err);
-                                });
+                                () -> callback.onError(err));
                     }
                 });
     }
@@ -89,28 +73,25 @@ public class IconRepository {
 
         AssetManager assets = context.getAssets();
 
+        String zipFileName = "material_icon.zip";
         try (InputStream inputStream = assets.open(zipFileName);
-                ZipInputStream zipIn = new ZipInputStream(inputStream)) {
+             ZipInputStream zipIn = new ZipInputStream(inputStream)) {
 
             ZipEntry entry;
             while ((entry = zipIn.getNextEntry()) != null) {
-                // نتجاهل المجلدات والملفات التي ليست بصيغة SVG
                 if (entry.isDirectory() || !entry.getName().toLowerCase().endsWith(".svg")) {
                     continue;
                 }
 
-                // استخراج اسم الأيقونة بدون مسار وبدون امتداد
-                String fullName = entry.getName(); // مثال: svg/home.svg
+                String fullName = entry.getName();
                 String iconName = extractIconName(fullName);
 
-                // قراءة بيانات SVG إلى مصفوفة بايتات
-                byte[] iconData = Utils.readAllBytes(zipIn);
+                byte[] iconData = readEntryBytes(zipIn);
 
-                // تجاهل الأيقونات الفارغة
-                if (iconData != null && iconData.length > 0) {
+                if (iconData.length > 0) {
                     try {
                         icons.add(new IconModel(iconName, iconData));
-                    } catch (Exception err) {
+                    } catch (Exception ignored) {
 
                     }
                 }
@@ -130,5 +111,16 @@ public class IconRepository {
             return fileName.substring(0, dotIndex);
         }
         return fileName;
+    }
+
+    @NonNull
+    private byte[] readEntryBytes(@NonNull ZipInputStream zipIn) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int len;
+        while ((len = zipIn.read(buffer)) != -1) {
+            baos.write(buffer, 0, len);
+        }
+        return baos.toByteArray();
     }
 }

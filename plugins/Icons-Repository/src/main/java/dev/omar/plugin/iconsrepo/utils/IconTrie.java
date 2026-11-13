@@ -1,10 +1,11 @@
 package dev.omar.plugin.iconsrepo.utils;
 
+import androidx.annotation.NonNull;
 import androidx.collection.ArrayMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import dev.omar.plugin.iconsrepo.models.IconModel;
+import dev.omar.plugin.iconsrepo.data.models.IconModel;
 
 public class IconTrie {
     
@@ -19,14 +20,14 @@ public class IconTrie {
         root = new Node();
     }
     
-    public void build(List<IconModel> icons) {
+    public void build(@NonNull List<IconModel> icons) {
         clear();
         for (IconModel icon : icons) {
             insert(icon);
         }
     }
     
-    private void insert(IconModel model) {
+    private void insert(@NonNull IconModel model) {
         String name = model.getIconName().toLowerCase(Locale.ROOT);
         Node current = root;
         for (int i = 0; i < name.length(); i++) {

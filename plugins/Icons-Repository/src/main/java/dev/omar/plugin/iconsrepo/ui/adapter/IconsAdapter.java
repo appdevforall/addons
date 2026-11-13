@@ -1,7 +1,6 @@
 package dev.omar.plugin.iconsrepo.ui.adapter;
 
 import android.annotation.SuppressLint;
-import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
@@ -13,28 +12,26 @@ import android.widget.Filter;
 import android.widget.Filterable;
 
 import androidx.annotation.NonNull;
-import androidx.collection.LruCache;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
+import dev.omar.plugin.iconsrepo.utils.FastSearchIndexV2;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import dev.omar.plugin.iconsrepo.R;
-import dev.omar.plugin.iconsrepo.models.IconModel;
+import dev.omar.plugin.iconsrepo.data.models.IconModel;
 import dev.omar.plugin.iconsrepo.utils.FastSearchIndex;
 
 public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
         implements Filterable, TextWatcher {
 
     private List<IconModel> originalList;
-    private FastSearchIndex searchIndex;
+    private FastSearchIndexV2 searchIndex;
     private final ExecutorService searchExecutor;
-    private final ExecutorService renderExecutor;
     private final Handler mainHandler;
-    private final LruCache<String, Bitmap> iconsCache;
     OnItemClickListener itemClickListener;
     private String currentQuery = "";
 
@@ -45,26 +42,7 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
         super(new IconModelDiffCallback());
         originalList = new ArrayList<>();
         searchExecutor = Executors.newSingleThreadExecutor();
-        renderExecutor = Executors.newFixedThreadPool(4);
         mainHandler = new Handler(Looper.getMainLooper());
-        iconsCache = new LruCache<String, Bitmap>(8 * 1024) {
-            @Override
-            protected int sizeOf(String keyword, @NonNull Bitmap bitmap) {
-                return bitmap.getByteCount() / 1024;
-            }
-        };
-    }
-
-    ExecutorService getRenderExecutor() {
-        return renderExecutor;
-    }
-
-    Handler getMainHandler() {
-        return mainHandler;
-    }
-
-    LruCache<String, Bitmap> getIconsCache() {
-        return iconsCache;
     }
 
     public void setOriginalList(List<IconModel> fullList) {
@@ -75,7 +53,7 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
                     for (IconModel model : fullList) {
                         names.add(model.getIconName());
                     }
-                    searchIndex = new FastSearchIndex(names);
+                    searchIndex = new FastSearchIndexV2(names);
                 });
         submitList(fullList);
     }
@@ -154,13 +132,7 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
     @Override
     public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
         super.onDetachedFromRecyclerView(recyclerView);
-        if (pendingSearch != null) {
-            mainHandler.removeCallbacks(pendingSearch);
-            pendingSearch = null;
-        }
-        searchExecutor.shutdownNow();
-        renderExecutor.shutdownNow();
-        iconsCache.evictAll();
+        searchExecutor.shutdown();
     }
 
     @Override

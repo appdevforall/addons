@@ -7,13 +7,14 @@ import android.graphics.drawable.BitmapDrawable;
 import android.util.Config;
 import android.graphics.drawable.Drawable;
 
+import androidx.annotation.NonNull;
+
 public final class ImageUtils {
 
     public static Bitmap drawable2Bitmap(Drawable drawable) {
         Bitmap createBitmap;
         Canvas canvas;
-        if (drawable instanceof BitmapDrawable) {
-            BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
+        if (drawable instanceof BitmapDrawable bitmapDrawable) {
             if (bitmapDrawable.getBitmap() != null) {
                 return bitmapDrawable.getBitmap();
             }
@@ -46,7 +47,8 @@ public final class ImageUtils {
         return createBitmap;
     }
 
-    public static Bitmap drawColor(Bitmap bitmap, int color) {
+    @NonNull
+    public static Bitmap drawColor(@NonNull Bitmap bitmap, int color) {
         Paint paint = new Paint(1);
         paint.setColor(color);
         Bitmap createBitmap =

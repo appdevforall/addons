@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MyPlugin</string>
+    <string name="app_name">IconsRepository-Plugin</string>
     <string name="plugin_description">A Code on the Go plugin</string>
-    
-    
     <string name="search_icons">Search icons</string>
     <string name="no_icons_found">No icons found</string>
     <string name="icon_description">Icon</string>
+    <string name="preview_icon">preview_icon</string>
+    <string name="icon_name">Icon name</string>
+    <string name="color">Color</string>
+    <string name="hex_color">Hex color</string>
+    <string name="target_module">Target module</string>
+    <string name="all_modules">All modules</string>
 </resources>

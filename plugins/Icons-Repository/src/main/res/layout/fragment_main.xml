@@ -4,12 +4,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="?colorSurface"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
     android:padding="16dp">
 
-    <!-- Search Input with Material3 TextInputLayout -->
+
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchInputLayout"
         android:layout_width="match_parent"
@@ -18,6 +18,9 @@
         app:startIconDrawable="@drawable/ic_search"
         app:endIconMode="clear_text"
         app:endIconDrawable="@drawable/ic_clear"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -33,33 +36,31 @@
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- FrameLayout to stack RecyclerView and ProgressBar -->
     <FrameLayout
-        android:id="@+id/contentContainer"
-        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingTop="16dp">
+            android:layout_width="match_parent">
 
-        <!-- Material3 RecyclerView for Icons Grid -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/iconsRecyclerView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
             android:fadingEdgeLength="24dp"
+            app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+            tools:itemCount="8"
+            app:spanCount="4"
             android:requiresFadingEdge="vertical"
             tools:listitem="@layout/item_icon" />
 
-        <!-- Circular Progress Indicator (centered) -->
-        <ProgressBar
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
             android:id="@+id/loadingProgressBar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:indeterminate="true"
-            android:visibility="gone" />
+            android:visibility="visible" />
 
-        <!-- Optional: Empty State Text -->
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/emptyStateText"
             android:layout_width="wrap_content"
