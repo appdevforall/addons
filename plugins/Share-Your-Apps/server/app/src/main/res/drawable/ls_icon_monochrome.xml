@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon layer (Android 13+): a one-colour silhouette the phone tints to match the wallpaper.
+     Drawn inside the circle every launcher keeps; the eyes are cut out of the head. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M39,27h30a1,1 0 0 1 1,1v5h-32v-5a1,1 0 0 1 1,-1zM38,33a4,4 0 1 0 8,0a4,4 0 1 0 -8,0zM46,33a4,4 0 1 0 8,0a4,4 0 1 0 -8,0zM54,33a4,4 0 1 0 8,0a4,4 0 1 0 -8,0zM62,33a4,4 0 1 0 8,0a4,4 0 1 0 -8,0z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M38,54a16,14 0 1 0 32,0a16,14 0 1 0 -32,0zM44.0,53a4.5,4.5 0 1 0 9.0,0a4.5,4.5 0 1 0 -9.0,0zM55.0,53a4.5,4.5 0 1 0 9.0,0a4.5,4.5 0 1 0 -9.0,0z" android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd" />
+    <path android:pathData="M47.8,51.6a2,2 0 1 0 4,0a2,2 0 1 0 -4,0zM56.4,54.2a2,2 0 1 0 4,0a2,2 0 1 0 -4,0z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M38,69h32a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-32a4,4 0 0 1 -4,-4v-4a4,4 0 0 1 4,-4z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M40,61q-8,-3 -9,-13M68,61q8,-3 9,-13" android:strokeColor="#FFFFFFFF" android:strokeWidth="4" android:strokeLineCap="round" />
+    <!-- The tiles it holds up: upright, so they read as tiles rather than arrowheads. -->
+    <path android:pathData="M27.7,37h5.6a2.2,2.2 0 0 1 2.2,2.2v5.6a2.2,2.2 0 0 1 -2.2,2.2h-5.6a2.2,2.2 0 0 1 -2.2,-2.2v-5.6a2.2,2.2 0 0 1 2.2,-2.2zM74.7,37h5.6a2.2,2.2 0 0 1 2.2,2.2v5.6a2.2,2.2 0 0 1 -2.2,2.2h-5.6a2.2,2.2 0 0 1 -2.2,-2.2v-5.6a2.2,2.2 0 0 1 2.2,-2.2z" android:fillColor="#FFFFFFFF" />
+</vector>

@@ -1,0 +1,98 @@
+WEBVTT
+
+00:00:00.400 --> 00:00:08.402
+Share Your Apps lets you share the Android apps you build in Code On The Go with people nearby. No internet, no app store, and no accounts.
+
+00:00:10.300 --> 00:00:20.145
+It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot.
+
+00:00:22.050 --> 00:00:23.683
+First, creating your store.
+
+00:00:25.580 --> 00:00:28.667
+Install the plugin from Code On The Go's Addons Manager.
+
+00:00:30.570 --> 00:00:36.705
+In the Share Your Apps tab, give your store a name. A description, a header picture and a PIN are optional.
+
+00:00:38.600 --> 00:00:42.905
+Add a product for each app. Each card shows what buyers can download.
+
+00:00:44.810 --> 00:00:48.415
+Choose the app's project, and the APK that buyers will install.
+
+00:00:50.320 --> 00:00:53.675
+Add screenshots and videos, so buyers can see what they're getting.
+
+00:00:55.570 --> 00:00:58.465
+Describe each picture, for buyers who use a screen reader.
+
+00:01:00.360 --> 00:01:02.365
+Then tap Publish, and confirm.
+
+00:01:04.260 --> 00:01:09.314
+The first time, Android asks you to allow a few things. Each one is needed just once.
+
+00:01:11.210 --> 00:01:15.503
+Choose a template to change the store's look, or write your own.
+
+00:01:17.400 --> 00:01:22.005
+When it's done, every file has been checked. And the store is already being served.
+
+00:01:23.900 --> 00:01:24.912
+Next, letting people in.
+
+00:01:26.900 --> 00:01:29.917
+Share Your Apps Server shows what it's serving, and where.
+
+00:01:31.820 --> 00:01:39.018
+Tap Show QR codes for buyers. On a hotspot, the first code joins its network, and the second opens the store.
+
+00:01:40.920 --> 00:01:46.381
+With no Wi-Fi around, the server makes a hotspot of its own, with a name and password you choose.
+
+00:01:48.280 --> 00:01:50.347
+Buyers see your store in their browser.
+
+00:01:52.250 --> 00:01:58.009
+Each app has its pictures, its description, and its downloads. One tap, and it's on their phone.
+
+00:01:59.910 --> 00:02:03.843
+And every store has an accessible version, plain and in large text.
+
+00:02:05.740 --> 00:02:09.197
+Keep serving when the screen is off, or pause to save battery.
+
+00:02:11.100 --> 00:02:13.640
+Finally, sharing your store with another phone.
+
+00:02:15.540 --> 00:02:20.826
+Someone nearby can serve a copy of your store from their own phone. Tap Share this store.
+
+00:02:22.730 --> 00:02:28.093
+Their phone scans the large code. The small one lets a phone without the app download it first.
+
+00:02:29.990 --> 00:02:34.427
+On their phone, they tap Import a store, and scan the code, or type it.
+
+00:02:36.330 --> 00:02:40.842
+Both phones show the same four digits, so you know you're sharing with the phone in front of you.
+
+00:02:42.740 --> 00:02:45.915
+You choose when their copy expires, and tap Allow.
+
+00:02:47.810 --> 00:02:50.537
+The copy arrives, and they tap Serve it now.
+
+00:02:52.440 --> 00:02:56.488
+They can set their own PIN. But they can't change the store, or pass it on.
+
+00:02:58.390 --> 00:03:01.285
+They let people in the same way, with codes of their own.
+
+00:03:03.190 --> 00:03:06.411
+And on the date you chose, the copy is deleted from their phone.
+
+00:03:08.310 --> 00:03:13.343
+Share Your Apps, from App Dev for All. Share what you build, with the people around you.
+

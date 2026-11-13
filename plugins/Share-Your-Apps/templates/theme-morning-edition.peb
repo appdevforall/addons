@@ -1,0 +1,52 @@
+<!doctype html><html lang="{{lang}}"><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>{{storeName}}</title><style>
+:root{--paper:#f4efe3;--ink:#1d1a16;--muted:#5f574c;--red:#a6231b;--hair:rgba(29,26,22,.28)}
+@media (prefers-color-scheme:dark){:root{--paper:#17150f;--ink:#efe8da;--muted:#a89f90;--red:#ff7a6b;--hair:rgba(239,232,218,.25)}.mast img{filter:grayscale(1) invert(1)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper) radial-gradient(var(--hair) .5px,transparent .9px) 0 0/5px 5px;color:var(--ink);font:16px/1.55 Georgia,"Times New Roman","DejaVu Serif",serif}
+.page{max-width:1120px;margin:0 auto;padding:14px 16px 30px}
+.ticker{overflow:hidden;white-space:nowrap;border-block:1px solid var(--ink);font:700 11px/26px Arial,"DejaVu Sans",sans-serif;text-transform:uppercase;letter-spacing:.12em}
+.ticker div{display:inline-block;padding-left:100%;animation:tick 40s linear infinite}
+.ticker span::before{content:"\25C6";color:var(--red);margin:0 14px}
+@keyframes tick{to{transform:translateX(-100%)}}
+.mast{text-align:center;padding:16px 0 8px;border-bottom:5px double var(--ink)}
+.mast img,.mast video{width:58px;height:58px;object-fit:contain;filter:grayscale(1) contrast(1.3)}
+h1{margin:2px 0 0;font:900 clamp(36px,12vw,84px)/.92 "Times New Roman","DejaVu Serif",Georgia,serif;letter-spacing:-.03em}
+.motto{font-style:italic;color:var(--muted);font-size:14px;margin:6px 0 0}
+.dateline{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--ink);padding:6px 0;font:11px Arial,"DejaVu Sans",sans-serif;text-transform:uppercase;letter-spacing:.12em}
+.lede{font-size:18px;line-height:1.5;margin:16px 0 4px;padding-bottom:14px;border-bottom:1px solid var(--hair)}
+.lede p{margin:.3em 0}.lede::first-letter,.pd::first-letter{float:left;font:900 3.3em/.78 Georgia,serif;padding:5px 3px 0 0;color:var(--red)}
+.cols{columns:17em;column-gap:30px;column-rule:1px solid var(--hair);margin-top:18px}
+article{break-inside:avoid;display:inline-block;width:100%;margin:0 0 22px;padding-bottom:18px;border-bottom:3px double var(--hair);animation:ink .9s both;animation-delay:calc(min(var(--i),6)*90ms)}
+@keyframes ink{from{opacity:0;filter:blur(3px);transform:translateY(8px)}}
+.kicker{font:700 11px Arial,"DejaVu Sans",sans-serif;color:var(--red);text-transform:uppercase;letter-spacing:.14em}
+h2{font:800 27px/1.05 Georgia,"DejaVu Serif",serif;margin:4px 0 4px}
+.by{font:italic 13px Georgia,serif;color:var(--muted)}
+figure{margin:12px 0 8px}
+.photos{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory}
+.photos>*{flex:0 0 100%;scroll-snap-align:start;display:block;width:100%;height:200px;padding:1px 0;object-fit:contain;background:rgba(0,0,0,.06);filter:grayscale(1) contrast(1.15);transition:filter .7s}
+.photos>*:hover,.photos>*:active,.photos>*:focus{filter:none}
+.photos audio{height:40px;margin:80px 0}
+figcaption{font:italic 12px Georgia,serif;color:var(--muted);border-bottom:1px solid var(--hair);padding:4px 0}
+.pd{margin-top:8px}.pd p{margin:.4em 0}.pd a,.lede a{color:var(--ink);text-decoration-color:var(--red)}
+.clip{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.coupon{flex:1 1 140px;position:relative;border:2px dashed var(--ink);padding:10px 8px;text-align:center;text-decoration:none;color:var(--ink);font:700 12px Arial,"DejaVu Sans",sans-serif;text-transform:uppercase;letter-spacing:.1em}
+.coupon::before{content:"\2702"/"";position:absolute;top:-11px;left:10px;background:var(--paper);padding:0 4px;font-size:15px}
+.coupon.apk{background:var(--accent,var(--ink));color:var(--accent-ink,var(--paper));border-style:solid}
+.coupon.apk::before{color:var(--ink)}
+.coupon small{display:block;font-weight:400;letter-spacing:.05em;text-transform:none}
+.acc{display:inline-block;margin:0 0 8px;font:700 12px Arial,"DejaVu Sans",sans-serif;text-transform:uppercase;letter-spacing:.12em;color:var(--ink);text-decoration-color:var(--red)}
+:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+.facts{font:italic 13px Georgia,"DejaVu Serif",serif;color:var(--muted);margin:10px 0 0}
+.new{margin:.5em 0}
+.news{border:2px solid var(--ink);padding:8px 12px;margin:16px 0 0;font:700 15px Georgia,"DejaVu Serif",serif}
+.foot{text-align:center;font:13px Georgia,"DejaVu Serif",serif;color:var(--muted);margin:10px 0}.foot p{margin:4px 0}.foot a{color:var(--ink)}
+.end{text-align:center;font:700 13px Arial,sans-serif;letter-spacing:.4em;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}.ticker div{padding-left:0}}
+</style>{% if accent is not empty %}<style>:root{--accent:{{accent}};--accent-ink:{{accentInk}}}</style>{% endif %}</head><body><div class=page>{% if accessibleHref is not empty %}<nav class=acc-nav aria-label="Page versions"><a class=acc href="{{accessibleHref}}">Accessible version</a></nav>{% endif %}
+<div class=ticker aria-hidden=true><div>{% for p in products %}<span>{{p.name}}</span>{% endfor %}</div></div>
+<header><div class=mast>{% if headerImage.type=='video' %}<video src="{{headerImage.src}}"{% if headerImage.poster %} poster="{{headerImage.poster}}"{% endif %} controls preload="none" muted loop playsinline></video>{% else %}<img src="{{headerImage.src}}" alt="">{% endif %}<h1>{{storeName}}</h1><p class=motto>All the apps that are fit to install</p></div>
+<div class=dateline><span>Vol. I &middot; No. {{products|length}}</span>{% if products is not empty %}<span>{{products[0].dateAddedLabel}}</span>{% endif %}<span>Price: free</span></div>
+{% if storeDescriptionHtml is not empty %}<div class=lede>{{storeDescriptionHtml|raw}}</div>{% endif %}</header>
+{% if announcement is not empty %}<p class=news role=region aria-label="Announcement"><span class=kicker>Stop press</span> {{announcement}}</p>{% endif %}<main class=cols>{% for p in products %}<article style="--i:{{loop.index}}"><div class=kicker>No. {{p.ordinal}}</div><h2>{{p.name}}</h2><div class=by>Filed {% if p.dateAddedIso is not empty %}<time datetime="{{p.dateAddedIso}}">{{p.dateAddedLabel}}</time>{% else %}{{p.dateAddedLabel}}{% endif %}</div>{% if p.carousel is not empty %}<figure><div class=photos tabindex=0 role=region aria-label="{{p.name}}: pictures">{% for m in p.carousel %}{% if m.type=='video' %}<video src="{{m.src}}" controls preload="none"{% if m.poster is not empty %} poster="{{m.poster}}"{% endif %} {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}aria-label="{{m.alt}}">{% if m.captions is not empty %}<track kind="captions" src="{{m.captions}}" srclang="{{lang}}" label="Captions" default>{% endif %}</video>{% elseif m.type=='audio' %}<audio src="{{m.src}}" controls aria-label="{{m.alt}}"></audio>{% else %}<img src="{{m.src}}" {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}alt="{{m.alt}}" loading="lazy">{% endif %}{% endfor %}</div><figcaption>{% if p.carousel|length > 1 %}{{p.carousel|length}} pictures &mdash; swipe for more. {% endif %}Touch a picture for colour.</figcaption></figure>{% endif %}{% if p.descriptionHtml is not empty %}<div class=pd>{{p.descriptionHtml|raw}}</div>{% endif %}{% if p.whatsNew is not empty %}<p class=new><b>What's new:</b> {{p.whatsNew}}</p>{% endif %}<div class=clip>{% if p.apk is not empty %}<a class="coupon apk" href="{{p.apk.src}}">Download APK<small>{{p.apk.sizeLabel}}</small></a>{% endif %}{% if p.sourceZip is not empty %}<a class=coupon href="{{p.sourceZip.src}}">Download source<small>{{p.sourceZip.sizeLabel}}</small></a>{% endif %}</div>{% if p.apk is not empty %}<p class=facts>{% if p.apk.versionName is not empty %}Version {{p.apk.versionName}} &middot; {% endif %}{% if p.apk.androidLabel is not empty %}{{p.apk.androidLabel}} &middot; {% endif %}For {{p.apk.abiLabel}}</p>{% endif %}{% if p.author is not empty or p.license is not empty or p.websiteHref is not empty %}<p class=facts>{% if p.author is not empty %}By {{p.author}}{% endif %}{% if p.license is not empty %}{% if p.author is not empty %} &middot; {% endif %}License: {{p.license}}{% endif %}{% if p.websiteHref is not empty %}{% if p.author is not empty or p.license is not empty %} &middot; {% endif %}<a href="{{p.websiteHref}}">Website</a>{% endif %}</p>{% endif %}</article>{% endfor %}</main>
+<footer class=foot>{% if contact is not empty %}<p class=contact>Questions?{% if contact.name is not empty %} Ask {{contact.name}}{% endif %}{% if contact.emailHref is not empty or contact.phoneHref is not empty or contact.urlHref is not empty %}:{% endif %}{% if contact.emailHref is not empty %} <a href="{{contact.emailHref}}">{{contact.email}}</a>{% endif %}{% if contact.phoneHref is not empty %}{% if contact.emailHref is not empty %} &middot;{% endif %} <a href="{{contact.phoneHref}}">{{contact.phone}}</a>{% endif %}{% if contact.urlHref is not empty %}{% if contact.emailHref is not empty or contact.phoneHref is not empty %} &middot;{% endif %} <a href="{{contact.urlHref}}">website</a>{% endif %}</p>{% endif %}<p class=made>Made with <a href="https://www.appdevforall.org/plugins" style="color:inherit">Share Your Apps{% if shareYourAppsVersion is not empty %} {{shareYourAppsVersion}}{% endif %}</a></p></footer>
+<p class=end aria-hidden=true>&mdash; 30 &mdash;</p></div></body></html>

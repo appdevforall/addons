@@ -1,0 +1,48 @@
+<!doctype html><html lang="{{lang}}"><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>{{storeName}}</title><style>
+:root{--bg:#0b0221;--pink:#ff2bd6;--cyan:#26f7ff;--yellow:#ffe45e;--ink:#f3e8ff}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;color:var(--ink);font:15px/1.5 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;overflow-x:hidden;min-height:100vh}
+.sun{position:fixed;left:50%;top:14vh;width:280px;height:280px;margin-left:-140px;border-radius:50%;z-index:-2;background:linear-gradient(var(--yellow),#ff8a3d 45%,var(--pink) 75%);-webkit-mask:linear-gradient(#000 0 52%,transparent 0),repeating-linear-gradient(#000 0 12px,transparent 0 18px);mask:linear-gradient(#000 0 52%,transparent 0),repeating-linear-gradient(#000 0 12px,transparent 0 18px)}
+.floor{position:fixed;left:-60%;right:-60%;bottom:0;height:46vh;z-index:-1;background:linear-gradient(transparent 0 92%,rgba(255,43,214,.85) 0) 0 0/100% 44px,linear-gradient(90deg,transparent 0 95%,rgba(38,247,255,.6) 0) 0 0/64px 100%,linear-gradient(#20063f,var(--bg));transform:perspective(320px) rotateX(64deg);transform-origin:bottom;animation:run 1.1s linear infinite}
+@keyframes run{to{background-position:0 44px,0 0,0 0}}
+header{text-align:center;padding:38px 16px 18px}
+header img,header video{width:88px;height:88px;object-fit:contain;filter:drop-shadow(0 0 14px var(--pink))}
+h1{margin:12px 0 8px;font-size:32px;line-height:1.05;text-transform:uppercase;letter-spacing:.08em;color:#fff;text-shadow:0 0 4px #fff,0 0 12px var(--pink),0 0 26px var(--pink),0 0 44px var(--cyan);animation:flicker 6s infinite}
+@keyframes flicker{0%,17%,21%,61%,64%,100%{opacity:1}19%,62%{opacity:.5}}
+.sd,.start{max-width:34em;margin:0 auto;padding:8px 12px;border-radius:10px;background:rgba(11,2,33,.72);color:#e4d8ff;font-size:13px}.sd p{margin:.4em 0}.sd a,.pd a{color:var(--cyan)}
+.start{display:inline-block;margin-top:12px;color:var(--yellow);font-size:12px;letter-spacing:.35em;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{text-shadow:0 0 10px var(--yellow),0 0 20px var(--pink)}}
+main{display:grid;gap:26px;padding:8px 14px 50px;max-width:1120px;margin:0 auto;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));align-items:start}
+@property --a{syntax:'<angle>';inherits:false;initial-value:0deg}
+.cab{border-radius:18px;padding:3px;background:conic-gradient(from var(--a),var(--pink),var(--cyan),var(--yellow),var(--pink));animation:spin 7s linear infinite;box-shadow:0 0 24px rgba(255,43,214,.35)}
+@keyframes spin{to{--a:360deg}}
+.in{background:rgba(11,2,33,.94);border-radius:15px;padding:14px}
+.top{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--yellow);letter-spacing:.18em;text-transform:uppercase}
+h2{margin:4px 0 10px;font-size:19px;text-transform:uppercase;letter-spacing:.06em;color:#fff;text-shadow:0 0 10px var(--cyan)}
+.scr{position:relative;border-radius:12px;overflow:hidden;background:#000;box-shadow:inset 0 0 34px rgba(38,247,255,.35),0 0 0 2px #2a0f55}
+.scr::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(rgba(255,255,255,.07) 0 1px,transparent 1px 3px)}
+.strip{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory}
+.strip>*{flex:0 0 100%;scroll-snap-align:start;display:block;width:100%;height:190px;padding:1px 0;object-fit:contain}
+.strip audio{height:40px;margin:74px 0}
+.lives{position:absolute;right:8px;bottom:8px;z-index:1;font-size:10px;color:var(--yellow);background:rgba(0,0,0,.6);padding:1px 7px;border-radius:4px;letter-spacing:.15em}
+.pd{margin:12px 0;color:#e2d6ff;font-size:13px}.pd p{margin:.4em 0}
+.a{display:flex;gap:10px;flex-wrap:wrap}
+.b{flex:1 1 130px;text-align:center;text-decoration:none;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:11px 8px;border-radius:10px;font-size:13px}
+.b:active{transform:translateY(2px)}
+.b1{background:var(--accent,var(--pink));color:var(--accent-ink,#1a0033);box-shadow:0 4px 0 #8a0f74,0 0 18px var(--pink)}
+.b2{color:var(--cyan);border:2px solid var(--cyan);box-shadow:inset 0 0 12px rgba(38,247,255,.45),0 0 10px rgba(38,247,255,.35)}
+.b small{display:block;font-size:10px;opacity:.85;letter-spacing:.15em}
+/* Full strength on the accent: accentInk only guarantees its contrast undimmed. */
+.b1 small{opacity:1}
+.acc{position:absolute;top:8px;left:10px;z-index:2;color:var(--cyan);background:rgba(11,2,33,.9);border:2px solid var(--cyan);border-radius:8px;padding:2px 10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;box-shadow:0 0 10px rgba(38,247,255,.45)}
+:focus-visible{outline:3px solid var(--yellow);outline-offset:3px}
+.facts{margin:10px 0 0;color:#d6c8ff;font-size:11px;letter-spacing:.06em}
+.new{color:#e2d6ff;font-size:13px;margin:0 0 12px}
+.news{max-width:34em;margin:0 auto 20px;padding:8px 12px;border:2px solid var(--yellow);border-radius:10px;background:rgba(11,2,33,.9);color:var(--yellow);text-align:center;font-size:13px}
+footer p{margin:6px 0}.contact,.made{text-transform:none;letter-spacing:.04em}footer a{color:var(--cyan)}
+footer{text-align:center;color:#a58fd6;font-size:11px;letter-spacing:.3em;padding:0 0 40px;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>{% if accent is not empty %}<style>:root{--accent:{{accent}};--accent-ink:{{accentInk}}}</style>{% endif %}</head><body>{% if accessibleHref is not empty %}<nav class=acc-nav aria-label="Page versions"><a class=acc href="{{accessibleHref}}">Accessible version</a></nav>{% endif %}<div class=sun aria-hidden=true></div><div class=floor aria-hidden=true></div>
+<header>{% if headerImage.type=='video' %}<video src="{{headerImage.src}}"{% if headerImage.poster %} poster="{{headerImage.poster}}"{% endif %} controls preload="none" muted loop playsinline></video>{% else %}<img src="{{headerImage.src}}" alt="">{% endif %}<h1>{{storeName}}</h1>{% if storeDescriptionHtml is not empty %}<div class=sd>{{storeDescriptionHtml|raw}}</div>{% endif %}<p class=start aria-hidden=true>&#9660; Select your app &#9660;</p></header>
+{% if announcement is not empty %}<p class=news role=region aria-label="Announcement">{{announcement}}</p>{% endif %}<main>{% for p in products %}<section class=cab><div class=in><div class=top><span>No. {{p.ordinal}}</span><span>{% if p.dateAddedIso is not empty %}<time datetime="{{p.dateAddedIso}}">{{p.dateAddedLabel}}</time>{% else %}{{p.dateAddedLabel}}{% endif %}</span></div><h2>{{p.name}}</h2>{% if p.carousel is not empty %}<div class=scr><div class=strip tabindex=0 role=region aria-label="{{p.name}}: pictures">{% for m in p.carousel %}{% if m.type=='video' %}<video src="{{m.src}}" controls preload="none"{% if m.poster is not empty %} poster="{{m.poster}}"{% endif %} {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}aria-label="{{m.alt}}">{% if m.captions is not empty %}<track kind="captions" src="{{m.captions}}" srclang="{{lang}}" label="Captions" default>{% endif %}</video>{% elseif m.type=='audio' %}<audio src="{{m.src}}" controls aria-label="{{m.alt}}"></audio>{% else %}<img src="{{m.src}}" {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}alt="{{m.alt}}" loading="lazy">{% endif %}{% endfor %}</div>{% if p.carousel|length > 1 %}<span class=lives aria-hidden=true>&#9664; {{p.carousel|length}} &#9654;</span>{% endif %}</div>{% endif %}{% if p.descriptionHtml is not empty %}<div class=pd>{{p.descriptionHtml|raw}}</div>{% endif %}{% if p.whatsNew is not empty %}<p class=new><b>What's new:</b> {{p.whatsNew}}</p>{% endif %}<div class=a>{% if p.apk is not empty %}<a class="b b1" href="{{p.apk.src}}">Download APK<small>{{p.apk.sizeLabel}}</small></a>{% endif %}{% if p.sourceZip is not empty %}<a class="b b2" href="{{p.sourceZip.src}}">Download source<small>{{p.sourceZip.sizeLabel}}</small></a>{% endif %}</div>{% if p.apk is not empty %}<p class=facts>{% if p.apk.versionName is not empty %}Version {{p.apk.versionName}} &middot; {% endif %}{% if p.apk.androidLabel is not empty %}{{p.apk.androidLabel}} &middot; {% endif %}For {{p.apk.abiLabel}}</p>{% endif %}{% if p.author is not empty or p.license is not empty or p.websiteHref is not empty %}<p class=facts>{% if p.author is not empty %}By {{p.author}}{% endif %}{% if p.license is not empty %}{% if p.author is not empty %} &middot; {% endif %}License: {{p.license}}{% endif %}{% if p.websiteHref is not empty %}{% if p.author is not empty or p.license is not empty %} &middot; {% endif %}<a href="{{p.websiteHref}}">Website</a>{% endif %}</p>{% endif %}</div></section>{% endfor %}</main>
+<footer><p>{{products|length}} apps on the floor</p>{% if contact is not empty %}<p class=contact>Questions?{% if contact.name is not empty %} Ask {{contact.name}}{% endif %}{% if contact.emailHref is not empty or contact.phoneHref is not empty or contact.urlHref is not empty %}:{% endif %}{% if contact.emailHref is not empty %} <a href="{{contact.emailHref}}">{{contact.email}}</a>{% endif %}{% if contact.phoneHref is not empty %}{% if contact.emailHref is not empty %} &middot;{% endif %} <a href="{{contact.phoneHref}}">{{contact.phone}}</a>{% endif %}{% if contact.urlHref is not empty %}{% if contact.emailHref is not empty or contact.phoneHref is not empty %} &middot;{% endif %} <a href="{{contact.urlHref}}">website</a>{% endif %}</p>{% endif %}<p class=made>Made with <a href="https://www.appdevforall.org/plugins" style="color:inherit">Share Your Apps{% if shareYourAppsVersion is not empty %} {{shareYourAppsVersion}}{% endif %}</a></p></footer></body></html>

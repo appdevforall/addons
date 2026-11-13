@@ -1,0 +1,16 @@
+{
+  "summary": "Publish your apps and their source to a store on your local network.",
+  "description": "Turns the apps you build into a small web store that people on the same Wi-Fi network or hotspot open in their phone's browser, with no internet and no accounts. The companion Share Your Apps Server serves the store, and a store can be copied to another phone by QR code, typed code or sound.",
+  "tags": [
+    "publishing",
+    "store",
+    "network",
+    "offline"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
