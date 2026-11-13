@@ -1,0 +1,295 @@
+{
+ "title": "Share Your Apps demo",
+ "recording": "Share_Your_Apps_demo.mp3, slowed to 0.9 with atempo",
+ "duration_seconds": 194.84,
+ "lines": [
+  {
+   "scene": 1,
+   "start": 0.4,
+   "end": 8.402,
+   "recording_from": 0,
+   "recording_to": 8.002,
+   "on_screen": "Title card: Share Your Apps",
+   "text": "Share Your Apps lets you share the Android apps you build in Code On The Go with people nearby. No internet, no app store, and no accounts."
+  },
+  {
+   "scene": 2,
+   "start": 10.3,
+   "end": 20.145,
+   "recording_from": 8.403,
+   "recording_to": 18.248,
+   "on_screen": "Title card: Two parts",
+   "text": "It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot."
+  },
+  {
+   "scene": 3,
+   "start": 22.05,
+   "end": 23.683,
+   "recording_from": 18.807,
+   "recording_to": 20.44,
+   "on_screen": "Title card: Creating your store",
+   "text": "First, creating your store."
+  },
+  {
+   "scene": 4,
+   "start": 25.58,
+   "end": 28.667,
+   "recording_from": 20.92,
+   "recording_to": 24.007,
+   "on_screen": "Screen P01: Install the plugin",
+   "text": "Install the plugin from Code On The Go's Addons Manager."
+  },
+  {
+   "scene": 5,
+   "start": 30.57,
+   "end": 36.705,
+   "recording_from": 24.454,
+   "recording_to": 30.589,
+   "on_screen": "Screen P02: Name your store",
+   "text": "In the Share Your Apps tab, give your store a name. A description, a header picture and a PIN are optional."
+  },
+  {
+   "scene": 6,
+   "start": 38.6,
+   "end": 42.905,
+   "recording_from": 31.057,
+   "recording_to": 35.362,
+   "on_screen": "Screen P04: Add your apps",
+   "text": "Add a product for each app. Each card shows what buyers can download."
+  },
+  {
+   "scene": 7,
+   "start": 44.81,
+   "end": 48.415,
+   "recording_from": 35.745,
+   "recording_to": 39.35,
+   "on_screen": "Screen P05: Choose the APK",
+   "text": "Choose the app's project, and the APK that buyers will install."
+  },
+  {
+   "scene": 8,
+   "start": 50.32,
+   "end": 53.675,
+   "recording_from": 39.792,
+   "recording_to": 43.147,
+   "on_screen": "Screen P07: Add pictures",
+   "text": "Add screenshots and videos, so buyers can see what they're getting."
+  },
+  {
+   "scene": 9,
+   "start": 55.57,
+   "end": 58.465,
+   "recording_from": 43.575,
+   "recording_to": 46.47,
+   "on_screen": "Screen P08: Describe them",
+   "text": "Describe each picture, for buyers who use a screen reader."
+  },
+  {
+   "scene": 10,
+   "start": 60.36,
+   "end": 62.365,
+   "recording_from": 46.895,
+   "recording_to": 48.9,
+   "on_screen": "Screen P11: Publish",
+   "text": "Then tap Publish, and confirm."
+  },
+  {
+   "scene": 11,
+   "start": 64.26,
+   "end": 69.314,
+   "recording_from": 49.346,
+   "recording_to": 54.4,
+   "on_screen": "Screen P12: Allow, once",
+   "text": "The first time, Android asks you to allow a few things. Each one is needed just once."
+  },
+  {
+   "scene": 12,
+   "start": 71.21,
+   "end": 75.503,
+   "recording_from": 54.803,
+   "recording_to": 59.096,
+   "on_screen": "Screen P15: Change the look",
+   "text": "Choose a template to change the store's look, or write your own."
+  },
+  {
+   "scene": 13,
+   "start": 77.4,
+   "end": 82.005,
+   "recording_from": 59.277,
+   "recording_to": 63.882,
+   "on_screen": "Screen P13: Done",
+   "text": "When it's done, every file has been checked. And the store is already being served."
+  },
+  {
+   "scene": 14,
+   "start": 83.9,
+   "end": 84.912,
+   "recording_from": 64.034,
+   "recording_to": 65.046,
+   "on_screen": "Title card: Serving your store",
+   "text": "Next, letting people in."
+  },
+  {
+   "scene": 15,
+   "start": 86.9,
+   "end": 89.917,
+   "recording_from": 65.443,
+   "recording_to": 68.46,
+   "on_screen": "Screen S01: Share Your Apps Server",
+   "text": "Share Your Apps Server shows what it's serving, and where."
+  },
+  {
+   "scene": 16,
+   "start": 91.82,
+   "end": 99.018,
+   "recording_from": 68.879,
+   "recording_to": 76.077,
+   "on_screen": "Screen S04: The codes",
+   "text": "Tap Show QR codes for buyers. On a hotspot, the first code joins its network, and the second opens the store."
+  },
+  {
+   "scene": 17,
+   "start": 100.92,
+   "end": 106.381,
+   "recording_from": 76.492,
+   "recording_to": 81.953,
+   "on_screen": "Screen S06: No Wi-Fi? No problem",
+   "text": "With no Wi-Fi around, the server makes a hotspot of its own, with a name and password you choose."
+  },
+  {
+   "scene": 18,
+   "start": 108.28,
+   "end": 110.347,
+   "recording_from": 82.342,
+   "recording_to": 84.409,
+   "on_screen": "Screen B01: The buyer's view",
+   "text": "Buyers see your store in their browser."
+  },
+  {
+   "scene": 19,
+   "start": 112.25,
+   "end": 118.009,
+   "recording_from": 84.789,
+   "recording_to": 90.548,
+   "on_screen": "Screen B02: Pictures and downloads",
+   "text": "Each app has its pictures, its description, and its downloads. One tap, and it's on their phone."
+  },
+  {
+   "scene": 20,
+   "start": 119.91,
+   "end": 123.843,
+   "recording_from": 90.975,
+   "recording_to": 94.908,
+   "on_screen": "Screen B03: Accessible, too",
+   "text": "And every store has an accessible version, plain and in large text."
+  },
+  {
+   "scene": 21,
+   "start": 125.74,
+   "end": 129.197,
+   "recording_from": 95.288,
+   "recording_to": 98.745,
+   "on_screen": "Screen S07: When to run",
+   "text": "Keep serving when the screen is off, or pause to save battery."
+  },
+  {
+   "scene": 22,
+   "start": 131.1,
+   "end": 133.64,
+   "recording_from": 99.308,
+   "recording_to": 101.848,
+   "on_screen": "Title card: Sharing with another seller",
+   "text": "Finally, sharing your store with another phone."
+  },
+  {
+   "scene": 23,
+   "start": 135.54,
+   "end": 140.826,
+   "recording_from": 102.263,
+   "recording_to": 107.549,
+   "on_screen": "Screen S08: Share this store",
+   "text": "Someone nearby can serve a copy of your store from their own phone. Tap Share this store."
+  },
+  {
+   "scene": 24,
+   "start": 142.73,
+   "end": 148.093,
+   "recording_from": 107.935,
+   "recording_to": 113.298,
+   "on_screen": "Screen S09: Two codes",
+   "text": "Their phone scans the large code. The small one lets a phone without the app download it first."
+  },
+  {
+   "scene": 25,
+   "start": 149.99,
+   "end": 154.427,
+   "recording_from": 113.745,
+   "recording_to": 118.182,
+   "on_screen": "Screen I03: Import a store",
+   "text": "On their phone, they tap Import a store, and scan the code, or type it."
+  },
+  {
+   "scene": 26,
+   "start": 156.33,
+   "end": 160.842,
+   "recording_from": 118.582,
+   "recording_to": 123.094,
+   "on_screen": "Screen I04: Four digits",
+   "text": "Both phones show the same four digits, so you know you're sharing with the phone in front of you."
+  },
+  {
+   "scene": 27,
+   "start": 162.74,
+   "end": 165.915,
+   "recording_from": 123.489,
+   "recording_to": 126.664,
+   "on_screen": "Screen S10: Allow a copy",
+   "text": "You choose when their copy expires, and tap Allow."
+  },
+  {
+   "scene": 28,
+   "start": 167.81,
+   "end": 170.537,
+   "recording_from": 127.09,
+   "recording_to": 129.817,
+   "on_screen": "Screen I05: Imported",
+   "text": "The copy arrives, and they tap Serve it now."
+  },
+  {
+   "scene": 29,
+   "start": 172.44,
+   "end": 176.488,
+   "recording_from": 130.221,
+   "recording_to": 134.269,
+   "on_screen": "Screen I07: Their own PIN",
+   "text": "They can set their own PIN. But they can't change the store, or pass it on."
+  },
+  {
+   "scene": 30,
+   "start": 178.39,
+   "end": 181.285,
+   "recording_from": 134.672,
+   "recording_to": 137.567,
+   "on_screen": "Screen I08: Their buyers",
+   "text": "They let people in the same way, with codes of their own."
+  },
+  {
+   "scene": 31,
+   "start": 183.19,
+   "end": 186.411,
+   "recording_from": 138.001,
+   "recording_to": 141.222,
+   "on_screen": "Screen I09: When it expires",
+   "text": "And on the date you chose, the copy is deleted from their phone."
+  },
+  {
+   "scene": 32,
+   "start": 188.31,
+   "end": 193.343,
+   "recording_from": 141.715,
+   "recording_to": 146.748,
+   "on_screen": "Title card: Share Your Apps",
+   "text": "Share Your Apps, from App Dev for All. Share what you build, with the people around you."
+  }
+ ]
+}

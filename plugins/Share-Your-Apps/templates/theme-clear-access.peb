@@ -1,0 +1,53 @@
+{# share-your-apps:accessible — marks this as the accessible template, so the plugin makes no second copy of it. #}
+<!doctype html><html lang="{{lang}}"><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>{{storeName}}</title><style>
+/* Clear Access: for people using screen readers, and for people with low vision.
+   Sizes are in rem, so they grow with the phone's own text size. Nothing moves; there's no script. */
+:root{--bg:#fff;--ink:#000;--soft:#1f1f1f;--line:#000;--link:#0033cc;--focus:#ffbf00;--btn:#000;--btn-ink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--ink:#fff;--soft:#e8e8e8;--line:#fff;--link:#9fc3ff;--focus:#ffbf00;--btn:#fff;--btn-ink:#000}}
+*{box-sizing:border-box}
+html{font-size:125%;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:1rem/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.skip{position:absolute;left:.5rem;top:-10rem;z-index:2;background:var(--btn);color:var(--btn-ink);padding:.75rem 1rem;font-weight:700;border-radius:.4rem}
+.skip:focus{top:.5rem}
+a{color:var(--link);text-decoration:underline;text-underline-offset:.2em;text-decoration-thickness:.12em}
+:focus-visible{outline:.25rem solid var(--focus);outline-offset:.2rem;box-shadow:0 0 0 .45rem var(--ink)}
+.wrap{max-width:38rem;margin:0 auto;padding:1rem}
+header{border-bottom:.25rem solid var(--line);padding-bottom:1rem}
+.brand{display:flex;align-items:center;gap:1rem}
+.brand img,.brand video{width:3.5rem;height:3.5rem;object-fit:contain;flex:none}
+h1{font-size:1.8rem;line-height:1.2;margin:.25rem 0}
+h2{font-size:1.4rem;line-height:1.25;margin:0 0 .25rem}
+.sd p,.pd p{margin:.5rem 0}.sd ul,.sd ol,.pd ul,.pd ol{padding-left:1.4em}
+nav{border-bottom:.25rem solid var(--line);padding:.5rem 0 1rem}
+nav h2{font-size:1.2rem}
+nav ol{margin:.25rem 0;padding-left:1.6em}
+nav li{margin:.35rem 0}
+article{border-bottom:.25rem solid var(--line);padding:1.25rem 0}
+.meta{color:var(--soft);margin:0 0 .5rem}
+.media{list-style:none;margin:.75rem 0;padding:0}
+.media li{margin:0 0 .75rem}
+/* A fixed height, so pictures loading as the page scrolls never shift it: the contents links and the skip link land where they should. */
+.media img,.media video{display:block;width:100%;height:16rem;object-fit:contain;border:.12rem solid var(--line);background:var(--bg)}
+.media audio{width:100%}
+.downloads{display:flex;flex-direction:column;gap:.75rem;margin:1rem 0 .5rem}
+.b{display:flex;align-items:center;justify-content:center;min-height:3.5rem;padding:.6rem 1rem;border:.2rem solid var(--line);border-radius:.5rem;font-weight:700;text-align:center;text-decoration:none;color:var(--ink);background:var(--bg)}
+.b.apk{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.top{display:inline-block;margin-top:.5rem}
+.facts{margin:.25rem 0 .5rem}
+.new{margin:.5rem 0}
+.news{border:.2rem solid var(--line);border-radius:.5rem;padding:.6rem .8rem;margin:1rem 0 0;font-weight:700}
+footer p{margin:.35rem 0}
+.alt{display:inline-block;margin-bottom:.5rem;font-weight:700}
+footer{padding:1rem 0 2rem;color:var(--soft)}
+@media (prefers-contrast:more){:root{--soft:var(--ink)}.b,.media img,.media video{border-width:.3rem}}
+@media (forced-colors:active){.b.apk{background:ButtonText;color:ButtonFace;forced-color-adjust:none}:focus-visible{outline-color:Highlight}}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style></head><body>
+<a class=skip href="#apps">Skip to the apps</a>
+<div class=wrap>
+{% if standardHref is not empty %}<nav aria-label="Page versions"><a class=alt href="{{standardHref}}">Standard version</a></nav>{% endif %}
+<header><div class=brand>{% if headerImage.type=='video' %}<video src="{{headerImage.src}}" muted playsinline aria-hidden=true></video>{% else %}<img src="{{headerImage.src}}" alt="">{% endif %}<h1>{{storeName}}</h1></div>{% if storeDescriptionHtml is not empty %}<div class=sd>{{storeDescriptionHtml|raw}}</div>{% endif %}</header>
+{% if announcement is not empty %}<p class=news role=region aria-label="Announcement">{{announcement}}</p>{% endif %}{% if products is not empty %}<nav aria-labelledby=contents><h2 id=contents>{{products|length}} {% if products|length == 1 %}app{% else %}apps{% endif %}</h2><ol>{% for p in products %}<li><a href="#{{p.slug}}">{{p.name}}</a></li>{% endfor %}</ol></nav>{% endif %}
+<main id=apps tabindex=-1>{% for p in products %}<article id="{{p.slug}}" aria-labelledby="name-{{p.slug}}"><h2 id="name-{{p.slug}}">{{p.name}}</h2><p class=meta>Added {% if p.dateAddedIso is not empty %}<time datetime="{{p.dateAddedIso}}">{{p.dateAddedLabel}}</time>{% else %}{{p.dateAddedLabel}}{% endif %}</p>{% if p.descriptionHtml is not empty %}<div class=pd>{{p.descriptionHtml|raw}}</div>{% endif %}{% if p.whatsNew is not empty %}<p class=new><b>What's new:</b> {{p.whatsNew}}</p>{% endif %}<div class=downloads>{% if p.apk is not empty %}<a class="b apk" href="{{p.apk.src}}">Download {{p.name}} APK, {{p.apk.sizeLabel}}</a>{% endif %}{% if p.sourceZip is not empty %}<a class=b href="{{p.sourceZip.src}}">Download {{p.name}} source code, {{p.sourceZip.sizeLabel}}</a>{% endif %}</div>{% if p.apk is not empty %}<p class=facts>{% if p.apk.versionName is not empty %}Version {{p.apk.versionName}} &middot; {% endif %}{% if p.apk.androidLabel is not empty %}{{p.apk.androidLabel}} &middot; {% endif %}For {{p.apk.abiLabel}}</p>{% endif %}{% if p.author is not empty or p.license is not empty or p.websiteHref is not empty %}<p class=facts>{% if p.author is not empty %}By {{p.author}}{% endif %}{% if p.license is not empty %}{% if p.author is not empty %} &middot; {% endif %}License: {{p.license}}{% endif %}{% if p.websiteHref is not empty %}{% if p.author is not empty or p.license is not empty %} &middot; {% endif %}<a href="{{p.websiteHref}}">Website</a>{% endif %}</p>{% endif %}{% if p.carousel is not empty %}<ul class=media aria-label="{{p.name}}: {{p.carousel|length}} {% if p.carousel|length == 1 %}item{% else %}pictures and videos{% endif %}">{% for m in p.carousel %}<li>{% if m.type=='video' %}<video src="{{m.src}}" controls preload="none"{% if m.poster is not empty %} poster="{{m.poster}}"{% endif %} {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}aria-label="{{m.alt}}">{% if m.captions is not empty %}<track kind="captions" src="{{m.captions}}" srclang="{{lang}}" label="Captions" default>{% endif %}</video>{% elseif m.type=='audio' %}<audio src="{{m.src}}" controls aria-label="{{m.alt}}"></audio>{% else %}<img src="{{m.src}}" {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}alt="{{m.alt}}" loading="lazy">{% endif %}</li>{% endfor %}</ul>{% endif %}<a class=top href="#contents">Back to the list of apps</a></article>{% endfor %}</main>
+<footer><p>{{storeName}} &middot; Updated <time datetime="{{publishedAt}}">{{publishedLabel}}</time></p>{% if contact is not empty %}<p class=contact>Questions?{% if contact.name is not empty %} Ask {{contact.name}}{% endif %}{% if contact.emailHref is not empty or contact.phoneHref is not empty or contact.urlHref is not empty %}:{% endif %}{% if contact.emailHref is not empty %} <a href="{{contact.emailHref}}">{{contact.email}}</a>{% endif %}{% if contact.phoneHref is not empty %}{% if contact.emailHref is not empty %} &middot;{% endif %} <a href="{{contact.phoneHref}}">{{contact.phone}}</a>{% endif %}{% if contact.urlHref is not empty %}{% if contact.emailHref is not empty or contact.phoneHref is not empty %} &middot;{% endif %} <a href="{{contact.urlHref}}">website</a>{% endif %}</p>{% endif %}<p class=made>Made with <a href="https://www.appdevforall.org/plugins" style="color:inherit">Share Your Apps{% if shareYourAppsVersion is not empty %} {{shareYourAppsVersion}}{% endif %}</a></p></footer>
+</div></body></html>

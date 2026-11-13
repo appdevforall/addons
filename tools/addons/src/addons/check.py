@@ -188,6 +188,13 @@ def check_names(root: Path) -> list[str]:
                 problems.append(
                     f"{directory}: plugin.name is '{plugin_name}', expected '{name}'")
 
+            # the source tarball adds the repository LICENSE at its root, so an
+            # addon's own copy collides there and aborts the whole publish
+            if (path / "LICENSE").exists():
+                problems.append(
+                    f"{directory}: LICENSE at the addon root clashes with the "
+                    f"repository LICENSE the source tarball adds; delete it")
+
         # the app keys every install on this; an empty one orphans them all
         if not model.addon_id(path):
             problems.append(

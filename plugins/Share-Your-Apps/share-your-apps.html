@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share Your Apps</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Share Your Apps</h1>
+  <p class="subtitle">Publish your apps and their source to a store on your local network &mdash; no internet, no accounts</p>
+  <div class="meta">Version 1.0.2 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.shareyourapps</code></div>
+</header>
+
+<section id="overview">
+  <h2>Executive overview</h2>
+  <p>
+    Share Your Apps turns the apps you build in Code on the Go into a small web store.
+    People on the same Wi-Fi network or hotspot open it in their phone's browser and
+    download each app's APK, its source, or both. Nothing goes through the internet.
+  </p>
+  <p>
+    The store is served by the companion <strong>Share Your Apps Server</strong> app,
+    which the plugin carries, installs and starts.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>Core functionality</h2>
+  <ul>
+    <li><strong>Manage the catalog</strong> in the Share Your Apps tab: the store's name,
+      description, header image and optional PIN, and products with their project, APK,
+      pictures, videos and description. Everything is saved as you edit it.</li>
+    <li><strong>Publish</strong> builds a complete new store beside the current one, starts the
+      server on it, checks every file is served correctly, and only then removes the old one.
+      If anything fails, the store keeps serving the previous version.</li>
+    <li><strong>Templates.</strong> The store page is rendered with Pebble. Pick one of the
+      built-in looks, or write your own.</li>
+    <li><strong>Copy a store to another phone</strong> by QR code, a typed code, or sound &mdash;
+      useful when a phone's camera is broken.</li>
+    <li><strong>Help everywhere.</strong> Long-press any heading or button for a tooltip.</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>Technical architecture</h2>
+  <p>Share Your Apps is two parts:</p>
+  <ul>
+    <li><strong>The plugin</strong> runs inside Code on the Go as a tab in the bottom sheet. It keeps the catalog in
+      the plugin's private folder, renders the store page with Pebble templates, and on <strong>Publish</strong> writes a
+      complete new <code>Store_*</code> folder to shared storage: each product's APK and its source as a zip, without
+      build output, IDE settings or signing files.</li>
+    <li><strong>Share Your Apps Server</strong> is a small Android app the plugin carries and installs. It serves the
+      store folder over HTTP on Wi-Fi or a hotspot, as a foreground service, with an optional PIN. It also copies a
+      store to another phone, encrypted, after the owner allows it, and can be controlled by other apps on the phone
+      through an MCP endpoint on <code>127.0.0.1</code> that needs a token.</li>
+  </ul>
+  <p>The plugin starts the server on the new folder, then downloads every file back from it over
+    <code>127.0.0.1</code> and compares sizes and checksums before removing the old folder.</p>
+</section>
+
+<section id="usage">
+  <h2>Usage</h2>
+  <ol>
+    <li>Install the plugin and open the <strong>Share Your Apps</strong> tab.</li>
+    <li>Name your store and add a product for each app you want to share.</li>
+    <li>Tap <strong>Publish</strong>. The first time, the plugin installs Share Your Apps Server.</li>
+    <li>Share the address the server shows. Anyone on the same network can open it.</li>
+  </ol>
+</section>
+
+<section id="benefits">
+  <h2>Key benefits</h2>
+  <ul>
+    <li><strong>Works offline.</strong> No internet, app store account or computer is needed to hand out an app.</li>
+    <li><strong>Source and app together.</strong> Learners can download what a classmate built and how they built it.</li>
+    <li><strong>Safe to update.</strong> Buyers keep the current store until the new one is checked and serving.</li>
+    <li><strong>Passes on.</strong> A store can be copied to another phone, so it reaches people beyond one Wi-Fi network.</li>
+  </ul>
+</section>
+
+<footer>
+  Share Your Apps is free software, licensed under the GNU Affero General Public License v3.0 or later.
+</footer>
+
+</body>
+</html>
