@@ -139,7 +139,7 @@ class ShellHooksPlugin :
 
         // activate() also runs when the user re-enables or updates the plugin mid-session.
         IdeStartedTrigger(launchGate, { isOn() && settings.isHookEnabled(Hook.IDE_STARTED) }) {
-            submit(HookEvent.ideStarted(currentProjectDir()))
+            submit(HookEvent.ideStarted())
         }.onActivate(launchId())
         return true
     }

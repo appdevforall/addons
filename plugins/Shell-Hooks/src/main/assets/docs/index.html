@@ -49,15 +49,15 @@ chmod +x file-saved</pre></li>
   <tr><td><code>file-closed</code></td><td>a file's tab closes</td><td><code>$1</code> = file</td></tr>
   <tr><td><code>file-activated</code></td><td>you switch tabs (the last of a quick burst)</td><td><code>$1</code> = file, or empty</td></tr>
   <tr><td><code>file-saved</code></td><td>a file is written to disk</td><td><code>$1</code> = file</td></tr>
-  <tr><td><code>build-started</code></td><td>a build starts</td><td>none</td></tr>
-  <tr><td><code>build-succeeded</code></td><td>a build succeeds</td><td>none</td></tr>
-  <tr><td><code>build-failed</code></td><td>a build fails, or you cancel it</td><td><code>$1</code> = the IDE's message saying why</td></tr>
+  <tr><td><code>build-started</code></td><td>a build starts, including a project sync</td><td>none</td></tr>
+  <tr><td><code>build-succeeded</code></td><td>a build succeeds, including a project sync</td><td>none</td></tr>
+  <tr><td><code>build-failed</code></td><td>a build fails, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code></td></tr>
 </table>
 <p>Every script also gets these environment variables:</p>
 <table>
   <tr><th>Variable</th><th>Value</th></tr>
   <tr><td><code>COGO_HOOK</code></td><td>the hook's name (<code>action</code> for an action)</td></tr>
-  <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder, or empty</td></tr>
+  <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder; empty when none is open, and for <code>ide-started</code></td></tr>
   <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
   <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
   <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code> or <code>project</code></td></tr>
@@ -90,7 +90,7 @@ chmod +x file-saved</pre></li>
   the order things happened: your scripts first, then the project's. A script still running after
   the timeout (60 seconds by default, set in Preferences) is stopped, together with the programs it
   started, when the Terminal has <code>timeout</code> (coreutils). Disabling or updating the plugin
-  while a script runs stops it the same way, within a few seconds. Up to 64 events can wait; after that the oldest is
+  while a script runs stops it the same way, within about half a minute. Up to 64 events can wait; after that the oldest is
   dropped. Run long jobs in the background: <code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>
 </p>
 

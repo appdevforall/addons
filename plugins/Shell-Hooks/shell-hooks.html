@@ -141,16 +141,16 @@
     <tr><td><code>file-closed</code></td><td>a file's tab is closed</td><td><code>$1</code> = file</td></tr>
     <tr><td><code>file-activated</code></td><td>you switch to another tab (the last of a quick burst only)</td><td><code>$1</code> = file, or empty when no file is open</td></tr>
     <tr><td><code>file-saved</code></td><td>the editor writes a file to disk</td><td><code>$1</code> = file</td></tr>
-    <tr><td><code>build-started</code></td><td>a Gradle build starts</td><td>none</td></tr>
-    <tr><td><code>build-succeeded</code></td><td>a Gradle build succeeds</td><td>none</td></tr>
-    <tr><td><code>build-failed</code></td><td>a Gradle build fails, or you cancel it</td><td><code>$1</code> = the IDE's message saying why (in the IDE's language)</td></tr>
+    <tr><td><code>build-started</code></td><td>a Gradle build starts, including a project sync</td><td>none</td></tr>
+    <tr><td><code>build-succeeded</code></td><td>a Gradle build succeeds, including a project sync</td><td>none</td></tr>
+    <tr><td><code>build-failed</code></td><td>a Gradle build fails, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code> (in the IDE's language)</td></tr>
   </table>
 
   <h3>Environment</h3>
   <table>
     <tr><th>Variable</th><th>Value</th></tr>
     <tr><td><code>COGO_HOOK</code></td><td>the hook's name, e.g. <code>file-saved</code> (<code>action</code> for an action)</td></tr>
-    <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder, or empty when none is open</td></tr>
+    <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder; empty when none is open, and for <code>ide-started</code></td></tr>
     <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
     <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
     <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code>, or <code>project</code> for a script stored in a project</td></tr>
@@ -199,8 +199,8 @@
     just before a build can be reported after the build starts. A script still running after the
     timeout (60 seconds unless you change it) is stopped, and with the Terminal's
     <code>timeout</code> (coreutils) installed so is every program it started. Disabling,
-    unloading or updating the plugin while a script runs stops it the same way within a few
-    seconds; release builds of Code on the Go ship <code>timeout</code>, and without it only the
+    unloading or updating the plugin while a script runs stops it the same way within about half
+    a minute; release builds of Code on the Go ship <code>timeout</code>, and without it only the
     script's own process is stopped. If events arrive faster than scripts
     finish, up to 64 wait; past that the oldest is dropped. Start long jobs in the background
     (<code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>).

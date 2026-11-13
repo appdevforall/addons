@@ -15,12 +15,12 @@ keep them in step with `engine/Hook.kt` and `engine/HookRunner.kt`.
 
 | Script | Source | `$*` |
 |---|---|---|
-| `ide-started` | `IPlugin.activate` through `IdeStartedTrigger`: the first start with hooks on in each IDE launch | none |
+| `ide-started` | `IPlugin.activate` through `IdeStartedTrigger`: the first start with hooks on in each IDE launch | none; `COGO_PROJECT_DIR` is empty |
 | `project-opened` / `project-closed` | `ProjectLifecycleListener` | `$1` = project folder |
 | `file-opened` / `file-closed` | `FileOpenExtension.onFileOpened` / `onFileClosed` | `$1` = file |
 | `file-activated` | `FileChangeListener`, last of a 500 ms burst | `$1` = file or empty |
 | `file-saved` | `FileSaveListener` | `$1` = file |
-| `build-started` / `build-succeeded` / `build-failed` | `BuildStatusListener` | failed: `$1` = the IDE's message, also on a cancel |
+| `build-started` / `build-succeeded` / `build-failed` | `BuildStatusListener`; a project sync is a Gradle build too | failed: `$1` = the IDE's message (`BUILD FAILED in 12s`), trailing newline removed, also on a cancel |
 
 Environment: `COGO_HOOK`, `COGO_PROJECT_DIR`, `COGO_HOOKS_DIR`, `COGO_HOOK_SCRIPT`,
 `COGO_HOOK_SOURCE` (`global`/`project`), `COGO_IDE_VERSION` when known.

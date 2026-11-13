@@ -66,7 +66,8 @@ class HookInvocationTest {
     @Test
     fun eachHookPassesTheDocumentedArguments() {
         val file = File(project, "a.kt")
-        assertEquals(emptyList<String>(), HookEvent.ideStarted(project).args)
+        assertEquals(emptyList<String>(), HookEvent.ideStarted().args)
+        assertEquals(null, HookEvent.ideStarted().projectDir)
         assertEquals(listOf(project.path), HookEvent.projectOpened(project).args)
         assertEquals(listOf(project.path), HookEvent.projectClosed(project).args)
         assertEquals(listOf(file.path), HookEvent.fileOpened(file, project).args)
@@ -78,6 +79,7 @@ class HookInvocationTest {
         assertEquals(emptyList<String>(), HookEvent.buildSucceeded(project).args)
         assertEquals(listOf("BUILD_FAILED"), HookEvent.buildFailed("BUILD_FAILED", project).args)
         assertEquals(listOf("cancelled"), HookEvent.buildFailed(null, project).args)
+        assertEquals(listOf("BUILD FAILED in 1s"), HookEvent.buildFailed("BUILD FAILED in 1s\n", project).args)
     }
 
     @Test

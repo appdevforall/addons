@@ -19,9 +19,9 @@ enum class Hook(
     FILE_CLOSED("file-closed", "File closed", "\$1 = the file"),
     FILE_ACTIVATED("file-activated", "Switched to a file", "\$1 = the file, or empty when no file is open"),
     FILE_SAVED("file-saved", "File saved", "\$1 = the file"),
-    BUILD_STARTED("build-started", "Build started", "no arguments"),
-    BUILD_SUCCEEDED("build-succeeded", "Build succeeded", "no arguments"),
-    BUILD_FAILED("build-failed", "Build failed", "\$1 = the IDE's message saying why, also when you cancel"),
+    BUILD_STARTED("build-started", "Build started", "no arguments; a project sync is a build too"),
+    BUILD_SUCCEEDED("build-succeeded", "Build succeeded", "no arguments; a project sync is a build too"),
+    BUILD_FAILED("build-failed", "Build failed", "\$1 = the IDE's message, such as BUILD FAILED in 12s, also when you cancel"),
     ;
 
     companion object {
@@ -46,7 +46,9 @@ data class HookEvent(
         // passes none, and is not part of the documented contract.
         const val BUILD_CANCELLED = "cancelled"
 
-        fun ideStarted(projectDir: File?) = HookEvent(Hook.IDE_STARTED, emptyList(), projectDir)
+        // No project: the event is the IDE starting, and at launch the IDE's current project is
+        // the last one opened, which need not be open.
+        fun ideStarted() = HookEvent(Hook.IDE_STARTED, emptyList(), null)
 
         fun projectOpened(projectDir: File) = HookEvent(Hook.PROJECT_OPENED, listOf(projectDir.path), projectDir)
 
@@ -66,7 +68,8 @@ data class HookEvent(
 
         fun buildSucceeded(projectDir: File?) = HookEvent(Hook.BUILD_SUCCEEDED, emptyList(), projectDir)
 
+        // The IDE's message ends in a newline, which a script would otherwise get in $1.
         fun buildFailed(error: String?, projectDir: File?) =
-            HookEvent(Hook.BUILD_FAILED, listOf(error ?: BUILD_CANCELLED), projectDir)
+            HookEvent(Hook.BUILD_FAILED, listOf(error?.trimEnd() ?: BUILD_CANCELLED), projectDir)
     }
 }

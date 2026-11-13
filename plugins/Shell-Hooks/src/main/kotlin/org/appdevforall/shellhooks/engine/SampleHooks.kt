@@ -42,7 +42,7 @@ object SampleHooks {
         |# Arguments: ${hook.argsDoc}
         |# Environment:
         |#   COGO_HOOK          ${hook.id}
-        |#   COGO_PROJECT_DIR   the project's folder, or empty when none is open
+        |#   COGO_PROJECT_DIR   the project's folder, or empty when none is open and for ide-started
         |#   COGO_HOOKS_DIR     the hooks folder this script is in
         |#   COGO_HOOK_SCRIPT   this script's path
         |#   COGO_HOOK_SOURCE   global, or project for a script stored in a project
