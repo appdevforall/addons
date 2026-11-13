@@ -133,6 +133,12 @@ public class MainFragment extends PluginFragment {
 
     @Override
     public void onDestroyView() {
+        // RecyclerView only calls onDetachedFromRecyclerView when the adapter is removed,
+        // which is where IconsAdapter shuts down its executors.
+        if (binding != null) {
+            binding.searchEditText.removeTextChangedListener(adapter);
+            binding.iconsRecyclerView.setAdapter(null);
+        }
         super.onDestroyView();
         binding = null;
     }
