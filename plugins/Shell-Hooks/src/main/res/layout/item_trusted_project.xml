@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A project with trusted scripts, and the button that forgets them. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="@dimen/space_xs"
+    android:paddingBottom="@dimen/space_xs">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/trustedPath"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="@color/plugin_on_surface"
+            android:textIsSelectable="true"
+            android:textSize="@dimen/text_mono" />
+
+        <TextView
+            android:id="@+id/trustedCount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/plugin_on_surface_variant"
+            android:textSize="@dimen/text_small" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/trustedRevoke"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minHeight="@dimen/touch_target_min"
+        android:text="@string/sh_revoke"
+        android:textColor="@color/plugin_error"
+        android:textSize="@dimen/text_body" />
+
+</LinearLayout>

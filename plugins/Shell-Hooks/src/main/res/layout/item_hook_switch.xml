@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One hook's on/off row: its name, then what its scripts receive. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="@dimen/space_xs"
+    android:paddingBottom="@dimen/space_xs">
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/hookSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="@dimen/touch_target_min"
+        android:textColor="@color/plugin_on_surface"
+        android:textSize="@dimen/text_body" />
+
+    <TextView
+        android:id="@+id/hookArgs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/plugin_on_surface_variant"
+        android:textSize="@dimen/text_small" />
+
+</LinearLayout>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.shellhooks" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Shell Hooks" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Runs your shell scripts when a project opens or closes, a file is opened, saved or closed, or a build starts, succeeds or fails. Off until you turn it on in Preferences. Scripts stored in a project run only after you trust them." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <!-- 26.47: IdeProjectService.addProjectLifecycleListener and
+             IdeEditorService.addFileSaveListener first ship there. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.47" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- system.commands: runs the user's hook scripts through IdeCommandService
+             and their actions in the Terminal through IdeTerminalService.
+             filesystem.read: the open file, the project root, and the file and
+             project listeners all need it.
+             filesystem.write: "Create sample hooks" writes scripts into the user's
+             hooks folder. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="system.commands,filesystem.read,filesystem.write" />
+
+        <!-- The Hooks tab in the editor's bottom panel (UIExtension.getEditorTabs). -->
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.shellhooks.ShellHooksPlugin" />
+
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
+
+        <!-- Plugin Manager icons. Paths are inside the .cgp (APK) zip. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

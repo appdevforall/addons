@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shell Hooks guide</title>
+<style>
+  body { background: #ffffff; color: #000000; font-family: sans-serif; line-height: 1.5; margin: 0 auto; max-width: 48rem; padding: 1rem; }
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.25rem; margin-top: 1.6rem; border-bottom: 1px solid #cccccc; }
+  code, pre { font-family: monospace; background: #f2f2f2; }
+  pre { padding: 0.6rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #cccccc; padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+  .note { border-left: 4px solid #000000; padding-left: 0.6rem; }
+</style>
+</head>
+<body>
+
+<h1>Shell Hooks guide</h1>
+<p>
+  Shell Hooks runs your own shell scripts when Code on the Go opens a project, opens, saves or
+  closes a file, or starts or finishes a build. If you can write a shell script, you can fit the
+  IDE into your workflow.
+</p>
+<p class="note">
+  Nothing runs until you turn on <b>Run hooks</b> in Preferences &gt; Shell Hooks. Hooks only
+  report what happened: a script cannot stop a save or a build.
+</p>
+
+<h2>Your first hook</h2>
+<ol>
+  <li>Preferences &gt; Shell Hooks: turn on <b>Run hooks</b>, then tap <b>Create sample hooks</b>.</li>
+  <li>In the Terminal:
+    <pre>cd ~/.config/codeonthego/hooks
+mv file-saved.sample file-saved
+chmod +x file-saved</pre></li>
+  <li>Save a file. The <b>Hooks</b> tab in the bottom panel shows the run; tap it to see the output.
+      The sample adds a line to <code>~/codeonthego-hooks.log</code>.</li>
+</ol>
+
+<h2>Hooks</h2>
+<table>
+  <tr><th>Script name</th><th>Runs when</th><th>Arguments</th></tr>
+  <tr><td><code>ide-started</code></td><td>once in each launch of Code on the Go, the first time Shell Hooks starts with hooks on</td><td>none</td></tr>
+  <tr><td><code>project-opened</code></td><td>a project opens (its sync does not wait for the hook)</td><td><code>$1</code> = project folder</td></tr>
+  <tr><td><code>project-closed</code></td><td>a project closes</td><td><code>$1</code> = project folder</td></tr>
+  <tr><td><code>file-opened</code></td><td>a file opens in the editor</td><td><code>$1</code> = file</td></tr>
+  <tr><td><code>file-closed</code></td><td>a file's tab closes</td><td><code>$1</code> = file</td></tr>
+  <tr><td><code>file-activated</code></td><td>you switch tabs (the last of a quick burst)</td><td><code>$1</code> = file, or empty</td></tr>
+  <tr><td><code>file-saved</code></td><td>a file is written to disk</td><td><code>$1</code> = file</td></tr>
+  <tr><td><code>build-started</code></td><td>a build starts, including a project sync</td><td>none</td></tr>
+  <tr><td><code>build-succeeded</code></td><td>a build succeeds, including a project sync</td><td>none</td></tr>
+  <tr><td><code>build-failed</code></td><td>a build fails, including a project sync, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code></td></tr>
+</table>
+<p>Every script also gets these environment variables:</p>
+<table>
+  <tr><th>Variable</th><th>Value</th></tr>
+  <tr><td><code>COGO_HOOK</code></td><td>the hook's name (<code>action</code> for an action)</td></tr>
+  <tr><td><code>COGO_PROJECT_DIR</code></td><td>the IDE's current project folder, which can be the last one opened even after it closes; empty for <code>ide-started</code></td></tr>
+  <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
+  <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
+  <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code> or <code>project</code></td></tr>
+  <tr><td><code>COGO_IDE_VERSION</code></td><td>the IDE's version, when known</td></tr>
+</table>
+<p>The script runs in <code>COGO_PROJECT_DIR</code>, or in <code>HOME</code> when that is empty, with the Terminal's <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code>.</p>
+
+<h2>Where scripts go</h2>
+<pre>~/.config/codeonthego/hooks/
+  file-saved          runs first
+  file-saved.d/       then every script here, in name order
+  actions/            "Run &lt;name&gt;" on a file's menu</pre>
+<ul>
+  <li>In your folder, only executable files run: <code>chmod +x</code>. A project's scripts need no executable bit.</li>
+  <li>Files ending in <code>.sample</code> or <code>~</code>, or starting with <code>.</code>, never run.</li>
+  <li><code>#!/usr/bin/env python3</code> or <code>#!/bin/bash</code> use the Terminal's programs, as any interpreter under <code>/bin</code>, <code>/usr/bin</code> or <code>/usr/local/bin</code> does. Any other path, such as a virtualenv's python, runs as written. No shebang means <code>bash</code>.</li>
+  <li>Settings can turn single hooks off without deleting their scripts.</li>
+</ul>
+
+<h2>Actions</h2>
+<p>
+  An executable script in <code>hooks/actions/</code> appears as <b>Run &lt;name&gt;</b> when you
+  long-press a file (not a folder) in the file tree or an editor tab. It runs in the Terminal with
+  the file in <code>$1</code>, so you see its output. If it cannot start, the Hooks tab says why.
+</p>
+
+<h2>Timeouts and order</h2>
+<p>
+  Scripts run one at a time, in the order events reach the plugin, which can differ slightly from
+  the order things happened: your scripts first, then the project's. A script still running after
+  the timeout (60 seconds by default, set in Preferences) is stopped, together with the programs it
+  started, when the Terminal has <code>timeout</code> (coreutils). Disabling or updating the plugin
+  while a script runs stops it the same way, within about half a minute. Up to 64 events can wait; after that the oldest is
+  dropped. Run long jobs in the background: <code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>
+</p>
+
+<h2>Hooks stored in a project</h2>
+<p>
+  A project can carry its own hooks in <code>.codeonthego/hooks/</code>, with the same layout,
+  except <code>ide-started</code>: it has no project, so only yours runs. They run only if you
+  turn on <b>Run hooks stored in projects</b> and trust each script.
+</p>
+<p>
+  Why: a hook runs with the same access as the Terminal, including your files and the network, and
+  a script can arrive with a project: a cloned repository, or an AI agent's edit. If such scripts
+  ran by themselves, they could run commands you never approved.
+</p>
+<ul>
+  <li>An untrusted script is skipped and listed in the Hooks tab. <b>Review</b> shows the whole
+      script, one numbered row per line, and a row marked &#x21B3; continues the line above it;
+      <b>Trust</b> approves exactly what you read.</li>
+  <li>Editing a trusted script, or adding one, needs a new review.</li>
+  <li>Only plain scripts can be trusted: at most 64 KB of printable ASCII and newlines, with no
+      tabs, carriage returns or other control or non-ASCII characters, no line longer than 100
+      characters or ending in a space, and a name of letters, digits, <code>.</code>,
+      <code>_</code>, <code>-</code> and <code>/</code> with no part starting with a dot (such
+      names are skipped altogether). Anything else is listed with the reason it
+      can't be reviewed, and never runs: such characters can make a script run differently from
+      how it reads, for example a backslash before an invisible carriage return that looks like a
+      line continuation while the next line runs as its own command. Your own hooks have no such
+      limits.</li>
+  <li><b>Reviewing is reading code.</b> Plain text means you see every character, not that a
+      quick look tells you what runs: read the script as the shell will. Watch for three things:
+      <ul>
+        <li>A backslash at the end of a line of code usually joins the next line to it, and a
+            <code>#</code> starting that line may then not begin a comment. A backslash that ends
+            a comment, or is escaped by another backslash, joins nothing.</li>
+        <li>A here-document ends at a line matching its delimiter, which may not be the one you
+            expect: <code>&lt;&lt;E"O"F</code> ends at <code>EOF</code>, and the
+            lines after that run. If the delimiter is not quoted, a backslash ending a line of
+            the text joins the next line to it too, and in bash, which runs a script with no
+            <code>#!</code> line, lines such as <code>EO\</code> and <code>F</code> can then
+            form the delimiter and end the here-document early.</li>
+        <li>Backticks, or <code>$(</code> in the text of a here-document whose delimiter is not
+            quoted, can run a command inside what looks like text.</li>
+      </ul>
+      A best-effort check, not a guarantee, marks <b>!</b> beside its number every line that
+      contains <code>&lt;&lt;</code>, a backtick or <code>$(</code>, or ends in a backslash, and
+      lists them above the script by kind. It judges each line on its own, in comments and strings
+      too, so it marks many harmless lines, and it misses every other kind of trick, such as an
+      alias or <code>IFS</code>. A line without a mark can still do anything, so read every
+      line.</li>
+  <li>Trust covers only that script. Files it runs from the project, such as
+      <code>./gradlew</code>, are not reviewed and can change later. Neither are settings that
+      tools read by themselves from the project: a hook in <code>.git/config</code> (such as
+      <code>core.fsmonitor</code>) runs a program when the script calls <code>git status</code>,
+      and Gradle and npm read the project's build files and scripts. Keep project hooks
+      self-contained, or review what they run.</li>
+  <li>Preferences lists the projects you trusted scripts in; <b>Revoke</b> forgets them.</li>
+  <li>A trusted script runs from a private copy of what you approved, so it cannot be swapped
+      after you approve it. Use <code>$COGO_HOOK_SCRIPT</code> to find the original.</li>
+</ul>
+
+<h2>Your own hooks are trusted</h2>
+<p>
+  Scripts in <code>~/.config/codeonthego/hooks/</code> are yours, so they run without review once
+  hooks are on. Like anything you run in the Terminal, they can read and change your projects and
+  use the network. Reviewing project scripts does not protect you from a plugin that can run
+  commands: such a plugin can already change this folder. Install only plugins you trust.
+</p>
+
+</body>
+</html>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shell Hooks</string>
+
+    <!-- Settings screen -->
+    <string name="sh_title">Shell Hooks</string>
+    <string name="sh_back">Back</string>
+    <string name="sh_enable">Run hooks</string>
+    <string name="sh_enable_summary">Runs your scripts when the IDE opens or closes a project, opens, saves or closes a file, or builds. Off until you turn it on.</string>
+    <string name="sh_folder_label">Your hooks folder</string>
+    <string name="sh_folder_help">Name an executable script after a hook, or put several in &lt;hook&gt;.d/. Scripts in actions/ appear as Run &lt;name&gt; on a file\'s menu. In the Terminal this folder is ~/.config/codeonthego/hooks.</string>
+    <string name="sh_create_samples">Create sample hooks</string>
+    <plurals name="sh_samples_created">
+        <item quantity="one">Wrote %1$d sample file. Drop .sample from its name and make the file executable to use it.</item>
+        <item quantity="other">Wrote %1$d sample files. Drop .sample from a name and make the file executable to use it.</item>
+    </plurals>
+    <string name="sh_samples_failed">Could not write the samples: %1$s</string>
+    <string name="sh_timeout_label">Stop a script after this many seconds</string>
+    <string name="sh_timeout_hint">%1$d to %2$d</string>
+    <string name="sh_timeout_invalid">Enter a whole number of seconds from %1$d to %2$d. The timeout stays at %3$d until you do.</string>
+    <string name="sh_hooks_label">Hooks</string>
+    <string name="sh_project_hooks">Run hooks stored in projects</string>
+    <string name="sh_project_hooks_summary">Scripts in a project\'s .codeonthego/hooks folder run only after you read and trust them in the Hooks tab, because a script can arrive with a project: a cloned repository, or an AI agent\'s edit. Only plain scripts can be trusted: printable ASCII and newlines, no tabs, no line over 100 characters or ending in a space, at most 64 KB. They need no executable bit.</string>
+    <string name="sh_trusted_label">Projects with trusted scripts</string>
+    <string name="sh_trusted_none">None</string>
+    <plurals name="sh_trusted_count">
+        <item quantity="one">%1$d trusted script</item>
+        <item quantity="other">%1$d trusted scripts</item>
+    </plurals>
+    <string name="sh_revoke">Revoke</string>
+
+    <!-- Hooks tab -->
+    <string name="hk_off">Shell Hooks is off. Turn it on in Preferences, Shell Hooks.</string>
+    <string name="hk_pending_title">Project scripts waiting for your review</string>
+    <!-- Between a script's name and its project's, which come from the project and are inserted in code. -->
+    <string name="hk_pending_in">" in "</string>
+    <string name="hk_pending_not_reviewable">". Can\'t be reviewed: %1$s. It never runs."</string>
+    <plurals name="hk_pending_more">
+        <item quantity="one">And %1$d more project script.</item>
+        <item quantity="other">And %1$d more project scripts.</item>
+    </plurals>
+    <string name="hk_review">Review</string>
+    <string name="hk_runs_title">Recent runs</string>
+    <string name="hk_clear">Clear</string>
+    <string name="hk_empty">No hook has run yet.</string>
+    <string name="hk_review_title">Trust %1$s?</string>
+    <!-- The project folder, which the project chose, is inserted in code between these two. -->
+    <string name="hk_review_intro_project">"This script is stored in the project "</string>
+    <string name="hk_review_intro">". It runs with the same access as the Terminal, including the network. Each numbered row below is one line of the script, and a row marked ↳ continues the line above it. You see every character, but reviewing is reading code: read it as the shell will. Watch for three things. A backslash at the end of a line of code usually joins the next line to it, and a # starting that next line may then not begin a comment; a backslash that ends a comment, or is escaped by another backslash, joins nothing. A here-document ends at a line matching its delimiter, which may not be the line you expect. In the text of a here-document whose delimiter is not quoted, a backslash ending a line joins the next line to it too, and in bash, which runs a script with no #! line, two lines joined that way can form the delimiter, so the here-document ends early and the lines after it run as commands. And backticks, or $( in the text of a here-document whose delimiter is not quoted, can run commands. Trust covers only this script: not other project files it runs, and not settings that tools read by themselves, such as hooks in .git/config (core.fsmonitor runs a program on git status) or the project\'s Gradle and npm files. Trust it only if you have read it and know what it does."</string>
+    <string name="hk_review_checks_title">Best-effort check, not a guarantee. Lines that use the syntax below are marked ! beside their numbers, wherever it appears, comments and strings included. A line without a mark can still do anything, so read every line.</string>
+    <!-- Each check is followed in code by the numbers of the lines it marks. -->
+    <string name="hk_review_check_here_document">Lines with &lt;&lt;: %1$s. Each may start a here-document. Find the line that ends it, and check whether its text is expanded: unless any part of the word after &lt;&lt; is quoted, $ in the text is expanded, backticks and $( in it can run commands, and a backslash ending a line joins the next line to it. In bash, two lines joined that way can end the here-document early.</string>
+    <string name="hk_review_check_continuation">Lines ending in a backslash: %1$s. In code, and in the text of a here-document whose delimiter is not quoted, the shell usually joins the next line to such a line. In code, a # starting the next line may then not begin a comment; in a here-document, bash can take the joined lines as the line that ends it. A backslash that ends a comment, or is escaped by another backslash, joins nothing.</string>
+    <string name="hk_review_check_command">Lines with a backtick or $(: %1$s. Each may run a command, even inside double quotes or here-document text.</string>
+    <plurals name="hk_review_check_more">
+        <item quantity="one">" and %1$d more, marked ! beside its number"</item>
+        <item quantity="other">" and %1$d more, each marked ! beside its number"</item>
+    </plurals>
+    <string name="hk_review_line">Line %1$d</string>
+    <string name="hk_review_line_marked">Line %1$d, marked for a check above</string>
+    <string name="hk_review_not_reviewable">Can\'t be reviewed: %1$s. A project script can be trusted only if it is plain: printable ASCII and newlines, no tabs or carriage returns, no line over 100 characters or ending in a space, at most 64 KB, and a name of letters, digits, \'.\', \'_\', \'-\' and \'/\' with no part starting with \'.\'. Anything else could look different here from how it runs, so it never runs.</string>
+    <!-- The script's path, revealed, is inserted in code after this. -->
+    <string name="hk_review_unreadable">"Could not read the script "</string>
+    <string name="hk_review_path">Script: %1$s</string>
+    <string name="hk_trust">Trust</string>
+    <string name="hk_cancel">Cancel</string>
+    <string name="hk_outcome_ok">OK</string>
+    <string name="hk_outcome_failed">Failed, exit %1$d</string>
+    <string name="hk_outcome_timed_out">Timed out</string>
+    <string name="hk_outcome_cancelled">Stopped</string>
+    <string name="hk_outcome_not_started">Did not start</string>
+    <string name="hk_run_detail">%1$s · %2$s · %3$d ms</string>
+    <string name="hk_no_output">(no output)</string>
+</resources>

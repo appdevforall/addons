@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Hooks bottom-sheet tab: scripts awaiting review, then recent runs. All of it scrolls. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/plugin_surface"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/space_md">
+
+        <TextView
+            android:id="@+id/hkOff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_sm"
+            android:text="@string/hk_off"
+            android:textColor="@color/plugin_warning"
+            android:textSize="@dimen/text_body"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/hkPendingTitle"
+            style="@style/SectionLabel"
+            android:layout_marginTop="0dp"
+            android:text="@string/hk_pending_title"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/hkPendingList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/hkRunsTitle"
+                style="@style/SectionLabel"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:text="@string/hk_runs_title" />
+
+            <Button
+                android:id="@+id/hkClear"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/touch_target_min"
+                android:text="@string/hk_clear"
+                android:textSize="@dimen/text_body" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/hkEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/hk_empty"
+            android:textColor="@color/plugin_on_surface_variant"
+            android:textSize="@dimen/text_body" />
+
+        <LinearLayout
+            android:id="@+id/hkRunList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+    </LinearLayout>
+</ScrollView>
