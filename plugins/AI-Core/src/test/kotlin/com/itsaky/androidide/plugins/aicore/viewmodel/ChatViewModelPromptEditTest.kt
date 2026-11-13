@@ -167,14 +167,14 @@ class ChatViewModelPromptEditTest {
         }
         assertTrue(viewModel.sendMessage("build teh app"))
         val prompt = awaitUserMessage(viewModel, "build teh app")
-        awaitCondition { viewModel.history.value.size == 2 && viewModel.agentState.value == AgentState.Idle }
+        awaitCondition { viewModel.history.value.size == 2 && viewModel.runFinished() }
 
         val result = viewModel.editPrompt(prompt, "build the app")
 
         assertEquals(ChatViewModel.EditResult.STARTED, result)
         awaitCondition {
             viewModel.history.value.firstOrNull()?.content == "build the app" &&
-                viewModel.agentState.value == AgentState.Idle
+                viewModel.runFinished()
         }
         assertEquals(listOf(Role.USER, Role.ASSISTANT), viewModel.history.value.map { it.role })
         assertEquals(
@@ -195,7 +195,7 @@ class ChatViewModelPromptEditTest {
 
         assertEquals(ChatViewModel.EditResult.STARTED, result)
         awaitCondition {
-            viewModel.history.value.size == 2 && viewModel.agentState.value == AgentState.Idle
+            viewModel.history.value.size == 2 && viewModel.runFinished()
         }
         assertEquals(
             listOf("build the release app"),
@@ -215,7 +215,7 @@ class ChatViewModelPromptEditTest {
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
         awaitCondition {
-            viewModel.history.value.size == 2 && viewModel.agentState.value == AgentState.Idle
+            viewModel.history.value.size == 2 && viewModel.runFinished()
         }
         val edited = viewModel.messages.value.first { it.sender == Sender.USER }.id
 
@@ -239,7 +239,7 @@ class ChatViewModelPromptEditTest {
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
         awaitCondition {
-            viewModel.history.value.size == 2 && viewModel.agentState.value == AgentState.Idle
+            viewModel.history.value.size == 2 && viewModel.runFinished()
         }
         viewModel.persistState()
         awaitCondition { "now run the tests" in stored.getValue(SESSIONS_KEY) }
@@ -259,7 +259,7 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition { viewModel.agentState.value == AgentState.Idle && viewModel.history.value.size == 2 }
+        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
 
         viewModel.clearMessages()
 
@@ -295,7 +295,7 @@ class ChatViewModelPromptEditTest {
         composer.cancel()
         val edited = viewModel.messages.value.single { it.sender == Sender.USER }
         assertEquals(listOf(File("/project/Edited.kt").absolutePath), edited.contextFiles)
-        awaitCondition { viewModel.agentState.value == AgentState.Idle }
+        awaitCondition { viewModel.runFinished() }
     }
 
     @Test
@@ -306,11 +306,11 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition { viewModel.agentState.value == AgentState.Idle && viewModel.history.value.size == 2 }
+        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
         val version = viewModel.messages.value.single { it.sender == Sender.USER }.id
 
         assertEquals(ChatViewModel.EditResult.STARTED, viewModel.editPrompt(version, "build the debug app"))
-        awaitCondition { viewModel.agentState.value == AgentState.Idle && viewModel.history.value.size == 2 }
+        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
 
         val replacement = viewModel.messages.value.single { it.sender == Sender.USER }
         assertEquals("build the debug app", replacement.text)
@@ -329,7 +329,7 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition { viewModel.agentState.value == AgentState.Idle && viewModel.history.value.size == 2 }
+        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
         val edited = viewModel.messages.value.single { it.sender == Sender.USER }.id
 
         assertFalse(viewModel.switchPromptVersion(edited, 1))
@@ -381,7 +381,7 @@ class ChatViewModelPromptEditTest {
         assertTrue(viewModel.sendMessage(text))
         val id = awaitUserMessage(viewModel, text)
         awaitCondition {
-            viewModel.history.value.size == before + 2 && viewModel.agentState.value == AgentState.Idle
+            viewModel.history.value.size == before + 2 && viewModel.runFinished()
         }
         return id
     }
@@ -430,6 +430,9 @@ class ChatViewModelPromptEditTest {
             Thread.sleep(10)
         }
     }
+
+    private fun ChatViewModel.runFinished(): Boolean =
+        agentState.value == AgentState.Idle && canChangePrompts.value
 
     private fun seedTwoExchanges() {
         stored[SESSIONS_KEY] =

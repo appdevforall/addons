@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Per-message actions, included under both agent and user messages; each row's include sets the
-  gravity. New actions go here as further buttons. ChatAdapter hides the row until a reply is done.
+  Per-message actions, included under agent messages and beside user messages; each row places
+  them. New actions go here as further buttons. ChatAdapter hides the row until a reply is done.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/message_actions"

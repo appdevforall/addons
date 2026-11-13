@@ -2,13 +2,13 @@
 <!--
   A user message: the agent row's views inside a bordered bubble at the end edge. The bubble wraps
   its text, growing leftwards, and only breaks lines once it reaches the MaxWidthLinearLayout cap.
-  Under it, end-aligned like the bubble, a row of per-message actions.
+  Beside it on the start side, level with its last line, a row of per-message actions; under it
+  only when they do not fit there (see UserMessageRow).
   Framework attributes only: a library's app: attributes are silently dropped in plugin layouts.
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.itsaky.androidide.plugins.aicore.views.UserMessageRow xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
     android:paddingStart="12dp"
     android:paddingEnd="12dp"
     android:paddingTop="8dp"
@@ -18,7 +18,6 @@
         android:id="@+id/user_bubble"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="end"
         android:background="@drawable/bg_user_message"
         android:orientation="vertical"
         android:paddingStart="@dimen/chat_user_bubble_padding_horizontal"
@@ -48,7 +47,6 @@
     <include
         layout="@layout/view_chat_message_actions"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end" />
+        android:layout_height="wrap_content" />
 
-</LinearLayout>
+</com.itsaky.androidide.plugins.aicore.views.UserMessageRow>
