@@ -156,3 +156,12 @@ def test_active_content_in_a_published_page_fails(tmp_path):
     problems = check.check_names(tmp_path)
     assert any("script" in p.lower() for p in problems)
     assert any("onerror" in p.lower() or "handler" in p.lower() for p in problems)
+
+
+def test_a_plugin_licence_at_the_root_fails(tmp_path):
+    d = make_addon(tmp_path, "Keystore-Generator", "Keystore Generator",
+                   "keystore-generator", "keystore-generator.html")
+    (d / "LICENSE").write_text("licence")
+    problems = check.check_names(tmp_path)
+    assert len(problems) == 1
+    assert "LICENSE" in problems[0]
