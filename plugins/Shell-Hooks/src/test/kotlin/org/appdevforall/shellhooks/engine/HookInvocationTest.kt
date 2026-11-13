@@ -67,7 +67,7 @@ class HookInvocationTest {
     fun eachHookPassesTheDocumentedArguments() {
         val file = File(project, "a.kt")
         assertEquals(emptyList<String>(), HookEvent.ideStarted().args)
-        assertEquals(null, HookEvent.ideStarted().projectDir)
+        assertNull(HookEvent.ideStarted().projectDir)
         assertEquals(listOf(project.path), HookEvent.projectOpened(project).args)
         assertEquals(listOf(project.path), HookEvent.projectClosed(project).args)
         assertEquals(listOf(file.path), HookEvent.fileOpened(file, project).args)

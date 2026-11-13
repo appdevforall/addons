@@ -21,7 +21,7 @@ enum class Hook(
     FILE_SAVED("file-saved", "File saved", "\$1 = the file"),
     BUILD_STARTED("build-started", "Build started", "no arguments; a project sync is a build too"),
     BUILD_SUCCEEDED("build-succeeded", "Build succeeded", "no arguments; a project sync is a build too"),
-    BUILD_FAILED("build-failed", "Build failed", "\$1 = the IDE's message, such as BUILD FAILED in 12s, also when you cancel"),
+    BUILD_FAILED("build-failed", "Build failed", "\$1 = the IDE's message, such as BUILD FAILED in 12s, also when you cancel; a project sync is a build too"),
     ;
 
     companion object {
@@ -31,7 +31,9 @@ enum class Hook(
 
 /**
  * One moment to report: which [hook], the positional arguments its scripts get, and the
- * project it concerns ([projectDir], null when none is open).
+ * project it concerns ([projectDir]): the event's own for project-opened and project-closed,
+ * otherwise the IDE's current project, which can be the last one opened even after it closed.
+ * Null for ide-started, or when the IDE has no current project.
  */
 data class HookEvent(
     val hook: Hook,

@@ -15,21 +15,25 @@ keep them in step with `engine/Hook.kt` and `engine/HookRunner.kt`.
 
 | Script | Source | `$*` |
 |---|---|---|
-| `ide-started` | `IPlugin.activate` through `IdeStartedTrigger`: the first start with hooks on in each IDE launch | none; `COGO_PROJECT_DIR` is empty |
+| `ide-started` | `IPlugin.activate` through `IdeStartedTrigger`: the first start with hooks on in each IDE launch | none; `COGO_PROJECT_DIR` is empty, so it runs in `HOME`; global scripts only |
 | `project-opened` / `project-closed` | `ProjectLifecycleListener` | `$1` = project folder |
 | `file-opened` / `file-closed` | `FileOpenExtension.onFileOpened` / `onFileClosed` | `$1` = file |
 | `file-activated` | `FileChangeListener`, last of a 500 ms burst | `$1` = file or empty |
 | `file-saved` | `FileSaveListener` | `$1` = file |
-| `build-started` / `build-succeeded` / `build-failed` | `BuildStatusListener`; a project sync is a Gradle build too | failed: `$1` = the IDE's message (`BUILD FAILED in 12s`), trailing newline removed, also on a cancel |
+| `build-started` / `build-succeeded` / `build-failed` | `BuildStatusListener`; a project sync is a Gradle build too | failed: `$1` = the IDE's message (`BUILD FAILED in 12s`), trailing whitespace removed, also on a cancel |
 
 Environment: `COGO_HOOK`, `COGO_PROJECT_DIR`, `COGO_HOOKS_DIR`, `COGO_HOOK_SCRIPT`,
-`COGO_HOOK_SOURCE` (`global`/`project`), `COGO_IDE_VERSION` when known.
+`COGO_HOOK_SOURCE` (`global`/`project`), `COGO_IDE_VERSION` when known. `COGO_PROJECT_DIR` is the
+event's project for project-opened and project-closed, otherwise
+`IdeProjectService.getCurrentProject()?.rootDir`, which the host does not clear when a project
+closes, so it can be the last project opened; it is empty for `ide-started`.
 
 Layout: `~/.config/codeonthego/hooks/<hook>`, then `<hook>.d/*` in byte order; executable files
 only; `*.sample`, dotfiles and `*~` skipped. `hooks/actions/*` become "Run <name>" file-menu
 entries (files only, not folders) that run in the Terminal. A project's own hooks live in
-`.codeonthego/hooks/` and need no executable bit: projects sit on shared storage, which is
-mounted noexec, and a trusted project script runs from a private copy the plugin marks executable.
+`.codeonthego/hooks/`, for every hook but `ide-started`, which has no project for `HookResolver`
+to look in, and need no executable bit: projects sit on shared storage, which is mounted noexec,
+and a trusted project script runs from a private copy the plugin marks executable.
 
 ## Design decisions
 
@@ -42,13 +46,17 @@ mounted noexec, and a trusted project script runs from a private copy the plugin
   termux-exec and Android has no `/usr/bin/env` or `/bin/bash`. Any other interpreter path
   (`/system/bin/sh`, a virtualenv's python) runs as written. It also `cd`s to `COGO_PROJECT_DIR`:
   the host refuses a working directory outside the *open* project, which `project-closed` would hit.
+  When that is empty it `cd`s to `HOME` (`/` without one): given no directory, the host uses its
+  current project's root, which can be the last project opened even after it closed.
 - **Timeouts stop the whole script.** The wrapper runs the script under the Terminal's GNU
   `timeout` (`COGO_TIMEOUT_SECONDS`), which puts it in its own process group and stops the group,
   so a hung `git` or `gradlew` the script started does not outlive it. The host gets the limit plus
   10 s and the runner gives up 5 s after that. The IDE stops a hook on disable, unload or update by
   SIGKILLing the process it started; were that `timeout` itself, the script would run on with no
   limit. So the wrapper runs `timeout` as a child, not with `exec`, and a watchdog sends `timeout`
-  TERM once the wrapper is gone, which stops the group within a few seconds. The release bootstraps
+  TERM within about a second of the wrapper being gone, and the group stops within a few seconds of
+  that (`-k 5` KILLs what ignores TERM). Counted from Disable, device QA saw a script's processes
+  gone after 10 to 25 s, so the user docs promise about half a minute. The release bootstraps
   ship GNU coreutils `timeout`. Without it, the IDE stops only the script's first process. Under
   `timeout` a script's standard input is `/dev/null`. The watchdog avoids signalling a process
   that has ended: its TERM trap only sets a flag; it stops its own `sleep` only when that flag is
@@ -90,13 +98,15 @@ mounted noexec, and a trusted project script runs from a private copy the plugin
 - **Review is still code review.** Plain text guarantees the reader sees every byte, not that a
   skim tells what the shell does. The reviews wrote plain scripts that read as inert and run a
   command: a line ending in `\` that joins a following `#;cmd` line into a word, so it is no
-  comment; `<<E"O"F`, which ends at the line `EOF` rather than `E"O"F`; backticks or `$(` in an
-  unquoted here-document's "help text"; and `(( n = 1 << 1 ))`, which dash and busybox read as a
-  here-document. The dialog's intro tells the reader to read the script as the shell will, and
+  comment; in an unquoted here-document's "help text", the lines `EO\` and `F`, which every shell
+  joins and bash then takes as the delimiter `EOF`, so the lines after them run (dash and busybox
+  keep them as text); `<<E"O"F`, which ends at the line `EOF` rather than `E"O"F`; backticks or
+  `$(` in an unquoted here-document's "help text"; and `(( n = 1 << 1 ))`, which dash and busybox
+  read as a here-document. The dialog's intro tells the reader to read the script as the shell will, and
   names these tricks, including that a backslash ending a comment, or escaped by another backslash, joins nothing.
 - **A best-effort check, not a guarantee** (`ScriptHints`). Above the script the dialog lists, by
-  kind, every line that contains `<<` (may start a here-document), ends in `\` (in code, usually joins the
-  next line), or contains a backtick or `$(` (may run a command), and marks each `!` beside its
+  kind, every line that contains `<<` (may start a here-document), ends in `\` (in code or in
+  unquoted here-document text, usually joins the next line), or contains a backtick or `$(` (may run a command), and marks each `!` beside its
   number. Each line is judged on its own: nothing is carried from line to line, and no quotes,
   comments or here-documents are tracked, so no line can change how later lines are marked. That
   is the whole rule: it marks many harmless lines (comments and strings too), and it misses every

@@ -51,19 +51,19 @@ chmod +x file-saved</pre></li>
   <tr><td><code>file-saved</code></td><td>a file is written to disk</td><td><code>$1</code> = file</td></tr>
   <tr><td><code>build-started</code></td><td>a build starts, including a project sync</td><td>none</td></tr>
   <tr><td><code>build-succeeded</code></td><td>a build succeeds, including a project sync</td><td>none</td></tr>
-  <tr><td><code>build-failed</code></td><td>a build fails, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code></td></tr>
+  <tr><td><code>build-failed</code></td><td>a build fails, including a project sync, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code></td></tr>
 </table>
 <p>Every script also gets these environment variables:</p>
 <table>
   <tr><th>Variable</th><th>Value</th></tr>
   <tr><td><code>COGO_HOOK</code></td><td>the hook's name (<code>action</code> for an action)</td></tr>
-  <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder; empty when none is open, and for <code>ide-started</code></td></tr>
+  <tr><td><code>COGO_PROJECT_DIR</code></td><td>the IDE's current project folder, which can be the last one opened even after it closes; empty for <code>ide-started</code></td></tr>
   <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
   <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
   <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code> or <code>project</code></td></tr>
   <tr><td><code>COGO_IDE_VERSION</code></td><td>the IDE's version, when known</td></tr>
 </table>
-<p>The script runs in the project's folder, with the Terminal's <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code>.</p>
+<p>The script runs in <code>COGO_PROJECT_DIR</code>, or in <code>HOME</code> when that is empty, with the Terminal's <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code>.</p>
 
 <h2>Where scripts go</h2>
 <pre>~/.config/codeonthego/hooks/
@@ -96,8 +96,9 @@ chmod +x file-saved</pre></li>
 
 <h2>Hooks stored in a project</h2>
 <p>
-  A project can carry its own hooks in <code>.codeonthego/hooks/</code>, with the same layout. They
-  run only if you turn on <b>Run hooks stored in projects</b> and trust each script.
+  A project can carry its own hooks in <code>.codeonthego/hooks/</code>, with the same layout,
+  except <code>ide-started</code>: it has no project, so only yours runs. They run only if you
+  turn on <b>Run hooks stored in projects</b> and trust each script.
 </p>
 <p>
   Why: a hook runs with the same access as the Terminal, including your files and the network, and
@@ -126,7 +127,10 @@ chmod +x file-saved</pre></li>
             a comment, or is escaped by another backslash, joins nothing.</li>
         <li>A here-document ends at a line matching its delimiter, which may not be the one you
             expect: <code>&lt;&lt;E"O"F</code> ends at <code>EOF</code>, and the
-            lines after that run.</li>
+            lines after that run. If the delimiter is not quoted, a backslash ending a line of
+            the text joins the next line to it too, and in bash, which runs a script with no
+            <code>#!</code> line, lines such as <code>EO\</code> and <code>F</code> can then
+            form the delimiter and end the here-document early.</li>
         <li>Backticks, or <code>$(</code> in the text of a here-document whose delimiter is not
             quoted, can run a command inside what looks like text.</li>
       </ul>

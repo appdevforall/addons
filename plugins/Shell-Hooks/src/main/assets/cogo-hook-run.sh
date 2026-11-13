@@ -8,9 +8,15 @@
 script=$1
 shift
 
-# The event's project, which for project-closed the IDE no longer has open.
-if [ -n "${COGO_PROJECT_DIR:-}" ] && [ -d "$COGO_PROJECT_DIR" ]; then
-	cd "$COGO_PROJECT_DIR" || exit 126
+# The event's project, which for project-closed the IDE no longer has open. With none, as for
+# ide-started, HOME: given no folder, the IDE starts this shell in the last project opened, even
+# one since closed.
+if [ -n "${COGO_PROJECT_DIR:-}" ]; then
+	if [ -d "$COGO_PROJECT_DIR" ]; then
+		cd "$COGO_PROJECT_DIR" || exit 126
+	fi
+else
+	cd "${HOME:-/}" || exit 126
 fi
 
 # With COGO_TIMEOUT_SECONDS set and the Terminal's GNU timeout installed, the script runs under

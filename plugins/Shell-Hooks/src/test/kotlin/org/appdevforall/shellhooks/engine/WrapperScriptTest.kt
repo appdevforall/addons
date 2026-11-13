@@ -526,6 +526,27 @@ class WrapperScriptTest(
     }
 
     @Test
+    fun withNoProjectTheScriptRunsInHomeNotTheInheritedFolder() {
+        // Given no folder, the IDE starts the wrapper in the last project opened, even one since
+        // closed; here the inherited folder is the test's work folder.
+        val home = File(work, "home").apply { mkdirs() }
+        val script = work.script("hook", "#!/bin/sh\npwd\n")
+
+        val pwd = run(script, env = mapOf("COGO_PROJECT_DIR" to "", "HOME" to home.path)).trim()
+
+        assertEquals(home.canonicalPath, File(pwd).canonicalPath)
+    }
+
+    @Test
+    fun withNoProjectAndNoHomeTheScriptRunsInRoot() {
+        val script = work.script("hook", "#!/bin/sh\npwd\n")
+
+        val pwd = run(script, env = mapOf("COGO_PROJECT_DIR" to "", "HOME" to "")).trim()
+
+        assertEquals("/", pwd)
+    }
+
+    @Test
     fun aMissingProjectFolderLeavesTheDirectoryAlone() {
         val script = work.script("hook", "#!/bin/sh\npwd\n")
 

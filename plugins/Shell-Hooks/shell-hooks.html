@@ -143,14 +143,14 @@
     <tr><td><code>file-saved</code></td><td>the editor writes a file to disk</td><td><code>$1</code> = file</td></tr>
     <tr><td><code>build-started</code></td><td>a Gradle build starts, including a project sync</td><td>none</td></tr>
     <tr><td><code>build-succeeded</code></td><td>a Gradle build succeeds, including a project sync</td><td>none</td></tr>
-    <tr><td><code>build-failed</code></td><td>a Gradle build fails, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code> (in the IDE's language)</td></tr>
+    <tr><td><code>build-failed</code></td><td>a Gradle build fails, including a project sync, or you cancel it</td><td><code>$1</code> = the IDE's message, such as <code>BUILD FAILED in 12s</code>; the message for a cancel is in the IDE's language</td></tr>
   </table>
 
   <h3>Environment</h3>
   <table>
     <tr><th>Variable</th><th>Value</th></tr>
     <tr><td><code>COGO_HOOK</code></td><td>the hook's name, e.g. <code>file-saved</code> (<code>action</code> for an action)</td></tr>
-    <tr><td><code>COGO_PROJECT_DIR</code></td><td>the project's folder; empty when none is open, and for <code>ide-started</code></td></tr>
+    <tr><td><code>COGO_PROJECT_DIR</code></td><td>the IDE's current project folder, which can be the last one opened even after it closes; empty for <code>ide-started</code></td></tr>
     <tr><td><code>COGO_HOOKS_DIR</code></td><td>the hooks folder the script is in</td></tr>
     <tr><td><code>COGO_HOOK_SCRIPT</code></td><td>the script's own path</td></tr>
     <tr><td><code>COGO_HOOK_SOURCE</code></td><td><code>global</code>, or <code>project</code> for a script stored in a project</td></tr>
@@ -158,7 +158,8 @@
   </table>
   <p>
     <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code> are the Terminal's, so every
-    Terminal package is available. A script runs in the project's folder.
+    Terminal package is available. A script runs in <code>COGO_PROJECT_DIR</code>, or in
+    <code>HOME</code> when that is empty.
   </p>
 
   <h3>Folder layout</h3>
@@ -218,9 +219,10 @@
   <ul>
     <li><strong>Your hooks</strong> in <code>~/.config/codeonthego/hooks/</code> are scripts you
         put there yourself, so they run once hooks are on.</li>
-    <li><strong>Project hooks</strong> in a project's <code>.codeonthego/hooks/</code> come with the
-        project: from a cloned repository, an AI agent's edit, or a plugin that can only write
-        project files. A project hook would otherwise run commands you never approved. They
+    <li><strong>Project hooks</strong> in a project's <code>.codeonthego/hooks/</code> use the same
+        layout, for every hook but <code>ide-started</code>, which has no project, so only yours
+        runs. They come with the project: from a cloned repository, an AI agent's edit, or a
+        plugin that can only write project files. A project hook would otherwise run commands you never approved. They
         therefore need two things: the <strong>Run hooks stored in projects</strong> switch (off by
         default), and your trust in that exact script. An untrusted script is skipped and listed in
         the Hooks tab; <strong>Review</strong> shows all of it, one numbered row per line, before
@@ -243,8 +245,11 @@
         next one to it, and a <code>#</code> starting that line may then be no comment (a
         backslash that ends a comment, or is escaped by another backslash, joins nothing); a
         here-document ends at a line matching its delimiter (<code>&lt;&lt;E"O"F</code> ends at
-        <code>EOF</code>, and the lines after it run); and backticks, or <code>$(</code> in an
-        unquoted here-document's text, can run a command inside what looks like text.</li>
+        <code>EOF</code>, and the lines after it run), and in an unquoted here-document's text a
+        backslash ending a line joins the next one too, so in bash, which runs a script with no
+        <code>#!</code> line, lines such as <code>EO\</code> and <code>F</code> can end it early;
+        and backticks, or <code>$(</code> in an unquoted here-document's text, can run a command
+        inside what looks like text.</li>
     <li><strong>A best-effort check, not a guarantee.</strong> The dialog marks <strong>!</strong>
         beside its number every line that contains <code>&lt;&lt;</code>, a backtick or
         <code>$(</code>, or ends in a backslash, and lists them above the script by kind. It judges
@@ -299,7 +304,7 @@ HookLog -> Hooks tab</div>
     <tr><td><code>engine/HookDiscovery</code></td><td>The git-hooks layout: <code>&lt;hook&gt;</code>, then <code>&lt;hook&gt;.d/*</code>.</td></tr>
     <tr><td><code>engine/TrustStore</code></td><td>Approvals keyed on project, path and SHA-256.</td></tr>
     <tr><td><code>engine/ShellQuote</code></td><td>Quoting for the Terminal, which takes a command line.</td></tr>
-    <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a <code>/bin</code> or <code>/usr/bin</code> shebang onto <code>$PREFIX/bin</code>, changes to the event's project folder, and runs the script under <code>timeout</code> so a timeout stops the whole process group.</td></tr>
+    <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a <code>/bin</code> or <code>/usr/bin</code> shebang onto <code>$PREFIX/bin</code>, changes to the event's project folder (to <code>HOME</code> with none), and runs the script under <code>timeout</code> so a timeout stops the whole process group.</td></tr>
     <tr><td><code>WorkspaceHooks</code></td><td>The 26.47 project and save listeners, kept apart so an older IDE runs the other hooks.</td></tr>
   </table>
 </section>

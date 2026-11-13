@@ -78,8 +78,9 @@ object HookInvocation {
         CommandSpec.ShellCommand(
             executable = "sh",
             arguments = listOf(wrapper.path, script.executable.path) + event.args,
-            // Null: the host's project root, or no directory with no project open. The wrapper
-            // then changes to COGO_PROJECT_DIR, which for project-closed the host would refuse.
+            // Null: the host's current project root, which can be the last project opened even
+            // after it closed. The wrapper then changes to COGO_PROJECT_DIR, which for
+            // project-closed the host would refuse, or to HOME when that is empty.
             workingDirectory = null,
             environment = environment(script, event, ideVersion) + listOfNotNull(timeoutSeconds?.let { TIMEOUT_VARIABLE to it.toString() }),
         )

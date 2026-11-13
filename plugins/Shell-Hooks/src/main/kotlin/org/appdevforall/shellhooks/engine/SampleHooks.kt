@@ -42,12 +42,14 @@ object SampleHooks {
         |# Arguments: ${hook.argsDoc}
         |# Environment:
         |#   COGO_HOOK          ${hook.id}
-        |#   COGO_PROJECT_DIR   the project's folder, or empty when none is open and for ide-started
+        |#   COGO_PROJECT_DIR   the IDE's current project folder, which can be the last one opened
+        |#                      even after it closes; empty for ide-started
         |#   COGO_HOOKS_DIR     the hooks folder this script is in
         |#   COGO_HOOK_SCRIPT   this script's path
         |#   COGO_HOOK_SOURCE   global, or project for a script stored in a project
         |#   COGO_IDE_VERSION   the IDE's version, when known
-        |# The script runs in the project's folder. Its output appears in the Hooks tab.
+        |# The script runs in COGO_PROJECT_DIR, or in HOME when that is empty. Its output appears in
+        |# the Hooks tab.
         |# Hooks only report what happened; a script cannot stop a save or a build.
         |
         |printf '%s %s %s\n' "${'$'}(date '+%F %T')" "${'$'}COGO_HOOK" "${'$'}*" >> "${'$'}HOME/codeonthego-hooks.log"

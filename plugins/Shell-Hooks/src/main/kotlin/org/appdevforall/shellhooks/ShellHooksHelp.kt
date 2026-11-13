@@ -63,7 +63,8 @@ object ShellHooksHelp {
                     <p>Each switch is one hook; under it is what the script gets in <code>$1</code>. A hook that
                     is off runs none of its scripts, yours or a project's. The scripts stay where they are.</p>
                     <p><code>ide-started</code> runs once in each launch of Code on the Go, the first time Shell
-                    Hooks starts with hooks on.</p>
+                    Hooks starts with hooks on. It has no project, so it runs only your scripts, in your home
+                    folder.</p>
                     """.trimIndent(),
                 buttons = guide,
             ),
@@ -85,7 +86,8 @@ object ShellHooksHelp {
                 summary = "Scripts stored in a project run only after you review and trust them.",
                 detail =
                     """
-                    <p>A project can carry hooks in <code>.codeonthego/hooks/</code>. A script can arrive with a
+                    <p>A project can carry hooks in <code>.codeonthego/hooks/</code>, for every hook but
+                    <code>ide-started</code>, which has no project. A script can arrive with a
                     project, from a cloned repository or an AI agent's edit, so none runs until you read it in
                     the Hooks tab and trust it. Editing a trusted script makes it untrusted again.</p>
                     <p>Only plain scripts can be trusted: at most 64 KB of printable ASCII and newlines, no tabs,
@@ -115,8 +117,11 @@ object ShellHooksHelp {
                     backslash ending a line of code usually joins the next line to it, and a
                     <code>#</code> starting that line may then be no comment (a backslash that ends a
                     comment, or is escaped by another backslash, joins nothing); a here-document ends at a
-                    line matching its delimiter, which may not be the one you expect; backticks, or
-                    <code>$(</code> in the text of an unquoted here-document, can run commands.</p>
+                    line matching its delimiter, which may not be the one you expect, and in the text of an
+                    unquoted here-document a backslash ending a line joins the next one too, so in bash,
+                    which runs a script with no <code>#!</code> line, two lines can end it early;
+                    backticks, or <code>$(</code> in the text of an unquoted here-document, can run
+                    commands.</p>
                     <p>A best-effort check, not a guarantee, marks <b>!</b> every line that contains
                     <code>&lt;&lt;</code>, a backtick or <code>$(</code>, or ends in a backslash, and lists
                     them above the script by kind. It judges each line on its own, in comments and strings
