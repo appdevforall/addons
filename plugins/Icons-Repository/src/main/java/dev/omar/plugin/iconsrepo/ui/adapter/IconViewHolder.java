@@ -12,7 +12,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.textview.MaterialTextView;
 
 import dev.omar.plugin.iconsrepo.R;
-import dev.omar.plugin.iconsrepo.models.IconModel;
+import dev.omar.plugin.iconsrepo.help.IconsRepositoryHelp;
+import dev.omar.plugin.iconsrepo.data.models.IconModel;
 import dev.omar.plugin.iconsrepo.utils.ImageUtils;
 
 public class IconViewHolder extends RecyclerView.ViewHolder {
@@ -28,6 +29,7 @@ public class IconViewHolder extends RecyclerView.ViewHolder {
         this.adapter = adapter;
         icon = view.findViewById(R.id.iconImageView);
         txt = view.findViewById(R.id.iconNameTextView);
+        IconsRepositoryHelp.wire(itemView, IconsRepositoryHelp.TAG_ICON);
     }
 
     public void bindView(@NonNull final IconModel model) {

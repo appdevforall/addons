@@ -1,7 +1,6 @@
 package dev.omar.plugin.iconsrepo.utils;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.Color;
 import android.util.TypedValue;
 
@@ -16,15 +15,27 @@ public final class DynamicColorHelper {
     private DynamicColorHelper() {
         // Prevent instantiation
     }
-public static ColorReferenceModel getColorModel(int resAttr){
-    for (ColorReferenceModel model :
-            getDynamicColors()) {
-        if (resAttr == model.getAttrId()){
-            return model;
+
+    public static ColorReferenceModel getColorModel(int resAttr) {
+        for (ColorReferenceModel model : getDynamicColors()) {
+            if (resAttr == model.getAttrId()) {
+                return model;
+            }
         }
+        return getDynamicColors().get(0);
     }
-    return getDynamicColors().get(0);
-}
+
+    @NonNull
+    public static ColorReferenceModel getDefaultColorModel() {
+        List<ColorReferenceModel> colors = getDynamicColors();
+        for (ColorReferenceModel model : colors) {
+            if ("colorOnSurface".equals(model.getDisplayName())) {
+                return model;
+            }
+        }
+        return colors.get(0);
+    }
+
     @NonNull
     public static List<ColorReferenceModel> getDynamicColors() {
         return Arrays.asList(
@@ -126,7 +137,7 @@ public static ColorReferenceModel getColorModel(int resAttr){
      * @return The resolved color integer, or {@link Color#BLACK} if resolution fails.
      */
     public static int resolveDynamicColor(Context context, @NonNull ColorReferenceModel model) {
-        if(context != null){
+        if (context != null) {
             Integer attrId = model.getAttrId();
             if (attrId != null) {
                 TypedValue typedValue = new TypedValue();
@@ -179,6 +190,7 @@ public static ColorReferenceModel getColorModel(int resAttr){
             return displayName;
         }
 
+        @NonNull
         @Override
         public String toString() {
             return "ColorReferenceModel{"

@@ -1,10 +1,12 @@
-package pro.sketchware.utility;
+package dev.omar.plugin.iconsrepo.utils;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 
+import org.jetbrains.annotations.Contract;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserFactory;
 import org.xmlpull.v1.XmlSerializer;
@@ -128,7 +130,7 @@ public class SvgUtils {
                 || "ellipse".equals(tag) || "polygon".equals(tag) || "polyline".equals(tag);
     }
 
-    private boolean hasFillAttribute(XmlPullParser parser) {
+    private boolean hasFillAttribute(@NonNull XmlPullParser parser) {
         for (int i = 0; i < parser.getAttributeCount(); i++) {
             if ("fill".equals(parser.getAttributeName(i))) {
                 return true;
@@ -152,7 +154,9 @@ public class SvgUtils {
         }
     }
 
-    private SvgAttributes extractSvgAttributes(XmlPullParser parser) throws Exception {
+    @NonNull
+    @Contract("_ -> new")
+    private SvgAttributes extractSvgAttributes(@NonNull XmlPullParser parser) throws Exception {
         while (parser.getEventType() != XmlPullParser.START_TAG || !"svg".equals(parser.getName())) {
             parser.next();
         }
@@ -192,8 +196,8 @@ public class SvgUtils {
         return new SvgAttributes(width, height, viewportWidth, viewportHeight);
     }
 
-    private void writeVectorDrawable(XmlSerializer serializer, SvgAttributes attributes,
-                                     XmlPullParser parser, @Nullable String customFillColor) throws Exception {
+    private void writeVectorDrawable(@NonNull XmlSerializer serializer, @NonNull SvgAttributes attributes,
+                                     @NonNull XmlPullParser parser, @Nullable String customFillColor) throws Exception {
         serializer.startDocument("UTF-8", true);
 
         serializer.startTag(null, "vector");
@@ -236,7 +240,7 @@ public class SvgUtils {
         serializer.endDocument();
     }
 
-    private void writePath(XmlSerializer serializer, XmlPullParser parser,
+    private void writePath(XmlSerializer serializer, @NonNull XmlPullParser parser,
                            @Nullable String inheritedFill) throws Exception {
         String pathData = parser.getAttributeValue(null, "d");
         String fill = parser.getAttributeValue(null, "fill");
@@ -266,7 +270,7 @@ public class SvgUtils {
         }
     }
 
-    private void writePathFromData(XmlSerializer serializer, String pathData,
+    private void writePathFromData(@NonNull XmlSerializer serializer, String pathData,
                                    @Nullable String fill) throws Exception {
         serializer.startTag(null, "path");
         serializer.attribute(null, "android:pathData", pathData);
@@ -274,7 +278,7 @@ public class SvgUtils {
         serializer.endTag(null, "path");
     }
 
-    private String convertShapeToPath(XmlPullParser parser) {
+    private String convertShapeToPath(@NonNull XmlPullParser parser) {
         String tagName = parser.getName();
         switch (tagName) {
             case "circle":
@@ -310,12 +314,15 @@ public class SvgUtils {
         }
     }
 
+    @NonNull
+    @Contract(pure = true)
     private String createCirclePath(float cx, float cy, float r) {
         return "M " + (cx - r) + "," + cy +
                 " A " + r + "," + r + " 0 0 1 " + (cx + r) + "," + cy +
                 " A " + r + "," + r + " 0 0 1 " + (cx - r) + "," + cy + " Z";
     }
 
+    @NonNull
     private String createRectPath(float x, float y, float width, float height,
                                   float rx, float ry) {
         if (rx <= 0f && ry <= 0f) {
@@ -335,6 +342,8 @@ public class SvgUtils {
         }
     }
 
+    @NonNull
+    @Contract(pure = true)
     private String createEllipsePath(float cx, float cy, float rx, float ry) {
         return "M " + (cx - rx) + "," + cy +
                 " A " + rx + "," + ry + " 0 0 1 " + (cx + rx) + "," + cy +

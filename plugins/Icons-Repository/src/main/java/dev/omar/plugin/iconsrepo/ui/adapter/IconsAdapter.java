@@ -17,20 +17,21 @@ import androidx.collection.LruCache;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
+import dev.omar.plugin.iconsrepo.utils.FastSearchIndexV2;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import dev.omar.plugin.iconsrepo.R;
-import dev.omar.plugin.iconsrepo.models.IconModel;
+import dev.omar.plugin.iconsrepo.data.models.IconModel;
 import dev.omar.plugin.iconsrepo.utils.FastSearchIndex;
 
 public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
         implements Filterable, TextWatcher {
 
     private List<IconModel> originalList;
-    private FastSearchIndex searchIndex;
+    private FastSearchIndexV2 searchIndex;
     private final ExecutorService searchExecutor;
     private final ExecutorService renderExecutor;
     private final Handler mainHandler;
@@ -75,7 +76,7 @@ public class IconsAdapter extends ListAdapter<IconModel, IconViewHolder>
                     for (IconModel model : fullList) {
                         names.add(model.getIconName());
                     }
-                    searchIndex = new FastSearchIndex(names);
+                    searchIndex = new FastSearchIndexV2(names);
                 });
         submitList(fullList);
     }
