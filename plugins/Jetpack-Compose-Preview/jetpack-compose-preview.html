@@ -347,10 +347,11 @@ fun GreetingDarkPreview() {
 
   <h3>4.6 Permissions</h3>
   <pre><code>&lt;meta-data android:name="plugin.permissions"
-           android:value="filesystem.read,project.structure,native.code" /&gt;</code></pre>
+           android:value="filesystem.read,filesystem.write,project.structure,native.code" /&gt;</code></pre>
   <p>
     Filesystem and project-structure access back source reading and module
-    resolution; <code>native.code</code> covers the bundled on-device toolchain.
+    resolution; <code>filesystem.write</code> lets the plugin save the open file
+    before it opens the preview; <code>native.code</code> covers the bundled on-device toolchain.
   </p>
 </section>
 
@@ -393,7 +394,7 @@ fun GreetingDarkPreview() {
     <tr><th>Requirement</th><th>Value</th></tr>
     <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
     <tr><td>Min IDE version</td><td>1.0.0</td></tr>
-    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>project.structure</code>, <code>native.code</code></td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>project.structure</code>, <code>native.code</code></td></tr>
     <tr><td>Network access</td><td>None</td></tr>
   </table>
 </section>
