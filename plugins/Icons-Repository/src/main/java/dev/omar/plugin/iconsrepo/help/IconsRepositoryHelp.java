@@ -100,7 +100,7 @@ public final class IconsRepositoryHelp {
                         "index.html"),
                 entry(
                         TAG_IMPORT,
-                        "Import writes the drawable; Cancel closes the dialog without changes.",
+                        "The preview shows the chosen tint. Import writes the drawable; Cancel closes without changes.",
                         "<p>The preview shows the icon with the chosen tint. <b>Import</b>"
                                 + " checks the name and color, then writes the file. If"
                                 + " something is wrong, the field shows an error and nothing"

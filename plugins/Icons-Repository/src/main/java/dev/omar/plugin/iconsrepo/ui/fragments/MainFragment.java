@@ -17,6 +17,8 @@ import com.itsaky.androidide.plugins.services.IdeProjectService;
 
 import dev.omar.plugin.iconsrepo.help.IconsRepositoryHelp;
 import dev.omar.plugin.iconsrepo.Main;
+import com.google.android.material.textfield.TextInputLayout;
+
 import dev.omar.plugin.iconsrepo.R;
 import dev.omar.plugin.iconsrepo.databinding.FragmentMainBinding;
 import dev.omar.plugin.iconsrepo.data.models.IconModel;
@@ -65,6 +67,8 @@ public class MainFragment extends PluginFragment {
 
         binding.searchEditText.addTextChangedListener(adapter);
         binding.iconsRecyclerView.setAdapter(adapter);
+        binding.searchInputLayout.setStartIconDrawable(R.drawable.ic_search);
+        binding.searchInputLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
         IconsRepositoryHelp.wireFieldIcons(binding.searchInputLayout, IconsRepositoryHelp.TAG_SEARCH);
     }
 

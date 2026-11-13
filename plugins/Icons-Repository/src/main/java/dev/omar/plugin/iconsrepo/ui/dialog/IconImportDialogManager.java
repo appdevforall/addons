@@ -16,12 +16,14 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputLayout;
 import com.itsaky.androidide.plugins.extensions.IModule;
 import com.itsaky.androidide.plugins.extensions.IProject;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.omar.plugin.iconsrepo.R;
 import dev.omar.plugin.iconsrepo.help.IconsRepositoryHelp;
 import dev.omar.plugin.iconsrepo.data.importer.AppPathResolver;
 import dev.omar.plugin.iconsrepo.data.importer.ImportIconResult;
@@ -84,10 +86,14 @@ public class IconImportDialogManager {
 
     private void wireHelp(@NonNull DialogImportIconBinding binding, @NonNull AlertDialog dialog) {
         IconsRepositoryHelp.wire(binding.iconPreview, IconsRepositoryHelp.TAG_IMPORT);
+        binding.inputNameLayout.setStartIconDrawable(R.drawable.ic_category);
+        binding.inputNameLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
         IconsRepositoryHelp.wireFieldIcons(binding.inputNameLayout, IconsRepositoryHelp.TAG_NAME);
         IconsRepositoryHelp.wire(binding.moduleSelectionLayout, IconsRepositoryHelp.TAG_MODULE);
         IconsRepositoryHelp.wire(binding.txtListModules, IconsRepositoryHelp.TAG_MODULE);
         IconsRepositoryHelp.wire(binding.txtListColors, IconsRepositoryHelp.TAG_COLOR);
+        binding.inputColorLayout.setStartIconDrawable(R.drawable.ic_category);
+        binding.inputColorLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
         IconsRepositoryHelp.wireFieldIcons(binding.inputColorLayout, IconsRepositoryHelp.TAG_COLOR);
         IconsRepositoryHelp.wire(dialog.getButton(AlertDialog.BUTTON_POSITIVE), IconsRepositoryHelp.TAG_IMPORT);
         IconsRepositoryHelp.wire(dialog.getButton(AlertDialog.BUTTON_NEGATIVE), IconsRepositoryHelp.TAG_IMPORT);
