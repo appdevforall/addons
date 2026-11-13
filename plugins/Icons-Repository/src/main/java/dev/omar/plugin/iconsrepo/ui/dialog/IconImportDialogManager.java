@@ -22,6 +22,7 @@ import com.itsaky.androidide.plugins.extensions.IProject;
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.omar.plugin.iconsrepo.help.IconsRepositoryHelp;
 import dev.omar.plugin.iconsrepo.data.importer.AppPathResolver;
 import dev.omar.plugin.iconsrepo.data.importer.ImportIconResult;
 import dev.omar.plugin.iconsrepo.data.models.IconModel;
@@ -72,12 +73,24 @@ public class IconImportDialogManager {
         dialogBuilder.setNegativeButton("Cancel", null);
 
         final AlertDialog alertDialog = dialogBuilder.show();
+        wireHelp(binding, alertDialog);
 
         alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             if (handleImportSubmitted(binding, currentProject, model)) {
                 alertDialog.dismiss();
             }
         });
+    }
+
+    private void wireHelp(@NonNull DialogImportIconBinding binding, @NonNull AlertDialog dialog) {
+        IconsRepositoryHelp.wire(binding.iconPreview, IconsRepositoryHelp.TAG_IMPORT);
+        IconsRepositoryHelp.wireFieldIcons(binding.inputNameLayout, IconsRepositoryHelp.TAG_NAME);
+        IconsRepositoryHelp.wire(binding.moduleSelectionLayout, IconsRepositoryHelp.TAG_MODULE);
+        IconsRepositoryHelp.wire(binding.txtListModules, IconsRepositoryHelp.TAG_MODULE);
+        IconsRepositoryHelp.wire(binding.txtListColors, IconsRepositoryHelp.TAG_COLOR);
+        IconsRepositoryHelp.wireFieldIcons(binding.inputColorLayout, IconsRepositoryHelp.TAG_COLOR);
+        IconsRepositoryHelp.wire(dialog.getButton(AlertDialog.BUTTON_POSITIVE), IconsRepositoryHelp.TAG_IMPORT);
+        IconsRepositoryHelp.wire(dialog.getButton(AlertDialog.BUTTON_NEGATIVE), IconsRepositoryHelp.TAG_IMPORT);
     }
 
     private void setupInputName(@NonNull DialogImportIconBinding binding, @NonNull IconModel model) {

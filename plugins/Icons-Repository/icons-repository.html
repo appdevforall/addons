@@ -90,6 +90,7 @@
     <li><code>data.importer.SvgToVectorImporter</code> — extracts SVG <code>d</code> path data, builds a Vector Drawable document with <code>XmlPullParser</code>, and writes it to the project's resource directory.</li>
     <li><code>data.importer.AppPathResolver</code> — resolves the active project's <code>app/src/main/res/drawable</code> through the IDE's <code>IProject</code>/<code>IModule</code> APIs (with a Gradle-plugin-project fallback).</li>
     <li><code>data.importer.ModuleDiscoveryEngine</code> — lists the project's Android modules from the IDE's module list, the <code>include</code> lines in <code>settings.gradle</code>, and a bounded scan of the project tree, so the import dialog can target any module.</li>
+    <li><code>help.IconsRepositoryHelp</code> — the in-app help: tooltip entries for the side-menu item, the search field, the icon grid and each import-dialog control, and the offline guide in <code>assets/docs/index.html</code>. <code>Main</code> serves them through <code>DocumentationExtension</code>.</li>
     <li><code>data.validation</code> — small validation framework (<code>Validator</code>, <code>ValidationRule</code>, <code>IconNameRule</code>, <code>HexColorRule</code>, <code>RequiredRule</code>) used by the import dialog.</li>
 </ul>
 

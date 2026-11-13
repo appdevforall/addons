@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.itsaky.androidide.plugins.extensions.IProject;
 import com.itsaky.androidide.plugins.services.IdeProjectService;
 
+import dev.omar.plugin.iconsrepo.help.IconsRepositoryHelp;
 import dev.omar.plugin.iconsrepo.Main;
 import dev.omar.plugin.iconsrepo.R;
 import dev.omar.plugin.iconsrepo.databinding.FragmentMainBinding;
@@ -64,6 +65,7 @@ public class MainFragment extends PluginFragment {
 
         binding.searchEditText.addTextChangedListener(adapter);
         binding.iconsRecyclerView.setAdapter(adapter);
+        IconsRepositoryHelp.wireFieldIcons(binding.searchInputLayout, IconsRepositoryHelp.TAG_SEARCH);
     }
 
     private void setupRecyclerView() {
