@@ -27,6 +27,15 @@ class ToolRouter(
         handlers.map { it.toolName }.filter { suggestableNames == null || it in suggestableNames }
 
     /**
+     * What a file write changes apart from its file, as [AgentLoop] compares repeats: the
+     * [ToolHandler.changeOf] of the tool the name reaches, or the call itself for a name that
+     * reaches none.
+     * @param call the call as the model emitted it.
+     * @return a value equal for two calls that make the same change to the same file.
+     */
+    fun changeOf(call: ToolCall): Any = getHandler(call.name)?.changeOf(call.args) ?: call
+
+    /**
      * Finds the handler for a name the model emitted.
      *
      * Exact first, then two forgiving passes, because the alternative is a wasted turn: a model

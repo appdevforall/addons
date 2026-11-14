@@ -131,6 +131,20 @@ class LlmInferenceServiceImplTest {
     }
 
     @Test
+    fun givenRequestParameters_whenGeneratingACompletion_thenTheBackendReceivesThemUnchanged() {
+        // Nothing in LlmInferenceService promises this, and the chat title relies on it: a backend
+        // that answers a title from its source text is told to by a key in extraParams.
+        val backend = mockBackend("test-backend")
+        service.registerBackend(backend)
+        val params = mapOf("chat_title_source" to "fix the build")
+        val config = LlmConfig("test-backend").apply { extraParams = params }
+
+        service.generateCompletion("Test prompt", config).get()
+
+        verify { backend.generate("Test prompt", match { it.extraParams == params }) }
+    }
+
+    @Test
     fun testAutoPrefersLocalWhenAvailable() {
         service.registerBackend(mockBackend("local", text = "from local"))
         service.registerBackend(mockBackend("gemini", text = "from gemini"))

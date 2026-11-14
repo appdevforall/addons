@@ -172,76 +172,109 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Runs .gguf models entirely on this device, with no network access.",
+            summary = "Runs an AI model on this device, so it works offline and your prompts and code never leave the device.",
             detail = """
-                <p><b>AI Agent Local</b> adds the on-device <code>local</code>
-                backend to <b>AI Core</b>. It runs a <code>.gguf</code> model
-                through a bundled llama.cpp build, so prompts and code never leave
-                the device.</p>
-                <p>Install <b>AI Core</b> as well, then select the
-                <b>local</b> backend in <b>Agent settings</b> and pick the model
-                file in the pane this plugin adds there.</p>
+                You need a model file in <code>.gguf</code> format. To download one, use the
+                Get AI Models add-on. Model files are large, so download them over Wi-Fi if
+                mobile data is expensive.<br><br>To use this agent, you must also install AI
+                Core. Then go to <b>Preferences → Agent</b>, choose <b>Local LLM</b> as the
+                backend, and choose your model file.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "AI Agent Local guide",
-                    uri = "index.html",
-                    order = 0
-                )
-            )
+                    description = "Learn more",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_LOCAL_MODEL,
-            summary = "Choose the .gguf model file this backend runs.",
+            summary = "Choose the <code>.gguf</code> model file to run.",
             detail = """
-                <p>Pick a <code>.gguf</code> chat model from device storage. The
-                file is checked before it is stored: a file that isn't a valid
-                <code>.gguf</code> is rejected, and one that looks too large for
-                this device's free memory raises a warning first.</p>
-                <p>The model is read where you saved it and never copied, so leave
-                the file in place. If it is moved or deleted, if its storage is
-                disconnected, or if the IDE's app data is cleared, pick it again
-                with <b>Browse</b>.</p>
-                <p><b>Load from saved</b> reloads the model already configured
-                without opening the picker — useful after restarting the IDE.</p>
+                After you select a <code>.gguf</code> model, CoGo uses the file from where
+                it's saved. If you move the file, tap <b>Browse for Model File</b> and choose
+                it from its new location. You'll also need to choose it again if you delete
+                it, remove its storage card, or clear CoGo's app data.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_LOCAL_SHA,
-            summary = "Optional SHA-256 of the model file, recorded for your own verification.",
+            summary = "A place to note the model file's SHA-256 checksum, if you want a record of it. This field is optional.",
             detail = """
-                <p>Paste the checksum published alongside the model download if you
-                want a record of which exact file is configured. It is stored as
-                typed and never sent anywhere.</p>
+                CoGo doesn't check the file against this value. It only saves what you type,
+                and never sends it anywhere. If the model's download page lists a checksum,
+                you can paste it here to remember exactly which file you chose.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT,
-            summary = "Send small local models a shorter, simpler system prompt.",
+            summary = "Gives small models shorter instructions, which they follow more reliably. This option is on by default.",
             detail = """
-                <p>On by default. Small on-device models follow a short prompt far
-                more reliably than the full tool-calling one; turn it off only if
-                you are running a larger model that handles the longer prompt.</p>
+                With every message, CoGo sends the model a set of instructions about how to
+                work with your project. Small models running on a device often get confused
+                by the full set. If you're running a larger model that can handle the full
+                instructions, clear this checkbox.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_MEMORY_PROCEED,
-            summary = "Load the model anyway, accepting that it may fail.",
+            summary = "Loads the model even though this device may not have enough free memory for it.",
             detail = """
-                <p>The estimate says this model may not fit in the memory free
-                right now. Loading it may work, fail quickly, or fail after
-                several minutes and leave the IDE unresponsive in the meantime.</p>
+                Loading may work, fail quickly, or fail after several minutes. While it's
+                loading, CoGo may stop responding. To free up memory, close other apps
+                before you tap this button.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_MEMORY_CANCEL,
-            summary = "Abandon this model; the previously selected one is unchanged.",
+            summary = "Closes this dialog without loading the model. The model you selected before stays selected.",
             detail = """
-                <p>Nothing is stored, so the model is never loaded. Close other
-                apps to free memory, or choose a smaller or more heavily quantized
-                model — a Q4_K_M build of a 1–3B model is the safest starting
-                point.</p>
+                To try again, close other apps to free up memory, or choose a smaller model.
+                A good starting point is a model with 1 to 3 billion parameters (1B–3B) in
+                the <code>Q4_K_M</code> format, which uses less memory.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-local.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
     )
 

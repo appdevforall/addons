@@ -24,6 +24,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/AI-Agent-OpenAI/`](plugins/AI-Agent-OpenAI/) | Adds OpenAI-compatible servers as an inference backend for AI Core. |
 | [`plugins/APK-Analyzer/`](plugins/APK-Analyzer/) | Inspects the structure of an APK file inside the editor. |
 | [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
+| [`plugins/Build-Animation/`](plugins/Build-Animation/) | Animates a toolbar icon while your app builds. |
 | [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
 | [`plugins/AI-Code-Suggestions/`](plugins/AI-Code-Suggestions/) | Shows inline code completions as you type. |
 | [`plugins/AI-Literacy-Course/`](plugins/AI-Literacy-Course/) | An offline "Introduction to AI" course with lesson videos and activities. |
@@ -33,6 +34,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Get-AI-Models/`](plugins/Get-AI-Models/) | Downloads small language models for on-device AI addons. |
 | [`plugins/Icons-Repository/`](plugins/Icons-Repository/) | Adds vector icons to a project from inside the editor. |
 | [`plugins/Jetpack-Compose-Preview/`](plugins/Jetpack-Compose-Preview/) | Renders Compose preview functions on the device. |
+| [`plugins/JVM-Tools/`](plugins/JVM-Tools/) | Runs Java and Kotlin programs, with a main-class picker and program arguments. |
 | [`plugins/Keystore-Generator/`](plugins/Keystore-Generator/) | Creates and manages app signing keystores on the device. |
 | [`plugins/Layout-Editor/`](plugins/Layout-Editor/) | Edits Android XML layouts by dragging views. |
 | [`plugins/Markdown-Previewer/`](plugins/Markdown-Previewer/) | Shows a live preview of Markdown and HTML files. |

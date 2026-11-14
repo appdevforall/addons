@@ -392,8 +392,8 @@ Java_${{ PACKAGE_NAME | replace({".": "_"}) }}_MainActivity_stringFromJNI(
   </p>
   <pre><code>val downloadAssets by tasks.registering {
     doLast {
-        val archiveUrl = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz"
-        val md5Url     = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz.md5"
+        val archiveUrl = "https://dev-assets.appdevforall.org/release/v8/ndk-cmake.tar.xz"
+        val md5Url     = "https://dev-assets.appdevforall.org/release/v8/ndk-cmake.tar.xz.md5"
 
         val archiveBytes = httpDownload(archiveUrl)
         archiveFile.writeBytes(archiveBytes)

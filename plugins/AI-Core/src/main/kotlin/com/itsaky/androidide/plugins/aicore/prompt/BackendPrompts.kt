@@ -29,6 +29,16 @@ interface BackendPrompts {
      * @return the prompt, or null when the backend has none, is unreachable, or throws.
      */
     fun systemPrompt(request: SystemPromptRequest): String?
+
+    /**
+     * Whether the backend writes its own system prompt for this run, which is how a small on-device
+     * model says its prompt is the short one. It answers null when the user has turned that off, and
+     * a larger model then gets this plugin's full prompt and every tool. Asked with an empty request,
+     * since only whether there is an answer matters here.
+     *
+     * @return true when [systemPrompt] has an answer.
+     */
+    fun hasOwnPrompt(): Boolean = systemPrompt(SystemPromptRequest(emptyList(), null, null)) != null
 }
 
 /**

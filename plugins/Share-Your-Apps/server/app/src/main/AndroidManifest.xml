@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- CHANGE_WIFI_STATE is also one of the permissions the connectedDevice
+         foreground-service type requires on Android 14+. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- MCP control (McpService): a loopback listener for MCP clients on this phone, which fits
+         none of Android's other foreground-service types. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Hearing the share code a sharing phone plays (the sound handshake): Listen on the import screen, and
+         import_listen for MCP control. Asked the first time someone taps Listen, or turns MCP control on. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- MCP control may listen with the app off screen, so McpService also has the microphone type. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!-- Starting a hotspot when the phone isn't on Wi-Fi: Nearby devices on Android 13+,
+         location on 12 and earlier. neverForLocation: the app never derives location from Wi-Fi. -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" />
+
+    <!-- Storage: all-files access on Android 11+, the older permissions on Android 9 and 10. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
+    <!-- usesCleartextTraffic: importing a store (design, Appendix E.3) talks plain HTTP to the owner's
+         phone, at whatever private address it has, which Android 9 and later block unless the app
+         opts in. The copy is protected by its own AES-GCM encryption, with a key only the two phones
+         have; the other requests carry nothing secret. -->
+    <!-- allowBackup, dataExtractionRules: nothing is backed up or moved to another phone — not
+         imported copies, which must stay on the phone the owner allowed, nor the store's key, nor
+         logs of buyers' addresses (design, Appendix E.4).
+         enableOnBackInvokedCallback: without it, Android 13 to 15 ignore the screens' back callbacks. -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:usesCleartextTraffic="true"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ls_launcher"
+        android:roundIcon="@mipmap/ls_launcher_round"
+        android:theme="@style/AppTheme"
+        android:requestLegacyExternalStorage="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- The plugin's entry point: started with startActivityForResult, returns the port.
+             Exported so CodeOnTheGo can reach it; it checks the caller itself. -->
+        <activity
+            android:name=".LaunchActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- The screen held up for buyers: portrait on phones, and it keeps the screen on. -->
+        <!-- Always light, in dark mode too: cameras read QR codes best black on white. -->
+        <activity android:name=".ServeActivity" android:exported="false" android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.Light.DarkActionBar" />
+
+        <!-- The full access log: older files, search, filters, share. -->
+        <activity android:name=".LogActivity" android:exported="false" />
+
+        <!-- Sharing a copy of the store with another seller (design, Appendix E). -->
+        <activity android:name=".ShareActivity" android:exported="false" />
+
+        <!-- Importing someone else's store: from Manage Server, or from a share's QR link, which
+             a camera app offers to open.
+             configChanges: turning the phone, resizing the window or folding it doesn't recreate the
+             screen, so Listen (the microphone, the countdown and the meter) carries on. The screen is
+             built in code with no landscape layouts, so it just lays itself out again. Other changes,
+             such as dark mode, still recreate it. -->
+        <activity android:name=".ImportActivity" android:exported="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="shareyourapps-share" />
+            </intent-filter>
+        </activity>
+
+        <!-- Hands log files to the share sheet, read-only, one grant per share. -->
+        <provider
+            android:name=".LogProvider"
+            android:authorities="org.appdevforall.shareyourapps.server.logs"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Tier-3 help pages, read from the bundled help database. -->
+        <activity android:name=".HelpActivity" android:exported="false" />
+
+        <!-- Main process: the foreground service that owns the server process. -->
+        <service
+            android:name=".HostService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- Server process: the HTTP server, restarted fresh for every change. -->
+        <!-- Keeps an import running off the screen: a foreground service, so Android doesn't freeze it. -->
+        <service
+            android:name=".ImportService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".ServerService"
+            android:exported="false"
+            android:process=":server" />
+
+        <!-- Main process: MCP control, the switch on the server screen. Listens on 127.0.0.1 only,
+             for MCP clients on this phone; off by default, and nothing starts it at boot. -->
+        <service
+            android:name=".McpService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse|microphone">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local MCP (Model Context Protocol) endpoint on 127.0.0.1, turned on by the user, letting apps on this phone start and stop the store server, share and import a store. A person still approves every copy." />
+        </service>
+    </application>
+</manifest>

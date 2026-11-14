@@ -11,44 +11,57 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Every prerequisite is checked here, first, and all failures are reported
+      # together, so a missing secret fails the run in seconds, not after the build.
+      - name: Pre-flight checks
+        env:
+          GH_TOKEN: ${{ secrets.ADMIN_PERSONAL_ACCESS_TOKEN }}
+          SERVER_SIGNING_KEYSTORE_BASE64: ${{ secrets.SERVER_SIGNING_KEYSTORE_BASE64 }}
+          SERVER_SIGNING_STORE_PASSWORD: ${{ secrets.SERVER_SIGNING_STORE_PASSWORD }}
+          SERVER_SIGNING_KEY_ALIAS: ${{ secrets.SERVER_SIGNING_KEY_ALIAS }}
+          SERVER_SIGNING_KEY_PASSWORD: ${{ secrets.SERVER_SIGNING_KEY_PASSWORD }}
+        run: |
+          failed=0
+          # Share Your Apps Server's release key (scripts/server-signing-key.sh).
+          for v in SERVER_SIGNING_KEYSTORE_BASE64 SERVER_SIGNING_STORE_PASSWORD SERVER_SIGNING_KEY_ALIAS SERVER_SIGNING_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Repository secret $v is missing or empty. See The release signing key in plugins/Share-Your-Apps/docs/share-your-apps-design.md."
+              failed=1
+            fi
+          done
+          # The push token. The build takes ~30 minutes; without this, a token that
+          # cannot write to this repo throws all of that away at "Commit updated jars".
+          org="${GITHUB_REPOSITORY%%/*}"
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::ADMIN_PERSONAL_ACCESS_TOKEN is not set. GITHUB_TOKEN cannot bypass the ${org} main ruleset, so the push would fail."
+            failed=1
+          elif ! repo=$(gh api "repos/${GITHUB_REPOSITORY}" 2>/dev/null); then
+            echo "::error::The token cannot see ${GITHUB_REPOSITORY}. A fine-grained PAT must use resource owner '${org}' (the organization). A token owned by a personal account cannot reach ${org} repositories."
+            failed=1
+          else
+            who=$(gh api user --jq .login 2>/dev/null || echo '(unknown)')
+            push=$(printf '%s' "$repo" | jq -r '.permissions.push // false')
+            echo "Token identity: ${who}. Push permission: ${push}."
+            if [ "$push" != "true" ]; then
+              echo "::error::The token authenticates as '${who}' but cannot write to ${GITHUB_REPOSITORY}. Grant it 'Contents: Read and write' with resource owner '${org}'."
+              failed=1
+            fi
+          fi
+          if [ "$failed" != 0 ]; then
+            echo "Pre-flight checks failed; see the errors above." >&2
+            exit 1
+          fi
+          echo "Pre-flight checks passed."
+
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
         with:
           # PAT from a repo admin so the libs/ push bypasses the main ruleset.
           # A fine-grained PAT must use the organization as its resource owner,
-          # not a personal account, or every push returns 403. The next step
+          # not a personal account, or every push returns 403. Pre-flight
           # checks this. GITHUB_TOKEN is only a fallback to keep checkout
           # working; it cannot bypass the ruleset, so the check rejects it.
           token: ${{ secrets.ADMIN_PERSONAL_ACCESS_TOKEN || github.token }}
-
-      # The build below takes ~30 minutes. Without this guard, a token that
-      # cannot write to this repo throws all of that away at "Commit updated
-      # jars". Check the token first so the run fails in seconds instead.
-      - name: Verify the push token
-        env:
-          ADMIN_PAT: ${{ secrets.ADMIN_PERSONAL_ACCESS_TOKEN }}
-          GH_TOKEN: ${{ secrets.ADMIN_PERSONAL_ACCESS_TOKEN || github.token }}
-        run: |
-          org="${GITHUB_REPOSITORY%%/*}"
-
-          if [ -z "$ADMIN_PAT" ]; then
-            echo "::error::ADMIN_PERSONAL_ACCESS_TOKEN is not set. GITHUB_TOKEN cannot bypass the ${org} main ruleset, so the push would fail."
-            exit 1
-          fi
-
-          if ! repo=$(gh api "repos/${GITHUB_REPOSITORY}" 2>/dev/null); then
-            echo "::error::The token cannot see ${GITHUB_REPOSITORY}. A fine-grained PAT must use resource owner '${org}' (the organization). A token owned by a personal account cannot reach ${org} repositories."
-            exit 1
-          fi
-
-          who=$(gh api user --jq .login 2>/dev/null || echo '(unknown)')
-          push=$(printf '%s' "$repo" | jq -r '.permissions.push // false')
-          echo "Token identity: ${who}. Push permission: ${push}."
-
-          if [ "$push" != "true" ]; then
-            echo "::error::The token authenticates as '${who}' but cannot write to ${GITHUB_REPOSITORY}. Grant it 'Contents: Read and write' with resource owner '${org}'."
-            exit 1
-          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -70,6 +83,14 @@ jobs:
         env:
           RUN_NUMBER: ${{ github.run_number }}
         run: echo "name=build-$(date -u +%Y-%m-%d)-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Put Share Your Apps Server's release key in place
+        env:
+          SERVER_SIGNING_KEYSTORE_BASE64: ${{ secrets.SERVER_SIGNING_KEYSTORE_BASE64 }}
+          SERVER_SIGNING_STORE_PASSWORD: ${{ secrets.SERVER_SIGNING_STORE_PASSWORD }}
+          SERVER_SIGNING_KEY_ALIAS: ${{ secrets.SERVER_SIGNING_KEY_ALIAS }}
+          SERVER_SIGNING_KEY_PASSWORD: ${{ secrets.SERVER_SIGNING_KEY_PASSWORD }}
+        run: ./scripts/server-signing-key.sh
 
       # Refreshes libs/ from CodeOnTheGo@stage, then proves every plugin still
       # compiles against the new jars. Templates use no jars, so none are built.

@@ -8,7 +8,7 @@ device.
 | Template | Directory | Language | Engine | Game |
 |---|---|---|---|---|
 | Demo (jME) | `demo/` | Java | jME 3.6.1 | A 3D Earth you drag to spin, an orbiting rocket with an exhaust trail and bloom glow, a starfield; tap for points |
-| Tetris (jME) | `tetris/` | Kotlin | jME 3.9.0 | Falling-block puzzle: drag to move, drag down to drop faster, tap to rotate, long-press to hard-drop |
+| Block Game (jME) | `blockgame/` | Kotlin | jME 3.9.0 | Falling-block puzzle: drag to move, drag down to drop faster, tap to rotate, long-press to hard-drop |
 | Bubble Wand (jME) | `bubblewand/` | Kotlin | jME 3.9.0 | First-person shooter: catch floating balloon animals in bubbles with an on-screen D-pad and **FIRE** button |
 
 A libGDX version of the same three games lives in
@@ -37,7 +37,7 @@ Central.
 | Game | Controls |
 |---|---|
 | Demo | Drag to rotate the Earth · flick to spin with inertia · tap for +10 points |
-| Tetris | Drag left/right to move · drag down to soft-drop · tap to rotate · long-press to hard-drop |
+| Block Game | Drag left/right to move · drag down to soft-drop · tap to rotate · long-press to hard-drop |
 | Bubble Wand | Left half: drag to walk · right half: drag to look, tap to shoot · or use the D-pad and **FIRE** · **HIDE UI** toggles the buttons |
 
 A hardware keyboard also works (arrow keys, space, WASD).
@@ -67,5 +67,6 @@ See [`../README.md`](../README.md) for authoring guidance and the format referen
 
 Written by **James Turner**. Converted from the standalone
 [FunandGames-jme](https://github.com/appdevforall/FunandGames-jme) repository to a template
-bundle in this repository. The one change to the skeletons: each `app/build.gradle.peb` takes
-jME from the jars in `app/libs` instead of from Maven Central.
+bundle in this repository. Two changes to the skeletons, which a sync from upstream must keep:
+each `app/build.gradle.peb` takes jME from the jars in `app/libs` instead of from Maven Central,
+and Demo's `settings.gradle.peb` does not list the jitpack.io repository (ADFA-6865).

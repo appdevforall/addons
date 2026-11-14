@@ -183,98 +183,118 @@ class ClaudePlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Sends prompts to Anthropic's Claude. Needs an API key and a network connection.",
+            summary = "Sends your prompts to Anthropic's Claude. You need an API key to use it. (Internet access is required.)",
             detail = """
-                <p><b>AI Agent Claude</b> is a headless plugin that adds the
-                <code>claude</code> backend to <b>AI Core</b>, calling Anthropic's
-                Messages API over HTTPS.</p>
-                <p>The agent's tools are declared to Claude directly, so it reads
-                and edits your project through structured calls rather than
-                text it has to get exactly right.</p>
-                <p>Install <b>AI Core</b> as well, then open <b>Preferences →
-                Configuration → Agent</b>, select the <b>claude</b> backend and
-                enter your API key in the pane this plugin adds there. Prompts
-                and any file contents a plugin sends are transmitted to
-                Anthropic.</p>
-                <p>The system prompt is set in YAML files under the plugin's
-                <code>assets/prompts/</code>, so its wording changes without code.
-                If they cannot load or render, AI Core's default prompt is sent
-                instead.</p>
+                API use is billed to prepaid credit, separate from a Claude.ai subscription.
+                For a free option, use AI Agent Local or AI Agent Gemini.<br><br>To use this
+                agent, you must also install AI Core. Then go to <b>Preferences → Agent</b>,
+                choose <b>Claude</b> as the backend, and enter your API key.<br><br>Your
+                prompts, and any project files the Agent reads, are sent to Anthropic.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "AI Agent Claude guide",
-                    uri = "index.html",
-                    order = 0
-                )
-            )
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_KEY,
-            summary = "Your Claude API key. Required: Claude has no anonymous access.",
+            summary = "Your Claude API key. Claude won't respond without one.",
             detail = """
-                <p>Keys start with <code>sk-ant-</code> and come from the Claude
-                Console, not from a Claude.ai subscription.</p>
-                <p>The key is checked against Claude before being saved, then
-                encrypted with the Android Keystore. Only the ciphertext is
-                written to disk. A key that cannot be checked, because the device
-                is offline, can still be saved but is marked unverified rather
-                than claiming a check that never happened.</p>
+                Keys start with <code>sk-ant-</code> and come from the Claude Console, not
+                from a Claude.ai subscription. When you tap <b>Save Key</b>, CoGo checks the
+                key with Claude, then stores it encrypted on this device. If Claude refuses
+                the key, it isn't saved, and any key you saved before is kept.<br><br>If
+                you're offline, you can still save the key without checking it. It will be
+                used once Claude can be reached.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_WORKSPACE,
-            summary = "Only for a key that is not in a workspace: the workspace Claude should bill it to.",
+            summary = "The Claude workspace to bill this key to.",
             detail = """
-                <p>A key that is not in a workspace is refused on every request
-                until it names one, so this field appears only after Claude has
-                said so, and a key in a workspace never needs it.</p>
-                <p>Workspace IDs start with <code>wrkspc_</code>. Find yours in
-                the Claude Console under <b>Workspaces</b>, then copy it into this
-                field. It is saved with the key and removed when the key is
-                cleared.</p>
+                This field is displayed only if Claude refuses your key because the key isn't
+                in a workspace. If your key is in a workspace, you never need it.<br><br>To
+                find your workspace ID, open the Claude Console and go to <b>Workspaces</b>.
+                IDs start with <code>wrkspc_</code>. Paste the ID here, then tap <b>Save Key</b>
+                again.<br><br>The ID is saved with your key. To remove it, tap <b>Clear</b>.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_MODEL,
-            summary = "Which Claude model to use. Type any id, or tap to pick one your key can use.",
+            summary = "Which Claude model to use. Type a model ID, or tap the field to pick one your key can use.",
             detail = """
-                <p>One field, and it accepts both: type a model id, or tap it to
-                choose from the list <b>Test Connection &amp; List Models</b>
-                fetched. Typing is saved as soon as you leave the field.</p>
-                <p>The default, <code>claude-opus-5-5</code>, suits building
-                apps. <code>claude-fable-5-1</code> is more capable and costs
-                more; <code>claude-sonnet-5-5</code> is faster and cheaper;
-                <code>claude-haiku-4-5</code> is fastest and cheapest.</p>
+                To fill the list, tap <b>Test Connection &amp; List Models</b>. A model ID you
+                type is saved when you leave the field.<ul><li><code>claude-opus-5-5</code>
+                (the default) is a good choice for building apps.</li><li><code>claude-fable-5-1</code>
+                is more capable and costs more.</li><li><code>claude-sonnet-5-5</code> is faster
+                and cheaper.</li><li><code>claude-haiku-4-5</code> is the fastest and cheapest.</li></ul>
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_TEST,
-            summary = "Checks your key and fills the model list. Both are the same request.",
+            summary = "Checks your key and fills the model list.",
             detail = """
-                <p>Tests the key without saving it, so a typo is caught here rather
-                than mid-chat. When Claude answers, that same answer fills the
-                <b>Model</b> list with the models your key can use.</p>
-                <p><b>Couldn't reach Claude</b> means this device has no route to
-                the internet, or Claude is briefly overloaded. Try again in a
-                moment.</p>
+                If the key has a typo, the test fails, so you can fix it before you start a
+                chat. The test doesn't save anything.<br><br>If <i>Couldn't reach Claude</i> is
+                displayed, this device isn't connected to the internet, or Claude is briefly
+                overloaded. Try again in a moment.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
-            summary = "Opens the Claude Console's API keys page in your browser. API use is not free.",
+            summary = "Opens the Claude Console in your browser, where you can create an API key. API use isn't free. (Internet access is required.)",
             detail = """
-                <p>Opens <code>platform.claude.com</code> in your own browser,
-                never an embedded WebView, so you can see the Console's URL bar
-                and sign-in works. Sign in, create a key, copy it, and paste it
-                into the field here.</p>
-                <p>The Claude API is billed to prepaid credit, separate from a
-                Claude.ai subscription. For a free option, use the
-                <b>AI Agent Local</b> or <b>AI Agent Gemini</b> plugin
-                instead.</p>
-                <p>This plugin never sees your password and never reads your
-                clipboard.</p>
+                The page opens outside CoGo, so you can check the web address and sign in
+                normally.<br><br>To get a key, sign in, create a key, and copy it. Then return
+                to this page, paste it into the Claude API Key field, and tap <b>Save Key</b>.<br><br>The
+                Claude API is billed to prepaid credit, separate from a Claude.ai subscription.
+                For a free option, use AI Agent Local or AI Agent Gemini.<br><br>CoGo never sees
+                your password and never reads your clipboard.
             """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-online.html",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
         ),
     )
 

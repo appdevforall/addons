@@ -1,0 +1,100 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+configurations {
+    natives
+}
+
+// libGDX 1.13.x needs androidx.core at runtime. Pin its tree to versions that
+// Code On The Go's offline Maven repository carries (the same ones its built-in
+// AndroidX templates use); the newer androidx.core libGDX asks for pulls in
+// modules (profileinstaller, collection 1.0.0, ...) that the repository lacks.
+configurations.configureEach {
+    resolutionStrategy {
+        force "androidx.core:core:1.9.0"
+        force "androidx.collection:collection:1.4.2"
+        force "androidx.annotation:annotation:1.8.1"
+        force "androidx.lifecycle:lifecycle-runtime:2.5.1"
+        force "androidx.lifecycle:lifecycle-common:2.5.1"
+    }
+}
+
+android {
+    namespace = "${{PACKAGE_NAME}}"
+    compileSdk = ${{COMPILE_SDK}} 
+
+    defaultConfig {
+        applicationId = "${{PACKAGE_NAME}}"
+        minSdk = ${{MIN_SDK}}  
+        targetSdk = ${{TARGET_SDK}}  
+        versionCode = 1
+        versionName = "1.0"
+
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    sourceSets {
+        main {
+            // copyAndroidNatives unpacks libgdx.so here; app/libs holds only the shipped jars
+            jniLibs.srcDirs = [layout.buildDirectory.dir("gdx-natives").get().asFile]
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = ${{JAVA_SOURCE_COMPAT}} 
+        targetCompatibility = ${{JAVA_TARGET_COMPAT}}  
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+dependencies {
+    implementation(files("libs/gdx-1.13.1.jar"))
+    implementation(files("libs/gdx-jnigen-loader-2.5.2.jar"))
+    implementation(files("libs/gdx-backend-android-1.13.1.aar"))
+    // gdx-backend-android needs androidx.core at runtime; a local .aar does not
+    // carry that dependency, so declare it here (pinned to 1.9.0 above).
+    implementation("androidx.core:core:1.9.0")
+    natives(files("libs/gdx-platform-1.13.1-natives-armeabi-v7a.jar"))
+    natives(files("libs/gdx-platform-1.13.1-natives-arm64-v8a.jar"))
+
+${% if LANGUAGE == 'kotlin' %}
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "${{JAVA_TARGET}}"
+}
+${% endif %}
+}
+
+// libGDX ships its Android .so files inside per-ABI classifier jars; unpack them
+// into build/gdx-natives/<abi>/ so AGP packages them as jniLibs. Written as a plain Copy
+// task (no project access at execution time) so it works with the configuration cache.
+tasks.register("copyAndroidNatives", Copy) {
+    def natives = configurations.natives
+    // Not app/libs: a Copy task owns its whole destination, so the jars there would
+    // count as its output and every compile task would need to depend on it.
+    into layout.buildDirectory.dir("gdx-natives")
+    ["armeabi-v7a", "arm64-v8a"].each { abi ->
+        def jar = natives.filter { it.name.endsWith("natives-" + abi + ".jar") }
+        from(zipTree { jar.singleFile }) {
+            include "*.so"
+            into abi
+        }
+    }
+}
+
+tasks.matching { it.name.contains("merge") && it.name.contains("JniLibFolders") }.configureEach {
+    it.dependsOn "copyAndroidNatives"
+}

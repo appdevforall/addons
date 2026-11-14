@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Build Animation</string>
+    <string name="build_animation_action_title">Build status</string>
+    <string name="build_animation_status_building">Gradle is working&#8230;</string>
+    <string name="build_animation_status_succeeded">Build finished</string>
+    <string name="build_animation_status_failed">Build failed or was cancelled</string>
+</resources>

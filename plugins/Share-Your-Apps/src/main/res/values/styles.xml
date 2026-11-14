@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android's own theme, not Material's: the plugin doesn't bundle Material. Its tab appears inside
+         Code On The Go's screen, with Code On The Go's theme, and draws its own colours. -->
+    <style name="PluginTheme" parent="android:Theme.DeviceDefault.NoActionBar" />
+</resources>

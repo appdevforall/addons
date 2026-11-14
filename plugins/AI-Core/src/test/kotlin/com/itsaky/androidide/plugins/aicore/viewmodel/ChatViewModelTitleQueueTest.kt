@@ -62,6 +62,9 @@ class ChatViewModelTitleQueueTest {
     /** Runs the prompt config load that activation starts on device; the title is worded from it. */
     private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Every ViewModel a test made, cleared before Main is reset; see [clearAndAwait]. */
+    private val viewModels = mutableListOf<ChatViewModel>()
+
     @Before
     fun setUp() {
         // ChatViewModel's stateIn() calls run on viewModelScope, i.e. Dispatchers.Main.
@@ -90,6 +93,7 @@ class ChatViewModelTitleQueueTest {
 
     @After
     fun tearDown() {
+        clearAndAwait(viewModels)
         Dispatchers.resetMain()
         SharedServices.clear()
         sharedPromptConfig.clear()
@@ -98,7 +102,7 @@ class ChatViewModelTitleQueueTest {
 
     private fun newViewModel() = ChatViewModel { null }.apply {
         initializeStorage(context, TEST_PROJECT_KEY)
-    }
+    }.also(viewModels::add)
 
     /** A ViewModel whose selected backend is ready; its chat turns never answer. */
     private fun newViewModelWithBackend(): ChatViewModel {
@@ -252,6 +256,38 @@ class ChatViewModelTitleQueueTest {
 
         assertTrue(SESSION_ID in viewModel.titlePending.value)
         verify { llmService.generateCompletion(match { it.contains("add a dark mode toggle") }, any()) }
+    }
+
+    @Test
+    fun givenAFirstPrompt_whenItsTitleIsAsked_thenTheRequestCarriesTheTextForABackendThatAnswersFromIt() {
+        val viewModel = newViewModel()
+
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "  add a dark mode toggle \n"))
+
+        verify {
+            llmService.generateCompletion(
+                any(),
+                match { it.extraParams?.get(ChatTitle.EXTRA_PARAM_SOURCE) == "add a dark mode toggle" },
+            )
+        }
+    }
+
+    @Test
+    fun givenABackendThatEchoesTheTitleSource_whenTheTitleArrives_thenItIsTheFirstWords() {
+        val viewModel = newViewModel()
+        assertTrue(viewModel.requestTitleIfUntitled(llmService, "add a dark mode toggle to the settings screen today"))
+
+        // What the local backend answers: the source text back, with no generation behind it.
+        titleResponse.complete(
+            LlmInferenceService.LlmResponse.success("add a dark mode toggle to the settings screen today", 0, 0),
+        )
+        runBlocking { viewModel.awaitTitleRequest() }
+
+        assertEquals(
+            "add a dark mode toggle to the settings",
+            viewModel.sessions.value.single { it.id == SESSION_ID }.generatedTitle,
+        )
+        assertFalse(SESSION_ID in viewModel.titlePending.value)
     }
 
     @Test
