@@ -1,0 +1,25 @@
+{
+  "name": "English",
+  "shortName": "EN",
+  "locale": "en-US",
+  "autoCapitalize": true,
+  "layers": {
+    "main": [
+      ["q", "w", {"output": "e", "popup": ["é", "è", "ê", "ë"]}, "r", "t", "y",
+       {"output": "u", "popup": ["ú", "ü", "û"]}, {"output": "i", "popup": ["í", "ï", "î"]},
+       {"output": "o", "popup": ["ó", "ö", "ô"]}, "p"],
+      [{"output": "a", "popup": ["á", "à", "â", "ä"]}, "s", "d", "f", "g", "h", "j", "k", "l"],
+      [{"type": "shift", "width": 1.5}, "z", "x", {"output": "c", "popup": ["ç"]}, "v", "b",
+       {"output": "n", "popup": ["ñ"]}, "m", {"type": "backspace", "width": 1.5}],
+      [{"type": "symbols", "width": 1.5}, {"type": "language"}, ",", {"type": "space", "width": 4},
+       {"output": ".", "popup": ["?", "!", "'", "\""]}, {"type": "enter", "width": 1.5}]
+    ],
+    "symbols": [
+      ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+      ["@", "#", "$", "%", "&", "-", "+", "(", ")", "/"],
+      ["*", "\"", "'", ":", ";", "!", "?", "_", {"type": "backspace", "width": 2}],
+      [{"type": "letters", "width": 1.5}, {"type": "language"}, ",", {"type": "space", "width": 4},
+       ".", {"type": "enter", "width": 1.5}]
+    ]
+  }
+}
