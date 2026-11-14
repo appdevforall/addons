@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat
 import androidx.customview.widget.ExploreByTouchHelper
 
 /**
@@ -71,8 +72,10 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val longPress = Runnable { onLongPressTimeout() }
     private val repeat = object : Runnable {
         override fun run() {
-            pressed?.let { listener.onKey(it.key, it.key.output) }
-            postDelayed(this, REPEAT_INTERVAL_MS)
+            val box = pressed ?: return
+            listener.onKey(box.key, box.key.output)
+            // The re-render may have dropped the press; then stop repeating.
+            if (pressed != null) postDelayed(this, REPEAT_INTERVAL_MS)
         }
     }
 
@@ -150,6 +153,18 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             }
         }
         boxes = result
+        followPressedKey()
+    }
+
+    // A key press can re-render the keyboard (backspace does, on every repeat), which
+    // replaces every KeyBox. Point the press at the same key in the new list, or drop it
+    // if the new layer has no such key where the finger is.
+    private fun followPressedKey() {
+        val old = pressed ?: return
+        val match = boxes.firstOrNull {
+            it.key == old.key && it.rect.contains(old.rect.centerX(), old.rect.centerY())
+        }
+        if (match != null) pressed = match else cancel()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -239,7 +254,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         if (box.key.type == KeyType.BACKSPACE) {
             listener.onKey(box.key, box.key.output)
-            postDelayed(repeat, REPEAT_DELAY_MS)
+            if (pressed != null) postDelayed(repeat, REPEAT_DELAY_MS)
         } else if (box.key.popup.isNotEmpty() || box.key.type == KeyType.LANGUAGE) {
             postDelayed(longPress, LONG_PRESS_MS)
         }
@@ -333,12 +348,25 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             node.contentDescription = describe(box.key)
             node.setBoundsInParent(Rect().also { box.rect.roundOut(it) })
             node.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
+            if (box.key.type == KeyType.LANGUAGE) {
+                node.addAction(AccessibilityNodeInfoCompat.ACTION_LONG_CLICK)
+            }
+            // Each long-press alternative is a custom action in TalkBack's actions menu.
+            box.key.popup.zip(ALTERNATIVE_ACTIONS.asList()) { option, actionId ->
+                node.addAction(AccessibilityActionCompat(actionId, context.getString(R.string.key_alternative, option)))
+            }
         }
 
         override fun onPerformActionForVirtualView(id: Int, action: Int, arguments: Bundle?): Boolean {
             val box = boxes.getOrNull(id) ?: return false
-            if (action != AccessibilityNodeInfoCompat.ACTION_CLICK) return false
-            listener.onKey(box.key, box.key.output)
+            when (action) {
+                AccessibilityNodeInfoCompat.ACTION_CLICK -> listener.onKey(box.key, box.key.output)
+                AccessibilityNodeInfoCompat.ACTION_LONG_CLICK -> listener.onKeyLongPress(box.key)
+                else -> {
+                    val option = box.key.popup.getOrNull(ALTERNATIVE_ACTIONS.indexOf(action)) ?: return false
+                    listener.onKey(box.key, option)
+                }
+            }
             return true
         }
 
@@ -369,6 +397,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     private companion object {
+        // Custom accessibility actions need resource ids. Alternatives past the last id
+        // are not offered to TalkBack.
+        val ALTERNATIVE_ACTIONS = intArrayOf(
+            R.id.key_alternative_1, R.id.key_alternative_2, R.id.key_alternative_3, R.id.key_alternative_4,
+            R.id.key_alternative_5, R.id.key_alternative_6, R.id.key_alternative_7, R.id.key_alternative_8,
+        )
         const val LONG_PRESS_MS = 350L
         const val REPEAT_DELAY_MS = 400L
         const val REPEAT_INTERVAL_MS = 50L

@@ -66,7 +66,7 @@ by `KeyboardLayout`.
   API 29.
 - **Text, not key codes.** Each key commits a string, so conjuncts, nukta forms and combining
   marks need no special handling. Delete removes one code point, as Indic keyboards expect.
-- **Accessible.** Every key is exposed to TalkBack through `ExploreByTouchHelper`.
+- **Accessible.** Every key is exposed to TalkBack through `ExploreByTouchHelper`. Long-press alternatives (up to eight per key) are in TalkBack's actions menu, and the language key's long-press opens the keyboard picker.
 - **No prediction, dictionary or swipe typing.** Those are where large keyboards such as HeliBoard
   or FUTO spend most of their code. This template is a starting point.
 - **Not direct-boot aware.** After a reboot the keyboard is unavailable until the device is

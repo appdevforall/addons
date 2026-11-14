@@ -24,10 +24,10 @@
        "।", {"type": "enter", "width": 2}]
     ],
     "symbols": [
-      [{"output": "१", "popup": ["1"]}, {"output": "२", "popup": ["2"]}, {"output": "३", "popup": ["3"]},
-       {"output": "४", "popup": ["4"]}, {"output": "५", "popup": ["5"]}, {"output": "६", "popup": ["6"]},
-       {"output": "७", "popup": ["7"]}, {"output": "८", "popup": ["8"]}, {"output": "९", "popup": ["9"]},
-       {"output": "०", "popup": ["0"]}],
+      [{"output": "1", "popup": ["१"]}, {"output": "2", "popup": ["२"]}, {"output": "3", "popup": ["३"]},
+       {"output": "4", "popup": ["४"]}, {"output": "5", "popup": ["५"]}, {"output": "6", "popup": ["६"]},
+       {"output": "7", "popup": ["७"]}, {"output": "8", "popup": ["८"]}, {"output": "9", "popup": ["९"]},
+       {"output": "0", "popup": ["०"]}],
       ["@", "#", "₹", "%", "&", "-", "+", "(", ")", "/"],
       ["*", "\"", "'", ":", ";", "!", "?", "_", {"type": "backspace", "width": 2}],
       [{"type": "letters", "label": "कखग", "width": 1.5}, {"type": "language"}, ",", {"type": "space", "width": 4},

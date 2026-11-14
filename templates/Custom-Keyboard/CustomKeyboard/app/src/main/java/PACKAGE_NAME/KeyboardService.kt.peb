@@ -47,6 +47,8 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     override fun onKey(key: Key, output: String) {
+        // Only two shift taps in a row make a double-tap.
+        if (key.type != KeyType.SHIFT) lastShiftTap = 0L
         when (key.type) {
             KeyType.CHARACTER -> {
                 currentInputConnection?.commitText(output, 1)
@@ -69,7 +71,11 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
             KeyType.SYMBOLS -> layer = KeyboardLayout.SYMBOLS
             KeyType.LETTERS -> {
                 layer = KeyboardLayout.MAIN
-                shift = Shift.OFF
+                // Caps lock survives a trip to symbols; otherwise shift follows the sentence.
+                if (shift != Shift.LOCKED) {
+                    shift = Shift.OFF
+                    updateAutoCapitalize()
+                }
             }
             KeyType.LANGUAGE -> nextLayout()
         }
@@ -90,15 +96,20 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         v.show(layout.layer(name), layout.heightInRows, shift, enterLabel(), layout.name, next.shortName)
     }
 
-    // Tap: shift the next letter. Double-tap: caps lock. Tap again: off.
+    // Tap: shift the next letter. Double-tap: caps lock, whatever shift was before,
+    // including ONCE set by auto-capitalize. Tap again: off.
     private fun toggleShift() {
         val now = SystemClock.uptimeMillis()
-        shift = when (shift) {
-            Shift.OFF -> Shift.ONCE
-            Shift.ONCE -> if (now - lastShiftTap < DOUBLE_TAP_MS) Shift.LOCKED else Shift.OFF
-            Shift.LOCKED -> Shift.OFF
+        val previous = shift
+        val doubleTap = now - lastShiftTap < DOUBLE_TAP_MS
+        shift = when {
+            previous == Shift.LOCKED -> Shift.OFF
+            doubleTap -> Shift.LOCKED
+            previous == Shift.OFF -> Shift.ONCE
+            else -> Shift.OFF
         }
-        lastShiftTap = now
+        // A tap that locks or unlocks does not start another double-tap.
+        lastShiftTap = if (previous == Shift.LOCKED || shift == Shift.LOCKED) 0L else now
     }
 
     private fun nextLayout() {

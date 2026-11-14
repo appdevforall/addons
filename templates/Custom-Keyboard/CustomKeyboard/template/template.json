@@ -2,7 +2,7 @@
     "name": "Custom Keyboard",
     "description": "A keyboard for your own language. Comes with English and Hindi layouts",
     "version": "1.0.0",
-    "tooltipTag": "template.empty.activity",
+    "tooltipTag": "template.custom.keyboard",
     "parameters": {
         "required": {
             "appName": { "identifier": "APP_NAME" },

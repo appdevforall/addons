@@ -23,6 +23,7 @@
     <string name="key_symbols">Symbols</string>
     <string name="key_letters">Letters</string>
     <string name="key_language">Switch to %1$s</string>
+    <string name="key_alternative">Type %1$s</string>
 
     <!-- The enter key shows what it will do in the current text field. -->
     <string name="action_go">Go</string>
