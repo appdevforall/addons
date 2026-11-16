@@ -4,6 +4,9 @@ import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.EndpointRetry
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpFailure
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
@@ -26,6 +29,13 @@ private const val TAG = "$LOG_PREFIX.McpToolCatalog"
 object McpToolCatalog {
 
     private val toolsByServer = ConcurrentHashMap<String, List<McpTool>>()
+
+    /** Re-reads an automatic entry's endpoint and tries once more when the stored one is stale. */
+    val retry = EndpointRetry(
+        refresh = AutomaticServers::refresh,
+        current = { id -> AutomaticServers.servers().firstOrNull { it.id == id } },
+        token = AutomaticServers::token,
+    )
 
     /**
      * The cached tools for a server.
@@ -61,7 +71,7 @@ object McpToolCatalog {
     ): Listing {
         McpServerHealth.connectingIfUnknown(server.id)
         val listing = try {
-            list(server, exchangeListener)
+            retry.call(server) { list(it, exchangeListener) }
         } catch (e: Throwable) {
             recordFailure(server, e)
             throw e
@@ -91,10 +101,13 @@ object McpToolCatalog {
     }
 
     private fun isConfigured(serverId: String): Boolean =
-        McpServerStore.servers().any { it.id == serverId }
+        McpServers.all().any { it.id == serverId }
 
     /** The handshake-and-list itself; see [connect]. */
     private fun list(server: McpServer, exchangeListener: McpExchangeListener): Listing {
+        // Taken before the request: if the endpoint is replaced while this list is in flight, the
+        // list is the old process's and must not be attached to the new one.
+        val origin = if (server.automatic) AutomaticServers.endpoint(server.id) else null
         // Kept, not just its tools: the name the handshake returned lands on the session.
         val session = McpConnections.session(server)
         val tools = session.recording(exchangeListener) {
@@ -108,8 +121,18 @@ object McpToolCatalog {
                 emptyList()
             }
         }
-        toolsByServer[server.id] = tools
-        McpServerStore.setKnownTools(server.id, tools.map { it.name })
+        if (server.automatic) {
+            val current = origin != null && AutomaticServers.urlFor(origin) == server.url &&
+                AutomaticServers.recordTools(server.id, origin, tools)
+            if (!current) {
+                Log.i(TAG, "Dropping a tool list from an endpoint '${server.name}' has since left")
+                return Listing(session.serverName, tools)
+            }
+            toolsByServer[server.id] = tools
+        } else {
+            toolsByServer[server.id] = tools
+            McpServerStore.setKnownTools(server.id, tools.map { it.name })
+        }
         Log.i(TAG, "Server '${server.name}' listed ${tools.size} tool(s)")
         return Listing(session.serverName, tools)
     }
@@ -128,7 +151,7 @@ object McpToolCatalog {
      */
     fun refreshAll(keepGoing: () -> Boolean = { true }): Int {
         var refreshed = 0
-        for (server in McpServerStore.servers().filter { it.enabled }) {
+        for (server in McpServers.all().filter { it.enabled }) {
             if (!keepGoing()) {
                 Log.i(TAG, "Stopped refreshing tool lists; the caller is gone")
                 break

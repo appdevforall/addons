@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
@@ -94,6 +95,10 @@ object McpConnections {
      *   failure to retry rather than to report as a lost credential.
      */
     private fun credentialsFor(serverId: String): McpCredentials {
+        if (AutomaticServers.isAutomatic(serverId)) {
+            // Read per request, so a refreshed endpoint's token is used without a new session.
+            return McpCredentials(AutomaticServers.token(serverId).orEmpty(), emptyMap())
+        }
         val token = when (val stored = McpServerStore.token(serverId)) {
             // Trimmed here, not by the store: the host's readAndMigrate migrates verbatim, and a
             // legacy token saved with a stray newline is one `setRequestProperty` refuses to send.

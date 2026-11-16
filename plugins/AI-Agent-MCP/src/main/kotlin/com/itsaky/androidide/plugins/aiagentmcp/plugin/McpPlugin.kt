@@ -5,6 +5,8 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpSettingsFragment
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
@@ -15,6 +17,7 @@ import com.itsaky.androidide.plugins.extensions.PluginSettingsEntry
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.SettingsExtension
+import com.itsaky.androidide.plugins.services.DebuggerEndpointService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import kotlinx.coroutines.CoroutineScope
@@ -159,6 +162,20 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         }
     }
 
+    /**
+     * Lists an automatic entry's tools as soon as its endpoint appears or changes, so a relaunched
+     * app's next call does not wait for the probe's cadence.
+     */
+    private val relistAutomatic: (String) -> Unit = { id ->
+        scope.launch {
+            val server = McpServers.all().firstOrNull { it.id == id && it.enabled }
+            if (server != null) {
+                runCatching { McpToolCatalog.connect(server) }
+                if (isActive) settingsChanged()
+            }
+        }
+    }
+
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
         pluginContext = context
@@ -174,6 +191,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         activationJob = active.coroutineContext[Job]
         toolSource = McpToolSource()
         McpServerStore.addChangeListener(settingsChanged)
+        AutomaticServers.addChangeListener(settingsChanged)
         McpServerHealth.addChangeListener(healthChanged)
         context.addPluginLifecycleListener(aiCoreLifecycle)
 
@@ -184,6 +202,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         // Tool lists are answered from cache, so the cache has to be filled before the user opens
         // the Agent — otherwise the first cold-start session sees no MCP tools at all.
         active.launch {
+            // Off the main thread: the host reads its database. Before refreshAll, so the entry is
+            // connected like any other.
+            installDebuggerEndpoints()
+            AutomaticServers.addEndpointListener(relistAutomatic)
             val refreshed = McpToolCatalog.refreshAll { isActive }
             if (refreshed > 0 && isActive) settingsChanged()
             probeHealth { isActive }
@@ -197,6 +219,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     override fun deactivate(): Boolean = try {
         context.removePluginLifecycleListener(aiCoreLifecycle)
         McpServerStore.removeChangeListener(settingsChanged)
+        AutomaticServers.removeChangeListener(settingsChanged)
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         // Before the connections are closed: an in-flight refresh would otherwise repopulate the
@@ -212,6 +236,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     override fun dispose() {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
+        AutomaticServers.removeChangeListener(settingsChanged)
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         stopScope()
@@ -237,7 +263,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         while (keepGoing()) {
             delay(PROBE_INTERVAL_MS)
             cycle++
-            val due = McpServerStore.servers().filter { server ->
+            if (AutomaticServers.refresh()) settingsChanged()
+            val due = McpServers.all().filter { server ->
                 val health = McpServerHealth.of(server.id)
                 server.enabled && health?.refused != true && (cycle % HEALTHY_PROBE_EVERY == 0 ||
                     health?.state != McpServerHealth.State.AVAILABLE)
@@ -256,6 +283,27 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             // The stored names may be unchanged, so the store's own notification cannot be relied on.
             if (toolsChanged && keepGoing()) settingsChanged()
         }
+    }
+
+    /**
+     * Points [AutomaticServers] at the host's debugger endpoints.
+     *
+     * `plugin.min_ide_version` keeps this plugin off an IDE that lacks the service: such an IDE
+     * rejects the unknown `debugger.endpoints` permission when it validates the manifest. The catch
+     * is defence only, for a host that registers no service anyway. A call that later throws (no
+     * permission, unreadable database) leaves the entries as they were.
+     */
+    private fun installDebuggerEndpoints() {
+        val service = try {
+            context.services.get(DebuggerEndpointService::class.java)
+        } catch (e: Throwable) {
+            null
+        }
+        if (service == null) {
+            context.logger.info("McpPlugin: this IDE has no debugger endpoint service")
+            return
+        }
+        AutomaticServers.install(AutomaticServers.fromHost { service.endpoints })
     }
 
     /** A fresh scope for this activation; the previous one is cancelled, never reused. */
@@ -353,6 +401,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         toolSource = null
         McpConnections.closeAll()
         McpToolCatalog.clear()
+        AutomaticServers.install(null)
     }
 
     /**

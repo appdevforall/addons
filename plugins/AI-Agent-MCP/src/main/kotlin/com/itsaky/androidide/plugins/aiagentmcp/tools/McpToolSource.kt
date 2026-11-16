@@ -4,12 +4,12 @@ import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
-import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.services.CapabilityStatus
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import java.util.concurrent.CompletableFuture
@@ -59,6 +59,7 @@ class McpToolSource :
             name = exposed.name,
             description = exposed.tool.description,
             parametersSchema = exposed.tool.inputSchema,
+            preApproved = exposed.server.automatic && exposed.tool.readOnlyHint,
         )
     }
 
@@ -68,7 +69,7 @@ class McpToolSource :
      */
     override fun getToolGroups(): List<ToolSourceRegistry.ToolGroup> {
         val namesByServer = exposedTools().groupBy({ it.server.id }, { it.name })
-        return McpServerStore.servers().filter { it.enabled }.map { server ->
+        return McpServers.all().filter { it.enabled }.map { server ->
             Group(
                 id = server.id,
                 displayName = server.name,
@@ -93,7 +94,7 @@ class McpToolSource :
         enabledHealth().firstOrNull { it?.state == McpServerHealth.State.DEGRADED }?.message
 
     private fun enabledHealth(): List<McpServerHealth.Health?> =
-        McpServerStore.servers().filter { it.enabled }.map { McpServerHealth.of(it.id) }
+        McpServers.all().filter { it.enabled }.map { McpServerHealth.of(it.id) }
 
     override fun invoke(
         invocation: ToolSourceRegistry.ToolInvocation,
@@ -140,12 +141,14 @@ class McpToolSource :
         tool: McpTool,
         arguments: Map<String, Any?>,
     ): ToolSourceRegistry.ToolOutcome = try {
-        val session = McpConnections.session(server)
-        liveSessions[callId] = session
-        val result = try {
-            session.callTool(tool.name, arguments)
-        } finally {
-            liveSessions.remove(callId)
+        val result = McpToolCatalog.retry.call(server) { target ->
+            val session = McpConnections.session(target)
+            liveSessions[callId] = session
+            try {
+                session.callTool(tool.name, arguments)
+            } finally {
+                liveSessions.remove(callId)
+            }
         }
         // A reply of any kind, a tool's own failure included, means the server is answering.
         McpServerHealth.available(server.id)
@@ -172,7 +175,7 @@ class McpToolSource :
      * @return the pairs, in configured order.
      */
     private fun enabledTools(): List<Pair<McpServer, McpTool>> =
-        McpServerStore.servers()
+        McpServers.all()
             .filter { it.enabled }
             .flatMap { server ->
                 McpToolCatalog.tools(server.id)
@@ -231,21 +234,26 @@ class McpToolSource :
     /**
      * One tool, as the host contract describes it.
      *
-     * Every remote tool asks for approval and declares itself non-read-only: this plugin cannot
+     * Every remote tool declares that it requires approval and is not read-only: this plugin cannot
      * know what a server's tool does, and guessing on the permissive side is the one guess that
-     * cannot be undone. The contract is a Java interface, so its accessors are implemented as
+     * cannot be undone. The one exception is [preApproved]: a readOnlyHint tool of the automatic
+     * debugger entry, whose server Code on the Go itself installed, declares no approval needed.
+     * That is a declaration only: AI-Core currently overrides `requiresApproval` to true for every
+     * contributed tool (`ContributedToolHandler`), so the Agent still asks on each call. Honouring
+     * the declaration is tracked in ADFA-7147. The contract is a Java interface, so its accessors are implemented as
      * functions: Kotlin synthesises properties for *reading* a Java getter, never for overriding one.
      */
     private class Spec(
         private val name: String,
         private val description: String,
         private val parametersSchema: Map<String, Any>,
+        private val preApproved: Boolean = false,
     ) : ToolSourceRegistry.ToolSpec {
         override fun getName(): String = name
         override fun getDescription(): String = description
         override fun getParametersSchema(): Map<String, Any> = parametersSchema
-        override fun requiresApproval(): Boolean = true
-        override fun isReadOnly(): Boolean = false
+        override fun requiresApproval(): Boolean = !preApproved
+        override fun isReadOnly(): Boolean = preApproved
     }
 
     /**

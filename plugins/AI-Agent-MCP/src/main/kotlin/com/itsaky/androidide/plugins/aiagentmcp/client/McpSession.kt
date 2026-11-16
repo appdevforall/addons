@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.ReadOnlyTrust
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
@@ -314,6 +315,9 @@ class McpSession(
                 name = name,
                 description = entry.optString("description"),
                 inputSchema = entry.optJSONObject("inputSchema")?.let(::toMap).orEmpty(),
+                readOnlyHint = ReadOnlyTrust.isReadOnlyHint(
+                    entry.optJSONObject("annotations")?.opt("readOnlyHint")
+                ),
             )
         }
 
