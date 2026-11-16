@@ -204,8 +204,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         active.launch {
             // Off the main thread: the host reads its database. Before refreshAll, so the entry is
             // connected like any other.
-            installDebuggerEndpoints()
-            AutomaticServers.addEndpointListener(relistAutomatic)
+            startDebuggerEntry { isActive }
             val refreshed = McpToolCatalog.refreshAll { isActive }
             if (refreshed > 0 && isActive) settingsChanged()
             probeHealth { isActive }
@@ -220,12 +219,14 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         context.removePluginLifecycleListener(aiCoreLifecycle)
         McpServerStore.removeChangeListener(settingsChanged)
         AutomaticServers.removeChangeListener(settingsChanged)
-        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         // Before the connections are closed: an in-flight refresh would otherwise repopulate the
         // catalogue and the session map straight after they were cleared.
         stopScope()
+        // After the scope ends, not before: startDebuggerEntry adds this listener and then checks
+        // the scope, so one added late is removed by that check and one added early is removed here.
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         releaseConnections()
         true
     } catch (e: Exception) {
@@ -237,10 +238,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
         AutomaticServers.removeChangeListener(settingsChanged)
-        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         stopScope()
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         releaseConnections()
         pluginContext = null
         context.logger.info("McpPlugin: disposed")
@@ -293,7 +294,24 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * is defence only, for a host that registers no service anyway. A call that later throws (no
      * permission, unreadable database) leaves the entries as they were.
      */
-    private fun installDebuggerEndpoints() {
+    /**
+     * Installs the host's endpoints and starts listening for changes, unless the activation ends first.
+     *
+     * The host's database read blocks and cancellation cannot interrupt it, so [keepGoing] is
+     * consulted around it. The listener is re-checked after it is added: [deactivate] ends the scope
+     * before it removes the listener, so one added in between is seen here and taken out again.
+     *
+     * @param keepGoing false once this activation is over.
+     */
+    internal fun startDebuggerEntry(keepGoing: () -> Boolean) {
+        if (!keepGoing()) return
+        installDebuggerEndpoints(keepGoing)
+        if (!keepGoing()) return
+        AutomaticServers.addEndpointListener(relistAutomatic)
+        if (!keepGoing()) AutomaticServers.removeEndpointListener(relistAutomatic)
+    }
+
+    private fun installDebuggerEndpoints(keepGoing: () -> Boolean) {
         val service = try {
             context.services.get(DebuggerEndpointService::class.java)
         } catch (e: Throwable) {
@@ -303,7 +321,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             context.logger.info("McpPlugin: this IDE has no debugger endpoint service")
             return
         }
-        AutomaticServers.install(AutomaticServers.fromHost { service.endpoints })
+        AutomaticServers.install(AutomaticServers.fromHost { service.endpoints }, keepGoing)
     }
 
     /** A fresh scope for this activation; the previous one is cancelled, never reused. */

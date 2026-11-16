@@ -61,10 +61,31 @@ object AutomaticServers {
         later = { e -> Log.d(TAG, "Still cannot read the debugger endpoints: $e") },
     )
 
-    /** Where endpoints come from; null (deactivation) clears every entry. */
+    /**
+     * Where endpoints come from; null (deactivation) clears every entry.
+     *
+     * @param keepGoing false once the activation installing [source] is over. The first read blocks
+     *   and cannot be cancelled, so an activation that ended during it must neither keep [source]
+     *   nor publish what it read: deactivation has already cleared everything, and a later
+     *   activation owns the state now.
+     */
     fun install(source: (() -> List<AutomaticEndpoint>)?) {
-        this.source = source
-        if (source == null) clear() else refresh()
+        if (source == null) {
+            // Under the lock the other overload takes, so a late install cannot set its source after this.
+            synchronized(this) { this.source = null }
+            clear()
+        } else {
+            install(source) { true }
+        }
+    }
+
+    /** As [install], for a source that may be superseded while its first read is blocked. */
+    fun install(source: () -> List<AutomaticEndpoint>, keepGoing: () -> Boolean) {
+        synchronized(this) {
+            if (!keepGoing()) return
+            this.source = source
+        }
+        refresh(keepGoing)
     }
 
     /** Adapts the host's service. A host without the service, or without the permission, is no source. */
@@ -92,11 +113,15 @@ object AutomaticServers {
         endpointListeners.remove(listener)
     }
 
+    /** How many endpoint listeners are registered; a test seam for a listener nothing removes. */
+    internal val endpointListenerCount: Int get() = endpointListeners.size
+
     /**
      * Re-reads the endpoints. Blocking host call: use a background thread.
+     * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
      */
-    fun refresh(): Boolean {
+    fun refresh(keepGoing: () -> Boolean = { true }): Boolean {
         val read = source ?: return false
         val fresh = try {
             read().associateBy { idFor(it.applicationId) }
@@ -109,6 +134,7 @@ object AutomaticServers {
         val moved = mutableListOf<String>()
         val removed: List<String>
         val changed = synchronized(this) {
+            if (!keepGoing()) return false
             val old = states
             val next = fresh.mapValues { (id, endpoint) ->
                 val previous = old[id]
