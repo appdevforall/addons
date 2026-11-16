@@ -59,7 +59,7 @@ object McpConnections {
             stale = current?.second
             // A supplier, not the values: the session is kept for the life of the process, and a
             // token in one of its fields would be readable in a heap dump for just as long.
-            McpSession(server.url, { credentialsFor(server.id) })
+            McpSession(server.url, { credentialsFor(server.id, server.url) })
                 .also { sessions[server.id] = key to it }
         }
 
@@ -88,16 +88,21 @@ object McpConnections {
      * does not register, and it is what keeps the plaintext from outliving the request.
      *
      * @param serverId the server being called.
+     * @param url the url the calling session was built for. An automatic entry's token is released
+     *   only while the entry still points there; a session for a replaced endpoint gets none, so
+     *   its `close()` and any call still in flight cannot hand the new process's token to the old port.
      * @return its token and headers; either may be empty.
      * @throws UnreadableSecretException when a stored credential cannot be decrypted here. Sending
      *   the request without it would earn a 401 and tell the user their token was refused.
      * @throws UnavailableSecretException when the keystore could not be reached to decrypt one, a
      *   failure to retry rather than to report as a lost credential.
      */
-    private fun credentialsFor(serverId: String): McpCredentials {
+    private fun credentialsFor(serverId: String, url: String): McpCredentials {
         if (AutomaticServers.isAutomatic(serverId)) {
-            // Read per request, so a refreshed endpoint's token is used without a new session.
-            return McpCredentials(AutomaticServers.token(serverId).orEmpty(), emptyMap())
+            // Read per request, so a token refreshed on the same port is used without a new session.
+            val endpoint = AutomaticServers.endpoint(serverId)
+            val token = if (endpoint != null && AutomaticServers.urlFor(endpoint) == url) endpoint.token else ""
+            return McpCredentials(token, emptyMap())
         }
         val token = when (val stored = McpServerStore.token(serverId)) {
             // Trimmed here, not by the store: the host's readAndMigrate migrates verbatim, and a
@@ -128,7 +133,7 @@ object McpConnections {
     private fun keyFor(server: McpServer): Key {
         // Headers join the key for the same reason the token does: edit one and the old session
         // would keep sending the old value until the IDE restarts.
-        val credentials = credentialsFor(server.id)
+        val credentials = credentialsFor(server.id, server.url)
         return Key(
             serverId = server.id,
             url = server.url,
