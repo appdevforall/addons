@@ -36,7 +36,8 @@ Configuration → MCP servers**:
 1. **Add server** — name, endpoint URL, optional token.
 2. **Connect** — saves the server, performs the MCP handshake and lists the tools
    it offers, all in one step.
-3. Switch on the tools you want. **They start off**: one popular GitHub server
+3. Switch on the tools you want. **They start off** (except the read-only tools
+   of the automatic debugger entry, below): one popular GitHub server
    advertises around ninety tools, which would fill a phone-sized context window
    on its own.
 4. **Clear stored credential** — removes the stored token and headers. The token
@@ -46,6 +47,26 @@ Configuration → MCP servers**:
 Every remote tool asks for approval on every call, and there is no "always
 allow" for contributed tools — they run outside the Agent's own path
 containment, so the dialog is the only gate.
+
+### The SQLite debugger entry
+
+For an app built in Code on the Go with `cogo.sqliteDebugger=true`, the plugin
+adds a server entry on its own, named "SQLite debugger (<application ID>)", with
+no URL or token to type. Code on the Go stores the port and token the running
+debug app reports; the plugin reads them through the `DebuggerEndpointService`
+(permission `debugger.endpoints`, so it needs Code on the Go 26.43 or later) and
+points the entry at `http://127.0.0.1:<port>/mcp`. A relaunched app gets a new
+port and token, and the plugin reads them again after a refused connection. An
+app that has not reported yet has no entry, and no error is shown.
+
+- It is held in memory only and is **not shown in the settings screen in this
+  version**, so there is no switch to turn it off there.
+- The tools that declare MCP's `readOnlyHint: true` start switched **on**. Any
+  other tool of that entry starts off. The hint is trusted for this entry only,
+  never for a server you add yourself.
+- The Agent still asks for approval on every call: AI-Core makes every
+  contributed tool ask (it ignores the tool's own `requiresApproval`). Approving
+  read-only calls automatically is tracked in ADFA-7147.
 
 ## Transport
 
@@ -105,10 +126,13 @@ Two dependencies were deliberately not taken:
 - `http://` is accepted only for a server on this device (`localhost`, `127.0.0.0/8`,
   `[::1]`), with or without credentials; any other host needs `https://`, since its
   traffic would cross a network in the clear. The check is `McpUrlPolicy`, built on
-  the host's `ServerUrl` (plugin-api **26.42**, hence this plugin's
-  `min_ide_version`), and judges the URL as typed with no DNS lookup. Save refuses
+  the host's `ServerUrl` (plugin-api 26.42), and judges the URL as typed with no DNS lookup. Save refuses
   such a URL, and the transport refuses it again, so a server saved before the rule
   is listed with a warning and never contacted until it is switched to `https://`.
+- The plugin declares the `debugger.endpoints` permission, to offer the SQLite debugger of the
+  open project's app without typing a port or token. Code on the Go 26.42 and older reject an
+  unknown permission when they validate the manifest, so this version needs **26.43 or newer**
+  (`plugin.min_ide_version`); users on 26.42 or older cannot install it.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.
