@@ -48,8 +48,8 @@ object SampleHooks {
         |#   COGO_HOOK_SCRIPT   this script's path
         |#   COGO_HOOK_SOURCE   global, or project for a script stored in a project
         |#   COGO_IDE_VERSION   the IDE's version, when known
-        |# The script runs in COGO_PROJECT_DIR, or in HOME when that is empty. Its output appears in
-        |# the Hooks tab.
+        |# The script runs in COGO_PROJECT_DIR, or in HOME when that is empty or gone. Its output
+        |# appears in the Hooks tab when it ends.
         |# Hooks only report what happened; a script cannot stop a save or a build.
         |
         |printf '%s %s %s\n' "${'$'}(date '+%F %T')" "${'$'}COGO_HOOK" "${'$'}*" >> "${'$'}HOME/codeonthego-hooks.log"

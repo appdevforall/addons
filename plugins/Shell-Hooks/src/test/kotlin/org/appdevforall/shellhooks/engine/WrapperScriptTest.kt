@@ -547,12 +547,65 @@ class WrapperScriptTest(
     }
 
     @Test
-    fun aMissingProjectFolderLeavesTheDirectoryAlone() {
+    fun aMissingProjectFolderRunsTheScriptInHomeNotTheInheritedFolder() {
+        // The inherited folder stands in for the IDE's current project, which can be another one.
+        val home = File(work, "home").apply { mkdirs() }
         val script = work.script("hook", "#!/bin/sh\npwd\n")
 
-        val pwd = run(script, env = mapOf("COGO_PROJECT_DIR" to File(work, "gone").path)).trim()
+        val pwd = run(script, env = mapOf("COGO_PROJECT_DIR" to File(work, "gone").path, "HOME" to home.path)).trim()
 
-        assertEquals(work.canonicalPath, File(pwd).canonicalPath)
+        assertEquals(home.canonicalPath, File(pwd).canonicalPath)
+    }
+
+    @Test
+    fun aJobLeftRunningInTheBackgroundDoesNotHoldTheOutputOpen() {
+        // The IDE waits for the end of the output, not for the wrapper: a bare `&` used to make a run
+        // that had ended look hung until the job did.
+        assumeTrue("needs /proc", File("/proc/self/stat").exists())
+        linkTimeout()
+        val mark = java.util.UUID.randomUUID().toString()
+        val script = work.script("hook", "#!/bin/sh\necho started\nsleep 30 &\necho warned >&2\nexit 4\n")
+
+        val process = start(script, emptyList(), mapOf("COGO_TIMEOUT_SECONDS" to "60", "COGO_TEST_MARK" to mark))
+        try {
+            val out = CompletableFuture.supplyAsync { process.inputStream.readBytes().toString(Charsets.UTF_8) }
+
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS))
+            assertEquals("started\nwarned\n", out.get(5, TimeUnit.SECONDS))
+            assertEquals(4, process.exitValue())
+            assertTrue("the job was stopped, though the script left it running", leftBehind(mark).isNotEmpty())
+        } finally {
+            leftBehind(mark).forEach { pid -> ProcessHandle.of(pid).ifPresent { it.destroyForcibly() } }
+        }
+    }
+
+    @Test
+    fun withNoWritableTmpdirTheOutputGoesStraightThrough() {
+        linkTimeout()
+        val script = work.script("hook", "#!/bin/sh\necho out\necho err >&2\nexit 2\n")
+
+        val process = start(script, emptyList(), mapOf("COGO_TIMEOUT_SECONDS" to "60", "TMPDIR" to File(work, "no such dir").path))
+        val out = process.inputStream.readBytes().toString(Charsets.UTF_8)
+
+        assertTrue(process.waitFor(10, TimeUnit.SECONDS))
+        assertEquals(setOf("out", "err"), out.lines().filter { it.isNotEmpty() }.toSet())
+        assertEquals(2, process.exitValue())
+    }
+
+    @Test
+    fun theOutputFilesAreGoneWhileTheScriptRuns() {
+        // Deleted once open, so a run the IDE kills leaves nothing in TMPDIR.
+        linkTimeout()
+        val tmp = File(work, "tmp").apply { mkdirs() }
+        val listed = File(work, "listed")
+        val script = work.script("hook", "#!/bin/sh\nls -A \"\$TMPDIR\" > \"\$1\"\n")
+
+        val process = start(script, listOf(listed.path), mapOf("COGO_TIMEOUT_SECONDS" to "60", "TMPDIR" to tmp.path))
+        process.inputStream.readBytes()
+
+        assertTrue(process.waitFor(10, TimeUnit.SECONDS))
+        assertEquals("", listed.readText())
+        assertEquals(emptyList<String>(), tmp.list().orEmpty().toList())
     }
 
     @Test

@@ -46,8 +46,9 @@ and a trusted project script runs from a private copy the plugin marks executabl
   termux-exec and Android has no `/usr/bin/env` or `/bin/bash`. Any other interpreter path
   (`/system/bin/sh`, a virtualenv's python) runs as written. It also `cd`s to `COGO_PROJECT_DIR`:
   the host refuses a working directory outside the *open* project, which `project-closed` would hit.
-  When that is empty it `cd`s to `HOME` (`/` without one): given no directory, the host uses its
-  current project's root, which can be the last project opened even after it closed.
+  When that is empty or is no longer a folder it `cd`s to `HOME` (`/` without one): given no
+  directory, the host uses its current project's root, which can be the last project opened even
+  after it closed, so another project's folder.
 - **Timeouts stop the whole script.** The wrapper runs the script under the Terminal's GNU
   `timeout` (`COGO_TIMEOUT_SECONDS`), which puts it in its own process group and stops the group,
   so a hung `git` or `gradlew` the script started does not outlive it. The host gets the limit plus
@@ -63,6 +64,13 @@ and a trusted project script runs from a private copy the plugin marks executabl
   set and the `wait` returned over 128 (a `sleep` killed from outside is already reaped and is left
   alone); and it signals `timeout` only while `/proc/<pid>/comm` still reads `timeout`. The gap
   left is a PID reused, between that check and the signal, by another process named `timeout`.
+- **Output is printed when the script ends.** Under `timeout`, the wrapper sends the script's
+  stdout and stderr to two files in `TMPDIR`, deletes them while keeping them open, and prints them
+  once the script exits. The host waits for its pipes to close, not for the wrapper, so a job the
+  script left running with a bare `&` would otherwise hold them: the run would look hung until the
+  limit, then be recorded as timed out. A run the IDE stops loses its output. Without a writable
+  `TMPDIR`, or without `timeout`, output goes straight to the host as before, and a bare `&` still
+  holds the run open.
 - **Own session without `timeout`.** Without `timeout` the script would share the IDE's process
   group, and `trap 'kill 0' EXIT` would signal Code on the Go. So a headless run (input not a
   terminal) from a shell that does not lead its group runs the script under `setsid`, preferring

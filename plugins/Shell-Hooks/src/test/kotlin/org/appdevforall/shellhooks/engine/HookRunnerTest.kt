@@ -328,6 +328,31 @@ class HookRunnerTest {
         }
 
     @Test
+    fun aHostErrorKeepsWhatTheScriptPrintedBeforeIt() =
+        runTest {
+            // The host reports an exception after the start as it reports a failed start.
+            val runner = runner(CommandRunner { _, _, _ -> CommandResult.Failure(-1, "step 1 done", "warning", "Unexpected error: boom", 40) })
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            val run = log.runs.value.single()
+            assertEquals(Outcome.NOT_STARTED, run.outcome)
+            assertEquals("step 1 done\nwarning\nUnexpected error: boom", run.output)
+        }
+
+    @Test
+    fun aFailedStartShowsTheHostsReason() =
+        runTest {
+            val runner = runner(CommandRunner { _, _, _ -> CommandResult.Failure(-1, "", "", "Invalid working directory: x", 0) })
+
+            runner.submit(HookEvent.buildStarted(project))
+            settle()
+
+            assertEquals("Invalid working directory: x", log.runs.value.single().output)
+        }
+
+    @Test
     fun aRefusedStartIsRecordedAndTheQueueKeepsGoing() =
         runTest {
             var calls = 0

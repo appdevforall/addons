@@ -9,12 +9,10 @@ script=$1
 shift
 
 # The event's project, which for project-closed the IDE no longer has open. With none, as for
-# ide-started, HOME: given no folder, the IDE starts this shell in the last project opened, even
-# one since closed.
-if [ -n "${COGO_PROJECT_DIR:-}" ]; then
-	if [ -d "$COGO_PROJECT_DIR" ]; then
-		cd "$COGO_PROJECT_DIR" || exit 126
-	fi
+# ide-started, or one whose folder is gone, HOME: given no folder, the IDE starts this shell in the
+# last project opened, even one since closed, and that can be another project.
+if [ -n "${COGO_PROJECT_DIR:-}" ] && [ -d "$COGO_PROJECT_DIR" ]; then
+	cd "$COGO_PROJECT_DIR" || exit 126
 else
 	cd "${HOME:-/}" || exit 126
 fi
@@ -26,10 +24,22 @@ fi
 # process it started, and if that were timeout the script would run on with no limit. A watchdog
 # notices this shell is gone and sends timeout TERM, which stops the whole group the same way.
 # Without timeout, the IDE's own stop ends only the script's first process.
+#
+# The script's output goes to files and is printed once it ends. The IDE waits for its pipes to
+# close, not for this shell to exit, so a job the script left running with a bare `&` would hold
+# them open and the run would look hung until the limit. The files are deleted as soon as they are
+# open, so a run that is stopped leaves none behind; its output is lost.
 run() {
 	if [ -n "${COGO_TIMEOUT_SECONDS:-}" ] && in_prefix timeout; then
-		"$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@" &
-		child=$!
+		capture
+		if [ -n "$captured" ]; then
+			"$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@" >&3 2>&4 3>&- 4>&- 5<&- 6<&- &
+			child=$!
+			exec 3>&- 4>&-
+		else
+			"$PREFIX/bin/timeout" -k 5 "$COGO_TIMEOUT_SECONDS" "$@" &
+			child=$!
+		fi
 		# Its output goes nowhere, so it never keeps the IDE's pipes open. Redirected with exec inside
 		# a subshell: dash and busybox, given `watch ... >/dev/null &`, keep a saved copy of the
 		# original stdout open in the background job. ($$ in a subshell is still this wrapper.)
@@ -38,6 +48,10 @@ run() {
 		wait "$child"
 		status=$?
 		kill "$watchdog" 2>/dev/null
+		if [ -n "$captured" ]; then
+			cat <&5
+			cat <&6 >&2
+		fi
 		exit "$status"
 	fi
 	# Without timeout the script would share the IDE's process group, so one that signals its own
@@ -94,6 +108,22 @@ watch() {
 
 in_prefix() {
 	[ -n "$1" ] && [ -n "${PREFIX:-}" ] && [ -f "$PREFIX/bin/$1" ] && [ -x "$PREFIX/bin/$1" ]
+}
+
+# Opens a file for the script's stdout on 3 and 5 (write, read) and one for its stderr on 4 and 6,
+# then deletes both: the descriptors keep them. Sets captured only if that worked; without a
+# writable TMPDIR the output goes straight to the IDE, as it did before.
+capture() {
+	captured=
+	dir=${TMPDIR:-/tmp}
+	out=$(mktemp -p "$dir" cogo-hook.XXXXXX 2>/dev/null) || return 0
+	if ! err=$(mktemp -p "$dir" cogo-hook.XXXXXX 2>/dev/null); then
+		rm -f "$out"
+		return 0
+	fi
+	exec 3>"$out" 4>"$err" 5<"$out" 6<"$err"
+	rm -f "$out" "$err"
+	captured=1
 }
 
 first=

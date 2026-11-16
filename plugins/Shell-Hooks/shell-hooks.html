@@ -159,7 +159,7 @@
   <p>
     <code>HOME</code>, <code>PREFIX</code> and <code>PATH</code> are the Terminal's, so every
     Terminal package is available. A script runs in <code>COGO_PROJECT_DIR</code>, or in
-    <code>HOME</code> when that is empty.
+    <code>HOME</code> when that is empty or the folder is gone.
   </p>
 
   <h3>Folder layout</h3>
@@ -304,7 +304,7 @@ HookLog -> Hooks tab</div>
     <tr><td><code>engine/HookDiscovery</code></td><td>The git-hooks layout: <code>&lt;hook&gt;</code>, then <code>&lt;hook&gt;.d/*</code>.</td></tr>
     <tr><td><code>engine/TrustStore</code></td><td>Approvals keyed on project, path and SHA-256.</td></tr>
     <tr><td><code>engine/ShellQuote</code></td><td>Quoting for the Terminal, which takes a command line.</td></tr>
-    <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a <code>/bin</code> or <code>/usr/bin</code> shebang onto <code>$PREFIX/bin</code>, changes to the event's project folder (to <code>HOME</code> with none), and runs the script under <code>timeout</code> so a timeout stops the whole process group.</td></tr>
+    <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a <code>/bin</code> or <code>/usr/bin</code> shebang onto <code>$PREFIX/bin</code>, changes to the event's project folder (to <code>HOME</code> with none, or when it is gone), and runs the script under <code>timeout</code> so a timeout stops the whole process group. Under <code>timeout</code> it keeps the script's output in deleted files and prints it when the script ends, so a job left running in the background does not hold the run open.</td></tr>
     <tr><td><code>WorkspaceHooks</code></td><td>The 26.47 project and save listeners, kept apart so an older IDE runs the other hooks.</td></tr>
   </table>
 </section>

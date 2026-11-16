@@ -219,8 +219,10 @@ class HookRunner(
                 when {
                     error != null && error.contains("timed out", ignoreCase = true) ->
                         Triple(Outcome.TIMED_OUT, null, listOf(output, error).filter { it.isNotBlank() }.joinToString("\n"))
+                    // Mostly a start that failed, but the host reports an error after a start the
+                    // same way, so whatever the script printed is kept.
                     error != null && result.exitCode == -1 ->
-                        Triple(Outcome.NOT_STARTED, null, error)
+                        Triple(Outcome.NOT_STARTED, null, listOf(output, error).filter { it.isNotBlank() }.joinToString("\n"))
                     // GNU timeout: 124 after TERM, 137 when it had to KILL. Only when the wrapper ran
                     // the script under timeout, and only once the run reached its limit: otherwise a
                     // 124 or 137 is the script's own (passed on from an inner timeout, or a kill for

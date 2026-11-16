@@ -65,6 +65,10 @@ class HookResolver(
         script: File,
     ): ResolvedScript? {
         val relativePath = script.relativeTo(root).path
+        // Listed under the canonical folder, which trust is keyed on too: the IDE reports
+        // project-opened and project-closed with that, and other events with the path as stored, so
+        // one project can arrive under two names.
+        val listedDir = File(TrustStore.canonical(projectDir))
         val (bytes, sha) =
             when (val assessed = ScriptReview.assess(script, relativePath)) {
                 is ScriptReview.Assessment.Unreadable -> {
@@ -72,16 +76,16 @@ class HookResolver(
                     return null
                 }
                 is ScriptReview.Assessment.NotReviewable -> {
-                    log.addPending(PendingTrust(projectDir, relativePath, script, sha256 = "", notReviewable = assessed.reason.message))
+                    log.addPending(PendingTrust(listedDir, relativePath, script, sha256 = "", notReviewable = assessed.reason.message))
                     return null
                 }
                 is ScriptReview.Assessment.Reviewable -> assessed.bytes to assessed.sha256
             }
         if (!trust.isTrusted(projectDir, relativePath, sha)) {
-            log.addPending(PendingTrust(projectDir, relativePath, script, sha))
+            log.addPending(PendingTrust(listedDir, relativePath, script, sha))
             return null
         }
-        log.removePending(projectDir, relativePath)
+        log.removePending(listedDir, relativePath)
         val copy = verifiedCopy(bytes, sha) ?: return null
         return ResolvedScript(copy, script, ScriptSource.PROJECT, root)
     }

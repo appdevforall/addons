@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 
 class HookResolverTest {
     private val appFiles = tempDir("appfiles")
@@ -67,7 +68,27 @@ class HookResolverTest {
         assertTrue(resolver.resolve(saved()).isEmpty())
         val pending = log.pending.value.single()
         assertEquals("file-saved", pending.relativePath)
-        assertEquals(project, pending.projectDir)
+        assertEquals(project.canonicalFile, pending.projectDir)
+    }
+
+    @Test
+    fun aProjectReachedThroughTwoPathsIsListedOnceAndOneTrustClearsIt() {
+        // The IDE reports project-opened and project-closed under the canonical path, and other
+        // events under the path as stored; the two differ when that path goes through a link.
+        val alias = File(appFiles, "alias").also { Files.createSymbolicLink(it.toPath(), project.toPath()) }
+        val viaAlias = HookEvent.fileSaved(File(alias, "Main.kt"), alias)
+        val script = projectHooks.script("file-saved")
+
+        resolver.resolve(saved())
+        resolver.resolve(viaAlias)
+        val pending = log.pending.value.single()
+        // What the Hooks tab's Trust button does.
+        assertTrue(trust.trust(pending.projectDir, pending.relativePath, script.readBytes()))
+        log.removePending(pending.projectDir, pending.relativePath)
+
+        assertTrue(log.pending.value.isEmpty())
+        assertEquals(1, resolver.resolve(viaAlias).size)
+        assertEquals(1, resolver.resolve(saved()).size)
     }
 
     @Test
