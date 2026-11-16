@@ -39,14 +39,17 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.43: the first release that knows the debugger.endpoints permission and carries
-             DebuggerEndpointService (ADFA-7139). An IDE of 26.42 or older rejects the unknown
-             permission when it validates this manifest, so it cannot install this plugin version
-             at all. 26.42 brought ServerUrl, which McpUrlPolicy uses to allow http:// only to this
-             device (ADFA-6314); 26.41 the capability-tag contract (ADFA-6278). Do not lower it. -->
+        <!-- 26.47: the first release that knows the debugger.endpoints permission and carries
+             DebuggerEndpointService (ADFA-7139); 26.46 and older have neither. Their
+             PluginSecurityManager.validatePlugin rejects a manifest that names a permission it
+             does not know, so those IDEs cannot install this plugin version at all. Raise this if
+             the release that ships ADFA-7139 is not 26.47. 26.43 made plugin-api interface bodies
+             Java default methods, which the bundled plugin-api.jar relies on; 26.42 brought
+             ServerUrl, which McpUrlPolicy uses to allow http:// only to this device (ADFA-6314);
+             26.41 the capability-tag contract (ADFA-6278). Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.43" />
+            android:value="26.47" />
 
         <meta-data
             android:name="plugin.max_ide_version"
