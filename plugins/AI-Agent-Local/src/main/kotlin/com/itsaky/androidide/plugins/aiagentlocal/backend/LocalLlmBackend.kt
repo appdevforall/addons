@@ -31,6 +31,7 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.Closeable
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -215,6 +216,7 @@ class LocalLlmBackend(
             contextTokens: Int,
             quantizeKv: Boolean,
             fallbackContextTokens: Int,
+            useWillNeedHint: Boolean,
         ) {
             // Native reads the counts when it creates the context, so they go in before the load.
             val threads = InferenceThreads.read()
@@ -227,6 +229,7 @@ class LocalLlmBackend(
                 nCtx = contextTokens,
                 quantizeKv = quantizeKv,
                 fallbackNCtx = fallbackContextTokens,
+                useWillNeedHint = useWillNeedHint,
             )
         }
         override suspend fun unload() = llama.unload()
@@ -249,6 +252,18 @@ class LocalLlmBackend(
      * launch one doomed load per [isAvailable] call, which the chat screen makes on open.
      */
     private val warmedUpRef = AtomicReference<String?>(null)
+
+    /**
+     * The reference most recently given the read-ahead hint. One slot, not a set: loading A, then
+     * B, then A again hints A's second load, since B displaced it. That is accepted — the user just
+     * switched models, which is as likely to mean a cold file as a first pick.
+     * `posix_fadvise(WILLNEED)` may shorten a cold load from shared storage, but did not do so
+     * reliably in interleaved measurements (ADFA-6810), and through FUSE the call itself seemed to
+     * cost ~140 ms on a warm load. The first load after the app starts or the selection changes is
+     * the one likely to be cold, so only that load pays for the hint; a reload of the same
+     * selection is almost always warm and skips it.
+     */
+    private val firstLoadHintedRef = AtomicReference<String?>(null)
 
     init {
         scope.launch { deleteLegacyModelCache() }
@@ -502,14 +517,34 @@ class LocalLlmBackend(
             // Before the load, which takes seconds: a send queued behind a warm-up is sized now.
             updateContextWindow { plannedContext = PlannedContext(modelRef, contextSize.contextTokens) }
 
-            context.logger.info("Loading model: $modelRef via ${opened.nativePath}")
+            // Armed here, after every pre-load refusal above, so a load that never reached the
+            // engine does not use up the one hint its selection gets.
+            val useWillNeedHint = firstLoadHintedRef.getAndSet(modelRef) != modelRef
+            context.logger.info(
+                "Loading model: $modelRef via ${opened.nativePath}" +
+                    if (useWillNeedHint) " (first load of this selection: read-ahead hint on)" else "",
+            )
+            val loadStartNanos = System.nanoTime()
             try {
                 engine.load(
                     nativePath = opened.nativePath,
                     contextTokens = contextSize.contextTokens,
                     quantizeKv = contextSize.kvType == KvCacheType.Q8_0,
                     fallbackContextTokens = contextSize.fallbackContextTokens,
+                    useWillNeedHint = useWillNeedHint,
                 )
+                // ADFA-6810: wall time of the whole engine.load -- thread setup, mapping the file,
+                // context creation (plus the f16 retry if q8_0 is refused), batch and sampler -- so
+                // the MB/s is a lower bound on file throughput and moves with the context size.
+                val loadMillis = (System.nanoTime() - loadStartNanos) / 1_000_000
+                val sizeBytes = opened.sizeBytes
+                val throughput = if (loadMillis > 0 && sizeBytes > 0) {
+                    val mbPerSecond = (sizeBytes / (1024.0 * 1024.0)) / (loadMillis / 1000.0)
+                    ", ${"%.1f".format(Locale.ROOT, mbPerSecond)} MB/s (${ByteSize.format(sizeBytes)})"
+                } else {
+                    ""
+                }
+                context.logger.info("Model load: $loadMillis ms$throughput")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
