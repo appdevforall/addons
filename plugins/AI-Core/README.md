@@ -115,7 +115,12 @@ Four rules the store applies, each of which was a bug before it was a rule:
 Contributed tools run inside the contributing plugin, under *its* permissions, and
 outside the `PathGuard` containment that covers this plugin's own handlers — so the
 approval dialog names the source plugin, and `allowsSessionApproval` is false for
-every contributed tool: "Always Allow" is downgraded to a single approval.
+every contributed tool that may change something: "Always Allow" is downgraded to a
+single approval. A tool its provider declares read-only (`ToolSpec.isReadOnly`) may
+be allowed for the session (ADFA-7147): still one explicit approval per tool, and the
+grant is keyed by provider and tool rather than by the registered name, which can pass
+to another plugin's tool when the sources change. The grant lapses if the tool stops
+declaring itself read-only.
 
 For the same reason a source's own `requiresApproval = false` is ignored:
 `ensureApproved` returns early on it, before `allowsSessionApproval` is ever

@@ -124,7 +124,7 @@ class ContributedToolHandlerTest {
     }
 
     @Test
-    fun givenAContributedTool_whenItIsBuilt_thenItIsNeverSessionApprovable() {
+    fun givenAContributedToolNotDeclaredReadOnly_whenItIsBuilt_thenItIsNeverSessionApprovable() {
         val source = FakeToolSource(PROVIDER)
         val handler = handlerFor(source, contributedTool(PROVIDER, "create_issue"))
 
@@ -148,9 +148,29 @@ class ContributedToolHandlerTest {
         val handler = ContributedToolHandler(source, tool, "searchplugin_code_search")
 
         assertTrue("a source cannot decline the approval dialog", handler.requiresApproval)
-        assertFalse(handler.allowsSessionApproval)
+        assertTrue("a read-only tool may be allowed for the session (ADFA-7147)", handler.allowsSessionApproval)
         assertTrue(handler.readOnly)
         assertFalse("a read-only tool changes nothing, whatever approval it needs", handler.mutatesProject)
+    }
+
+    @Test
+    fun givenTwoProvidersToolsOfOneName_whenBuilt_thenTheirSessionKeysDiffer() {
+        // A session grant follows what the dialog showed, the provider and the tool's own name,
+        // never the registered name, which another plugin's tool can take over.
+        val first = ContributedToolHandler(
+            FakeToolSource("com.example.one"),
+            contributedTool("com.example.one", "query", readOnly = true),
+            "query",
+        )
+        val second = ContributedToolHandler(
+            FakeToolSource("com.example.two"),
+            contributedTool("com.example.two", "query", readOnly = true),
+            "query",
+        )
+
+        assertEquals(first.toolName, second.toolName)
+        assertFalse(first.sessionApprovalKey == second.sessionApprovalKey)
+        assertFalse("a contributed key cannot collide with a built-in name", first.sessionApprovalKey == "query")
     }
 
     @Test

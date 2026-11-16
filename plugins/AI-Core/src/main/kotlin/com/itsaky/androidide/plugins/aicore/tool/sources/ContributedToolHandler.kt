@@ -57,15 +57,26 @@ class ContributedToolHandler(
      * A source's own `requiresApproval = false` would return from
      * `ToolApprovalManager.ensureApproved` before [allowsSessionApproval] below is ever consulted,
      * so a provider could opt out of the only control there is by asking. The declaration is kept
-     * on [ContributedTool] for a host-side allowlist to honour one day; nothing honours it now.
+     * on [ContributedTool] for a host-side allowlist to honour one day (ADFA-7147); nothing
+     * honours it now.
      */
     override val requiresApproval: Boolean = true
 
     /**
-     * Never blanket-approved: a contributed tool runs outside the agent's path containment, so the
-     * approval dialog is the only control there is.
+     * True only for a tool its provider declared read-only (ADFA-7147). A contributed tool runs
+     * outside the agent's path containment, so the dialog is the only control there is: one that
+     * may change something is confirmed on every call. For a read-only one the user may answer
+     * "Always Allow", which still takes one explicit approval per tool per session. The
+     * declaration is the provider's own claim, so it can widen nothing beyond that one choice.
      */
-    override val allowsSessionApproval: Boolean = false
+    override val allowsSessionApproval: Boolean get() = readOnly
+
+    /**
+     * The provider and the tool's own name, which is what the dialog showed when the user said
+     * "Always Allow". [toolName] alone could hand the grant to another plugin's tool that takes
+     * the name over after the sources change.
+     */
+    override val sessionApprovalKey: String = "contributed:${tool.providerId}:${tool.name}"
 
     /** The contributing plugin's id, for provenance in logs and the settings screen. */
     val providerId: String get() = tool.providerId
