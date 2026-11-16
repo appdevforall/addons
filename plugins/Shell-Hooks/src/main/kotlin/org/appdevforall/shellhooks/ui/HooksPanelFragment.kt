@@ -7,7 +7,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.format.DateFormat
 import android.text.style.ForegroundColorSpan
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
@@ -76,20 +76,15 @@ class HooksPanelFragment : Fragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
         val plugin = ShellHooksPlugin.getInstance() ?: return
-        help(view.findViewById(R.id.hkRunsTitle), ShellHooksHelp.TAG_TAB)
-        help(view.findViewById(R.id.hkPendingTitle), ShellHooksHelp.TAG_PROJECT_HOOKS)
-        view.findViewById<Button>(R.id.hkClear).apply {
-            help(this, ShellHooksHelp.TAG_TAB)
-            setOnClickListener {
-                expanded.clear()
-                plugin.log.clearRuns()
-            }
+        view.findViewById<RecyclerView>(R.id.hkList).apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            adapter = PanelAdapter(plugin)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(plugin.log.runs, plugin.log.pending) { runs, pending -> runs to pending }
-                    .collect { (runs, pending) -> render(view, plugin, runs, pending) }
+                    .collect { (runs, pending) -> render(plugin, runs, pending) }
             }
         }
     }
@@ -97,7 +92,8 @@ class HooksPanelFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         // The master switch lives on another screen; pick up a change made there.
-        view?.findViewById<View>(R.id.hkOff)?.visibility = if (ShellHooksPlugin.getInstance()?.isOn() == true) View.GONE else View.VISIBLE
+        val plugin = ShellHooksPlugin.getInstance() ?: return
+        render(plugin, plugin.log.runs.value, plugin.log.pending.value)
     }
 
     override fun onDestroyView() {
@@ -106,98 +102,166 @@ class HooksPanelFragment : Fragment() {
         reviewDialog = null
     }
 
+    /** Hands the rows to the adapter, which works out off the main thread which ones changed. */
     private fun render(
-        root: View,
         plugin: ShellHooksPlugin,
         runs: List<HookRun>,
         pending: List<PendingTrust>,
     ) {
-        root.findViewById<View>(R.id.hkOff).visibility = if (plugin.isOn()) View.GONE else View.VISIBLE
-
-        val pendingList = root.findViewById<LinearLayout>(R.id.hkPendingList)
-        pendingList.removeAllViews()
-        root.findViewById<View>(R.id.hkPendingTitle).visibility = if (pending.isEmpty()) View.GONE else View.VISIBLE
-        // Built on the main thread, so a project with thousands of scripts shows only the first ones.
-        for (entry in pending.take(MAX_PENDING_ROWS)) {
-            val row = layoutInflater.inflate(R.layout.item_pending_trust, pendingList, false)
-            // Names come from the project, so they are revealed.
-            val name =
-                SpannableStringBuilder()
-                    .append(RevealedNames.show(row.context, entry.relativePath))
-                    .append(getString(R.string.hk_pending_in))
-                    .append(RevealedNames.show(row.context, entry.projectDir.name))
-            val reason = entry.notReviewable
-            if (reason != null) name.append(getString(R.string.hk_pending_not_reviewable, reason))
-            row.findViewById<TextView>(R.id.pendingName).text = name
-            row.findViewById<Button>(R.id.pendingReview).apply {
-                // A script that cannot be reviewed cannot be trusted, so it has nothing to review.
-                visibility = if (reason == null) View.VISIBLE else View.GONE
-                help(this, ShellHooksHelp.TAG_REVIEW)
-                setOnClickListener { review(plugin, entry) }
-            }
-            help(row, ShellHooksHelp.TAG_REVIEW)
-            pendingList.addView(row)
+        val list = view?.findViewById<RecyclerView>(R.id.hkList) ?: return
+        val adapter = list.adapter as? PanelAdapter ?: return
+        // The list keeps its first visible row in place, so a row added above it, such as the
+        // first script awaiting review, would land out of sight even with the list at the top.
+        val atTop = !list.canScrollVertically(-1)
+        adapter.submitList(PanelRow.of(plugin.isOn(), runs, pending)) {
+            if (atTop) list.scrollToPosition(0)
         }
-        val more = pending.size - MAX_PENDING_ROWS
-        if (more > 0) {
-            pendingList.addView(
-                TextView(requireContext()).apply {
-                    text = resources.getQuantityString(R.plurals.hk_pending_more, more, more)
-                    setTextColor(context.getColor(R.color.plugin_on_surface_variant))
-                    setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.text_body))
-                    help(this, ShellHooksHelp.TAG_REVIEW)
-                },
-            )
-        }
-
-        val runList = root.findViewById<LinearLayout>(R.id.hkRunList)
-        runList.removeAllViews()
-        root.findViewById<View>(R.id.hkEmpty).visibility = if (runs.isEmpty()) View.VISIBLE else View.GONE
-        for (run in runs) runList.addView(runRow(runList, run))
     }
 
-    private fun runRow(
-        parent: ViewGroup,
-        run: HookRun,
-    ): View {
-        val row = layoutInflater.inflate(R.layout.item_hook_run, parent, false)
-        // Script and file names can come from a project, so they are revealed.
-        val title = SpannableStringBuilder(run.name).append("  ").append(RevealedNames.show(row.context, scriptLabel(run)))
-        run.targetLabel?.let { title.append("  ").append(RevealedNames.show(row.context, it)) }
-        row.findViewById<TextView>(R.id.runTitle).text = title
+    /** The tab's rows, inflated with the fragment's inflater, which reads the plugin's resources. */
+    private inner class PanelAdapter(
+        private val plugin: ShellHooksPlugin,
+    ) : ListAdapter<PanelRow, RecyclerView.ViewHolder>(PanelRowDiff) {
+        override fun getItemViewType(position: Int): Int =
+            when (getItem(position)) {
+                PanelRow.Off -> OFF
+                PanelRow.PendingTitle -> PENDING_TITLE
+                is PanelRow.Pending -> PENDING
+                is PanelRow.PendingMore -> PENDING_MORE
+                PanelRow.RunsHeader -> RUNS_HEADER
+                PanelRow.Empty -> EMPTY
+                is PanelRow.Run -> RUN
+            }
 
-        val detail = row.findViewById<TextView>(R.id.runDetail)
-        detail.text =
-            getString(
-                R.string.hk_run_detail,
-                outcomeLabel(run),
-                DateFormat.getTimeFormat(requireContext()).format(Date(run.startedAtMillis)),
-                run.durationMillis,
-            )
-        detail.setTextColor(
-            row.context.getColor(
-                when (run.outcome) {
-                    Outcome.SUCCEEDED -> R.color.plugin_success
-                    Outcome.TIMED_OUT, Outcome.CANCELLED -> R.color.plugin_warning
-                    Outcome.FAILED, Outcome.NOT_STARTED -> R.color.plugin_error
-                },
-            ),
-        )
+        override fun onCreateViewHolder(
+            parent: ViewGroup,
+            viewType: Int,
+        ): RecyclerView.ViewHolder {
+            val row = layoutInflater.inflate(LAYOUTS.getValue(viewType), parent, false)
+            when (viewType) {
+                PENDING -> return PendingHolder(row)
+                RUN -> return RunHolder(row)
+                PENDING_TITLE -> help(row, ShellHooksHelp.TAG_PROJECT_HOOKS)
+                PENDING_MORE -> help(row, ShellHooksHelp.TAG_REVIEW)
+                EMPTY -> (row as TextView).setText(R.string.hk_empty)
+                RUNS_HEADER -> {
+                    help(row.findViewById(R.id.hkRunsTitle), ShellHooksHelp.TAG_TAB)
+                    row.findViewById<Button>(R.id.hkClear).apply {
+                        help(this, ShellHooksHelp.TAG_TAB)
+                        setOnClickListener {
+                            expanded.clear()
+                            plugin.log.clearRuns()
+                        }
+                    }
+                }
+            }
+            return object : RecyclerView.ViewHolder(row) {}
+        }
 
-        // Up to 64 KB per run: set only while the row is open, so a refresh does not lay out
-        // the output of every run in the list.
-        val output = row.findViewById<TextView>(R.id.runOutput)
-        val show = { open: Boolean ->
-            output.text = if (open) run.output.ifBlank { getString(R.string.hk_no_output) } else ""
-            output.visibility = if (open) View.VISIBLE else View.GONE
+        override fun onBindViewHolder(
+            holder: RecyclerView.ViewHolder,
+            position: Int,
+        ) {
+            when (val row = getItem(position)) {
+                is PanelRow.Pending -> (holder as PendingHolder).bind(row.entry)
+                is PanelRow.Run -> (holder as RunHolder).bind(row.run)
+                is PanelRow.PendingMore ->
+                    (holder.itemView as TextView).text = resources.getQuantityString(R.plurals.hk_pending_more, row.count, row.count)
+                else -> Unit
+            }
         }
-        show(run.id in expanded)
-        row.setOnClickListener {
-            if (!expanded.add(run.id)) expanded.remove(run.id)
-            show(run.id in expanded)
+
+        override fun onViewAttachedToWindow(holder: RecyclerView.ViewHolder) {
+            // Rebinding a recycled row sets its text while the row is off the window, and the
+            // new layout then finds no window under it, which turns selection off
+            // (Editor.prepareCursorControllers). Enabling it again once attached turns it back on.
+            (holder as? RunHolder)?.output?.apply {
+                isEnabled = false
+                isEnabled = true
+            }
         }
-        help(row, ShellHooksHelp.TAG_TAB)
-        return row
+
+        inner class PendingHolder(
+            row: View,
+        ) : RecyclerView.ViewHolder(row) {
+            private val name = row.findViewById<TextView>(R.id.pendingName)
+            private val reviewButton = row.findViewById<Button>(R.id.pendingReview)
+            private var entry: PendingTrust? = null
+
+            init {
+                help(row, ShellHooksHelp.TAG_REVIEW)
+                help(reviewButton, ShellHooksHelp.TAG_REVIEW)
+                reviewButton.setOnClickListener { entry?.let { review(plugin, it) } }
+            }
+
+            fun bind(entry: PendingTrust) {
+                this.entry = entry
+                val context = itemView.context
+                // Names come from the project, so they are revealed.
+                val text =
+                    SpannableStringBuilder()
+                        .append(RevealedNames.show(context, entry.relativePath))
+                        .append(getString(R.string.hk_pending_in))
+                        .append(RevealedNames.show(context, entry.projectDir.name))
+                val reason = entry.notReviewable
+                if (reason != null) text.append(getString(R.string.hk_pending_not_reviewable, reason))
+                name.text = text
+                // A script that cannot be reviewed cannot be trusted, so it has nothing to review.
+                reviewButton.visibility = if (reason == null) View.VISIBLE else View.GONE
+            }
+        }
+
+        inner class RunHolder(
+            row: View,
+        ) : RecyclerView.ViewHolder(row) {
+            private val title = row.findViewById<TextView>(R.id.runTitle)
+            private val detail = row.findViewById<TextView>(R.id.runDetail)
+            val output: TextView = row.findViewById(R.id.runOutput)
+            private var run: HookRun? = null
+
+            init {
+                help(row, ShellHooksHelp.TAG_TAB)
+                row.setOnClickListener {
+                    val run = run ?: return@setOnClickListener
+                    if (!expanded.add(run.id)) expanded.remove(run.id)
+                    showOutput(run)
+                }
+            }
+
+            fun bind(run: HookRun) {
+                this.run = run
+                val context = itemView.context
+                // Script and file names can come from a project, so they are revealed.
+                val text = SpannableStringBuilder(run.name).append("  ").append(RevealedNames.show(context, scriptLabel(run)))
+                run.targetLabel?.let { text.append("  ").append(RevealedNames.show(context, it)) }
+                title.text = text
+                detail.text =
+                    getString(
+                        R.string.hk_run_detail,
+                        outcomeLabel(run),
+                        DateFormat.getTimeFormat(context).format(Date(run.startedAtMillis)),
+                        run.durationMillis,
+                    )
+                detail.setTextColor(
+                    context.getColor(
+                        when (run.outcome) {
+                            Outcome.SUCCEEDED -> R.color.plugin_success
+                            Outcome.TIMED_OUT, Outcome.CANCELLED -> R.color.plugin_warning
+                            Outcome.FAILED, Outcome.NOT_STARTED -> R.color.plugin_error
+                        },
+                    ),
+                )
+                showOutput(run)
+            }
+
+            // Up to 64 KB per run: set only while the row is open, so binding a closed row does
+            // not lay out its output.
+            private fun showOutput(run: HookRun) {
+                val open = run.id in expanded
+                output.text = if (open) run.output.ifBlank { getString(R.string.hk_no_output) } else ""
+                output.visibility = if (open) View.VISIBLE else View.GONE
+            }
+        }
     }
 
     private fun scriptLabel(run: HookRun): String {
@@ -380,8 +444,24 @@ class HooksPanelFragment : Fragment() {
     }
 
     private companion object {
-        /** Pending scripts listed by name; the rest are counted. */
-        const val MAX_PENDING_ROWS = 50
+        const val OFF = 0
+        const val PENDING_TITLE = 1
+        const val PENDING = 2
+        const val PENDING_MORE = 3
+        const val RUNS_HEADER = 4
+        const val EMPTY = 5
+        const val RUN = 6
+
+        val LAYOUTS =
+            mapOf(
+                OFF to R.layout.item_hooks_off,
+                PENDING_TITLE to R.layout.item_pending_title,
+                PENDING to R.layout.item_pending_trust,
+                PENDING_MORE to R.layout.item_panel_note,
+                RUNS_HEADER to R.layout.item_runs_header,
+                EMPTY to R.layout.item_panel_note,
+                RUN to R.layout.item_hook_run,
+            )
     }
 }
 

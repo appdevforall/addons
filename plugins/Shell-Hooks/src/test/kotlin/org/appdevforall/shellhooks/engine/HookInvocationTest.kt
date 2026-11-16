@@ -48,6 +48,31 @@ class HookInvocationTest {
     }
 
     @Test
+    fun anActionGetsEveryVariableAHookGets() {
+        val actions = File(hooksDir, "actions")
+        val action = File(actions, "format")
+        val hookEnv = HookInvocation.environment(script, HookEvent.fileSaved(File(project, "a.kt"), project), "26.47")
+
+        val env = HookInvocation.actionEnvironment(action, actions, project, "26.47")
+
+        assertEquals(hookEnv.keys, env.keys)
+        assertEquals(
+            mapOf(
+                "COGO_HOOK" to "action",
+                "COGO_PROJECT_DIR" to project.path,
+                "COGO_IDE_VERSION" to "26.47",
+                "COGO_HOOKS_DIR" to actions.path,
+                "COGO_HOOK_SCRIPT" to action.path,
+                "COGO_HOOK_SOURCE" to "global",
+            ),
+            env,
+        )
+        val bare = HookInvocation.actionEnvironment(action, actions, null, null)
+        assertEquals("", bare["COGO_PROJECT_DIR"])
+        assertFalse(bare.containsKey("COGO_IDE_VERSION"))
+    }
+
+    @Test
     fun theTimeoutIsPassedToTheWrapperOnlyWhenGiven() {
         val event = HookEvent.buildStarted(project)
 

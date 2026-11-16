@@ -28,6 +28,7 @@ import org.appdevforall.shellhooks.engine.Coalescer
 import org.appdevforall.shellhooks.engine.Hook
 import org.appdevforall.shellhooks.engine.HookDiscovery
 import org.appdevforall.shellhooks.engine.HookEvent
+import org.appdevforall.shellhooks.engine.HookInvocation
 import org.appdevforall.shellhooks.engine.HookLog
 import org.appdevforall.shellhooks.engine.HookPaths
 import org.appdevforall.shellhooks.engine.HookRun
@@ -280,17 +281,10 @@ class ShellHooksPlugin :
                 // The class itself is missing: plugins got a Terminal service in Code on the Go 26.42.
                 return failed("This IDE has no Terminal service for plugins; Code on the Go 26.42 or later is needed")
             } ?: return failed("The IDE's Terminal is not available")
-        val projectDir = currentProjectDir()
         // The Terminal takes a command line, so every value is quoted as one word.
         val command =
             ShellQuote.command(
-                linkedMapOf(
-                    "COGO_HOOK" to "action",
-                    "COGO_PROJECT_DIR" to (projectDir?.path ?: ""),
-                    "COGO_HOOKS_DIR" to paths.actions.path,
-                    "COGO_HOOK_SCRIPT" to action.path,
-                    "COGO_HOOK_SOURCE" to "global",
-                ),
+                HookInvocation.actionEnvironment(action, paths.actions, currentProjectDir(), ideVersion()),
                 listOf("sh", runnerScript.path, action.path, file.path),
             )
         scope.launch {

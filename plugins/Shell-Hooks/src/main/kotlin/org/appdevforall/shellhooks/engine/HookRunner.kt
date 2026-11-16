@@ -89,14 +89,32 @@ object HookInvocation {
         script: ResolvedScript,
         event: HookEvent,
         ideVersion: String?,
+    ): Map<String, String> = variables(event.hook.id, event.projectDir, ideVersion, script.hooksDir, script.original, script.source)
+
+    /** An action's: the same variables as a hook's, with `action` for the hook. Actions are global only. */
+    fun actionEnvironment(
+        action: File,
+        actionsDir: File,
+        projectDir: File?,
+        ideVersion: String?,
+    ): Map<String, String> = variables(HookRun.ACTION, projectDir, ideVersion, actionsDir, action, ScriptSource.GLOBAL)
+
+    // The one list of what every script is told, hook or action; the docs list the same names.
+    private fun variables(
+        hook: String,
+        projectDir: File?,
+        ideVersion: String?,
+        hooksDir: File,
+        script: File,
+        source: ScriptSource,
     ): Map<String, String> =
         buildMap {
-            put("COGO_HOOK", event.hook.id)
-            put("COGO_PROJECT_DIR", event.projectDir?.path ?: "")
+            put("COGO_HOOK", hook)
+            put("COGO_PROJECT_DIR", projectDir?.path ?: "")
             ideVersion?.let { put("COGO_IDE_VERSION", it) }
-            put("COGO_HOOKS_DIR", script.hooksDir.path)
-            put("COGO_HOOK_SCRIPT", script.original.path)
-            put("COGO_HOOK_SOURCE", script.source.id)
+            put("COGO_HOOKS_DIR", hooksDir.path)
+            put("COGO_HOOK_SCRIPT", script.path)
+            put("COGO_HOOK_SOURCE", source.id)
         }
 }
 

@@ -138,8 +138,10 @@ and a trusted project script runs from a private copy the plugin marks executabl
   and scripts. Keep project hooks self-contained, or review what they call.
 - **The UI thread.** Reading, checking and marking a script happen off the main thread, and so do
   Trust and Revoke, which resolve a canonical path and `commit()` to disk, and loading Settings'
-  list of trusted projects, which resolves each project's canonical path. The Hooks tab lists at
-  most 50 pending scripts and counts the rest.
+  list of trusted projects, which resolves each project's canonical path. The Hooks tab is one
+  RecyclerView (`PanelRow`) whose `ListAdapter` compares the rows off the main thread, so a
+  finished hook binds its one new row. It lists at most 50 pending scripts and counts the rest,
+  so a project with thousands of them does not push the runs out of reach.
 - **Notifications only.** No hook can veto a save or a build; the host callbacks report the past.
 - **Paths.** `HOME` and `PREFIX` are `<app files>/home` and `<app files>/usr`, the values
   `TermuxProcessEnvironment` gives every command, derived from `PluginContext.getAppFilesDir()`.
