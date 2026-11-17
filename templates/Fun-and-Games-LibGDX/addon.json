@@ -1,0 +1,22 @@
+{
+  "summary": "Adds three playable libGDX games to the New Project screen: a 3D demo, Block Game and Bubble Wand.",
+  "description": "Installs three small Android game projects built with libGDX, so you can start from a complete, playable game instead of an empty activity. Demo is a 3D Earth you spin by touch with an orbiting rocket, written in Java. Block Game is a falling-block puzzle and Bubble Wand is a first-person bubble shooter, both written in Kotlin. Each project builds and runs on the device. These are libGDX ports of the Fun and Games JME templates.",
+  "tags": [
+    "games",
+    "libgdx",
+    "templates",
+    "kotlin",
+    "java"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "James Turner",
+    "url": ""
+  },
+  "template": {
+    "id": "org.appdevforall.funandgameslibgdx",
+    "version": "1.0.0",
+    "minAppVersion": "26.40"
+  }
+}

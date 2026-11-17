@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">${{APP_NAME}}</string>
+    <string name="intro">This app writes to the Android log from C. Tap the button, then open App Logs in Code on the Go and type NativeDemoC in its filter box.\n\nApp Logs receives lines only from a debug build, and only while this project is open in the editor. The code is in app/src/main/cpp/native-log.c.</string>
+    <string name="run_button">Write to App Logs</string>
+    <string name="status_done">Done. Look in App Logs for lines tagged NativeDemoC.</string>
+</resources>

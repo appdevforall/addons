@@ -1,0 +1,6 @@
+Share Your Apps: share the apps you build, with people nearby.
+Publish your apps, right from Code On The Go.
+Buyers scan one code to join your phone's hotspot, and another to open the store.
+No internet, and no accounts. Just your store, in their browser.
+One tap, and the app is on their phone.
+Share Your Apps, from App Dev for All.

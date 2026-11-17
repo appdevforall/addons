@@ -1,0 +1,711 @@
+package ${{PACKAGE_NAME}} 
+
+import com.badlogic.gdx.ApplicationAdapter
+import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.Input
+import com.badlogic.gdx.InputAdapter
+import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.GL20
+import com.badlogic.gdx.graphics.PerspectiveCamera
+import com.badlogic.gdx.graphics.VertexAttributes.Usage
+import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.GlyphLayout
+import com.badlogic.gdx.graphics.g2d.SpriteBatch
+import com.badlogic.gdx.graphics.g3d.Environment
+import com.badlogic.gdx.graphics.g3d.Material
+import com.badlogic.gdx.graphics.g3d.Model
+import com.badlogic.gdx.graphics.g3d.ModelBatch
+import com.badlogic.gdx.graphics.g3d.ModelInstance
+import com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.DepthTestAttribute
+import com.badlogic.gdx.graphics.g3d.attributes.FloatAttribute
+import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.SphereShapeBuilder
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer
+import com.badlogic.gdx.math.MathUtils
+import com.badlogic.gdx.math.Quaternion
+import com.badlogic.gdx.math.Vector3
+import com.badlogic.gdx.utils.Align
+import kotlin.math.abs
+
+private const val ARENA_HALF_SIZE = 25f
+private const val PLAYER_EYE_HEIGHT = 1.7f
+private const val MOVE_SPEED = 6f
+private const val TURN_RATE = 1.6f
+private const val LOOK_RATE = 1.2f
+private const val LOOK_SENSITIVITY = 0.0011f
+private const val PITCH_LIMIT = 80f * MathUtils.degreesToRadians
+private const val JOYSTICK_MAX_RADIUS = 120f
+private const val DRAG_THRESHOLD_PIXELS = 6f
+private const val TAP_MAX_NANOS = 250_000_000L
+private const val BUBBLE_SPEED = 18f
+private const val BUBBLE_RADIUS = 0.25f
+private const val BUBBLE_MAX_DISTANCE = 60f
+private const val TARGET_RADIUS = 0.75f
+private const val ENCASE_BUBBLE_RADIUS = 1.4f
+private const val FLOAT_SPEED = 3f
+private const val FLOAT_REMOVE_HEIGHT = 25f
+private const val TARGET_COUNT = 8
+private const val TREE_COUNT = 14
+private const val ROCK_COUNT = 10
+private const val MOUNTAIN_COUNT = 10
+
+private val MESH_ATTRIBUTES = (Usage.Position or Usage.Normal).toLong()
+
+private const val TARGETS_TEXT_SCALE = 1.3f
+private const val MESSAGE_TEXT_SCALE = 1.6f
+private const val BUTTON_TEXT_SCALE = 1.6f
+private const val TOGGLE_TEXT_SCALE = 1f
+
+private val BALLOON_COLORS = arrayOf(
+    Color(1f, 0.25f, 0.4f, 1f),
+    Color(1f, 0.55f, 0.1f, 1f),
+    Color(1f, 0.85f, 0.1f, 1f),
+    Color(0.25f, 0.8f, 0.35f, 1f),
+    Color(0.2f, 0.55f, 1f, 1f),
+    Color(0.65f, 0.3f, 0.9f, 1f),
+    Color(1f, 0.5f, 0.75f, 1f)
+)
+
+private class Bubble(val instance: ModelInstance, val position: Vector3, val velocity: Vector3, val spawnPos: Vector3)
+
+private class ButtonRect(val x: Float, val y: Float, val w: Float, val h: Float) {
+    fun contains(px: Float, py: Float) = px in x..(x + w) && py in y..(y + h)
+}
+
+private class Button(val label: String, val rect: ButtonRect, val color: Color)
+
+private val TOGGLE_COLOR = Color(0.2f, 0.2f, 0.2f, 0.5f)
+
+/** First-person "bubble wand" shooter: hit floating targets with bubbles to encase and remove them. */
+class BubbleWandGame : ApplicationAdapter() {
+
+    private lateinit var cam: PerspectiveCamera
+    private lateinit var modelBatch: ModelBatch
+    private lateinit var environment: Environment
+    private lateinit var shapes: ShapeRenderer
+    private lateinit var hudBatch: SpriteBatch
+    private lateinit var font: BitmapFont
+    private val glyphs = GlyphLayout()
+
+    private val models = mutableListOf<Model>()
+    private lateinit var unitSphere: Model
+    private lateinit var balloonDogModels: List<Model>
+    private lateinit var wandHandle: ModelInstance
+    private lateinit var wandTip: ModelInstance
+
+    // Lit scenery that never moves, plus the per-frame lists
+    private val scenery = mutableListOf<ModelInstance>()
+    private val targets = mutableListOf<Target>()
+    private val bubbles = mutableListOf<Bubble>()
+    private var gameWon = false
+    private var messageText = ""
+
+    private var yaw = 0f
+    private var pitch = 0f
+    private val camRotation = Quaternion()
+    private val camLeft = Vector3()
+
+    private var moveTouchId = -1
+    private var moveStartX = 0f
+    private var moveStartY = 0f
+    private var moveDX = 0f
+    private var moveDY = 0f
+
+    private var lookTouchId = -1
+    private var lookDownX = 0f
+    private var lookDownY = 0f
+    private var lookLastX = 0f
+    private var lookLastY = 0f
+    private var lookDownTimeNanos = 0L
+    private var lookDragged = false
+
+    private var keyForward = false
+    private var keyBack = false
+    private var keyLeft = false
+    private var keyRight = false
+    private var keyLookLeft = false
+    private var keyLookRight = false
+    private var keyLookUp = false
+    private var keyLookDown = false
+
+    private var toggleRect = ButtonRect(0f, 0f, 0f, 0f)
+    private var buttonsVisible = true
+
+    private val buttons = linkedMapOf<String, Button>()
+    private var btnUpPointer = -1
+    private var btnDownPointer = -1
+    private var btnLeftPointer = -1
+    private var btnRightPointer = -1
+    private var btnShootPointer = -1
+
+    override fun create() {
+        cam = PerspectiveCamera(40f, Gdx.graphics.width.toFloat(), Gdx.graphics.height.toFloat())
+        cam.near = 0.05f
+        cam.far = 1000f
+
+        modelBatch = ModelBatch()
+        shapes = ShapeRenderer()
+        hudBatch = SpriteBatch()
+        font = BitmapFont()
+        Gdx.input.inputProcessor = input
+
+        val builder = ModelBuilder()
+        unitSphere = builder.createSphere(2f, 2f, 2f, 10, 10, Material(), MESH_ATTRIBUTES).also(models::add)
+
+        setUpLights()
+        setUpGround(builder)
+        setUpLandscape()
+        setUpWand(builder)
+        balloonDogModels = BALLOON_COLORS.map { createBalloonDog(builder, it).also(models::add) }
+        layoutHud(Gdx.graphics.width, Gdx.graphics.height)
+        startNewGame()
+    }
+
+    private fun litMaterial(color: Color, specular: Color = Color.WHITE, shininess: Float = 32f) = Material(
+        ColorAttribute.createDiffuse(color),
+        ColorAttribute.createSpecular(specular),
+        FloatAttribute.createShininess(shininess)
+    )
+
+    private fun unshadedMaterial(color: Color) = Material(ColorAttribute.createDiffuse(color))
+
+    /** Alpha-blended, no depth writes — the equivalent of jME's Transparent bucket + BlendMode.Alpha. */
+    private fun transparentMaterial(color: Color) = Material(
+        ColorAttribute.createDiffuse(color.r, color.g, color.b, 1f),
+        BlendingAttribute(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA, color.a),
+        DepthTestAttribute(GL20.GL_LEQUAL, false)
+    )
+
+    /** A new instance of the shared unit sphere; instances copy materials, so each can be recoloured independently. */
+    private fun sphereInstance(material: Material): ModelInstance {
+        val instance = ModelInstance(unitSphere)
+        instance.materials.first().set(material)
+        return instance
+    }
+
+    private fun setUpLights() {
+        environment = Environment()
+        environment.set(ColorAttribute(ColorAttribute.AmbientLight, 0.5f, 0.5f, 0.55f, 1f))
+        environment.add(DirectionalLight().set(Color.WHITE, Vector3(-0.4f, -1f, -0.3f).nor()))
+    }
+
+    private fun setUpGround(builder: ModelBuilder) {
+        val groundModel = builder.createBox(
+            ARENA_HALF_SIZE * 2f, 0.2f, ARENA_HALF_SIZE * 2f,
+            litMaterial(Color(0.25f, 0.55f, 0.25f, 1f), Color.BLACK, 1f),
+            MESH_ATTRIBUTES
+        ).also(models::add)
+        val ground = ModelInstance(groundModel)
+        ground.transform.setToTranslation(0f, -0.1f, 0f)
+        scenery.add(ground)
+    }
+
+    private fun setUpWand(builder: ModelBuilder) {
+        val handleModel = builder.createBox(
+            0.04f, 0.04f, 0.44f,
+            litMaterial(Color(0.35f, 0.22f, 0.1f, 1f)),
+            MESH_ATTRIBUTES
+        ).also(models::add)
+        wandHandle = ModelInstance(handleModel)
+        wandTip = sphereInstance(unshadedMaterial(Color(0.6f, 0.9f, 1f, 1f)))
+    }
+
+    /** Scatters trees, rocks and distant mountains around the arena for visual interest. */
+    private fun setUpLandscape() {
+        val trunkMat = litMaterial(Color(0.4f, 0.26f, 0.12f, 1f), Color.BLACK, 4f)
+        val foliageMat = litMaterial(Color(0.15f, 0.5f, 0.2f, 1f), Color.BLACK, 4f)
+        val rockMat = litMaterial(Color(0.5f, 0.5f, 0.52f, 1f), Color.WHITE, 8f)
+        val mountainMat = litMaterial(Color(0.45f, 0.42f, 0.55f, 1f), Color.BLACK, 2f)
+
+        repeat(TREE_COUNT) {
+            val angle = MathUtils.random() * MathUtils.PI2
+            val dist = ARENA_HALF_SIZE - 1f - MathUtils.random() * 6f
+            val x = MathUtils.cos(angle) * dist
+            val z = MathUtils.sin(angle) * dist
+
+            val trunk = sphereInstance(trunkMat)
+            trunk.transform.setToTranslation(x, 1.1f, z).scale(0.25f, 1.1f, 0.25f)
+            scenery.add(trunk)
+
+            val foliageScale = 1f + MathUtils.random() * 0.4f
+            val foliage = sphereInstance(foliageMat)
+            foliage.transform.setToTranslation(x, 2.4f, z)
+                .scale(0.9f * foliageScale, 1.1f * foliageScale, 0.9f * foliageScale)
+            scenery.add(foliage)
+        }
+
+        repeat(ROCK_COUNT) {
+            val angle = MathUtils.random() * MathUtils.PI2
+            val dist = 4f + MathUtils.random() * (ARENA_HALF_SIZE - 5f)
+            val x = MathUtils.cos(angle) * dist
+            val z = MathUtils.sin(angle) * dist
+            val scale = 0.3f + MathUtils.random() * 0.5f
+
+            val rock = sphereInstance(rockMat)
+            rock.transform.setToTranslation(x, scale * 0.3f, z).scale(scale, scale * 0.7f, scale)
+            scenery.add(rock)
+        }
+
+        repeat(MOUNTAIN_COUNT) { i ->
+            val angle = (MathUtils.PI2 / MOUNTAIN_COUNT) * i + MathUtils.random() * 0.3f
+            val dist = ARENA_HALF_SIZE + 6f + MathUtils.random() * 10f
+            val x = MathUtils.cos(angle) * dist
+            val z = MathUtils.sin(angle) * dist
+            val height = 10f + MathUtils.random() * 10f
+            val width = 6f + MathUtils.random() * 6f
+
+            val mountain = sphereInstance(mountainMat)
+            mountain.transform.setToTranslation(x, -height * 0.3f, z).scale(width, height, width)
+            scenery.add(mountain)
+        }
+    }
+
+    /** Builds a cute single-color balloon-animal (dog) out of stretched spheres, all sharing one material. */
+    private fun createBalloonDog(builder: ModelBuilder, color: Color): Model {
+        val mat = litMaterial(color, Color.WHITE, 96f)
+        builder.begin()
+        var partIndex = 0
+
+        fun part(sx: Float, sy: Float, sz: Float, px: Float, py: Float, pz: Float) {
+            val node = builder.node()
+            node.id = "part${partIndex++}"
+            node.scale.set(sx, sy, sz)
+            node.translation.set(px, py, pz)
+            val mesh = builder.part(node.id, GL20.GL_TRIANGLES, MESH_ATTRIBUTES, mat)
+            SphereShapeBuilder.build(mesh, 2f, 2f, 2f, 10, 10)
+        }
+
+        part(0.55f, 0.28f, 0.28f, 0f, 0f, 0f) // body
+        part(0.3f, 0.3f, 0.3f, 0.68f, 0.14f, 0f) // head
+        part(0.18f, 0.16f, 0.16f, 0.95f, 0.04f, 0f) // snout
+        part(0.09f, 0.18f, 0.09f, 0.75f, 0.38f, 0.14f) // ear
+        part(0.09f, 0.18f, 0.09f, 0.75f, 0.38f, -0.14f) // ear
+        part(0.22f, 0.09f, 0.09f, -0.68f, 0.22f, 0f) // tail
+        part(0.08f, 0.26f, 0.08f, 0.35f, -0.32f, 0.16f) // leg
+        part(0.08f, 0.26f, 0.08f, 0.35f, -0.32f, -0.16f) // leg
+        part(0.08f, 0.26f, 0.08f, -0.35f, -0.32f, 0.16f) // leg
+        part(0.08f, 0.26f, 0.08f, -0.35f, -0.32f, -0.16f) // leg
+
+        return builder.end()
+    }
+
+    override fun resize(width: Int, height: Int) {
+        cam.viewportWidth = width.toFloat()
+        cam.viewportHeight = height.toFloat()
+        cam.update()
+        shapes.projectionMatrix.setToOrtho2D(0f, 0f, width.toFloat(), height.toFloat())
+        hudBatch.projectionMatrix.setToOrtho2D(0f, 0f, width.toFloat(), height.toFloat())
+        layoutHud(width, height)
+    }
+
+    /** Lays out the on-screen D-pad (move), fire button and show/hide toggle, recording their hit-test bounds. */
+    private fun layoutHud(width: Int, height: Int) {
+        buttons.clear()
+
+        val size = 100f
+        val gap = 12f
+        val padding = 24f
+        val moveColor = Color(1f, 1f, 1f, 0.28f)
+
+        buttons["up"] = Button("^", ButtonRect(padding + size + gap, padding + (size + gap) * 2, size, size), moveColor)
+        buttons["left"] = Button("<", ButtonRect(padding, padding + size + gap, size, size), moveColor)
+        buttons["right"] = Button(">", ButtonRect(padding + (size + gap) * 2, padding + size + gap, size, size), moveColor)
+        buttons["down"] = Button("v", ButtonRect(padding + size + gap, padding, size, size), moveColor)
+
+        val shootSize = 140f
+        buttons["shoot"] = Button(
+            "FIRE",
+            ButtonRect(width - padding - shootSize, padding, shootSize, shootSize),
+            Color(1f, 0.3f, 0.3f, 0.4f)
+        )
+
+        // A small always-visible control, independent of the buttons above, that shows/hides them
+        val toggleSize = 70f
+        toggleRect = ButtonRect(width - padding - toggleSize, height - padding - toggleSize, toggleSize, toggleSize)
+    }
+
+    private fun setButtonsVisible(visible: Boolean) {
+        buttonsVisible = visible
+        if (!visible) {
+            btnUpPointer = -1
+            btnDownPointer = -1
+            btnLeftPointer = -1
+            btnRightPointer = -1
+            btnShootPointer = -1
+            keyForward = false
+            keyBack = false
+            keyLeft = false
+            keyRight = false
+        }
+    }
+
+    private fun hitButton(x: Float, y: Float): String? {
+        for ((name, button) in buttons) {
+            if (button.rect.contains(x, y)) return name
+        }
+        return null
+    }
+
+    private fun startNewGame() {
+        targets.clear()
+        bubbles.clear()
+
+        repeat(TARGET_COUNT) { targets.add(spawnTarget()) }
+
+        gameWon = false
+        messageText = ""
+
+        yaw = 0f
+        pitch = 0f
+        cam.position.set(0f, PLAYER_EYE_HEIGHT, 0f)
+        updateCameraRotation()
+    }
+
+    private fun spawnTarget(): Target {
+        val angle = MathUtils.random() * MathUtils.PI2
+        val dist = 6f + MathUtils.random() * (ARENA_HALF_SIZE - 8f)
+        val x = MathUtils.cos(angle) * dist
+        val z = MathUtils.sin(angle) * dist
+        val y = 1f + MathUtils.random() * 3f
+
+        val instance = ModelInstance(balloonDogModels.random())
+        return Target(instance, Vector3(x, y, z), MathUtils.random() * MathUtils.PI2, TARGET_RADIUS)
+    }
+
+    private fun shootBubble() {
+        val dir = Vector3(cam.direction).nor()
+        val right = Vector3(camLeft).scl(-1f)
+        val up = cam.up
+        val spawnPos = Vector3(cam.position)
+            .mulAdd(dir, 1.1f)
+            .mulAdd(right, 0.22f)
+            .mulAdd(up, -0.18f)
+
+        val instance = sphereInstance(transparentMaterial(Color(0.75f, 0.9f, 1f, 0.55f)))
+        bubbles.add(Bubble(instance, Vector3(spawnPos), Vector3(dir).scl(BUBBLE_SPEED), spawnPos))
+    }
+
+    private fun captureTarget(target: Target) {
+        target.state = TargetState.CAPTURED
+        target.captureBubble = sphereInstance(transparentMaterial(Color(0.6f, 0.85f, 1f, 0.45f)))
+    }
+
+    /** Same Tait-Bryan composition as jME's Quaternion.fromAngles(pitch, yaw, 0) followed by Camera.setAxes. */
+    private fun updateCameraRotation() {
+        camRotation.setEulerAnglesRad(yaw, pitch, 0f)
+        cam.direction.set(0f, 0f, 1f).mul(camRotation)
+        cam.up.set(0f, 1f, 0f).mul(camRotation)
+        camLeft.set(1f, 0f, 0f).mul(camRotation)
+        cam.update()
+    }
+
+    private fun applyMovement(tpf: Float) {
+        val forwardInput: Float
+        val strafeInput: Float
+        if (moveTouchId != -1) {
+            forwardInput = (moveDY / JOYSTICK_MAX_RADIUS).coerceIn(-1f, 1f)
+            strafeInput = (moveDX / JOYSTICK_MAX_RADIUS).coerceIn(-1f, 1f)
+        } else {
+            forwardInput = (if (keyForward) 1f else 0f) + (if (keyBack) -1f else 0f)
+            strafeInput = (if (keyRight) 1f else 0f) + (if (keyLeft) -1f else 0f)
+        }
+        if (forwardInput == 0f && strafeInput == 0f) return
+
+        val dir = Vector3(cam.direction)
+        dir.y = 0f
+        if (dir.len2() > 0.0001f) dir.nor()
+        val left = Vector3(camLeft)
+        left.y = 0f
+        if (left.len2() > 0.0001f) left.nor()
+
+        val moveVec = dir.scl(forwardInput).mulAdd(left, -strafeInput).scl(MOVE_SPEED * tpf)
+        val newLoc = Vector3(cam.position).add(moveVec)
+        newLoc.x = newLoc.x.coerceIn(-ARENA_HALF_SIZE + 1f, ARENA_HALF_SIZE - 1f)
+        newLoc.z = newLoc.z.coerceIn(-ARENA_HALF_SIZE + 1f, ARENA_HALF_SIZE - 1f)
+        newLoc.y = PLAYER_EYE_HEIGHT
+        cam.position.set(newLoc)
+        cam.update()
+    }
+
+    private fun updateWand() {
+        val right = Vector3(camLeft).scl(-1f)
+        val pos = Vector3(cam.position)
+            .mulAdd(cam.direction, 0.9f)
+            .mulAdd(right, 0.22f)
+            .mulAdd(cam.up, -0.18f)
+        wandHandle.transform.setToTranslation(pos).rotate(camRotation).translate(0f, 0f, -0.15f)
+        wandTip.transform.setToTranslation(pos).rotate(camRotation).translate(0f, 0f, -0.4f).scale(0.055f, 0.055f, 0.055f)
+    }
+
+    private fun updateBubbles(tpf: Float) {
+        val it = bubbles.iterator()
+        while (it.hasNext()) {
+            val b = it.next()
+            b.position.mulAdd(b.velocity, tpf)
+
+            var hit = false
+            for (t in targets) {
+                if (t.state == TargetState.ACTIVE && b.position.dst(t.position) < BUBBLE_RADIUS + t.radius) {
+                    captureTarget(t)
+                    hit = true
+                    break
+                }
+            }
+
+            if (hit || b.position.dst(b.spawnPos) > BUBBLE_MAX_DISTANCE) {
+                it.remove()
+            } else {
+                b.instance.transform.setToTranslation(b.position).scale(BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS)
+            }
+        }
+    }
+
+    private fun updateTargets(tpf: Float) {
+        val it = targets.iterator()
+        while (it.hasNext()) {
+            val t = it.next()
+            if (t.state == TargetState.CAPTURED) {
+                t.position.y += FLOAT_SPEED * tpf
+                t.yaw += tpf * 1.5f
+                if (t.position.y > FLOAT_REMOVE_HEIGHT) {
+                    it.remove()
+                    continue
+                }
+            }
+            t.instance.transform.setToTranslation(t.position).rotateRad(Vector3.Y, t.yaw)
+            t.captureBubble?.transform?.set(t.instance.transform)
+                ?.scale(ENCASE_BUBBLE_RADIUS, ENCASE_BUBBLE_RADIUS, ENCASE_BUBBLE_RADIUS)
+        }
+    }
+
+    override fun render() {
+        val tpf = Gdx.graphics.deltaTime
+
+        if (keyLookLeft) yaw += TURN_RATE * tpf
+        if (keyLookRight) yaw -= TURN_RATE * tpf
+        if (keyLookUp) pitch = (pitch + LOOK_RATE * tpf).coerceIn(-PITCH_LIMIT, PITCH_LIMIT)
+        if (keyLookDown) pitch = (pitch - LOOK_RATE * tpf).coerceIn(-PITCH_LIMIT, PITCH_LIMIT)
+        updateCameraRotation()
+
+        applyMovement(tpf)
+        updateBubbles(tpf)
+        updateTargets(tpf)
+        updateWand()
+
+        val remaining = targets.count { it.state == TargetState.ACTIVE }
+        if (remaining == 0 && !gameWon) {
+            gameWon = true
+            messageText = "ALL TARGETS CAPTURED!\nTap to play again"
+        }
+
+        Gdx.gl.glClearColor(0.55f, 0.75f, 0.95f, 1f)
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT or GL20.GL_DEPTH_BUFFER_BIT)
+
+        // One begin/end so ModelBatch sorts the transparent bubbles after all opaque geometry
+        modelBatch.begin(cam)
+        modelBatch.render(scenery, environment)
+        modelBatch.render(wandHandle, environment)
+        for (t in targets) modelBatch.render(t.instance, environment)
+        // No environment = unshaded
+        modelBatch.render(wandTip)
+        for (t in targets) t.captureBubble?.let { modelBatch.render(it) }
+        for (b in bubbles) modelBatch.render(b.instance)
+        modelBatch.end()
+
+        renderHud(remaining)
+    }
+
+    private fun renderHud(remaining: Int) {
+        val width = Gdx.graphics.width.toFloat()
+        val height = Gdx.graphics.height.toFloat()
+
+        Gdx.gl.glEnable(GL20.GL_BLEND)
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
+        shapes.begin(ShapeRenderer.ShapeType.Filled)
+        drawReticle(width / 2f, height / 2f)
+        if (buttonsVisible) {
+            for (button in buttons.values) {
+                shapes.color = button.color
+                shapes.rect(button.rect.x, button.rect.y, button.rect.w, button.rect.h)
+            }
+        }
+        shapes.color = TOGGLE_COLOR
+        shapes.rect(toggleRect.x, toggleRect.y, toggleRect.w, toggleRect.h)
+        shapes.end()
+
+        hudBatch.begin()
+        font.color = Color.WHITE
+        font.data.setScale(TARGETS_TEXT_SCALE)
+        font.draw(hudBatch, "Targets remaining: $remaining", 10f, height - 10f)
+
+        if (buttonsVisible) {
+            font.data.setScale(BUTTON_TEXT_SCALE)
+            for (button in buttons.values) drawCentered(button.label, button.rect)
+        }
+        font.data.setScale(TOGGLE_TEXT_SCALE)
+        drawCentered(if (buttonsVisible) "HIDE\nUI" else "SHOW\nUI", toggleRect)
+
+        if (messageText.isNotEmpty()) {
+            font.color = Color.YELLOW
+            font.data.setScale(MESSAGE_TEXT_SCALE)
+            font.draw(hudBatch, messageText, width / 2f - 160f, height / 2f + 60f)
+        }
+        hudBatch.end()
+    }
+
+    private fun drawCentered(text: String, rect: ButtonRect) {
+        glyphs.setText(font, text, Color.WHITE, rect.w, Align.center, false)
+        font.draw(hudBatch, glyphs, rect.x, rect.y + rect.h / 2f + glyphs.height / 2f)
+    }
+
+    /** Crosshair-bullseye reticle: a dashed ring, four tick lines, and a center dot. */
+    private fun drawReticle(cx: Float, cy: Float) {
+        shapes.color = Color.WHITE
+
+        val ringRadius = 16f
+        val tickCount = 16
+        repeat(tickCount) { i ->
+            val angle = (MathUtils.PI2 / tickCount) * i
+            val x = MathUtils.cos(angle) * ringRadius
+            val y = MathUtils.sin(angle) * ringRadius
+            shapes.rect(cx + x - 1.5f, cy + y - 1.5f, 3f, 3f)
+        }
+
+        val lineLen = 10f
+        val gap = 6f
+        val thickness = 2f
+        shapes.rect(cx - gap - lineLen, cy - thickness / 2f, lineLen, thickness) // left
+        shapes.rect(cx + gap, cy - thickness / 2f, lineLen, thickness) // right
+        shapes.rect(cx - thickness / 2f, cy + gap, thickness, lineLen) // top
+        shapes.rect(cx - thickness / 2f, cy - gap - lineLen, thickness, lineLen) // bottom
+        shapes.rect(cx - 2f, cy - 2f, 4f, 4f) // center dot
+    }
+
+    override fun dispose() {
+        models.forEach { it.dispose() }
+        modelBatch.dispose()
+        shapes.dispose()
+        hudBatch.dispose()
+        font.dispose()
+    }
+
+    // --- Input: touch is primary (left half = move joystick, right half = look/shoot); WASD+arrows are a testing convenience.
+    // Screen y is flipped to bottom-up so hit tests and look math match the original jME TouchEvent coordinates.
+    private val input = object : InputAdapter() {
+
+        private fun setKey(keycode: Int, pressed: Boolean): Boolean {
+            when (keycode) {
+                Input.Keys.W -> keyForward = pressed
+                Input.Keys.S -> keyBack = pressed
+                Input.Keys.A -> keyLeft = pressed
+                Input.Keys.D -> keyRight = pressed
+                Input.Keys.LEFT -> keyLookLeft = pressed
+                Input.Keys.RIGHT -> keyLookRight = pressed
+                Input.Keys.UP -> keyLookUp = pressed
+                Input.Keys.DOWN -> keyLookDown = pressed
+                Input.Keys.SPACE -> if (pressed) {
+                    if (gameWon) startNewGame() else shootBubble()
+                }
+                else -> return false
+            }
+            return true
+        }
+
+        override fun keyDown(keycode: Int) = setKey(keycode, true)
+
+        override fun keyUp(keycode: Int) = setKey(keycode, false)
+
+        override fun touchDown(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean {
+            val x = screenX.toFloat()
+            val y = Gdx.graphics.height - screenY.toFloat()
+            if (toggleRect.contains(x, y)) {
+                setButtonsVisible(!buttonsVisible)
+                return true
+            }
+            val buttonHit = if (buttonsVisible) hitButton(x, y) else null
+            if (buttonHit != null) {
+                when (buttonHit) {
+                    "up" -> { btnUpPointer = pointer; keyForward = true }
+                    "down" -> { btnDownPointer = pointer; keyBack = true }
+                    "left" -> { btnLeftPointer = pointer; keyLeft = true }
+                    "right" -> { btnRightPointer = pointer; keyRight = true }
+                    "shoot" -> {
+                        btnShootPointer = pointer
+                        if (gameWon) startNewGame() else shootBubble()
+                    }
+                }
+                return true
+            }
+            if (x < Gdx.graphics.width / 2f) {
+                if (moveTouchId == -1) {
+                    moveTouchId = pointer
+                    moveStartX = x
+                    moveStartY = y
+                    moveDX = 0f
+                    moveDY = 0f
+                }
+            } else if (lookTouchId == -1) {
+                lookTouchId = pointer
+                lookDownX = x
+                lookDownY = y
+                lookLastX = x
+                lookLastY = y
+                lookDownTimeNanos = System.nanoTime()
+                lookDragged = false
+            }
+            return true
+        }
+
+        override fun touchDragged(screenX: Int, screenY: Int, pointer: Int): Boolean {
+            val x = screenX.toFloat()
+            val y = Gdx.graphics.height - screenY.toFloat()
+            if (pointer == moveTouchId) {
+                moveDX = (x - moveStartX).coerceIn(-JOYSTICK_MAX_RADIUS, JOYSTICK_MAX_RADIUS)
+                moveDY = (y - moveStartY).coerceIn(-JOYSTICK_MAX_RADIUS, JOYSTICK_MAX_RADIUS)
+            } else if (pointer == lookTouchId) {
+                val dx = x - lookLastX
+                val dy = y - lookLastY
+                lookLastX = x
+                lookLastY = y
+                if (abs(x - lookDownX) > DRAG_THRESHOLD_PIXELS || abs(y - lookDownY) > DRAG_THRESHOLD_PIXELS) {
+                    lookDragged = true
+                }
+                yaw -= dx * LOOK_SENSITIVITY
+                pitch = (pitch + dy * LOOK_SENSITIVITY).coerceIn(-PITCH_LIMIT, PITCH_LIMIT)
+            }
+            return true
+        }
+
+        override fun touchUp(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean {
+            if (pointer == btnUpPointer) {
+                btnUpPointer = -1
+                keyForward = false
+            } else if (pointer == btnDownPointer) {
+                btnDownPointer = -1
+                keyBack = false
+            } else if (pointer == btnLeftPointer) {
+                btnLeftPointer = -1
+                keyLeft = false
+            } else if (pointer == btnRightPointer) {
+                btnRightPointer = -1
+                keyRight = false
+            } else if (pointer == btnShootPointer) {
+                btnShootPointer = -1
+            } else if (pointer == moveTouchId) {
+                moveTouchId = -1
+                moveDX = 0f
+                moveDY = 0f
+            } else if (pointer == lookTouchId) {
+                val elapsed = System.nanoTime() - lookDownTimeNanos
+                if (!lookDragged && elapsed <= TAP_MAX_NANOS) {
+                    if (gameWon) startNewGame() else shootBubble()
+                }
+                lookTouchId = -1
+            }
+            return true
+        }
+    }
+}

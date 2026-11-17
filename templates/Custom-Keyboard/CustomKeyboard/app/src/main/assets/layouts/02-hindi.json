@@ -1,0 +1,37 @@
+{
+  "name": "हिन्दी",
+  "shortName": "हि",
+  "locale": "hi-IN",
+  "layers": {
+    "main": [
+      ["ा", "ि", "ी", {"output": "ु", "popup": ["ृ"]}, "ू", {"output": "े", "popup": ["ॅ"]}, "ै",
+       {"output": "ो", "popup": ["ॉ"]}, "ौ", {"output": "ं", "popup": ["ँ", "ः"]}, "्"],
+      [{"output": "क", "popup": ["क़", "क्ष"]}, {"output": "ख", "popup": ["ख़"]}, {"output": "ग", "popup": ["ग़"]},
+       "घ", "ङ", "च", "छ", {"output": "ज", "popup": ["ज़", "ज्ञ"]}, "झ", "ञ", "ट"],
+      ["ठ", {"output": "ड", "popup": ["ड़"]}, {"output": "ढ", "popup": ["ढ़"]}, "ण", {"output": "त", "popup": ["त्र"]},
+       "थ", "द", "ध", "न", "प", {"output": "फ", "popup": ["फ़"]}],
+      [{"type": "shift"}, "ब", "भ", "म", "य", {"output": "र", "popup": ["ऋ"]}, "ल", "व",
+       {"output": "स", "popup": ["श", "ष", "श्र"]}, "ह", {"type": "backspace"}],
+      [{"type": "symbols", "width": 1.5}, {"type": "language", "width": 1.5}, {"type": "space", "width": 5},
+       {"output": "।", "popup": ["॥", ",", ".", "?"]}, {"type": "enter", "width": 2}]
+    ],
+    "shift": [
+      ["अ", "आ", "इ", "ई", "उ", "ऊ", "ए", "ऐ", "ओ", "औ", "ऋ"],
+      ["क्ष", "त्र", "ज्ञ", "श्र", "श", "ष", "ऑ", "ॅ", "ॉ", "ँ", "ः"],
+      ["क़", "ख़", "ग़", "ज़", "ड़", "ढ़", "फ़", "़", "ृ", "ॐ", "ऽ"],
+      [{"type": "shift"}, "।", "॥", ",", ".", "?", "!", "-", "'", {"type": "backspace"}],
+      [{"type": "symbols", "width": 1.5}, {"type": "language", "width": 1.5}, {"type": "space", "width": 5},
+       "।", {"type": "enter", "width": 2}]
+    ],
+    "symbols": [
+      [{"output": "1", "popup": ["१"]}, {"output": "2", "popup": ["२"]}, {"output": "3", "popup": ["३"]},
+       {"output": "4", "popup": ["४"]}, {"output": "5", "popup": ["५"]}, {"output": "6", "popup": ["६"]},
+       {"output": "7", "popup": ["७"]}, {"output": "8", "popup": ["८"]}, {"output": "9", "popup": ["९"]},
+       {"output": "0", "popup": ["०"]}],
+      ["@", "#", "₹", "%", "&", "-", "+", "(", ")", "/"],
+      ["*", "\"", "'", ":", ";", "!", "?", "_", {"type": "backspace", "width": 2}],
+      [{"type": "letters", "label": "कखग", "width": 1.5}, {"type": "language"}, ",", {"type": "space", "width": 4},
+       "।", {"type": "enter", "width": 1.5}]
+    ]
+  }
+}

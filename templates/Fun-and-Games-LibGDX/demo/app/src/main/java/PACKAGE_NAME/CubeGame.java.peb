@@ -1,0 +1,437 @@
+package ${{PACKAGE_NAME}};
+
+import com.badlogic.gdx.ApplicationAdapter;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.PerspectiveCamera;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.VertexAttributes.Usage;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.g3d.Environment;
+import com.badlogic.gdx.graphics.g3d.Material;
+import com.badlogic.gdx.graphics.g3d.Model;
+import com.badlogic.gdx.graphics.g3d.ModelBatch;
+import com.badlogic.gdx.graphics.g3d.ModelInstance;
+import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
+import com.badlogic.gdx.graphics.g3d.attributes.FloatAttribute;
+import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute;
+import com.badlogic.gdx.graphics.g3d.decals.CameraGroupStrategy;
+import com.badlogic.gdx.graphics.g3d.decals.Decal;
+import com.badlogic.gdx.graphics.g3d.decals.DecalBatch;
+import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.graphics.g3d.model.Node;
+import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.BoxShapeBuilder;
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.CylinderShapeBuilder;
+import com.badlogic.gdx.graphics.g3d.utils.shapebuilders.SphereShapeBuilder;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Quaternion;
+import com.badlogic.gdx.math.Vector3;
+import java.util.Random;
+
+public class CubeGame extends ApplicationAdapter {
+
+    private PerspectiveCamera cam;
+    private ModelBatch modelBatch;
+    private Environment environment;
+    // Unlit except for emissive: used for the bloom glow pass
+    private Environment glowEnvironment;
+    private BloomEffect bloom;
+
+    private Model starModel;
+    private Model earthModel;
+    private Model rocketModel;
+    private ModelInstance stars;
+    private ModelInstance cube;
+    private ModelInstance rocket;
+    private Material nozzleMat;
+    private Texture earthTexture;
+
+    // Scene-graph state kept as plain transforms (libGDX has no Node hierarchy for instances)
+    private final Quaternion cubeRotation = new Quaternion();
+    private float orbitAngle = 0f;   // radians around the tilted orbit pivot's local Y
+    private float rocketSpin = 0f;   // radians around the rocket's local Y
+    private final Matrix4 orbitNodeTransform = new Matrix4();
+
+    private SpriteBatch spriteBatch;
+    private BitmapFont font;
+    private int score = 0;
+
+    // Trail particles
+    private static final int MAX_PARTICLES = 150;
+    private static final float PARTICLES_PER_SEC = 120f;
+    private static final float LOW_LIFE  = 0.4f;
+    private static final float HIGH_LIFE = 0.65f;
+    private static final float START_SIZE = 0.25f;
+    private static final float END_SIZE   = 0.02f;
+    private static final Color START_COLOR = new Color(1.0f, 0.65f, 0.10f, 1f);  // bright orange-yellow
+    private static final Color END_COLOR   = new Color(0.5f, 0.05f, 0.00f, 0f);  // dark red, transparent
+    private Texture particleTexture;
+    private DecalBatch decalBatch;
+    private final Decal[] particles = new Decal[MAX_PARTICLES];
+    private final float[] particleAge = new float[MAX_PARTICLES];
+    private final float[] particleLife = new float[MAX_PARTICLES];
+    private final boolean[] particleAlive = new boolean[MAX_PARTICLES];
+    private float emitAccumulator = 0f;
+    private final Color tmpColor = new Color();
+    private final Vector3 tmpVec = new Vector3();
+
+    // Drag state
+    private boolean isDragging = false;
+    private float lastX, lastY;
+    private float totalDragDistance = 0f;
+
+    // Inertia: carry over drag velocity after finger lifts
+    private float velocityX = 0f;
+    private float velocityY = 0f;
+
+    private static final float DRAG_SENSITIVITY = 0.008f;
+    private static final float TAP_THRESHOLD    = 15f;   // pixels
+    private static final float INERTIA_DECAY    = 0.92f;
+
+    // Screen y is converted to bottom-up so drag math matches the original jME TouchEvent coordinates
+    private final InputAdapter touchListener = new InputAdapter() {
+
+        @Override
+        public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+            if (pointer != 0) return false;
+            isDragging = true;
+            lastX = screenX;
+            lastY = Gdx.graphics.getHeight() - screenY;
+            totalDragDistance = 0f;
+            // Kill inertia when finger touches down
+            velocityX = 0f;
+            velocityY = 0f;
+            return true;
+        }
+
+        @Override
+        public boolean touchDragged(int screenX, int screenY, int pointer) {
+            if (pointer != 0 || !isDragging) return false;
+            float x = screenX;
+            float y = Gdx.graphics.getHeight() - screenY;
+            float dx = x - lastX;
+            float dy = y - lastY;
+
+            rotateCube(dx, dy);
+
+            // Store as inertia velocity (pixels/frame, decayed on lift)
+            velocityX = dx;
+            velocityY = dy;
+
+            totalDragDistance += (float) Math.sqrt(dx * dx + dy * dy);
+            lastX = x;
+            lastY = y;
+            return true;
+        }
+
+        @Override
+        public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+            if (pointer != 0) return false;
+            isDragging = false;
+            // Small movement = tap: award score
+            if (totalDragDistance < TAP_THRESHOLD) {
+                score += 10;
+            }
+            return true;
+        }
+    };
+
+    @Override
+    public void create() {
+        cam = new PerspectiveCamera(45f, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        cam.position.set(0, 0, 6);
+        cam.lookAt(0, 0, 0);
+        cam.up.set(Vector3.Y);
+        cam.near = 1f;
+        cam.far = 1000f;
+        cam.update();
+
+        modelBatch = new ModelBatch();
+        ModelBuilder modelBuilder = new ModelBuilder();
+
+        // Starfield — 250 tiny boxes on a sphere shell, merged into one mesh (one draw call)
+        modelBuilder.begin();
+        MeshPartBuilder starBuilder = modelBuilder.part("stars", GL20.GL_TRIANGLES, Usage.Position,
+            new Material(ColorAttribute.createDiffuse(Color.WHITE)));
+        Random rand = new Random(12345L); // fixed seed for deterministic layout
+        for (int i = 0; i < 250; i++) {
+            // Uniform distribution on sphere surface
+            float theta = rand.nextFloat() * MathUtils.PI2;
+            float phi   = (float) Math.acos(2f * rand.nextFloat() - 1f);
+            float r     = 25f + rand.nextFloat() * 15f; // shell between radius 25 and 40
+            float size  = 0.12f * (0.5f + rand.nextFloat()); // vary star size
+            BoxShapeBuilder.build(starBuilder,
+                r * MathUtils.sin(phi) * MathUtils.cos(theta),
+                r * MathUtils.sin(phi) * MathUtils.sin(theta),
+                r * MathUtils.cos(phi),
+                size, size, size);
+        }
+        starModel = modelBuilder.end();
+        stars = new ModelInstance(starModel);
+
+        // Earth — textured sphere; diffuse texture drives colour, specular adds ocean glint
+        earthTexture = new Texture(Gdx.files.internal("Textures/earth.png"), true);
+        earthTexture.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
+        Material mat = new Material(
+            TextureAttribute.createDiffuse(earthTexture),
+            ColorAttribute.createDiffuse(Color.WHITE),
+            ColorAttribute.createSpecular(0.40f, 0.55f, 0.85f, 1f),
+            FloatAttribute.createShininess(60f));
+        earthModel = modelBuilder.createSphere(2f, 2f, 2f, 48, 48, mat,
+            Usage.Position | Usage.Normal | Usage.TextureCoordinates);
+        cube = new ModelInstance(earthModel);
+
+        buildRocket(modelBuilder);
+        setUpTrail();
+
+        // Lights
+        environment = new Environment();
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.25f, 0.25f, 0.35f, 1f)); // cool blue-white fill
+        DirectionalLight sun = new DirectionalLight().set(Color.WHITE, new Vector3(-1, -1, -2).nor());
+        // Color.set clamps to 1; write the channels directly to keep the original 1.5x sun
+        sun.color.r = sun.color.g = sun.color.b = 1.5f;
+        environment.add(sun);
+
+        glowEnvironment = new Environment();
+        glowEnvironment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0f, 0f, 0f, 1f));
+
+        // Bloom — only geometry with an emissive glow colour in the glow pass blooms,
+        // so the Earth and background are unaffected
+        bloom = new BloomEffect(1.5f, 1.2f, 2f);  // downsample 2x for mobile perf
+        bloom.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+
+        // HUD
+        spriteBatch = new SpriteBatch();
+        font = new BitmapFont();
+        font.getData().setScale(2f);
+        font.setColor(Color.WHITE);
+
+        Gdx.input.setInputProcessor(touchListener);
+    }
+
+    /** Generic rocket ship built procedurally; one model, one node per part. */
+    private void buildRocket(ModelBuilder modelBuilder) {
+        long attrs = Usage.Position | Usage.Normal;
+
+        // Body — white/light gray hull
+        Material bodyMat = new Material("body",
+            ColorAttribute.createDiffuse(0.88f, 0.88f, 0.88f, 1f),
+            ColorAttribute.createSpecular(Color.WHITE),
+            FloatAttribute.createShininess(48f));
+
+        // Nose cone / fins accent — red
+        Material accentMat = new Material("accent",
+            ColorAttribute.createDiffuse(0.88f, 0.10f, 0.10f, 1f),
+            ColorAttribute.createSpecular(Color.WHITE),
+            FloatAttribute.createShininess(24f));
+
+        // Engine nozzle — dark metal; its orange glow is added only during the bloom pass
+        Material nozzle = new Material("nozzle",
+            ColorAttribute.createDiffuse(0.38f, 0.38f, 0.38f, 1f),
+            ColorAttribute.createSpecular(Color.WHITE),
+            FloatAttribute.createShininess(64f));
+
+        // Porthole window — dark blue
+        Material windowMat = new Material("window",
+            ColorAttribute.createDiffuse(0.10f, 0.20f, 0.55f, 1f),
+            ColorAttribute.createSpecular(Color.WHITE),
+            FloatAttribute.createShininess(128f));
+
+        modelBuilder.begin();
+
+        // Nose — red sphere at top of rocket
+        partNode(modelBuilder, "Nose", 0, 0.38f, 0);
+        SphereShapeBuilder.build(modelBuilder.part("Nose", GL20.GL_TRIANGLES, attrs, accentMat),
+            0.20f, 0.20f, 0.20f, 16, 8);
+
+        // Body cylinder — long axis along +Y (nose up)
+        partNode(modelBuilder, "Body", 0, 0.08f, 0);
+        CylinderShapeBuilder.build(modelBuilder.part("Body", GL20.GL_TRIANGLES, attrs, bodyMat),
+            0.20f, 0.55f, 0.20f, 16);
+
+        // Porthole window on the upper body
+        partNode(modelBuilder, "Window", 0.10f, 0.20f, 0);
+        SphereShapeBuilder.build(modelBuilder.part("Window", GL20.GL_TRIANGLES, attrs, windowMat),
+            0.076f, 0.076f, 0.076f, 12, 6);
+
+        // 4 stabiliser fins around the base (+X, -X along Z-thin; +Z, -Z along X-thin)
+        partNode(modelBuilder, "FinPX", 0.20f, -0.16f, 0);
+        BoxShapeBuilder.build(modelBuilder.part("FinPX", GL20.GL_TRIANGLES, attrs, accentMat), 0.26f, 0.32f, 0.03f);
+        partNode(modelBuilder, "FinNX", -0.20f, -0.16f, 0);
+        BoxShapeBuilder.build(modelBuilder.part("FinNX", GL20.GL_TRIANGLES, attrs, accentMat), 0.26f, 0.32f, 0.03f);
+        partNode(modelBuilder, "FinPZ", 0, -0.16f, 0.20f);
+        BoxShapeBuilder.build(modelBuilder.part("FinPZ", GL20.GL_TRIANGLES, attrs, accentMat), 0.03f, 0.32f, 0.26f);
+        partNode(modelBuilder, "FinNZ", 0, -0.16f, -0.20f);
+        BoxShapeBuilder.build(modelBuilder.part("FinNZ", GL20.GL_TRIANGLES, attrs, accentMat), 0.03f, 0.32f, 0.26f);
+
+        // Engine nozzle bell — wider than body, glows orange
+        partNode(modelBuilder, "Nozzle", 0, -0.26f, 0);
+        CylinderShapeBuilder.build(modelBuilder.part("Nozzle", GL20.GL_TRIANGLES, attrs, nozzle),
+            0.26f, 0.10f, 0.26f, 16);
+
+        rocketModel = modelBuilder.end();
+        rocket = new ModelInstance(rocketModel);
+        // ModelInstance copies materials, so grab the instance's copy to toggle the glow on
+        nozzleMat = rocket.getMaterial("nozzle");
+    }
+
+    private static void partNode(ModelBuilder modelBuilder, String id, float x, float y, float z) {
+        Node node = modelBuilder.node();
+        node.id = id;
+        node.translation.set(x, y, z);
+    }
+
+    private void setUpTrail() {
+        particleTexture = new Texture(Gdx.files.internal("Textures/Particle.png"));
+        TextureRegion region = new TextureRegion(particleTexture);
+        decalBatch = new DecalBatch(new CameraGroupStrategy(cam));
+        for (int i = 0; i < MAX_PARTICLES; i++) {
+            // Additive alpha blending, matching jME's Particle.j3md
+            particles[i] = Decal.newDecal(1f, 1f, region, GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        }
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        cam.viewportWidth = width;
+        cam.viewportHeight = height;
+        cam.update();
+        spriteBatch.getProjectionMatrix().setToOrtho2D(0, 0, width, height);
+        bloom.resize(width, height);
+    }
+
+    @Override
+    public void render() {
+        float tpf = Math.min(Gdx.graphics.getDeltaTime(), 0.1f);
+        update(tpf);
+
+        Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+
+        modelBatch.begin(cam);
+        modelBatch.render(stars);  // no environment = unshaded
+        modelBatch.render(cube, environment);
+        modelBatch.render(rocket, environment);
+        modelBatch.end();
+
+        drawTrail();
+
+        // Glow pass: everything black except the nozzle's glow colour; other geometry still occludes it
+        nozzleMat.set(ColorAttribute.createEmissive(1.0f, 0.45f, 0.0f, 1f));
+        bloom.beginGlow();
+        modelBatch.begin(cam);
+        modelBatch.render(cube, glowEnvironment);
+        modelBatch.render(rocket, glowEnvironment);
+        modelBatch.end();
+        bloom.endGlow();
+        nozzleMat.remove(ColorAttribute.Emissive);
+
+        spriteBatch.begin();
+        font.draw(spriteBatch, "Score: " + score + "  |  Drag to rotate  |  Tap for points",
+            10f, Gdx.graphics.getHeight() - 10f);
+        spriteBatch.end();
+    }
+
+    private void update(float tpf) {
+        if (isDragging) {
+            // Finger is down — cube is driven entirely by touch events
+        } else if (velocityX != 0f || velocityY != 0f) {
+            // Apply inertia after finger lifts
+            rotateCube(velocityX, velocityY);
+            velocityX *= INERTIA_DECAY;
+            velocityY *= INERTIA_DECAY;
+            if (Math.abs(velocityX) < 0.01f) velocityX = 0f;
+            if (Math.abs(velocityY) < 0.01f) velocityY = 0f;
+        } else {
+            // Idle auto-spin when untouched (local-space rotation, like jME's Spatial.rotate)
+            cubeRotation.mul(new Quaternion().setEulerAnglesRad(tpf * 0.35f, tpf * 0.5f, 0f)).nor();
+        }
+        cube.transform.set(cubeRotation);
+
+        // Orbit pivot rotates around its local Y — the 20° tilt makes the path look 3-D
+        orbitAngle += tpf * 1.2f;
+        // Rocket spins slowly so all angles are visible during the orbit
+        rocketSpin += tpf * 0.6f;
+
+        // pivot (tilt 20° about X, then orbit about local Y) -> orbit node at radius 2.5
+        orbitNodeTransform.idt()
+            .rotate(Vector3.X, 20f)
+            .rotateRad(Vector3.Y, orbitAngle)
+            .translate(2.5f, 0f, 0f);
+        rocket.transform.set(orbitNodeTransform).rotateRad(Vector3.Y, rocketSpin);
+
+        updateTrail(tpf);
+    }
+
+    private void updateTrail(float tpf) {
+        // Particles live in world space: spawned at the orbit node, then left behind as it moves
+        orbitNodeTransform.getTranslation(tmpVec);
+
+        emitAccumulator += PARTICLES_PER_SEC * tpf;
+        for (int i = 0; i < MAX_PARTICLES && emitAccumulator >= 1f; i++) {
+            if (!particleAlive[i]) {
+                particleAlive[i] = true;
+                particleAge[i] = 0f;
+                particleLife[i] = MathUtils.random(LOW_LIFE, HIGH_LIFE);
+                particles[i].setPosition(tmpVec);
+                emitAccumulator -= 1f;
+            }
+        }
+        // Pool exhausted: drop the backlog rather than bursting later
+        if (emitAccumulator > 1f) emitAccumulator = 0f;
+
+        for (int i = 0; i < MAX_PARTICLES; i++) {
+            if (!particleAlive[i]) continue;
+            particleAge[i] += tpf;
+            if (particleAge[i] >= particleLife[i]) {
+                particleAlive[i] = false;
+                continue;
+            }
+            float t = particleAge[i] / particleLife[i];
+            // jME particle size is a half-extent, so the quad is twice as wide
+            float size = 2f * MathUtils.lerp(START_SIZE, END_SIZE, t);
+            tmpColor.set(START_COLOR).lerp(END_COLOR, t);
+            Decal d = particles[i];
+            d.setDimensions(size, size);
+            d.setColor(tmpColor);
+        }
+    }
+
+    private void drawTrail() {
+        for (int i = 0; i < MAX_PARTICLES; i++) {
+            if (!particleAlive[i]) continue;
+            particles[i].lookAt(cam.position, cam.up);
+            decalBatch.add(particles[i]);
+        }
+        decalBatch.flush();
+    }
+
+    // dx/dy are screen-pixel deltas (y up); horizontal drag rotates around Y, vertical around X
+    private void rotateCube(float dx, float dy) {
+        Quaternion rotY = new Quaternion().setFromAxisRad(Vector3.Y,  dx * DRAG_SENSITIVITY);
+        Quaternion rotX = new Quaternion().setFromAxisRad(Vector3.X, -dy * DRAG_SENSITIVITY);
+        cubeRotation.set(rotY.mul(rotX).mul(cubeRotation)).nor();
+    }
+
+    @Override
+    public void dispose() {
+        modelBatch.dispose();
+        decalBatch.dispose();
+        spriteBatch.dispose();
+        font.dispose();
+        bloom.dispose();
+        starModel.dispose();
+        earthModel.dispose();
+        rocketModel.dispose();
+        earthTexture.dispose();
+        particleTexture.dispose();
+    }
+}

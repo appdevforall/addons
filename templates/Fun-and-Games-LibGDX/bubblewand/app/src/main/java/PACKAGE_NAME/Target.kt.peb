@@ -1,0 +1,15 @@
+package ${{PACKAGE_NAME}} 
+
+import com.badlogic.gdx.graphics.g3d.ModelInstance
+import com.badlogic.gdx.math.Vector3
+
+enum class TargetState { ACTIVE, CAPTURED }
+
+/**
+ * A target in the arena: [instance] is its mesh, placed each frame from [position] and [yaw];
+ * once hit it is encased in [captureBubble] and floats away.
+ */
+class Target(val instance: ModelInstance, val position: Vector3, var yaw: Float, val radius: Float) {
+    var state: TargetState = TargetState.ACTIVE
+    var captureBubble: ModelInstance? = null
+}

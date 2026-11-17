@@ -1,0 +1,166 @@
+package ${{PACKAGE_NAME}};
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Mesh;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.VertexAttribute;
+import com.badlogic.gdx.graphics.VertexAttributes;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
+import com.badlogic.gdx.graphics.glutils.ShaderProgram;
+import com.badlogic.gdx.utils.Disposable;
+import com.badlogic.gdx.utils.GdxRuntimeException;
+
+/**
+ * Minimal stand-in for jME's BloomFilter(GlowMode.Objects): the caller renders only glow
+ * colours into {@link #beginGlow()}/{@link #endGlow()}, the result is blurred at reduced
+ * resolution, then added on top of the already-drawn scene.
+ */
+public class BloomEffect implements Disposable {
+
+    private static final String VERTEX =
+        "attribute vec2 a_position;\n" +
+        "attribute vec2 a_texCoord0;\n" +
+        "varying vec2 v_uv;\n" +
+        "void main() {\n" +
+        "    v_uv = a_texCoord0;\n" +
+        "    gl_Position = vec4(a_position, 0.0, 1.0);\n" +
+        "}\n";
+
+    // 9-tap separable gaussian; u_step is one texel along the blur direction
+    private static final String BLUR_FRAGMENT =
+        "#ifdef GL_ES\nprecision mediump float;\n#endif\n" +
+        "uniform sampler2D u_texture;\n" +
+        "uniform vec2 u_step;\n" +
+        "varying vec2 v_uv;\n" +
+        "void main() {\n" +
+        "    vec4 sum = texture2D(u_texture, v_uv) * 0.227027;\n" +
+        "    sum += texture2D(u_texture, v_uv + u_step * 1.0) * 0.194595;\n" +
+        "    sum += texture2D(u_texture, v_uv - u_step * 1.0) * 0.194595;\n" +
+        "    sum += texture2D(u_texture, v_uv + u_step * 2.0) * 0.121622;\n" +
+        "    sum += texture2D(u_texture, v_uv - u_step * 2.0) * 0.121622;\n" +
+        "    sum += texture2D(u_texture, v_uv + u_step * 3.0) * 0.054054;\n" +
+        "    sum += texture2D(u_texture, v_uv - u_step * 3.0) * 0.054054;\n" +
+        "    sum += texture2D(u_texture, v_uv + u_step * 4.0) * 0.016216;\n" +
+        "    sum += texture2D(u_texture, v_uv - u_step * 4.0) * 0.016216;\n" +
+        "    gl_FragColor = sum;\n" +
+        "}\n";
+
+    private static final String COMPOSITE_FRAGMENT =
+        "#ifdef GL_ES\nprecision mediump float;\n#endif\n" +
+        "uniform sampler2D u_texture;\n" +
+        "uniform float u_intensity;\n" +
+        "varying vec2 v_uv;\n" +
+        "void main() {\n" +
+        "    gl_FragColor = vec4(texture2D(u_texture, v_uv).rgb * u_intensity, 1.0);\n" +
+        "}\n";
+
+    private final ShaderProgram blurShader;
+    private final ShaderProgram compositeShader;
+    private final Mesh quad;
+    private FrameBuffer glowBuffer;
+    private FrameBuffer pingBuffer;
+
+    private final float intensity;
+    private final float blurScale;
+    private final float downSamplingFactor;
+
+    public BloomEffect(float intensity, float blurScale, float downSamplingFactor) {
+        this.intensity = intensity;
+        this.blurScale = blurScale;
+        this.downSamplingFactor = downSamplingFactor;
+
+        blurShader = compile(BLUR_FRAGMENT);
+        compositeShader = compile(COMPOSITE_FRAGMENT);
+
+        // Full-screen quad in clip space; FBO textures have v=0 at the bottom, so UVs map straight through
+        quad = new Mesh(true, 4, 6,
+            new VertexAttribute(VertexAttributes.Usage.Position, 2, "a_position"),
+            new VertexAttribute(VertexAttributes.Usage.TextureCoordinates, 2, "a_texCoord0"));
+        quad.setVertices(new float[] {
+            -1f, -1f, 0f, 0f,
+             1f, -1f, 1f, 0f,
+             1f,  1f, 1f, 1f,
+            -1f,  1f, 0f, 1f });
+        quad.setIndices(new short[] { 0, 1, 2, 2, 3, 0 });
+    }
+
+    private static ShaderProgram compile(String fragment) {
+        ShaderProgram program = new ShaderProgram(VERTEX, fragment);
+        if (!program.isCompiled()) {
+            throw new GdxRuntimeException("Bloom shader failed to compile: " + program.getLog());
+        }
+        return program;
+    }
+
+    public void resize(int width, int height) {
+        disposeBuffers();
+        int w = Math.max(1, (int) (width / downSamplingFactor));
+        int h = Math.max(1, (int) (height / downSamplingFactor));
+        glowBuffer = new FrameBuffer(Pixmap.Format.RGBA8888, w, h, true);
+        pingBuffer = new FrameBuffer(Pixmap.Format.RGBA8888, w, h, false);
+        glowBuffer.getColorBufferTexture().setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        pingBuffer.getColorBufferTexture().setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+    }
+
+    /** Starts the glow pass; everything drawn until {@link #endGlow()} becomes bloom source. */
+    public void beginGlow() {
+        glowBuffer.begin();
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+    }
+
+    /** Blurs the glow pass and additively composites it onto the current framebuffer. */
+    public void endGlow() {
+        glowBuffer.end();
+
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+
+        float stepX = blurScale / glowBuffer.getWidth();
+        float stepY = blurScale / glowBuffer.getHeight();
+
+        // Horizontal: glow -> ping
+        pingBuffer.begin();
+        drawQuad(blurShader, glowBuffer.getColorBufferTexture(), stepX, 0f);
+        pingBuffer.end();
+
+        // Vertical: ping -> glow
+        glowBuffer.begin();
+        drawQuad(blurShader, pingBuffer.getColorBufferTexture(), 0f, stepY);
+        glowBuffer.end();
+
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE);
+        glowBuffer.getColorBufferTexture().bind(0);
+        compositeShader.bind();
+        compositeShader.setUniformi("u_texture", 0);
+        compositeShader.setUniformf("u_intensity", intensity);
+        quad.render(compositeShader, GL20.GL_TRIANGLES);
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void drawQuad(ShaderProgram shader, Texture source, float stepX, float stepY) {
+        source.bind(0);
+        shader.bind();
+        shader.setUniformi("u_texture", 0);
+        shader.setUniformf("u_step", stepX, stepY);
+        quad.render(shader, GL20.GL_TRIANGLES);
+    }
+
+    private void disposeBuffers() {
+        if (glowBuffer != null) glowBuffer.dispose();
+        if (pingBuffer != null) pingBuffer.dispose();
+        glowBuffer = null;
+        pingBuffer = null;
+    }
+
+    @Override
+    public void dispose() {
+        disposeBuffers();
+        blurShader.dispose();
+        compositeShader.dispose();
+        quad.dispose();
+    }
+}

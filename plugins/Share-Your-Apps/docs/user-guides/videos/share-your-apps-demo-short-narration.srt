@@ -1,0 +1,24 @@
+1
+00:00:00,300 --> 00:00:03,943
+Share Your Apps: share the apps you build, with people nearby.
+
+2
+00:00:05,240 --> 00:00:07,553
+Publish your apps, right from Code On The Go.
+
+3
+00:00:08,850 --> 00:00:13,264
+Buyers scan one code to join your phone's hotspot, and another to open the store.
+
+4
+00:00:14,560 --> 00:00:18,557
+No internet, and no accounts. Just your store, in their browser.
+
+5
+00:00:19,860 --> 00:00:21,967
+One tap, and the app is on their phone.
+
+6
+00:00:23,270 --> 00:00:25,592
+Share Your Apps, from App Dev for All.
+

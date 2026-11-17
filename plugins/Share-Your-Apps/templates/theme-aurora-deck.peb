@@ -1,0 +1,47 @@
+<!doctype html><html lang="{{lang}}"><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>{{storeName}}</title><style>
+:root{color-scheme:dark;--glass:rgba(255,255,255,.10);--edge:rgba(255,255,255,.26);--ink:#f5f7ff;--soft:#c5cff2;--link:#9ef0ff}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#070b1f;color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"DejaVu Sans",sans-serif;overflow-x:hidden}
+.sky{position:fixed;inset:-25%;z-index:-1;filter:blur(70px) saturate(1.5)}
+.sky i{position:absolute;width:60vmax;height:60vmax;border-radius:50%;opacity:.75;mix-blend-mode:screen;animation:drift 20s ease-in-out infinite alternate}
+.sky i:nth-child(1){background:#00ffa3;left:0;top:5%}
+.sky i:nth-child(2){background:#7a5cff;right:0;top:15%;animation-duration:24s;animation-delay:-8s}
+.sky i:nth-child(3){background:#00b7ff;left:25%;bottom:0;animation-duration:28s;animation-delay:-14s}
+.sky i:nth-child(4){background:#ff4fd8;right:15%;bottom:10%;animation-duration:32s;opacity:.5}
+@keyframes drift{to{transform:translate(14vmax,-10vmax) scale(1.3) rotate(45deg)}}
+.glass{background:var(--glass);border:1px solid var(--edge);-webkit-backdrop-filter:blur(20px) saturate(1.4);backdrop-filter:blur(20px) saturate(1.4)}
+header{margin:20px 16px 14px;padding:20px;border-radius:28px;display:flex;gap:16px;align-items:center}header.glass{background:rgba(8,12,38,.66)}
+header img,header video{flex:0 0 64px;width:64px;height:64px;border-radius:18px;object-fit:contain;background:rgba(255,255,255,.12)}
+h1{margin:0;font-size:29px;line-height:1.05;font-weight:800;background:linear-gradient(90deg,#fff,#9ef0ff,#c9a8ff,#fff) 0 0/300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 9s linear infinite}
+@keyframes shine{to{background-position:300% 0}}
+.sd{color:#e8edff;font-size:13px;margin-top:6px}.sd p{margin:.3em 0}.sd a,.pd a{color:var(--link)}
+.bar{display:flex;justify-content:space-between;margin:0 16px 8px;padding:6px 14px;border-radius:999px;background:rgba(8,12,38,.66);font-size:11px;color:#e8edff;letter-spacing:.16em;text-transform:uppercase}
+.deck{display:grid;grid-auto-flow:column;grid-auto-columns:min(84%,420px);gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 8% 34px;counter-reset:card;align-items:start}
+@media (min-width:900px){.deck{grid-auto-flow:row;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));overflow:visible;padding:8px 24px 40px}.swipe{display:none}}
+.card{scroll-snap-align:center;counter-increment:card;position:relative;border-radius:30px;padding:16px;box-shadow:0 24px 50px -24px rgba(0,0,0,.7);background:linear-gradient(160deg,rgba(255,255,255,.18),rgba(255,255,255,.04))}
+.t{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.num::before{content:counter(card,decimal-leading-zero);font:800 40px/1 system-ui,sans-serif;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.5)}
+.mosaic{display:grid;grid-template-columns:1fr 1fr;gap:6px;border-radius:20px;overflow:hidden;margin:0 0 14px}
+.mosaic>*{display:block;width:100%;height:104px;padding:1px 0;object-fit:cover;background:rgba(0,0,0,.28)}
+.mosaic>:first-child{grid-column:1/-1;height:190px;object-fit:contain}
+.mosaic>:last-child:nth-child(even){grid-column:1/-1}
+.mosaic audio{grid-column:1/-1;height:44px}
+h2{margin:0;font-size:22px;line-height:1.2}
+.date{font-size:12px;color:var(--soft);margin-bottom:6px}
+.pd{color:#e6eaff;font-size:14px}.pd p{margin:.4em 0}
+.a{display:grid;grid-template-columns:1.5fr 1fr;gap:10px;margin-top:14px}.a>:only-child{grid-column:1/-1}
+.b{display:flex;flex-direction:column;justify-content:center;min-height:50px;padding:8px 10px;border-radius:999px;text-align:center;text-decoration:none;font-weight:700;font-size:14px;white-space:nowrap;color:var(--ink);border:1px solid var(--edge);background:rgba(255,255,255,.08)}
+.b:active{transform:scale(.97)}
+.b1{background:var(--accent,linear-gradient(135deg,#00e6a8,#5b8cff 55%,#b45cff));border-color:transparent;color:var(--accent-ink,#061032);box-shadow:0 10px 26px -10px #5b8cff}
+.b small{display:block;font-weight:500;font-size:11px;opacity:.85}
+/* Full strength on the accent: accentInk only guarantees its contrast undimmed. */
+.b1 small{opacity:1}
+.acc{display:inline-block;margin:14px 16px 0;padding:6px 14px;border-radius:999px;color:var(--ink);background:rgba(8,12,38,.6);border:1px solid var(--edge);font-size:13px;font-weight:700;text-decoration:none}
+:focus-visible{outline:3px solid #9ef0ff;outline-offset:3px}
+.facts{color:#e6ecff;font-size:12px;margin:10px 6px 0}
+.new{color:#e6eaff;font-size:13px;margin:.4em 0}
+.news,.foot{margin:0 16px 12px;padding:10px 14px;border-radius:18px;background:rgba(8,12,38,.66);color:#fff}.news{font-weight:700;font-size:14px}.foot{margin-bottom:28px;font-size:12px;text-align:center}.foot p{margin:3px 0}.foot a{color:var(--link)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>{% if accent is not empty %}<style>:root{--accent:{{accent}};--accent-ink:{{accentInk}}}</style>{% endif %}</head><body><div class=sky aria-hidden=true><i></i><i></i><i></i><i></i></div>{% if accessibleHref is not empty %}<nav class=acc-nav aria-label="Page versions"><a class=acc href="{{accessibleHref}}">Accessible version</a></nav>{% endif %}
+<header class=glass>{% if headerImage.type=='video' %}<video src="{{headerImage.src}}"{% if headerImage.poster %} poster="{{headerImage.poster}}"{% endif %} controls preload="none" muted loop playsinline></video>{% else %}<img src="{{headerImage.src}}" alt="">{% endif %}<div><h1>{{storeName}}</h1>{% if storeDescriptionHtml is not empty %}<div class=sd>{{storeDescriptionHtml|raw}}</div>{% endif %}</div></header>
+{% if announcement is not empty %}<p class=news role=region aria-label="Announcement">{{announcement}}</p>{% endif %}<main aria-label="Apps"><div class=bar><span>{{products|length}} apps</span><span class=swipe>Swipe &rarr;</span></div>
+<div class=deck>{% for p in products %}<section class="card glass">{% if p.carousel is not empty %}<div class=mosaic role=group aria-label="{{p.name}}: pictures">{% for m in p.carousel %}{% if m.type=='video' %}<video src="{{m.src}}" controls preload="none"{% if m.poster is not empty %} poster="{{m.poster}}"{% endif %} {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}aria-label="{{m.alt}}">{% if m.captions is not empty %}<track kind="captions" src="{{m.captions}}" srclang="{{lang}}" label="Captions" default>{% endif %}</video>{% elseif m.type=='audio' %}<audio src="{{m.src}}" controls aria-label="{{m.alt}}"></audio>{% else %}<img src="{{m.src}}" {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}alt="{{m.alt}}" loading="lazy">{% endif %}{% endfor %}</div>{% endif %}<div class=t><div><h2>{{p.name}}</h2><div class=date>{% if p.dateAddedIso is not empty %}<time datetime="{{p.dateAddedIso}}">{{p.dateAddedLabel}}</time>{% else %}{{p.dateAddedLabel}}{% endif %}</div></div><span class=num aria-hidden=true></span></div>{% if p.descriptionHtml is not empty %}<div class=pd>{{p.descriptionHtml|raw}}</div>{% endif %}{% if p.whatsNew is not empty %}<p class=new><b>What's new:</b> {{p.whatsNew}}</p>{% endif %}<div class=a>{% if p.apk is not empty %}<a class="b b1" href="{{p.apk.src}}">Download APK<small>{{p.apk.sizeLabel}}</small></a>{% endif %}{% if p.sourceZip is not empty %}<a class=b href="{{p.sourceZip.src}}">Source<small>{{p.sourceZip.sizeLabel}}</small></a>{% endif %}</div>{% if p.apk is not empty %}<p class=facts>{% if p.apk.versionName is not empty %}Version {{p.apk.versionName}} &middot; {% endif %}{% if p.apk.androidLabel is not empty %}{{p.apk.androidLabel}} &middot; {% endif %}For {{p.apk.abiLabel}}</p>{% endif %}{% if p.author is not empty or p.license is not empty or p.websiteHref is not empty %}<p class=facts>{% if p.author is not empty %}By {{p.author}}{% endif %}{% if p.license is not empty %}{% if p.author is not empty %} &middot; {% endif %}License: {{p.license}}{% endif %}{% if p.websiteHref is not empty %}{% if p.author is not empty or p.license is not empty %} &middot; {% endif %}<a href="{{p.websiteHref}}">Website</a>{% endif %}</p>{% endif %}</section>{% endfor %}</div></main><footer class=foot>{% if contact is not empty %}<p class=contact>Questions?{% if contact.name is not empty %} Ask {{contact.name}}{% endif %}{% if contact.emailHref is not empty or contact.phoneHref is not empty or contact.urlHref is not empty %}:{% endif %}{% if contact.emailHref is not empty %} <a href="{{contact.emailHref}}">{{contact.email}}</a>{% endif %}{% if contact.phoneHref is not empty %}{% if contact.emailHref is not empty %} &middot;{% endif %} <a href="{{contact.phoneHref}}">{{contact.phone}}</a>{% endif %}{% if contact.urlHref is not empty %}{% if contact.emailHref is not empty or contact.phoneHref is not empty %} &middot;{% endif %} <a href="{{contact.urlHref}}">website</a>{% endif %}</p>{% endif %}<p class=made>Made with <a href="https://www.appdevforall.org/plugins" style="color:inherit">Share Your Apps{% if shareYourAppsVersion is not empty %} {{shareYourAppsVersion}}{% endif %}</a></p></footer></body></html>

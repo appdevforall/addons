@@ -1,0 +1,13 @@
+[versions]
+agp = "${{AGP_VERSION}}"
+kotlin = "${{KOTLIN_VERSION}}"
+gdx = "1.13.1"
+
+[libraries]
+gdx-core = { group = "com.badlogicgames.gdx", name = "gdx", version.ref = "gdx" }
+gdx-backend-android = { group = "com.badlogicgames.gdx", name = "gdx-backend-android", version.ref = "gdx" }
+gdx-platform = { group = "com.badlogicgames.gdx", name = "gdx-platform", version.ref = "gdx" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

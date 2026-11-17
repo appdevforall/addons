@@ -1,0 +1,35 @@
+# Build output and caches
+build/
+.gradle/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+captures/
+*.hprof
+
+# IDE and editor state (.cg is CodeOnTheGo's)
+.cg/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Machine-specific settings
+local.properties
+
+# Signing: the keystore and its passwords must never be committed
+release.keystore
+release.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+
+# The bundled server APK is a build output, copied in before each release (see README)
+src/main/assets/share-your-apps-server.apk
+
+# Media (demo video, narration recordings) is kept out of git
+*.webm
+*.mp3
+*.mp4

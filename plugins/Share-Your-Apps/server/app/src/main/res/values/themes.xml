@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light mode: Android's own light theme. res/values-night has the dark one, so Android's controls —
+         fields, buttons, radio buttons, dialogs — follow the phone's setting. Palette.kt has the app's own colours. -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.DarkActionBar" />
+</resources>

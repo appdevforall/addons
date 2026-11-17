@@ -1,0 +1,61 @@
+{
+ "title": "Share Your Apps demo, short",
+ "recording": "share_Your_Apps_promo.mp3, slowed to 0.9 with atempo",
+ "duration_seconds": 26.59,
+ "lines": [
+  {
+   "scene": 1,
+   "start": 0.3,
+   "end": 3.943,
+   "recording_from": 0,
+   "recording_to": 3.643,
+   "on_screen": "Title card: Share Your Apps",
+   "text": "Share Your Apps: share the apps you build, with people nearby."
+  },
+  {
+   "scene": 2,
+   "start": 5.24,
+   "end": 7.553,
+   "recording_from": 4.072,
+   "recording_to": 6.385,
+   "on_screen": "Screen P11: From Code On The Go",
+   "text": "Publish your apps, right from Code On The Go."
+  },
+  {
+   "scene": 3,
+   "start": 8.85,
+   "end": 13.264,
+   "recording_from": 6.831,
+   "recording_to": 11.245,
+   "on_screen": "Screen S04: Scan to join",
+   "text": "Buyers scan one code to join your phone's hotspot, and another to open the store."
+  },
+  {
+   "scene": 4,
+   "start": 14.56,
+   "end": 18.557,
+   "recording_from": 11.587,
+   "recording_to": 15.584,
+   "on_screen": "Screen B01: Your store",
+   "text": "No internet, and no accounts. Just your store, in their browser."
+  },
+  {
+   "scene": 5,
+   "start": 19.86,
+   "end": 21.967,
+   "recording_from": 15.974,
+   "recording_to": 18.081,
+   "on_screen": "Screen B02: Download",
+   "text": "One tap, and the app is on their phone."
+  },
+  {
+   "scene": 6,
+   "start": 23.27,
+   "end": 25.592,
+   "recording_from": 18.548,
+   "recording_to": 20.87,
+   "on_screen": "Title card: Share Your Apps",
+   "text": "Share Your Apps, from App Dev for All."
+  }
+ ]
+}

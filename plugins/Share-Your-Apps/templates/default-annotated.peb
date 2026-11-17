@@ -1,0 +1,478 @@
+{#
+  BLOCKS: this template is split into blocks — styles, header, announcement,
+  card, downloads and footer. A template of your own can extend it and replace just one:
+
+    {% extends "default" %}
+    {% block downloads %}<a class="b b1" href="{{ p.apk.src }}">Get it</a>{% endblock %}
+
+  {{ parent() }} inside a block keeps the original too. Other templates, and macros, go in the
+  template library, CodeOnTheGoProjects/ShareYourAppsTemplates/, for {% include %} and {% import %}.
+#}
+{#
+  The default Share Your Apps page, laid out and annotated. It renders the same page as the compact
+  copy the plugin ships. Comments like this one are Pebble comments: Pebble removes
+  them while rendering, so none reach buyers. The /* … */ comments in the CSS and script do reach
+  the page, as ordinary CSS and JavaScript comments.
+
+  What the template receives:
+    lang                   the page's language, such as "en-US": Extra JSON's "lang" if set, else the phone's
+    publishedAt            when this publish happened, as an ISO date and time; publishedLabel is "Sep 24, 2026"
+    shareYourAppsVersion      the plugin's version, such as "1.0.0", for a "Made with Share Your Apps" line
+    contact                from Extra JSON, checked: .name, .email, .phone and .url, each with an
+                           .emailHref, .phoneHref or .urlHref only when it's a plausible address
+    announcement           from Extra JSON: a short line of news, as plain text
+    accent, accentInk      from Extra JSON: a colour, only ever #rrggbb, and black or white — whichever
+                           reads better on it, which always reaches WCAG's 4.5 to 1
+    storeName              the store's name, as text
+    storeDescriptionHtml   the owner's description, as HTML, or null
+    headerImage            .src and .type ("image" or "video") — the octopus when none is chosen
+    products               in Manage Catalog's order, each with:
+      .name, .ordinal, .slug (a stable ID, such as "termux"), .descriptionHtml (HTML or null)
+      .dateAddedLabel      "Sep 24, 2026"; .dateAddedIso is the same as an ISO date and time
+      .carousel            pictures, videos and sounds: .src, .type, .poster for a video, and
+                           .width and .height where known
+      .apk                 .src, .sizeLabel ("6.8 MB") and .sizeBytes, or null; and what the plugin reads
+                           from the APK: .versionName, .versionCode, .packageName, .minSdk and
+                           .androidLabel ("Android 9 or later") — each null when it can't be read —
+                           and .abis, its native-code architectures, with .abiLabel for buyers
+                           ("64-bit phones", "32-bit phones", "32- and 64-bit phones", or "all
+                           phones" when it has no native code)
+      .sourceZip           .src, .sizeLabel and .sizeBytes, or null
+      .whatsNew, .license, .author
+                           from the product's Extra JSON, checked: plain text, cut to 500, 80 and 80
+                           characters, or null. They sit on the product itself: p.whatsNew, not
+                           p.extra.whatsNew
+      .website, .websiteHref
+                           from the product's Extra JSON: the text, cut to 300 characters, and the same
+                           as a link, only when it's an http or https address, else null
+      .extra               the product's whole Extra JSON, exactly as typed and not checked: any key the
+                           owner added is here, but nothing in it is safe to use as a link. Prefer the
+                           checked values above
+    extra                  the store's whole Extra JSON, exactly as typed and not checked. Its "strings"
+                           table feeds t("key", "fallback"), which picks the text for the store's
+                           language; the other documented keys have checked values above (lang,
+                           contact, announcement, accent)
+    accessibleHref         the link to the accessible version of the page, accessible.html, which
+                           every publish also makes from the Clear Access template
+
+  Every .src is ready to use: a /f/… link to a file in the store, or, for anything of 10 KB or
+  less, the file itself as a data: URI.
+
+  Pebble rules that differ from other template languages: a condition needs "is not empty" —
+  a bare {% if x %} is an error — and the sort filter takes no arguments, which is why products
+  arrive already in order. {{ … }} escapes HTML; |raw prints the owner's HTML as it is.
+#}
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>{{storeName}}</title>
+{% block styles %}<style>
+/* Start every element from nothing, so browsers' own margins and paddings don't differ. */
+* {
+	box-sizing:border-box;
+	margin:0;
+	padding:0;
+}
+
+/* The page: cream ground, dark violet ink, and the phone's own rounded font where it has one.
+   No web fonts: the store works offline. */
+body {
+	background:#FFF3D6;
+	color:#2B1B3D;
+	font-family:ui-rounded,"SF Pro Rounded",system-ui,sans-serif;
+}
+
+/* The awning across the top, drawn entirely with gradients — no image file:
+     1. red half-circles every 48 px, at 12 px,
+     2. cream half-circles every 48 px, at 36 px, between the red ones,
+     3. red and cream stripes, 24 px each, above them,
+     4. the teal of the header behind everything. */
+.aw {
+	height:26px;
+	background:
+		radial-gradient(circle at 12px 14px,#FF4F3A 11.5px,transparent 12px) 0 0/48px 26px repeat-x,
+		radial-gradient(circle at 36px 14px,#FFF3D6 11.5px,transparent 12px) 0 0/48px 26px repeat-x,
+		repeating-linear-gradient(90deg,#FF4F3A 0 24px,#FFF3D6 24px 48px) 0 0/100% 14px no-repeat,
+		#0B6E6E;
+}
+
+/* The header: the store's icon beside its name and description. */
+header {
+	background:#0B6E6E;
+	color:#fff;
+	padding:6px 16px 20px;
+	display:flex;
+	align-items:center;
+	gap:14px;
+}
+header img,
+header video {
+	width:64px;
+	height:64px;
+	border-radius:16px;
+	border:3px solid #2B1B3D;
+	background:#fff;
+	object-fit:cover;
+	flex-shrink:0;
+}
+/* min-width:0 lets a long name wrap instead of pushing the icon off the screen. */
+header .ht {
+	display:flex;
+	flex-direction:column;
+	gap:4px;
+	min-width:0;
+}
+h1 {
+	font-size:22px;
+	font-weight:800;
+	overflow-wrap:anywhere;
+}
+.sd {
+	font-size:13px;
+	color:#FFF3D6;
+	line-height:1.4;
+}
+.sd a {
+	color:#FFE14D;
+}
+
+/* The products, in columns at least 260 px wide, as many as fit — one on a phone held upright.
+   Each card sits directly under the one above, so a tall card never leaves a gap beside a short
+   one; reading order runs down each column, then on to the next. */
+.n {
+	columns:260px;
+	column-gap:20px;
+	padding:22px 16px 10px;
+}
+
+/* A product's card: white, a thick dark outline, and a hard shadow offset down and right.
+   break-inside:avoid, with inline-block, keeps a card whole rather than split across columns. */
+.p {
+	background:#fff;
+	border:3px solid #2B1B3D;
+	border-radius:16px;
+	overflow:hidden;
+	box-shadow:5px 5px 0 #2B1B3D;
+	break-inside:avoid;
+	display:inline-block;
+	width:100%;
+	margin-bottom:20px;
+}
+
+/* The picture strip: items side by side, scrolling sideways only, snapping one item at a time.
+   overflow-y:hidden stops it scrolling up and down, so dragging the page on a picture can't
+   nudge the picture out of place. */
+.c {
+	display:flex;
+	overflow-x:auto;
+	overflow-y:hidden;
+	scroll-snap-type:x mandatory;
+	border-bottom:3px solid #2B1B3D;
+}
+.c>div {
+	flex:0 0 100%;
+	scroll-snap-align:start;
+	height:160px;
+	background:#E3F2EF;
+}
+/* Each picture or video fills its 160 px box, keeping 1 px clear above and below, and is scaled
+   to fit whole ("contain") rather than cropped. display:block removes the few pixels a browser
+   otherwise leaves under a picture for letters like "g". */
+.c img,
+.c video {
+	display:block;
+	box-sizing:border-box;
+	width:100%;
+	height:160px;
+	padding:1px 0;
+	object-fit:contain;
+}
+
+/* The arrows over a strip with more than one item: small white circles, like the buttons. */
+.cw {
+	position:relative;
+}
+/* A strip can take keyboard focus, so it can be scrolled with the arrow keys; this shows where focus is. */
+.c:focus-visible {
+	outline:3px solid #8E5BFF;
+	outline-offset:-3px;
+}
+/* A product's name is a real heading, for screen reader users, but looks like the rest of its line. */
+.t h2 {
+	font:inherit;
+	margin:0;
+}
+/* The link to the accessible version: a small white pill over the awning's top-left corner, so
+   the header's layout doesn't move. It's the page's first link, so a screen reader or keyboard
+   reaches it first. */
+.acc {
+	position:absolute;
+	top:3px;
+	left:8px;
+	z-index:1;
+	background:#fff;
+	color:#2B1B3D;
+	border:2px solid #2B1B3D;
+	border-radius:999px;
+	padding:1px 10px;
+	font-size:12px;
+	font-weight:800;
+	text-decoration:none;
+}
+.acc:focus-visible {
+	outline:3px solid #8E5BFF;
+	outline-offset:2px;
+}
+.ar {
+	position:absolute;
+	top:50%;
+	transform:translateY(-50%);
+	width:34px;
+	height:34px;
+	padding:0 0 3px;
+	border-radius:50%;
+	border:2px solid #2B1B3D;
+	background:#fff;
+	color:#2B1B3D;
+	font:800 24px/1 system-ui,sans-serif;
+	display:flex;
+	align-items:center;
+	justify-content:center;
+	box-shadow:2px 2px 0 #2B1B3D;
+	cursor:pointer;
+}
+.ar.l {
+	left:8px;
+}
+.ar.r {
+	right:8px;
+}
+/* The script below hides an arrow at its end of the strip. */
+.ar[hidden] {
+	display:none;
+}
+.ar:focus-visible {
+	outline:3px solid #8E5BFF;
+	outline-offset:2px;
+}
+
+/* The card's text: the name and date on one line, then the description. */
+.i {
+	padding:14px;
+}
+.t {
+	display:flex;
+	justify-content:space-between;
+	align-items:baseline;
+	gap:8px;
+	font-weight:800;
+	font-size:17px;
+}
+.d {
+	color:#6B5A7A;
+	font-size:12px;
+	font-weight:600;
+	white-space:nowrap;
+}
+.pd {
+	color:#4A3A5C;
+	font-size:13px;
+	line-height:1.45;
+	margin-top:6px;
+}
+.pd a {
+	color:#5B2FD6;
+}
+/* Lists in the owner's descriptions: indented, since the reset above removed their padding. */
+.sd ol,
+.sd ul,
+.pd ol,
+.pd ul {
+	padding-left:1.4em;
+	margin:4px 0;
+}
+
+/* The download buttons, sharing the card's width. A button looks pressed while touched: it
+   moves onto its own shadow. */
+.a {
+	display:flex;
+	gap:10px;
+	margin-top:12px;
+}
+.b {
+	flex:1;
+	padding:10px 8px;
+	border:3px solid #2B1B3D;
+	border-radius:12px;
+	text-align:center;
+	text-decoration:none;
+	font-size:14px;
+	font-weight:800;
+	box-shadow:3px 3px 0 #2B1B3D;
+}
+.b:active {
+	transform:translate(3px,3px);
+	box-shadow:none;
+}
+.b:focus-visible {
+	outline:3px solid #8E5BFF;
+	outline-offset:2px;
+}
+.b1 {
+	background:var(--accent,#FF9E2C);
+	color:var(--accent-ink,#2B1B3D);
+}
+.b2 {
+	background:#fff;
+	color:#5B2FD6;
+}
+/* Each download's size, under its label. */
+small {
+	display:block;
+	font-weight:600;
+	font-size:11px;
+	margin-top:2px;
+}
+/* The APK's facts, under the buttons: its version, the Android it needs, and which phones it's for. */
+.facts {
+	color:#6B5A7A;
+	font-size:11px;
+	font-weight:600;
+	margin-top:8px;
+}
+/* What's new in a product, under its description. */
+.new {
+	color:#4A3A5C;
+	font-size:13px;
+	margin-top:6px;
+}
+/* The owner's announcement: a card of its own, above the products. */
+.news {
+	margin:18px 16px 0;
+	padding:10px 12px;
+	background:#fff;
+	border:3px solid #2B1B3D;
+	border-radius:12px;
+	box-shadow:3px 3px 0 #2B1B3D;
+	font-weight:700;
+	font-size:14px;
+}
+/* The foot of the page: how to contact the owner, and what made the store. */
+.f {
+	padding:0 16px 26px;
+	text-align:center;
+	color:#4A3A5C;
+	font-size:12px;
+}
+.f a {
+	color:#5B2FD6;
+}
+.f p {
+	margin:4px 0;
+}
+</style>{% endblock %}
+{# The owner's accent colour, if any, for the download button: checked by the plugin, so it's only
+   ever a #rrggbb colour, with black or white text on it. #}
+{% if accent is not empty %}<style>
+:root {
+	--accent:{{accent}};
+	--accent-ink:{{accentInk}};
+}
+</style>{% endif %}
+</head>
+<body>
+{# The accessible version, first on the page. It's in its own small region, so screen readers
+   list it among the page's regions. #}
+{% if accessibleHref is not empty %}<nav class=acc-nav aria-label="Page versions"><a class=acc href="{{accessibleHref}}">Accessible version</a></nav>{% endif %}
+{# The awning is decoration only, so screen readers skip it. #}
+<div class=aw aria-hidden=true></div>
+
+{# The header. The octopus arrives as headerImage when the owner hasn't chosen an image. A video
+   header plays by itself, silently and in a loop, like an animated picture. #}
+{% block header %}<header>
+  {% if headerImage.type=='video' %}<video src="{{headerImage.src}}"{% if headerImage.poster %} poster="{{headerImage.poster}}"{% endif %} controls preload="none" muted loop playsinline></video>{% else %}<img src="{{headerImage.src}}" alt="">{% endif %}
+  <div class=ht>
+    <h1>{{storeName}}</h1>
+    {% if storeDescriptionHtml is not empty %}<div class=sd>{{storeDescriptionHtml|raw}}</div>{% endif %}
+  </div>
+</header>{% endblock %}
+
+{# The owner's announcement, if any, above the products. #}
+{% block announcement %}{% if announcement is not empty %}<p class=news role=region aria-label="Announcement">{{announcement}}</p>{% endif %}{% endblock %}
+
+{# The products, one card each, in Manage Catalog's order. They're the page's main region, which
+   screen readers can jump straight to. #}
+<main class=n>
+  {% for p in products %}{% block card %}<div class=p>
+
+    {# The picture strip, if the product has any pictures, videos or sounds. It can take keyboard
+       focus, so it can be scrolled with the arrow keys, and screen readers announce its label. #}
+    {% if p.carousel is not empty %}
+    <div class=cw>
+      <div class=c tabindex=0 role=region aria-label="{{p.name}}: pictures">
+        {% for m in p.carousel %}
+        <div>
+          {# Videos show their poster until played, and never preload: preloading would tie up
+             the server's single thread. Each item is labelled with its product and position, such
+             as "Termux, picture 1 of 3": the catalog has no descriptions of what pictures show. #}
+          {% if m.type=='video' %}<video src="{{m.src}}" controls preload="none"{% if m.poster is not empty %} poster="{{m.poster}}"{% endif %} {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}aria-label="{{m.alt}}">{% if m.captions is not empty %}<track kind="captions" src="{{m.captions}}" srclang="{{lang}}" label="Captions" default>{% endif %}</video>
+          {% elseif m.type=='audio' %}<audio src="{{m.src}}" controls style="width:100%;margin-top:60px" aria-label="{{m.alt}}"></audio>
+          {% else %}<img src="{{m.src}}" {% if m.width is not empty %}width="{{m.width}}" height="{{m.height}}" {% endif %}alt="{{m.alt}}">{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {# Arrows only when there's more than one item. The left one starts hidden, at the first
+         item; the script shows and hides both as the strip moves. #}
+      {% if p.carousel|length > 1 %}
+      <button type=button class="ar l" aria-label="Previous picture" hidden>&#8249;</button>
+      <button type=button class="ar r" aria-label="Next picture">&#8250;</button>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# The name, as a heading, with the date — in a <time> element, which screen readers and other
+       tools understand — then the description, then whichever downloads the product offers, and
+       what the plugin could read from the APK. Parts it couldn't read are simply left out. #}
+    <div class=i>
+      <div class=t><h2>{{p.name}}</h2><span class=d>{% if p.dateAddedIso is not empty %}<time datetime="{{p.dateAddedIso}}">{{p.dateAddedLabel}}</time>{% else %}{{p.dateAddedLabel}}{% endif %}</span></div>
+      {% if p.descriptionHtml is not empty %}<div class=pd>{{p.descriptionHtml|raw}}</div>{% endif %}
+      {% if p.whatsNew is not empty %}<p class=new><b>What's new:</b> {{p.whatsNew}}</p>{% endif %}
+      {% block downloads %}<div class=a>
+        {% if p.sourceZip is not empty %}<a class="b b2" href="{{p.sourceZip.src}}">Download source<small>{{p.sourceZip.sizeLabel}}</small></a>{% endif %}
+        {% if p.apk is not empty %}<a class="b b1" href="{{p.apk.src}}">Download APK<small>{{p.apk.sizeLabel}}</small></a>{% endif %}
+      </div>{% endblock %}
+      {% if p.apk is not empty %}<p class=facts>{% if p.apk.versionName is not empty %}Version {{p.apk.versionName}} &middot; {% endif %}{% if p.apk.androidLabel is not empty %}{{p.apk.androidLabel}} &middot; {% endif %}For {{p.apk.abiLabel}}</p>{% endif %}
+      {% if p.author is not empty or p.license is not empty or p.websiteHref is not empty %}<p class=facts>{% if p.author is not empty %}By {{p.author}}{% endif %}{% if p.license is not empty %}{% if p.author is not empty %} &middot; {% endif %}License: {{p.license}}{% endif %}{% if p.websiteHref is not empty %}{% if p.author is not empty or p.license is not empty %} &middot; {% endif %}<a href="{{p.websiteHref}}">Website</a>{% endif %}</p>{% endif %}
+    </div>
+  </div>{% endblock %}{% endfor %}
+</main>
+
+{# The foot: the owner's contact details, each a link only when it's a real address, and the version. #}
+{% block footer %}<footer class=f>
+  {% if contact is not empty %}<p class=contact>Questions?{% if contact.name is not empty %} Ask {{contact.name}}{% endif %}{% if contact.emailHref is not empty or contact.phoneHref is not empty or contact.urlHref is not empty %}:{% endif %}{% if contact.emailHref is not empty %} <a href="{{contact.emailHref}}">{{contact.email}}</a>{% endif %}{% if contact.phoneHref is not empty %}{% if contact.emailHref is not empty %} &middot;{% endif %} <a href="{{contact.phoneHref}}">{{contact.phone}}</a>{% endif %}{% if contact.urlHref is not empty %}{% if contact.emailHref is not empty or contact.phoneHref is not empty %} &middot;{% endif %} <a href="{{contact.urlHref}}">website</a>{% endif %}</p>{% endif %}
+  <p class=made>Made with <a href="https://www.appdevforall.org/plugins" style="color:inherit">Share Your Apps{% if shareYourAppsVersion is not empty %} {{shareYourAppsVersion}}{% endif %}</a></p>
+</footer>{% endblock %}
+
+<script>
+/* Each picture strip with more than one item gets arrows: hidden at its ends, and tapping one
+   moves a picture. Without this script the page still works: strips can be swiped, and the
+   right arrow still shows there's more. */
+document.querySelectorAll(".cw").forEach(function(w){
+  var c=w.querySelector(".c"),l=w.querySelector(".l"),r=w.querySelector(".r");
+  if(!l||!r)return;                       /* one item: no arrows */
+  function u(){                           /* hide an arrow within 4 px of its end */
+    var end=c.scrollWidth-c.clientWidth;
+    l.hidden=c.scrollLeft<=4;
+    r.hidden=c.scrollLeft>=end-4
+  }
+  c.addEventListener("scroll",u,{passive:true});   /* as the strip is swiped */
+  window.addEventListener("resize",u);             /* and when the phone is rotated */
+  l.addEventListener("click",function(){c.scrollBy({left:-c.clientWidth,behavior:"smooth"})});
+  r.addEventListener("click",function(){c.scrollBy({left:c.clientWidth,behavior:"smooth"})});
+  u()
+});
+</script>
+</body>
+</html>

@@ -160,12 +160,16 @@ list: a directory you leave out is not packaged.
 
 ```json
 {
+  "displayName": "My Templates",
   "templates": [
     { "path": "MyFirstTemplate" },
     { "path": "MySecondTemplate" }
   ]
 }
 ```
+
+`displayName` names the whole bundle on its card in the Extensions Manager. Without it, the card
+shows the first template's name, which misdescribes a bundle of several.
 
 Add `"experimental": true` to an entry to hide it unless the user turns experiments on.
 
@@ -485,7 +489,7 @@ An unrecognised entry at the archive root is ignored, which is why
 | Reader | Purpose | Method |
 |---|---|---|
 | `ZipTemplateReader` | Builds the New Project list | Reads `templates.json` by that exact bare name at the archive root, then reads `<path>/template/template.json` for each entry |
-| `CgtTemplateReader` | Fills the Extensions Manager Templates tab | Scans for any entry ending in `/template/template.json`, and ignores `templates.json` |
+| `CgtTemplateReader` | Fills the Extensions Manager Templates tab | Scans for any entry ending in `/template/template.json`. From ADFA-6570 on, it also reads `displayName` from `templates.json`, and nothing else in that file |
 
 A missing `template.json` makes `ZipTemplateReader` skip that entry with no error.
 
@@ -495,12 +499,19 @@ The root manifest, in **strict** JSON. It names the directory of each template.
 
 ```json
 {
+  "displayName": "Flutter Starter Kit",
   "templates": [
       { "path": "FlutterBasic" },
       { "path": "FlutterBloc" }
   ]
 }
 ```
+
+`displayName` is optional. It is the title of the bundle's card on the Extensions Manager's
+Templates tab. When it is absent or blank, the card falls back to the first template's `name`,
+then to the file name. The New Project screen does not read it, and IDE versions without the
+ADFA-6570 change ignore it, because `ZipTemplateReader` parses this file with Gson, which skips
+unknown keys.
 
 An entry also accepts `"experimental": true`. The IDE then hides that template unless
 `FeatureFlags.isExperimentsEnabled` is set.

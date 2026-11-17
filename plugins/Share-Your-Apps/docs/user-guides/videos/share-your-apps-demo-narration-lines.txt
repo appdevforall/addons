@@ -1,0 +1,32 @@
+Share Your Apps lets you share the Android apps you build in Code On The Go with people nearby. No internet, no app store, and no accounts.
+It has two parts. The Share Your Apps plugin, where you describe your apps and publish them. And the Share Your Apps Server app, which serves them over Wi-Fi, or your phone's hotspot.
+First, creating your store.
+Install the plugin from Code On The Go's Addons Manager.
+In the Share Your Apps tab, give your store a name. A description, a header picture and a PIN are optional.
+Add a product for each app. Each card shows what buyers can download.
+Choose the app's project, and the APK that buyers will install.
+Add screenshots and videos, so buyers can see what they're getting.
+Describe each picture, for buyers who use a screen reader.
+Then tap Publish, and confirm.
+The first time, Android asks you to allow a few things. Each one is needed just once.
+Choose a template to change the store's look, or write your own.
+When it's done, every file has been checked. And the store is already being served.
+Next, letting people in.
+Share Your Apps Server shows what it's serving, and where.
+Tap Show QR codes for buyers. On a hotspot, the first code joins its network, and the second opens the store.
+With no Wi-Fi around, the server makes a hotspot of its own, with a name and password you choose.
+Buyers see your store in their browser.
+Each app has its pictures, its description, and its downloads. One tap, and it's on their phone.
+And every store has an accessible version, plain and in large text.
+Keep serving when the screen is off, or pause to save battery.
+Finally, sharing your store with another phone.
+Someone nearby can serve a copy of your store from their own phone. Tap Share this store.
+Their phone scans the large code. The small one lets a phone without the app download it first.
+On their phone, they tap Import a store, and scan the code, or type it.
+Both phones show the same four digits, so you know you're sharing with the phone in front of you.
+You choose when their copy expires, and tap Allow.
+The copy arrives, and they tap Serve it now.
+They can set their own PIN. But they can't change the store, or pass it on.
+They let people in the same way, with codes of their own.
+And on the date you chose, the copy is deleted from their phone.
+Share Your Apps, from App Dev for All. Share what you build, with the people around you.
