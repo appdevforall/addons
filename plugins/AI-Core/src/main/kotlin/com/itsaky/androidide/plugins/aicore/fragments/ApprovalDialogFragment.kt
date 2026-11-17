@@ -237,9 +237,14 @@ class ApprovalDialogFragment : DialogFragment() {
     /**
      * A [NestedScrollView] capped by [ApprovalPresentation.messageMaxHeightPx] so the stock button panel
      * keeps its full height. `AlertDialogLayout.tryOnMeasure` measures the button panel (unspecified, so
-     * at its full height) before it measures this view, so the panel's measured height is current here.
+     * at its full height) before it measures this view, counts only its minimum, then may measure this
+     * view again with the height left over once the buttons took theirs, and `forceUniformWidth` may
+     * measure it a third time. Only the first measure of a sequence reserves room for the buttons;
+     * [firstOffered] remembers that offer so the later ones are recognised, and [onLayout] ends the sequence.
      */
     private class BoundedScrollView(context: Context) : NestedScrollView(context) {
+        private var firstOffered: Int? = null
+
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val offered = View.MeasureSpec.getSize(heightMeasureSpec)
             val panel = rootView?.findViewById<View>(androidx.appcompat.R.id.buttonPanel)
@@ -251,11 +256,23 @@ class ApprovalDialogFragment : DialogFragment() {
                 buttonsFullPx = panel?.measuredHeight,
                 buttonsMinPx = panel?.let(::minimumHeightOf) ?: 0,
                 floorPx = (MESSAGE_FLOOR_DP * metrics.density).toInt(),
+                firstOfferedPx = firstOffered,
             )
+            if (firstOffered == null) firstOffered = offered
             super.onMeasure(
                 widthMeasureSpec,
                 View.MeasureSpec.makeMeasureSpec(minOf(cap, offered), View.MeasureSpec.AT_MOST),
             )
+        }
+
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            firstOffered = null
+            super.onLayout(changed, l, t, r, b)
+        }
+
+        override fun onDetachedFromWindow() {
+            firstOffered = null
+            super.onDetachedFromWindow()
         }
 
         /** Mirrors `AlertDialogLayout.resolveMinimumHeight`: the view's own, else its only child's. */

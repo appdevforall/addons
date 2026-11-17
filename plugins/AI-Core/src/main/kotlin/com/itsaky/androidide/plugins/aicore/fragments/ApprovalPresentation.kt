@@ -45,7 +45,7 @@ internal object ApprovalPresentation {
      * AppCompat's `AlertDialogLayout` measures the title, then the button panel at its minimum
      * height, then offers the middle panel (this message) what remains ([offeredPx]); only after
      * that does it hand leftover height back to the buttons. A long message therefore leaves the
-     * stacked buttons just their minimum. This reserves the difference between the buttons' full
+     * stacked buttons just their minimum. The first measure reserves the difference between the buttons' full
      * and minimum heights, which is the same as `window - title - full buttons`.
      *
      * The result never exceeds half the window ([windowHeightPx]), which keeps the dialog compact on
@@ -58,6 +58,10 @@ internal object ApprovalPresentation {
      *   case the cap is half the window alone.
      * @param buttonsMinPx the button panel's minimum height, already counted in [offeredPx].
      * @param floorPx the least height the message may be given.
+     * @param firstOfferedPx the offer of the first measure of this layout sequence, or null when this is
+     *   the first. After that measure the layout hands the buttons their height and measures the message
+     *   again with `offered = first - (full - min)` or less, so a later measure at or below that has the
+     *   buttons already counted and reserves nothing; reserving again would cut the message short.
      */
     fun messageMaxHeightPx(
         windowHeightPx: Int,
@@ -65,10 +69,13 @@ internal object ApprovalPresentation {
         buttonsFullPx: Int?,
         buttonsMinPx: Int,
         floorPx: Int,
+        firstOfferedPx: Int? = null,
     ): Int {
         val half = (windowHeightPx / 2).coerceAtLeast(0)
         if (buttonsFullPx == null) return half
-        val reserved = (buttonsFullPx - buttonsMinPx).coerceAtLeast(0)
+        val extra = (buttonsFullPx - buttonsMinPx).coerceAtLeast(0)
+        val buttonsCounted = firstOfferedPx != null && offeredPx <= firstOfferedPx - extra
+        val reserved = if (buttonsCounted) 0 else extra
         return minOf(offeredPx - reserved, half).coerceAtLeast(floorPx)
     }
 }
