@@ -4,8 +4,10 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class SampleHooksTest {
     private val appFiles = tempDir("samples")
@@ -32,6 +34,22 @@ class SampleHooksTest {
         Hook.entries.forEach { assertTrue(it.id, HookDiscovery.discover(paths.globalHooks, it.id).isEmpty()) }
         assertTrue(HookDiscovery.actions(paths.actions).isEmpty())
         paths.globalHooks.walk().filter { it.isFile }.forEach { assertFalse(it.path, it.canExecute()) }
+    }
+
+    // A name can hold terminal control codes, and the action's output goes to the Terminal.
+    @Test
+    fun theSampleActionCountsWithoutPrintingTheFileName() {
+        val bash = listOf("/bin/bash", "/usr/bin/bash").map(::File).firstOrNull { it.canExecute() }
+        assumeTrue("needs bash", bash != null)
+        SampleHooks.write(paths)
+        val target = File(appFiles, "x\u001b]52;c;ZWNobw==\u0007.txt").apply { writeText("one two\n") }
+
+        val process = ProcessBuilder(bash!!.path, File(paths.actions, SampleHooks.ACTION_SAMPLE).path, target.path).redirectErrorStream(true).start()
+        val out = process.inputStream.readBytes().toString(Charsets.UTF_8)
+        process.waitFor(10, TimeUnit.SECONDS)
+
+        assertEquals(listOf("1", "2", "8"), out.trim().split(Regex("\\s+")))
+        assertFalse(out, out.contains('\u001b'))
     }
 
     @Test

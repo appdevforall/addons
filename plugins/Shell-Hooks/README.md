@@ -40,7 +40,10 @@ and a trusted project script runs from a private copy the plugin marks executabl
 - **Values travel as argv.** Headless hooks run as
   `ShellCommand("sh", [cogo-hook-run.sh, script, args...])`; no value is ever part of a shell
   string. Only actions go through a command line (the Terminal takes one), built with
-  `ShellQuote`.
+  `ShellQuote`: every value single-quoted, with control characters written as bash `$'\xHH'`
+  bytes, because the Terminal prints the line before running it and a raw escape sequence in a
+  file name would reach the terminal (OSC 52 can set the clipboard). The sample action reads its
+  file from stdin, so `wc` does not print the name either.
 - **`cogo-hook-run.sh`** maps a shebang under `/bin`, `/usr/bin` or `/usr/local/bin` onto
   `$PREFIX/bin` the way termux-exec would, because the IDE's command service does not preload
   termux-exec and Android has no `/usr/bin/env` or `/bin/bash`. Any other interpreter path

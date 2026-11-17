@@ -141,9 +141,14 @@ class HooksPanelFragment : Fragment() {
             when (viewType) {
                 PENDING -> return PendingHolder(row)
                 RUN -> return RunHolder(row)
+                // The banner is about the master switch, which the settings entry explains.
+                OFF -> help(row, ShellHooksHelp.TAG_SETTINGS)
                 PENDING_TITLE -> help(row, ShellHooksHelp.TAG_PROJECT_HOOKS)
                 PENDING_MORE -> help(row, ShellHooksHelp.TAG_REVIEW)
-                EMPTY -> (row as TextView).setText(R.string.hk_empty)
+                EMPTY -> {
+                    (row as TextView).setText(R.string.hk_empty)
+                    help(row, ShellHooksHelp.TAG_TAB)
+                }
                 RUNS_HEADER -> {
                     help(row.findViewById(R.id.hkRunsTitle), ShellHooksHelp.TAG_TAB)
                     row.findViewById<Button>(R.id.hkClear).apply {
@@ -503,6 +508,7 @@ private class ScriptAdapter(
             return object : RecyclerView.ViewHolder(view) {}
         }
         val row = LayoutInflater.from(parent.context).inflate(R.layout.item_script_line, parent, false) as LinearLayout
+        help(row, ShellHooksHelp.TAG_REVIEW)
         val text = row.findViewById<TextView>(R.id.lineText)
         val gutter = LineGutter(parent.context, text, digits)
         row.addView(gutter, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))

@@ -264,7 +264,10 @@
     <li>File names and other values reach hook scripts as separate arguments, never through a
         shell command line, so a file named <code>$(rm -rf ~)</code> is just a name. Actions are the
         exception: the Terminal takes a command line, so an action's command is built with every
-        value in single quotes, which the shell never expands.</li>
+        value in single quotes, which the shell never expands. Control characters in a value are
+        written as escapes, so a file name cannot send terminal control codes to the Terminal
+        when it prints the command. What your action prints is up to it: the sample reads its file
+        from stdin, so it never prints the name.</li>
     <li><strong>What review does not cover.</strong> A plugin that can run commands, or one that
         writes files from inside the IDE, can already change your own hooks folder or the record of
         what you trusted. Install only plugins you trust. Trust also covers only the hook's own

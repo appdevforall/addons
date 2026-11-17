@@ -65,7 +65,9 @@ object SampleHooks {
         |#
         |# Arguments: ${'$'}1 = the file
         |
-        |wc -l -w -c "${'$'}1"
+        |# Read from stdin, so wc does not print the file's name: a name can hold terminal control
+        |# codes, and the Terminal would act on them.
+        |wc -l -w -c < "${'$'}1"
         |
         """.trimMargin()
 }
