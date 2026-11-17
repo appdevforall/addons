@@ -20,6 +20,22 @@ class ApprovalDialogLayoutMathTest {
     }
 
     @Test
+    fun `stacked buttons put the primary first and Always Allow last`() {
+        assertEquals(
+            listOf("Run now", "Decline", "Always Allow"),
+            ApprovalDialogLayoutMath.stackedOrder(listOf("Always Allow", "Decline", "Run now")),
+        )
+        assertEquals(
+            listOf("Accept", "Decline", "Correct"),
+            ApprovalDialogLayoutMath.stackedOrder(listOf("Correct", "Decline", "Accept")),
+        )
+        assertEquals(
+            listOf("Run now", "Decline"),
+            ApprovalDialogLayoutMath.stackedOrder(listOf("Decline", "Run now")),
+        )
+    }
+
+    @Test
     fun `scroll area gets what the buttons leave`() {
         assertEquals(700, ApprovalDialogLayoutMath.scrollBudget(1000, 300, 100))
     }
