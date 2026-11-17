@@ -287,14 +287,6 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     /**
-     * Points [AutomaticServers] at the host's debugger endpoints.
-     *
-     * `plugin.min_ide_version` keeps this plugin off an IDE that lacks the service: such an IDE
-     * rejects the unknown `debugger.endpoints` permission when it validates the manifest. The catch
-     * is defence only, for a host that registers no service anyway. A call that later throws (no
-     * permission, unreadable database) leaves the entries as they were.
-     */
-    /**
      * Installs the host's endpoints and starts listening for changes, unless the activation ends first.
      *
      * The host's database read blocks and cancellation cannot interrupt it, so [keepGoing] is
@@ -311,6 +303,14 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         if (!keepGoing()) AutomaticServers.removeEndpointListener(relistAutomatic)
     }
 
+    /**
+     * Points [AutomaticServers] at the host's debugger endpoints.
+     *
+     * `plugin.min_ide_version` keeps this plugin off an IDE that lacks the service: such an IDE
+     * rejects the unknown `debugger.endpoints` permission when it validates the manifest. The catch
+     * is defence only, for a host that registers no service anyway. A call that later throws (no
+     * permission, unreadable database) leaves the entries as they were.
+     */
     private fun installDebuggerEndpoints(keepGoing: () -> Boolean) {
         val service = try {
             context.services.get(DebuggerEndpointService::class.java)
