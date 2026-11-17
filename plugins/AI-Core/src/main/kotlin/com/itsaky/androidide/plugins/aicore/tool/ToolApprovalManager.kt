@@ -222,7 +222,9 @@ class ToolApprovalManager(
     }
 
     /**
-     * Clear all session-approved tools.
+     * Forgets every "Always Allow", built-in and contributed alike. `ChatViewModel` calls it when
+     * the chat changes or is cleared, which is where a session ends: its manager lives as long as
+     * the plugin.
      */
     fun clearSessionApprovals() {
         sessionApprovedTools.clear()

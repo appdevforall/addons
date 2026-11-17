@@ -642,12 +642,13 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW,
-            summary = "Stop asking about this tool for the rest of this session.",
+            summary = "Stop asking about this tool for the rest of this chat.",
             detail = """
-                <p>Approves this tool for the current session, so the agent can use
+                <p>Approves this tool for the rest of this chat, so the agent can use
                 it again without prompting. The grant is by <b>tool name only</b> —
-                it does not depend on the arguments — and it is forgotten when the
-                session ends.</p>
+                it does not depend on the arguments. It is forgotten when you start
+                a new chat, open another one or clear this one, and when the IDE
+                closes.</p>
                 <p>For a tool from another plugin, the button appears only when
                 that plugin says the tool only reads. Code on the Go cannot check
                 that, and after one tap the agent can call the tool with any

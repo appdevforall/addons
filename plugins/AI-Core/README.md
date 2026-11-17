@@ -122,7 +122,10 @@ grant is keyed by provider, the tool's own name and a SHA-256 of its description
 input schema rather than by the registered name, which can pass to another plugin's tool
 when the sources change. A tool its provider republishes under the same name with
 another description or schema therefore asks again. The grant lapses if the tool stops
-declaring itself read-only. The declaration is the provider's own and nothing checks it,
+declaring itself read-only, and every grant, built-in or contributed, ends with the chat:
+`ChatViewModel` clears them whenever the current chat changes (new, opened, imported, or
+deleted and replaced) or is cleared, since its `ToolApprovalManager` lives as long as the
+plugin. The declaration is the provider's own and nothing checks it,
 so a dialog offering "Always Allow" for a contributed tool says exactly that
 (`ApprovalRequest.readOnlyOnProvidersWord`).
 
