@@ -26,12 +26,8 @@ object McpToolText {
      * @param toolName the tool's own name.
      * @return the exposed name, or null when nothing usable survives sanitising.
      */
-    fun exposedName(serverName: String, toolName: String): String? {
-        val tool = identifier(toolName).take(MAX_NAME_LENGTH).trim('_')
-        if (tool.isEmpty()) return null
-        val prefix = identifier(serverName).take(MAX_PREFIX_LENGTH).trim('_')
-        return if (prefix.isEmpty()) tool else "${prefix}_$tool"
-    }
+    fun exposedName(serverName: String, toolName: String): String? =
+        exposedNameWithPrefix(identifier(serverName).take(MAX_PREFIX_LENGTH).trim('_'), toolName)
 
     /**
      * As [exposedName], for a prefix that is already decided (see [appPrefixes]).

@@ -60,8 +60,9 @@ port and token, and the plugin reads them again after a refused connection. An
 app that has not reported yet has no entry, and no error is shown.
 
 Each app's tools are told apart for the model. Their names start with `db_` and
-the last segment of the application ID (`db_notes_query` for
-`com.example.notes`); when two apps would share that prefix, both use the first
+the first seven characters of the application ID's last segment
+(`db_notes_query` for `com.example.notes`, `db_myappli_query` for
+`com.example.myapplication`); when two apps would share that prefix, both use the first
 five characters of the segment and four hex digits derived from the full
 application ID (`notes_3fa1_query`), so a name never depends on which app was
 read first. Each description starts with the application ID, as
