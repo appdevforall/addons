@@ -1597,6 +1597,23 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenARepeatedReadSentWithRespond_whenTheLoopRuns_thenTheRespondIsTheAnswerAndTheRepeatIsNotRun() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(toolCall("read_file", "a"), toolCall("read_file", "a") + respond),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(2, result.turns)
+        // The answer ends the run: no repeat turn is sent, and no "repeated" notice is raised.
+        assertEquals(listOf("final"), events)
+        assertEquals(0, history.count { it.content == REPEATED })
+        assertEquals(1, history.count { it.role == Role.USER && it.content.contains("[read_file]") })
+    }
+
+    @Test
     fun givenAReadRepeatedTwice_whenTheLoopRuns_thenItEndsAfterTheExtraTurnWithTheRepeatEvent() = runTest {
         val (result, _, events) = runWriting(
             listOf(toolCall("read_file", "a"), toolCall("read_file", "a"), toolCall("read_file", "a")),

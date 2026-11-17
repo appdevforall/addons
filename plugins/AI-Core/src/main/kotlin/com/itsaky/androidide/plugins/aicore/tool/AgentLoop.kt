@@ -364,6 +364,11 @@ class AgentLoop(
                     // A repeated look is not completion while the change the user asked for failed.
                     if (unapplied.warn(turn, history, events)) continue
                     if (unapplied.outstanding) return unapplied.stop(turn, StopReason.ABANDONED, events)
+                    // The turn that repeats also answered: that is the answer, so nothing is asked.
+                    if (terminal != null) {
+                        events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
+                        return Result(turn, StopReason.COMPLETED)
+                    }
                     // A read-only question not yet answered looks the same as a finished write, so the
                     // run gets one turn to answer before it is ended; the repeated batch is not run.
                     if (!askedToAnswerAfterRepeat && repeatedAfterSuccessTurn != null) {
