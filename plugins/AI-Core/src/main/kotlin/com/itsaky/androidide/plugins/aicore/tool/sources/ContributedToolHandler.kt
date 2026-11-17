@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.aicore.tool.Validation
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -72,11 +73,14 @@ class ContributedToolHandler(
     override val allowsSessionApproval: Boolean get() = readOnly
 
     /**
-     * The provider and the tool's own name, which is what the dialog showed when the user said
-     * "Always Allow". [toolName] alone could hand the grant to another plugin's tool that takes
-     * the name over after the sources change.
+     * The provider, the tool's own name and a digest of its description and input schema: the
+     * tool the user said "Always Allow" to, not the name it ran under. [toolName] could hand the
+     * grant to another plugin's tool that takes the name over after the sources change, and the
+     * name alone to a tool its provider republishes under it with other behaviour.
      */
-    override val sessionApprovalKey: String = "contributed:${tool.providerId}:${tool.name}"
+    override val sessionApprovalKey: String by lazy {
+        "contributed:${tool.providerId}:${tool.name}:${digest(tool.description, tool.parametersSchema)}"
+    }
 
     /** The contributing plugin's id, for provenance in logs and the settings screen. */
     val providerId: String get() = tool.providerId
@@ -188,4 +192,56 @@ class ContributedToolHandler(
     /** One model-facing sentence naming the provider, so a failure is attributable. */
     private fun providerFailure(what: String): String =
         "Tool '$displayName' from $sourceLabel $what"
+
+    private companion object {
+        /**
+         * A SHA-256 of [description] and [schema], in hex. The provider's own description, before
+         * it is flattened and capped, so a change past the cap counts too.
+         */
+        fun digest(description: String, schema: Map<String, Any>): String {
+            val canonical = StringBuilder().also { appendCanonical(it, listOf(description, schema)) }
+            return MessageDigest.getInstance("SHA-256")
+                .digest(canonical.toString().toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+        }
+
+        /**
+         * Writes [value] so that equal content always gives equal text: map keys sorted, strings
+         * quoted and escaped. A provider rebuilds its schema maps on each listing, so their order
+         * is not part of what the user approved.
+         */
+        fun appendCanonical(out: StringBuilder, value: Any?) {
+            when (value) {
+                null, is Boolean, is Number -> out.append(value)
+                is Map<*, *> -> {
+                    out.append('{')
+                    value.entries.sortedBy { it.key.toString() }.forEachIndexed { index, entry ->
+                        if (index > 0) out.append(',')
+                        appendCanonical(out, entry.key.toString())
+                        out.append(':')
+                        appendCanonical(out, entry.value)
+                    }
+                    out.append('}')
+                }
+                is Iterable<*> -> {
+                    out.append('[')
+                    value.forEachIndexed { index, item ->
+                        if (index > 0) out.append(',')
+                        appendCanonical(out, item)
+                    }
+                    out.append(']')
+                }
+                is Array<*> -> appendCanonical(out, value.asList())
+                is String -> {
+                    out.append('"')
+                    value.forEach { c ->
+                        if (c == '"' || c == '\\') out.append('\\')
+                        out.append(c)
+                    }
+                    out.append('"')
+                }
+                else -> appendCanonical(out, value.toString())
+            }
+        }
+    }
 }

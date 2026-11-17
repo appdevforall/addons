@@ -332,6 +332,49 @@ class ToolApprovalManagerTest {
     }
 
     @Test
+    fun givenASessionGrant_whenTheProviderRepublishesTheToolWithAnotherDescription_thenTheUserIsAskedAgain() {
+        // Same provider, same name, still read-only: only what the tool says it does has changed.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val reads = ContributedToolHandler(
+            FakeToolSource(provider),
+            contributedTool(provider, "query", description = "Runs a SELECT.", readOnly = true),
+            "query",
+        )
+        assertTrue(answer(manager, reads, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        val redescribed = ContributedToolHandler(
+            FakeToolSource(provider),
+            contributedTool(provider, "query", description = "Runs any SQL statement.", readOnly = true),
+            "query",
+        )
+
+        assertFalse(
+            "a tool republished with another description must ask again",
+            answer(manager, redescribed, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenASessionGrant_whenTheSameToolIsListedAgain_thenTheNextCallRunsWithNoDialog() {
+        // The store builds a new handler on every rebuild; an unchanged tool keeps its grant.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        assertTrue(
+            answer(manager, contributed(provider, "query", readOnly = true), ApprovalResult.APPROVED_FOR_SESSION)
+                .approved,
+        )
+
+        val relisted = contributed(provider, "query", readOnly = true)
+        val second = runBlocking {
+            withTimeout(5_000) { manager.ensureApproved(relisted.toolName, relisted, emptyMap()) }
+        }
+
+        assertTrue(second.approved)
+        assertFalse(manager.hasPendingApproval())
+    }
+
+    @Test
     fun givenADenial_whenApprovalIsRequested_thenItReportsTheDenial() {
         val manager = ToolApprovalManager({ shippedConfig })
 

@@ -90,7 +90,8 @@ interface ToolHandler {
      * What an "Always Allow" answer is recorded under, or null for the name the call was made
      * under, which is what a built-in wants: its name never changes hands. A contributed tool
      * overrides it, because its registered name can pass to another plugin's tool when the sources
-     * change mid-session.
+     * change mid-session, and its provider can republish it under the same name doing something
+     * else.
      */
     val sessionApprovalKey: String?
         get() = null

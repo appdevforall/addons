@@ -174,6 +174,64 @@ class ContributedToolHandlerTest {
     }
 
     @Test
+    fun givenAToolRepublishedUnderItsNameWithAnotherDescriptionOrSchema_whenBuilt_thenItsSessionKeyChanges() {
+        // A grant covers the tool the user read about, not whatever its provider later calls by
+        // the same name (an MCP server can republish its tools mid-session).
+        val schema = mapOf("type" to "object", "properties" to mapOf("sql" to mapOf("type" to "string")))
+        val original = keyOf(ContributedTool(PROVIDER, "query", "Runs a SELECT.", schema, readOnly = true))
+
+        val redescribed = keyOf(ContributedTool(PROVIDER, "query", "Runs any statement.", schema, readOnly = true))
+        val reshaped = keyOf(
+            ContributedTool(
+                PROVIDER,
+                "query",
+                "Runs a SELECT.",
+                schema + ("required" to listOf("sql")),
+                readOnly = true,
+            )
+        )
+
+        assertFalse("a new description must ask again", original == redescribed)
+        assertFalse("a new input schema must ask again", original == reshaped)
+    }
+
+    @Test
+    fun givenTheSameToolListedAgain_whenItsSchemaMapsComeInAnotherOrder_thenItsSessionKeyIsUnchanged() {
+        // A provider rebuilds its maps on every listing; a grant that lapsed on that alone would
+        // ask on every call again, which is the cost ADFA-7147 removes.
+        val inOneOrder = linkedMapOf<String, Any>(
+            "type" to "object",
+            "properties" to linkedMapOf("sql" to "string", "limit" to "integer"),
+            "required" to listOf("sql"),
+        )
+        val inAnother = linkedMapOf<String, Any>(
+            "required" to listOf("sql"),
+            "properties" to linkedMapOf("limit" to "integer", "sql" to "string"),
+            "type" to "object",
+        )
+
+        assertEquals(
+            keyOf(ContributedTool(PROVIDER, "query", "Runs a SELECT.", inOneOrder, readOnly = true)),
+            keyOf(ContributedTool(PROVIDER, "query", "Runs a SELECT.", inAnother, readOnly = true)),
+        )
+    }
+
+    @Test
+    fun givenADescriptionThatDiffersOnlyPastTheShownCap_whenBuilt_thenItsSessionKeyChanges() {
+        // The dialog shows the description cut to MAX_DETAIL_CHARS; the key covers all of it.
+        val head = "r".repeat(ContributedText.MAX_DETAIL_CHARS + 10)
+
+        assertFalse(
+            keyOf(ContributedTool(PROVIDER, "query", "$head reads", readOnly = true)) ==
+                keyOf(ContributedTool(PROVIDER, "query", "$head writes", readOnly = true)),
+        )
+    }
+
+    /** The session key of [tool], built as the store would build its handler. */
+    private fun keyOf(tool: ContributedTool): String? =
+        handlerFor(FakeToolSource(tool.providerId), tool).sessionApprovalKey
+
+    @Test
     fun givenAToolNameCarryingNewlines_whenItIsBuilt_thenTheNameShownCannotForgeDialogStructure() {
         // displayName is the approval dialog's title: a name carrying a newline plus a copy of the
         // dialog's own header would let a remote server draw structure the user then trusts.

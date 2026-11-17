@@ -118,8 +118,10 @@ approval dialog names the source plugin, and `allowsSessionApproval` is false fo
 every contributed tool that may change something: "Always Allow" is downgraded to a
 single approval. A tool its provider declares read-only (`ToolSpec.isReadOnly`) may
 be allowed for the session (ADFA-7147): still one explicit approval per tool, and the
-grant is keyed by provider and tool rather than by the registered name, which can pass
-to another plugin's tool when the sources change. The grant lapses if the tool stops
+grant is keyed by provider, the tool's own name and a SHA-256 of its description and
+input schema rather than by the registered name, which can pass to another plugin's tool
+when the sources change. A tool its provider republishes under the same name with
+another description or schema therefore asks again. The grant lapses if the tool stops
 declaring itself read-only.
 
 For the same reason a source's own `requiresApproval = false` is ignored:
