@@ -40,9 +40,35 @@ internal object ApprovalPresentation {
         ApprovalPreview.entries.firstOrNull { it.name == name } ?: ApprovalPreview.ARGS
 
     /**
-     * The tallest the approval message may grow, given the window's height: half of it. Whatever
-     * the message holds, the title and the stacked buttons (three at a large font scale) keep the
-     * other half, so no button can be pushed off screen.
+     * The tallest the approval message may grow, so the stock button panel keeps its full height.
+     *
+     * AppCompat's `AlertDialogLayout` measures the title, then the button panel at its minimum
+     * height, then offers the middle panel (this message) what remains ([offeredPx]); only after
+     * that does it hand leftover height back to the buttons. A long message therefore leaves the
+     * stacked buttons just their minimum. This reserves the difference between the buttons' full
+     * and minimum heights, which is the same as `window - title - full buttons`.
+     *
+     * The result never exceeds half the window ([windowHeightPx]), which keeps the dialog compact on
+     * a tall screen, and never drops below [floorPx], so the message cannot collapse to nothing; when
+     * even the floor leaves no room, the stock layout scrolls the buttons as it always did.
+     *
+     * @param windowHeightPx the window height, for the half-window cap.
+     * @param offeredPx the height the parent offers this view (the AT_MOST size).
+     * @param buttonsFullPx the button panel's natural height, or null when it cannot be found, in which
+     *   case the cap is half the window alone.
+     * @param buttonsMinPx the button panel's minimum height, already counted in [offeredPx].
+     * @param floorPx the least height the message may be given.
      */
-    fun messageMaxHeightPx(windowHeightPx: Int): Int = (windowHeightPx / 2).coerceAtLeast(0)
+    fun messageMaxHeightPx(
+        windowHeightPx: Int,
+        offeredPx: Int,
+        buttonsFullPx: Int?,
+        buttonsMinPx: Int,
+        floorPx: Int,
+    ): Int {
+        val half = (windowHeightPx / 2).coerceAtLeast(0)
+        if (buttonsFullPx == null) return half
+        val reserved = (buttonsFullPx - buttonsMinPx).coerceAtLeast(0)
+        return minOf(offeredPx - reserved, half).coerceAtLeast(floorPx)
+    }
 }

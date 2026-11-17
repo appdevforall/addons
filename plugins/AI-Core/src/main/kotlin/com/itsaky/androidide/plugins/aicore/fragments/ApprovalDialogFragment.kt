@@ -6,12 +6,14 @@ import android.content.res.Resources
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.util.TypedValue
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.use
+import androidx.core.view.ViewCompat
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -58,6 +60,8 @@ class ApprovalDialogFragment : DialogFragment() {
     }
 
     companion object {
+        /** The least the approval message is given (about three lines), whatever the buttons need. */
+        private const val MESSAGE_FLOOR_DP = 96
         private const val ARG_TOOL_NAME = "tool_name"
         private const val ARG_PROVIDER_NAME = "provider_name"
         private const val ARG_SOURCE = "source"
@@ -208,9 +212,9 @@ class ApprovalDialogFragment : DialogFragment() {
     }
 
     /**
-     * The message as a scrolling view no taller than half the window ([ApprovalPresentation.messageMaxHeightPx]).
-     * The stock message panel takes its space before the button panel, so a long message squeezed the
-     * stacked buttons off screen at a large font scale; bounding it leaves the buttons their full height.
+     * The message as a scrolling view bounded by [BoundedScrollView]. The stock layout gives the middle
+     * panel its height before the buttons get more than their minimum, so a long message squeezed the
+     * stacked buttons off screen at a large font scale; the bound leaves the buttons their full height.
      * The text looks like the stock message: it takes the dialog theme's own `materialAlertDialogBodyTextStyle`
      * and `dialogPreferredPadding`, from [context] (the builder's, so it carries the dialog theme overlay).
      */
@@ -227,17 +231,38 @@ class ApprovalDialogFragment : DialogFragment() {
             this.text = message
             setPadding(padding, paddingTop, padding, paddingBottom)
         }
-        val maxHeight = ApprovalPresentation.messageMaxHeightPx(context.resources.displayMetrics.heightPixels)
-        return BoundedScrollView(context, maxHeight).apply { addView(text) }
+        return BoundedScrollView(context).apply { addView(text) }
     }
 
-    /** A [NestedScrollView] that never measures taller than [maxHeightPx]. */
-    private class BoundedScrollView(context: Context, private val maxHeightPx: Int) : NestedScrollView(context) {
+    /**
+     * A [NestedScrollView] capped by [ApprovalPresentation.messageMaxHeightPx] so the stock button panel
+     * keeps its full height. `AlertDialogLayout.tryOnMeasure` measures the button panel (unspecified, so
+     * at its full height) before it measures this view, so the panel's measured height is current here.
+     */
+    private class BoundedScrollView(context: Context) : NestedScrollView(context) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val bounded = View.MeasureSpec.makeMeasureSpec(
-                minOf(maxHeightPx, View.MeasureSpec.getSize(heightMeasureSpec)), View.MeasureSpec.AT_MOST,
+            val offered = View.MeasureSpec.getSize(heightMeasureSpec)
+            val panel = rootView?.findViewById<View>(androidx.appcompat.R.id.buttonPanel)
+                ?.takeIf { it.visibility == View.VISIBLE && it.measuredHeight > 0 }
+            val metrics = resources.displayMetrics
+            val cap = ApprovalPresentation.messageMaxHeightPx(
+                windowHeightPx = metrics.heightPixels,
+                offeredPx = offered,
+                buttonsFullPx = panel?.measuredHeight,
+                buttonsMinPx = panel?.let(::minimumHeightOf) ?: 0,
+                floorPx = (MESSAGE_FLOOR_DP * metrics.density).toInt(),
             )
-            super.onMeasure(widthMeasureSpec, bounded)
+            super.onMeasure(
+                widthMeasureSpec,
+                View.MeasureSpec.makeMeasureSpec(minOf(cap, offered), View.MeasureSpec.AT_MOST),
+            )
+        }
+
+        /** Mirrors `AlertDialogLayout.resolveMinimumHeight`: the view's own, else its only child's. */
+        private fun minimumHeightOf(view: View): Int {
+            val own = ViewCompat.getMinimumHeight(view)
+            if (own > 0) return own
+            return if (view is ViewGroup && view.childCount == 1) minimumHeightOf(view.getChildAt(0)) else 0
         }
     }
 
