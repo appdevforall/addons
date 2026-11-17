@@ -15,6 +15,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -114,6 +115,26 @@ class AppToolNamesTest {
         connectAll(one to fake("a", tool("query", true)), two to fake("b", tool("query", true)), reversed = true)
 
         assertEquals(forward, byApp())
+    }
+
+    @Test
+    fun `an app listed between two reads of the server list cannot break the listing`() {
+        connectAll(
+            "com.example.notes" to fake("a", tool("query", true)),
+            "com.example.shop" to fake("b", tool("query", true)),
+        )
+        val full = McpServers.all()
+        val before = full.filter { AutomaticServers.applicationIdOf(it.id) == "com.example.notes" }
+        // A second read would see the newly listed app; the listing must not make one.
+        mockkObject(McpServers)
+        try {
+            every { McpServers.all() } returnsMany listOf(before, full) andThen full
+
+            assertEquals(setOf("db_notes_query"), source.listTools().map { it.name }.toSet())
+            verify(exactly = 1) { McpServers.all() }
+        } finally {
+            unmockkObject(McpServers)
+        }
     }
 
     @Test

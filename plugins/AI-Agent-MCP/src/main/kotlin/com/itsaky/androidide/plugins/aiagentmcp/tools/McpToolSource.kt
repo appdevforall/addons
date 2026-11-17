@@ -192,10 +192,11 @@ class McpToolSource :
 
     /**
      * Every enabled tool of every enabled server, paired with its server.
+     * @param servers one snapshot of the server list, so the caller's other reads agree with it.
      * @return the pairs, in configured order.
      */
-    private fun enabledTools(): List<Pair<McpServer, McpTool>> =
-        McpServers.all()
+    private fun enabledTools(servers: List<McpServer>): List<Pair<McpServer, McpTool>> =
+        servers
             .filter { it.enabled }
             .flatMap { server ->
                 McpToolCatalog.tools(server.id)
@@ -223,12 +224,15 @@ class McpToolSource :
         val exposed = mutableListOf<Exposed>()
         val taken = mutableSetOf<String>()
 
+        // Read once: an app listed between two reads would have tools here but no prefix below.
+        val servers = McpServers.all()
+
         // From every automatic entry, not only those offering tools, so a prefix does not change
         // when another app's tools are switched off or its tool list is still empty.
         val appPrefixes = McpToolText.appPrefixes(
-            McpServers.all().filter { it.automatic }.map { AutomaticServers.applicationIdOf(it.id) },
+            servers.filter { it.automatic }.map { AutomaticServers.applicationIdOf(it.id) },
         )
-        for ((server, tool) in enabledTools()) {
+        for ((server, tool) in enabledTools(servers)) {
             val base = if (server.automatic) {
                 McpToolText.exposedNameWithPrefix(
                     appPrefixes.getValue(AutomaticServers.applicationIdOf(server.id)),
