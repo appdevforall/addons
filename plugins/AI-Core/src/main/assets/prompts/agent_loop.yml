@@ -42,9 +42,9 @@ agent_loop:
   # Sent once when a run re-issues the batch it has just run successfully. The batch is not run
   # again; the earlier result is already in the transcript.
   repeated_after_success: >-
-    You just repeated your previous tool call, which already succeeded; its result is above, and
-    the call was not run again. Do not call that tool again. Answer the user now, from that
-    result: write the answer, or call the "{{TERMINAL_TOOL}}" tool with it.
+    Your previous tool call(s) already succeeded and were not run again; their results are above.
+    If those results are enough, answer the user now: write the answer, or call the
+    "{{TERMINAL_TOOL}}" tool with it. Otherwise make a different call, not the same one again.
   # Sent once when a run that had to check the web first answered without searching; TOOL is the
   # search tool. A backend that forces the call never sends it (see VerificationPolicy).
   required_tool: >-

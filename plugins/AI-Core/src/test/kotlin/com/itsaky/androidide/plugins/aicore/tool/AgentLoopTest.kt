@@ -1640,6 +1640,9 @@ class AgentLoopTest {
         val text = ToolResultsPrompt.renderRepeatedAfterSuccess(shippedConfig, "respond")
         assertTrue(text, text.contains("\"respond\""))
         assertTrue(text, text.contains("already succeeded"))
+        assertTrue(text, text.contains("were not run again"))
+        assertTrue(text, text.contains("make a different call, not the same one again"))
+        assertFalse(text, text.contains("Do not call that tool again"))
     }
 
     private companion object {
