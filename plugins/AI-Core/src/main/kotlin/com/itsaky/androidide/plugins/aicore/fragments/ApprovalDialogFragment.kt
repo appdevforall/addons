@@ -231,7 +231,11 @@ class ApprovalDialogFragment : DialogFragment() {
             this.text = message
             setPadding(padding, paddingTop, padding, paddingBottom)
         }
+        // The stock layout puts this gap (titleDividerNoCustom) between the title and a message
+        // it owns; a custom view loses it, so it is restored as top padding on the scroll view.
+        val gap = context.resources.getDimensionPixelSize(androidx.appcompat.R.dimen.abc_dialog_title_divider_material)
         return BoundedScrollView(context).apply {
+            setPadding(paddingLeft, gap, paddingRight, paddingBottom)
             // The stock content panel shows these edge indicators while it can scroll; setView drops them.
             scrollIndicators = View.SCROLL_INDICATOR_TOP or View.SCROLL_INDICATOR_BOTTOM
             addView(text)
@@ -250,7 +254,8 @@ class ApprovalDialogFragment : DialogFragment() {
         private var firstOffered: Int? = null
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val offered = View.MeasureSpec.getSize(heightMeasureSpec)
+            val unlimited = View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED
+            val offered = if (unlimited) Int.MAX_VALUE else View.MeasureSpec.getSize(heightMeasureSpec)
             val panel = rootView?.findViewById<View>(androidx.appcompat.R.id.buttonPanel)
                 ?.takeIf { it.visibility == View.VISIBLE && it.measuredHeight > 0 }
             val metrics = resources.displayMetrics

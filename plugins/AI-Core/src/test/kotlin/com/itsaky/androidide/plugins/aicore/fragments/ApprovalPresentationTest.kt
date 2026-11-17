@@ -111,4 +111,10 @@ class ApprovalPresentationTest {
         // A fresh sequence offering more than that reserves again.
         assertEquals(1344, ApprovalPresentation.messageMaxHeightPx(3088, 1710, 549, 183, 288, null))
     }
+
+    @Test
+    fun givenAnUnlimitedOffer_whenTheMessageIsBounded_thenTheWindowCapApplies() {
+        assertEquals(1544, ApprovalPresentation.messageMaxHeightPx(3088, Int.MAX_VALUE, 549, 183, 288))
+        assertEquals(1544, ApprovalPresentation.messageMaxHeightPx(3088, Int.MAX_VALUE, null, 0, 288))
+    }
 }
