@@ -19,14 +19,6 @@ internal object ApprovalDialogLayoutMath {
         naturalWidths.sum() <= available
 
     /**
-     * The order top to bottom when the buttons stack, given them in side-by-side order (Always Allow
-     * or Correct, Decline, Run now or Accept): the reverse, matching the stock Material dialog, so the
-     * primary action sits on top and the one that approves every later call is never where Run now
-     * is expected.
-     */
-    fun <T> stackedOrder(sideBySide: List<T>): List<T> = sideBySide.asReversed()
-
-    /**
      * Height the scrolling text area may use: whatever the dialog may occupy ([maxTotal]) after
      * the button area ([buttonsHeight]), but never less than [minScroll], so the buttons are
      * always on screen and some text stays visible.
@@ -54,57 +46,36 @@ internal class BoundedScrollView(context: Context) : ScrollView(context) {
 }
 
 /**
- * The dialog's buttons. Side by side (the leading buttons at the start, the rest at the end) when
- * their natural widths fit: Always Allow (or Correct), Decline, Run now (or Accept). Otherwise one
- * per line, each full width, in the stock Material dialog's stacked order: the primary action on top,
- * then Decline, then Always Allow (or Correct) at the bottom (see [ApprovalDialogLayoutMath.stackedOrder]).
- * The children are re-ordered with the layout, so focus and accessibility traversal follow the visual
- * order. Re-decided on every measure, so a font-scale or window change cannot leave one cut off.
+ * The dialog's buttons, in one row (the leading buttons at the start, the rest at the end) when their
+ * natural widths fit, otherwise one per line, each full width, in the same order top to bottom.
+ * Re-decided on every measure, so a font-scale or window change cannot leave one cut off.
  */
 internal class ApprovalButtonBar(context: Context) : LinearLayout(context) {
-    private val gap = View(context)
-    private var buttons: List<View> = emptyList()
-    private var leading = 0
-    private var arrangedStacked: Boolean? = null
+    private var spacer: View? = null
 
-    /** Adds [buttons], given in side-by-side order; the first [leading] sit at the start, the rest at the end. */
+    /** Adds [buttons]; the first [leading] sit at the start, the rest at the end. */
     fun setButtons(buttons: List<View>, leading: Int) {
-        this.buttons = buttons
-        this.leading = leading
-        arrangedStacked = null
-        arrange(stacked = false)
-    }
-
-    private fun arrange(stacked: Boolean) {
-        if (arrangedStacked == stacked) return
-        arrangedStacked = stacked
-        removeAllViewsInLayout()
-        orientation = if (stacked) VERTICAL else HORIZONTAL
-        if (stacked) {
-            ApprovalDialogLayoutMath.stackedOrder(buttons).forEach { addButton(it) }
-        } else {
-            buttons.forEachIndexed { i, button ->
-                if (i == leading) addViewInLayout(gap, -1, LayoutParams(0, 0, 1f), true)
-                addButton(button)
-            }
+        removeAllViews()
+        orientation = HORIZONTAL
+        val gap = View(context).also { spacer = it }
+        buttons.forEachIndexed { i, button ->
+            if (i == leading) addView(gap, LayoutParams(0, 0, 1f))
+            addView(button, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         }
-        requestLayout()
-    }
-
-    private fun addButton(button: View) {
-        addViewInLayout(button, -1, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT), true)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val buttons = (0 until childCount).map(::getChildAt).filter { it !== spacer }
         val unbounded = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         val widths = buttons.map {
-            it.layoutParams?.width = ViewGroup.LayoutParams.WRAP_CONTENT
+            it.layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT
             it.measure(unbounded, unbounded)
             it.measuredWidth
         }
         val available = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
         val sideBySide = ApprovalDialogLayoutMath.fitsSideBySide(widths, available)
-        arrange(stacked = !sideBySide)
+        orientation = if (sideBySide) HORIZONTAL else VERTICAL
+        spacer?.visibility = if (sideBySide) VISIBLE else GONE
         if (!sideBySide) buttons.forEach { it.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }

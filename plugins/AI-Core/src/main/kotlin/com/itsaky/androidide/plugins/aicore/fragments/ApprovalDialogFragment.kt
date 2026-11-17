@@ -207,7 +207,7 @@ class ApprovalDialogFragment : DialogFragment() {
 
         val bar = ApprovalButtonBar(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
-            // Side by side: neutral at the start, then decline, then the primary. Stacked, the bar reverses this.
+            // Same order as the stock dialog: neutral at the start, then decline, then the primary.
             setButtons(listOfNotNull(neutral, decline, positive), leading = if (neutral != null) 1 else 0)
         }
 
