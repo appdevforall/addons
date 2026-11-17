@@ -87,6 +87,14 @@ interface ToolHandler {
         get() = true
 
     /**
+     * Whether [allowsSessionApproval] rests only on the tool's provider saying it only reads, a
+     * claim nothing here can check. The approval dialog then says so above "Always Allow". False
+     * for a built-in, whose code is this plugin's own.
+     */
+    val readOnlyOnProvidersWord: Boolean
+        get() = false
+
+    /**
      * What an "Always Allow" answer is recorded under, or null for the name the call was made
      * under, which is what a built-in wants: its name never changes hands. A contributed tool
      * overrides it, because its registered name can pass to another plugin's tool when the sources

@@ -122,7 +122,9 @@ grant is keyed by provider, the tool's own name and a SHA-256 of its description
 input schema rather than by the registered name, which can pass to another plugin's tool
 when the sources change. A tool its provider republishes under the same name with
 another description or schema therefore asks again. The grant lapses if the tool stops
-declaring itself read-only.
+declaring itself read-only. The declaration is the provider's own and nothing checks it,
+so a dialog offering "Always Allow" for a contributed tool says exactly that
+(`ApprovalRequest.readOnlyOnProvidersWord`).
 
 For the same reason a source's own `requiresApproval = false` is ignored:
 `ensureApproved` returns early on it, before `allowsSessionApproval` is ever

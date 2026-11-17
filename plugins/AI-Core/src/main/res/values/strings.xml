@@ -147,6 +147,8 @@
     <string name="approval_confirm_title">⚠️ Confirm: %s</string>
     <string name="approval_source">From %1$s</string>
     <string name="approval_provider_name">The source calls this tool “%1$s”</string>
+    <!-- Shown when "Always Allow" is offered for another plugin's tool: it rests on that plugin's own claim. -->
+    <string name="approval_read_only_claim">The plugin that supplied this tool says it only reads. Code on the Go cannot check that.</string>
     <string name="approval_run_now">✓ Run Now</string>
     <string name="approval_always_allow">✓ Always Allow</string>
     <string name="approval_proposed_change">Proposed change:</string>

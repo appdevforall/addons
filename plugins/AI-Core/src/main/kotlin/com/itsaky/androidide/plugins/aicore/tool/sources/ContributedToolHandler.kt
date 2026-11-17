@@ -72,6 +72,9 @@ class ContributedToolHandler(
      */
     override val allowsSessionApproval: Boolean get() = readOnly
 
+    /** The same declaration: the user is told it is the provider's, which nothing here checks. */
+    override val readOnlyOnProvidersWord: Boolean get() = readOnly
+
     /**
      * The provider, the tool's own name and a digest of its description and input schema: the
      * tool the user said "Always Allow" to, not the name it ran under. [toolName] could hand the

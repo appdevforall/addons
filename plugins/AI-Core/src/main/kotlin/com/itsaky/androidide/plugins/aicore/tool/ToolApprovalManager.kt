@@ -111,6 +111,7 @@ class ToolApprovalManager(
                 return ApprovalResponse(approved = true)
             }
 
+            val allowsSession = !isNeverSessionApproved(toolName, handler)
             val request = ApprovalRequest(
                 toolName = toolName,
                 displayName = handler.displayName,
@@ -118,7 +119,8 @@ class ToolApprovalManager(
                 args = args,
                 description = describe(handler),
                 preview = handler.approvalPreview,
-                allowsSessionApproval = !isNeverSessionApproved(toolName, handler),
+                allowsSessionApproval = allowsSession,
+                readOnlyOnProvidersWord = allowsSession && handler.readOnlyOnProvidersWord,
             )
 
             val deferred = CompletableDeferred<ApprovalDecision>()
@@ -249,6 +251,8 @@ data class ApprovalResponse(
  * @property sourceLabel the contributing plugin, or null for one of the agent's own tools.
  * @property args the arguments the tool would run with.
  * @property description what the tool does.
+ * @property readOnlyOnProvidersWord "Always Allow" is offered only because the tool's provider says
+ *   it only reads; the dialog tells the user so, and that the claim is not checked.
  */
 data class ApprovalRequest(
     val toolName: String,
@@ -258,6 +262,7 @@ data class ApprovalRequest(
     val sourceLabel: String? = null,
     val preview: ApprovalPreview = ApprovalPreview.ARGS,
     val allowsSessionApproval: Boolean = true,
+    val readOnlyOnProvidersWord: Boolean = false,
 )
 
 /**

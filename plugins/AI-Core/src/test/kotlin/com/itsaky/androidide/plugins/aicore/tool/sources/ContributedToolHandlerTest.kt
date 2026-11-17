@@ -129,6 +129,7 @@ class ContributedToolHandlerTest {
         val handler = handlerFor(source, contributedTool(PROVIDER, "create_issue"))
 
         assertFalse(handler.allowsSessionApproval)
+        assertFalse(handler.readOnlyOnProvidersWord)
         assertTrue("contributed tools default to asking every time", handler.requiresApproval)
     }
 
@@ -149,6 +150,7 @@ class ContributedToolHandlerTest {
 
         assertTrue("a source cannot decline the approval dialog", handler.requiresApproval)
         assertTrue("a read-only tool may be allowed for the session (ADFA-7147)", handler.allowsSessionApproval)
+        assertTrue("and only on the provider's word, which the dialog says", handler.readOnlyOnProvidersWord)
         assertTrue(handler.readOnly)
         assertFalse("a read-only tool changes nothing, whatever approval it needs", handler.mutatesProject)
     }

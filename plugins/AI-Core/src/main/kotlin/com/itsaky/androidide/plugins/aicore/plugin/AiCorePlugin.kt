@@ -648,6 +648,10 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 it again without prompting. The grant is by <b>tool name only</b> —
                 it does not depend on the arguments — and it is forgotten when the
                 session ends.</p>
+                <p>For a tool from another plugin, the button appears only when
+                that plugin says the tool only reads. Code on the Go cannot check
+                that, and after one tap the agent can call the tool with any
+                arguments.</p>
                 <p>It is deliberately unavailable for file edits: those are
                 re-confirmed every time, with the change on screen.</p>
             """.trimIndent(),

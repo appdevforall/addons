@@ -60,6 +60,7 @@ class ApprovalDialogFragment : DialogFragment() {
         private const val ARG_ARGS = "args"
         private const val ARG_PREVIEW = "preview"
         private const val ARG_ALLOWS_ALWAYS_ALLOW = "allows_always_allow"
+        private const val ARG_READ_ONLY_ON_PROVIDERS_WORD = "read_only_on_providers_word"
 
         /**
          * Builds the dialog. Everything it needs is in [getArguments], so the framework can
@@ -83,6 +84,7 @@ class ApprovalDialogFragment : DialogFragment() {
                     putString(ARG_PREVIEW, preview.name)
                     putString(ARG_ARGS, ApprovalPresentation.format(preview, request.args, resources))
                     putBoolean(ARG_ALLOWS_ALWAYS_ALLOW, request.allowsSessionApproval)
+                    putBoolean(ARG_READ_ONLY_ON_PROVIDERS_WORD, request.readOnlyOnProvidersWord)
                 }
             }
         }
@@ -97,21 +99,32 @@ class ApprovalDialogFragment : DialogFragment() {
         val preview = ApprovalPresentation.named(arguments?.getString(ARG_PREVIEW))
         val isEdit = preview == ApprovalPreview.EDIT
         val allowsAlwaysAllow = arguments?.getBoolean(ARG_ALLOWS_ALWAYS_ALLOW) ?: false
+        // An edit never offers it, whatever the request allows; see the buttons below.
+        val offersAlwaysAllow = allowsAlwaysAllow && !isEdit
+        val readOnlyOnProvidersWord = arguments?.getBoolean(ARG_READ_ONLY_ON_PROVIDERS_WORD) ?: false
+
+        // Provenance before the description: a tool that leaves the device is a different
+        // decision from a local edit, and only the source says which this is.
+        val provenance = buildList {
+            if (!source.isNullOrBlank()) {
+                add(getString(R.string.approval_source, source))
+                // Both names, when they differ: the title says what runs, this says what the
+                // source calls it, so neither can be passed off as the other.
+                if (!providerName.isNullOrBlank()) {
+                    add(getString(R.string.approval_provider_name, providerName))
+                }
+            }
+            // "Always Allow" rests on the plugin's own word here, so the user is told whose it is.
+            if (offersAlwaysAllow && readOnlyOnProvidersWord) {
+                add(getString(R.string.approval_read_only_claim))
+            }
+        }
 
         val message = buildString {
             append(getString(R.string.approval_header))
             append("\n\n")
-            // Provenance before the description: a tool that leaves the device is a different
-            // decision from a local edit, and only the source says which this is.
-            if (!source.isNullOrBlank()) {
-                append(getString(R.string.approval_source, source))
-                append("\n")
-                // Both names, when they differ: the title says what runs, this says what the
-                // source calls it, so neither can be passed off as the other.
-                if (!providerName.isNullOrBlank()) {
-                    append(getString(R.string.approval_provider_name, providerName))
-                    append("\n")
-                }
+            if (provenance.isNotEmpty()) {
+                provenance.forEach { append(it).append("\n") }
                 append("\n")
             }
             append(description)
@@ -144,7 +157,7 @@ class ApprovalDialogFragment : DialogFragment() {
                 decide(ApprovalResult.APPROVED_ONCE)
                 dismiss()
             }
-            if (allowsAlwaysAllow) {
+            if (offersAlwaysAllow) {
                 builder.setNeutralButton(getString(R.string.approval_always_allow)) { _, _ ->
                     decide(ApprovalResult.APPROVED_FOR_SESSION)
                     dismiss()

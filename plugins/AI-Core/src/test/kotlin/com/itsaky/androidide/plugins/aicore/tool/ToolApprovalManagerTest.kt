@@ -375,6 +375,40 @@ class ToolApprovalManagerTest {
     }
 
     @Test
+    fun givenAReadOnlyContributedTool_whenTheDialogOffersAlwaysAllow_thenItSaysTheClaimIsThePluginsOwn() {
+        // Review F11: the button rests on the provider's word, so the request must carry that.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+
+        answer(manager, contributed(provider, "query", readOnly = true), ApprovalResult.DENIED)
+
+        assertTrue(lastRequest?.allowsSessionApproval == true)
+        assertTrue("the dialog must say the read-only claim is the plugin's", lastRequest?.readOnlyOnProvidersWord == true)
+    }
+
+    @Test
+    fun givenAToolWhoseAlwaysAllowRestsOnNoClaim_whenTheDialogIsShown_thenItSaysNothingAboutOne() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val builtIn = object : ToolHandler {
+            override val toolName = "add_dependency"
+            override val description = "fake"
+            override val requiresApproval = true
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ok")
+        }
+
+        answer(manager, builtIn, ApprovalResult.DENIED)
+        assertTrue(lastRequest?.allowsSessionApproval == true)
+        assertFalse("a built-in is this plugin's own code", lastRequest?.readOnlyOnProvidersWord == true)
+
+        answer(
+            manager,
+            contributed("com.itsaky.androidide.plugins.aiagentmcp", "create_issue", readOnly = false),
+            ApprovalResult.DENIED,
+        )
+        assertFalse("no Always Allow, so no claim to explain", lastRequest?.readOnlyOnProvidersWord == true)
+    }
+
+    @Test
     fun givenADenial_whenApprovalIsRequested_thenItReportsTheDenial() {
         val manager = ToolApprovalManager({ shippedConfig })
 
