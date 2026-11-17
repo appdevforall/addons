@@ -12,6 +12,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.services.CapabilityStatus
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
+import java.io.InterruptedIOException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
@@ -41,6 +42,16 @@ class McpToolSource :
      * failure for a call nobody cancelled.
      */
     private val liveSessions = ConcurrentHashMap<String, McpSession>()
+
+    /** Calls whose worker is running, so [cancel] knows whether a flag will ever be read. */
+    private val running: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /**
+     * Running calls that were cancelled. The session drop in [cancel] reaches only a request in
+     * flight; one landing between the two attempts of the endpoint retry finds no session, so the
+     * retry reads this before it sends anything.
+     */
+    private val cancelled: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /**
      * Remote calls run here rather than on the common pool: an MCP call blocks on a socket for as
@@ -114,6 +125,7 @@ class McpToolSource :
 
     override fun cancel(callId: String) {
         inFlight.remove(callId)?.cancel(true)
+        if (callId in running) cancelled += callId
         // The worker is blocked on a socket read, where an interrupt does nothing; dropping the
         // connection is what actually ends it. Only this call's, so a concurrent call against
         // another server keeps its socket.
@@ -141,7 +153,11 @@ class McpToolSource :
         tool: McpTool,
         arguments: Map<String, Any?>,
     ): ToolSourceRegistry.ToolOutcome = try {
+        running += callId
         val result = McpToolCatalog.retry.call(server) { target ->
+            // Cancelled between two attempts (or before the first): nothing is sent. Signalled as
+            // an interrupted read, which is how a dropped connection already reports a cancel.
+            if (callId in cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
             val session = McpConnections.session(target)
             liveSessions[callId] = session
             try {
@@ -158,6 +174,9 @@ class McpToolSource :
         McpToolCatalog.recordFailure(server, e)
         val context = McpPlugin.getContext()?.androidContext
         Outcome(false, "", McpErrorFormatter.format(context, server.name, e))
+    } finally {
+        running -= callId
+        cancelled -= callId
     }
 
     /**
