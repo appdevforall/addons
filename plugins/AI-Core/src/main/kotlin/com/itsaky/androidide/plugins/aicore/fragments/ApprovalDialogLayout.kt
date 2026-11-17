@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import android.content.Context
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -56,8 +57,9 @@ internal class BoundedScrollView(context: Context) : ScrollView(context) {
 /**
  * The dialog's buttons. Side by side (the leading buttons at the start, the rest at the end) when
  * their natural widths fit: Always Allow (or Correct), Decline, Run now (or Accept). Otherwise one
- * per line, each full width, in the stock Material dialog's stacked order: the primary action on top,
- * then Decline, then Always Allow (or Correct) at the bottom (see [ApprovalDialogLayoutMath.stackedOrder]).
+ * per line, each at its natural width against the end edge, as the stock Material dialog stacks them,
+ * and in its order: the primary action on top, then Decline, then Always Allow (or Correct) at the
+ * bottom (see [ApprovalDialogLayoutMath.stackedOrder]).
  * The children are re-ordered with the layout, so focus and accessibility traversal follow the visual
  * order. Re-decided on every measure, so a font-scale or window change cannot leave one cut off.
  */
@@ -81,18 +83,19 @@ internal class ApprovalButtonBar(context: Context) : LinearLayout(context) {
         removeAllViewsInLayout()
         orientation = if (stacked) VERTICAL else HORIZONTAL
         if (stacked) {
-            ApprovalDialogLayoutMath.stackedOrder(buttons).forEach { addButton(it) }
+            ApprovalDialogLayoutMath.stackedOrder(buttons).forEach { addButton(it, Gravity.END) }
         } else {
             buttons.forEachIndexed { i, button ->
                 if (i == leading) addViewInLayout(gap, -1, LayoutParams(0, 0, 1f), true)
-                addButton(button)
+                addButton(button, Gravity.NO_GRAVITY)
             }
         }
         requestLayout()
     }
 
-    private fun addButton(button: View) {
-        addViewInLayout(button, -1, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT), true)
+    private fun addButton(button: View, gravity: Int) {
+        val params = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).also { it.gravity = gravity }
+        addViewInLayout(button, -1, params, true)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -105,7 +108,6 @@ internal class ApprovalButtonBar(context: Context) : LinearLayout(context) {
         val available = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
         val sideBySide = ApprovalDialogLayoutMath.fitsSideBySide(widths, available)
         arrange(stacked = !sideBySide)
-        if (!sideBySide) buttons.forEach { it.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 }
