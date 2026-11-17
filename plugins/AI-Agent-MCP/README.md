@@ -59,6 +59,15 @@ points the entry at `http://127.0.0.1:<port>/mcp`. A relaunched app gets a new
 port and token, and the plugin reads them again after a refused connection. An
 app that has not reported yet has no entry, and no error is shown.
 
+Each app's tools are told apart for the model. Their names start with `db_` and
+the last segment of the application ID (`db_notes_query` for
+`com.example.notes`); when two apps would share that prefix, both use the first
+five characters of the segment and four hex digits derived from the full
+application ID (`notes_3fa1_query`), so a name never depends on which app was
+read first. Each description starts with the application ID, as
+"com.example.notes (SQLite debugger): ...", and the approval dialog shows it.
+Servers you add yourself keep the name prefix taken from their label.
+
 - It is held in memory only and is **not shown in the settings screen in this
   version**, so there is no switch to turn it off there.
 - The tools that declare MCP's `readOnlyHint: true` start switched **on**. Any

@@ -4,6 +4,7 @@ import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
@@ -68,7 +69,7 @@ class McpToolSource :
     override fun listTools(): List<ToolSourceRegistry.ToolSpec> = exposedTools().map { exposed ->
         Spec(
             name = exposed.name,
-            description = exposed.tool.description,
+            description = exposed.description,
             parametersSchema = exposed.tool.inputSchema,
             preApproved = exposed.server.automatic && exposed.tool.readOnlyHint,
         )
@@ -222,8 +223,20 @@ class McpToolSource :
         val exposed = mutableListOf<Exposed>()
         val taken = mutableSetOf<String>()
 
+        // From every automatic entry, not only those offering tools, so a prefix does not change
+        // when another app's tools are switched off or its tool list is still empty.
+        val appPrefixes = McpToolText.appPrefixes(
+            McpServers.all().filter { it.automatic }.map { AutomaticServers.applicationIdOf(it.id) },
+        )
         for ((server, tool) in enabledTools()) {
-            val base = McpToolText.exposedName(server.name, tool.name)
+            val base = if (server.automatic) {
+                McpToolText.exposedNameWithPrefix(
+                    appPrefixes.getValue(AutomaticServers.applicationIdOf(server.id)),
+                    tool.name,
+                )
+            } else {
+                McpToolText.exposedName(server.name, tool.name)
+            }
             if (base == null) {
                 Log.w(TAG, "Dropping a tool from '${server.name}': its name has nothing usable")
                 continue
@@ -237,7 +250,7 @@ class McpToolSource :
                 Log.i(TAG, "'${tool.name}' on '${server.name}' shares a name; offering it as '$name'")
             }
             taken += name
-            exposed += Exposed(server, tool, name)
+            exposed += Exposed(server, tool, name, describe(server, tool))
         }
         return exposed
     }
@@ -248,7 +261,23 @@ class McpToolSource :
      * @property tool the tool, as the server described it.
      * @property name the name the agent and the model see.
      */
-    private class Exposed(val server: McpServer, val tool: McpTool, val name: String)
+    private class Exposed(
+        val server: McpServer,
+        val tool: McpTool,
+        val name: String,
+        val description: String,
+    )
+
+    /**
+     * The description the model and the approval dialog see. A SQLite debugger tool starts with
+     * its application ID: every entry's tools say the same thing otherwise, and the model could
+     * not tell which app's database one reads. A hand-added server's text is passed through.
+     */
+    private fun describe(server: McpServer, tool: McpTool): String {
+        if (!server.automatic) return tool.description
+        val app = "${AutomaticServers.applicationIdOf(server.id)} (SQLite debugger)"
+        return if (tool.description.isBlank()) app else "$app: ${tool.description}"
+    }
 
     /**
      * One tool, as the host contract describes it.

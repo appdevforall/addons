@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.tools
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -58,5 +59,23 @@ class McpToolTextTest {
         val taken = (setOf("git_search") + (2..20).map { "git_search_$it" }).toSet()
 
         assertNull(McpToolText.disambiguate("git_search", taken))
+    }
+
+    @Test
+    fun givenAppIds_whenPrefixed_thenEachAppGetsItsOwnShortStablePrefix() {
+        val ids = listOf("com.example.notes", "com.example.shop", "org.other.Notes")
+        val prefixes = McpToolText.appPrefixes(ids)
+        assertEquals("db_shop", prefixes.getValue("com.example.shop"))
+        // The two notes apps share a segment: both fall back to segment plus digest.
+        val a = prefixes.getValue("com.example.notes")
+        val b = prefixes.getValue("org.other.Notes")
+        assertEquals(2, setOf(a, b).size)
+        assertTrue(a.startsWith("notes_") && a.length <= 10)
+        assertEquals(prefixes, McpToolText.appPrefixes(ids.reversed()))
+    }
+
+    @Test
+    fun givenAnAppIdWithNothingUsable_whenPrefixed_thenItStillGetsAName() {
+        assertEquals("db_app", McpToolText.appPrefixes(listOf("com.example.***")).getValue("com.example.***"))
     }
 }

@@ -220,6 +220,9 @@ object AutomaticServers {
 
     fun idFor(applicationId: String) = ID_PREFIX + applicationId
 
+    /** The application ID an automatic entry's id was made from. */
+    fun applicationIdOf(serverId: String) = serverId.removePrefix(ID_PREFIX)
+
     private fun fireChanged() {
         for (l in listeners) runCatching { l() }
     }

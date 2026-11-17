@@ -34,6 +34,52 @@ object McpToolText {
     }
 
     /**
+     * As [exposedName], for a prefix that is already decided (see [appPrefixes]).
+     * @param prefix a sanitised prefix of at most [MAX_PREFIX_LENGTH] characters.
+     */
+    fun exposedNameWithPrefix(prefix: String, toolName: String): String? {
+        val tool = identifier(toolName).take(MAX_NAME_LENGTH).trim('_')
+        if (tool.isEmpty()) return null
+        return if (prefix.isEmpty()) tool else "${prefix}_$tool"
+    }
+
+    /**
+     * The name prefix of each SQLite debugger entry, told apart by app.
+     *
+     * The server label cannot do it: every entry is labelled "SQLite debugger (...)", and the
+     * first [MAX_PREFIX_LENGTH] characters of that are the same for all of them. The prefix is
+     * `db_` and the first seven characters of the application ID's last segment. Entries whose
+     * prefix would still be shared (`com.a.notes` and `com.b.notes`) all take the first five
+     * characters of the segment and four hex digits of a digest of the full application ID
+     * instead. Both forms depend only on the set of application IDs, never on their order, and
+     * fit [MAX_PREFIX_LENGTH].
+     *
+     * @param applicationIds the application ID of every entry.
+     * @return the prefix by application ID.
+     */
+    fun appPrefixes(applicationIds: Collection<String>): Map<String, String> {
+        val ids = applicationIds.distinct()
+        val plain = ids.associateWith { id ->
+            "db_" + segment(id).take(MAX_PREFIX_LENGTH - 3).trim('_')
+        }
+        val shared = plain.values.groupingBy { it }.eachCount()
+        return ids.associateWith { id ->
+            if (shared.getValue(plain.getValue(id)) == 1) {
+                plain.getValue(id)
+            } else {
+                segment(id).take(5).trim('_') + "_" + digest(id)
+            }
+        }
+    }
+
+    private fun segment(applicationId: String): String =
+        identifier(applicationId.substringAfterLast('.')).ifEmpty { "app" }
+
+    private fun digest(text: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+            .take(2).joinToString("") { "%02x".format(it) }
+
+    /**
      * A free variant of [name], numbered when two tools ended up sharing one exposed name.
      *
      * Truncation is what makes this necessary: `get_pull_request_comments` and
