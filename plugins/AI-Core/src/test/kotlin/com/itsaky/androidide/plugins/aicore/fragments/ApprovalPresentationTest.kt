@@ -69,23 +69,31 @@ class ApprovalPresentationTest {
     /** What [simulate] leaves on screen: the message's height and the button panel's. */
     private data class Laid(val message: Int, val buttons: Int)
 
+    /** The message view's `firstOffered`, carried from one [simulate] to the next as the view carries it. */
+    private var firstOffered: Int? = null
+
     /**
      * Replays AppCompat 1.6.1 `AlertDialogLayout.tryOnMeasure`: title, buttons at their minimum, the message
      * at `AT_MOST(H - used)`, the leftover to the buttons, then any height still left to the message in a
-     * second measure of it. [natural] is the message's own height; the window is 3088 px tall.
+     * second measure of it. [natural] is the message's own height; the window is 3088 px tall. Each call is
+     * one measure pass; [afterLayout] says a layout ended the previous one, which clears [firstOffered].
      */
-    private fun simulate(natural: Int, dialog: Int, title: Int, min: Int, full: Int): Laid {
-        fun cap(offered: Int, first: Int?) =
-            ApprovalPresentation.messageMaxHeightPx(3088, offered, full, min, 288, first)
+    private fun simulate(natural: Int, dialog: Int, title: Int, min: Int, full: Int, afterLayout: Boolean = true): Laid {
+        if (afterLayout) firstOffered = null
+        // As BoundedScrollView.onMeasure does it.
+        fun cap(offered: Int): Int {
+            firstOffered = ApprovalPresentation.sequenceFirstOfferPx(firstOffered, offered)
+            return ApprovalPresentation.messageMaxHeightPx(3088, offered, full, min, 288, firstOffered)
+        }
 
         val offered1 = dialog - title - min
-        var message = minOf(natural, cap(offered1, null), offered1)
+        var message = minOf(natural, cap(offered1), offered1)
         var remaining = dialog - title - min - message
         val give = minOf(remaining, full - min).coerceAtLeast(0)
         remaining -= give
         if (remaining > 0) {
             val offered2 = message + remaining
-            message = minOf(natural, cap(offered2, offered1), offered2)
+            message = minOf(natural, cap(offered2), offered2)
         }
         return Laid(message, min + give)
     }
@@ -110,6 +118,25 @@ class ApprovalPresentationTest {
         assertEquals(1000, ApprovalPresentation.messageMaxHeightPx(3088, 1000, 549, 183, 288, 1710))
         // A fresh sequence offering more than that reserves again.
         assertEquals(1344, ApprovalPresentation.messageMaxHeightPx(3088, 1710, 549, 183, 288, null))
+    }
+
+    // ViewRootImpl.measureHierarchy can measure the dialog again at a greater width before its first layout.
+    // There the title takes a line fewer (377 -> 300 px), so that pass first offers 1787 px, more than the
+    // stale 1710; its second measure (1421) must not reserve the buttons' 366 px again.
+    @Test
+    fun givenASecondMeasurePassBeforeAnyLayout_whenItOffersMore_thenTheButtonsAreReservedOnlyOnce() {
+        val fresh = simulate(1200, 2270, 300, 183, 549)
+        assertEquals(Laid(1200, 549), fresh)
+        assertEquals(Laid(1200, 549), simulate(1200, 2270, 377, 183, 549))
+        assertEquals(fresh, simulate(1200, 2270, 300, 183, 549, afterLayout = false))
+    }
+
+    @Test
+    fun givenAStoredFirstOffer_whenALaterOfferExceedsIt_thenANewSequenceStarts() {
+        assertEquals(1710, ApprovalPresentation.sequenceFirstOfferPx(null, 1710))
+        assertEquals(1710, ApprovalPresentation.sequenceFirstOfferPx(1710, 1344))
+        assertEquals(1710, ApprovalPresentation.sequenceFirstOfferPx(1710, 1710))
+        assertEquals(1787, ApprovalPresentation.sequenceFirstOfferPx(1710, 1787))
     }
 
     @Test

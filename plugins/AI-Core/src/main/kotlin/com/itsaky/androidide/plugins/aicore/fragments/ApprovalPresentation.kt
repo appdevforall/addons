@@ -58,10 +58,11 @@ internal object ApprovalPresentation {
      *   case the cap is half the window alone.
      * @param buttonsMinPx the button panel's minimum height, already counted in [offeredPx].
      * @param floorPx the least height the message may be given.
-     * @param firstOfferedPx the offer of the first measure of this layout sequence, or null when this is
-     *   the first. After that measure the layout hands the buttons their height and measures the message
-     *   again with `offered = first - (full - min)` or less, so a later measure at or below that has the
-     *   buttons already counted and reserves nothing; reserving again would cut the message short.
+     * @param firstOfferedPx the offer of the first measure of this layout sequence (see [sequenceFirstOfferPx]),
+     *   or null when this is the first. After that measure the layout hands the buttons their height and
+     *   measures the message again with `offered = first - (full - min)` or less, so a later measure at or
+     *   below that has the buttons already counted and reserves nothing; reserving again would cut the
+     *   message short. Passing this measure's own offer for the first one reserves just as null does.
      */
     fun messageMaxHeightPx(
         windowHeightPx: Int,
@@ -78,4 +79,13 @@ internal object ApprovalPresentation {
         val reserved = if (buttonsCounted) 0 else extra
         return minOf(offeredPx - reserved, half).coerceAtLeast(floorPx)
     }
+
+    /**
+     * The first offer of the measure sequence that [offeredPx] belongs to, given the [storedPx] one remembered
+     * from earlier measures (null after a layout). Inside one `AlertDialogLayout.tryOnMeasure` the later offers
+     * never exceed the first, so a larger offer starts a new sequence and becomes the first. That happens with
+     * no layout in between when `ViewRootImpl.measureHierarchy` measures the window again at a greater width.
+     */
+    fun sequenceFirstOfferPx(storedPx: Int?, offeredPx: Int): Int =
+        storedPx?.takeIf { offeredPx <= it } ?: offeredPx
 }

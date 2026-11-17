@@ -248,7 +248,9 @@ class ApprovalDialogFragment : DialogFragment() {
      * at its full height) before it measures this view, counts only its minimum, then may measure this
      * view again with the height left over once the buttons took theirs, and `forceUniformWidth` may
      * measure it a third time. Only the first measure of a sequence reserves room for the buttons;
-     * [firstOffered] remembers that offer so the later ones are recognised, and [onLayout] ends the sequence.
+     * [firstOffered] remembers that offer so the later ones are recognised. [onLayout] ends the sequence,
+     * and so does a larger offer, which is a new measure pass before any layout
+     * ([ApprovalPresentation.sequenceFirstOfferPx]).
      */
     private class BoundedScrollView(context: Context) : NestedScrollView(context) {
         private var firstOffered: Int? = null
@@ -259,6 +261,7 @@ class ApprovalDialogFragment : DialogFragment() {
             val panel = rootView?.findViewById<View>(androidx.appcompat.R.id.buttonPanel)
                 ?.takeIf { it.visibility == View.VISIBLE && it.measuredHeight > 0 }
             val metrics = resources.displayMetrics
+            firstOffered = ApprovalPresentation.sequenceFirstOfferPx(firstOffered, offered)
             val cap = ApprovalPresentation.messageMaxHeightPx(
                 windowHeightPx = metrics.heightPixels,
                 offeredPx = offered,
@@ -267,7 +270,6 @@ class ApprovalDialogFragment : DialogFragment() {
                 floorPx = (MESSAGE_FLOOR_DP * metrics.density).toInt(),
                 firstOfferedPx = firstOffered,
             )
-            if (firstOffered == null) firstOffered = offered
             super.onMeasure(
                 widthMeasureSpec,
                 View.MeasureSpec.makeMeasureSpec(minOf(cap, offered), View.MeasureSpec.AT_MOST),
