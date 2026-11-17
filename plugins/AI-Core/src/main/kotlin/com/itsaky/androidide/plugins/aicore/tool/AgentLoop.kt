@@ -361,6 +361,12 @@ class AgentLoop(
                     return unapplied.stop(turn, StopReason.CYCLING, events)
                 }
                 ToolCallProgressGuard.Verdict.ASSUME_COMPLETE -> {
+                    // An answer sent with the repeat owes the required tool as much as a plain one.
+                    if (terminal != null && requiredPending) {
+                        requiredPending = false
+                        askForRequiredTool(turn, requiredTool!!, history, events)
+                        continue
+                    }
                     // A repeated look is not completion while the change the user asked for failed.
                     if (unapplied.warn(turn, history, events)) continue
                     if (unapplied.outstanding) return unapplied.stop(turn, StopReason.ABANDONED, events)

@@ -1005,6 +1005,7 @@ class AgentLoopTest {
         writtenFilesOf: ((ToolCall) -> Set<String>)? = null,
         changeOf: (ToolCall) -> Any = { it },
         resolvedFileOf: (ToolCall) -> String? = { it.args["path"]?.toString() },
+        requiredTool: String? = null,
     ): Triple<AgentLoop.Result, MutableList<ChatMessage>, List<String>> {
         val model = ScriptedModel(replies)
         val used = mutableMapOf<String, Int>()
@@ -1023,6 +1024,7 @@ class AgentLoopTest {
                 }
             },
             pathsOf = pathsOf,
+            requiredTool = requiredTool,
             changesPaths = { it.name == "edit_file" || it.name == "run_shell_command" },
             writesFiles = { it.name == "edit_file" },
             writtenFilesOf = writtenFilesOf ?: pathsOf,
@@ -1564,6 +1566,7 @@ class AgentLoopTest {
         terminalTool = "respond",
         unfinishedTurn = { UNFINISHED },
         repeatedAfterSuccessTurn = { REPEATED },
+        requiredToolTurn = { tool -> "$REQUIRED $tool" },
     )
 
     @Test
@@ -1650,6 +1653,28 @@ class AgentLoopTest {
         assertTrue(result.completed)
         assertEquals(2, result.turns)
         assertEquals(listOf("assumed-complete"), events)
+    }
+
+    @Test
+    fun givenARequiredToolPending_whenARepeatIsSentWithRespond_thenTheRunIsRedirectedToTheToolInsteadOfFinishing() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(
+                toolCall("read_file", "a"),
+                toolCall("read_file", "a") + respond,
+                toolCall("web_search"),
+                respond,
+            ),
+            mapOf("read_file" to listOf(ToolResult.success("lines")), "web_search" to listOf(ToolResult.success("hits"))),
+            loop = repeatAwareLoop(),
+            requiredTool = "web_search",
+        )
+
+        assertTrue(result.completed)
+        assertEquals(4, result.turns)
+        assertEquals(1, history.count { it.content == "$REQUIRED web_search" })
+        assertEquals(1, history.count { it.role == Role.USER && it.content.contains("[web_search]") })
+        // Only the final respond ends the run; the repeat's respond did not.
+        assertEquals(listOf("final"), events)
     }
 
     @Test
