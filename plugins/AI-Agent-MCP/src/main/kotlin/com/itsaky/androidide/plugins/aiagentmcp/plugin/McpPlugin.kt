@@ -207,7 +207,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             startDebuggerEntry { isActive }
             val refreshed = McpToolCatalog.refreshAll { isActive }
             if (refreshed > 0 && isActive) settingsChanged()
-            probeHealth { isActive }
+            probeHealth({ isActive })
         }
         true
     } catch (e: Exception) {
@@ -257,14 +257,18 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * Servers are asked in parallel, so one that hangs until its timeout delays no other's tag.
      *
      * @param keepGoing false once this activation is over; checked before each probe, since a probe
-     *   blocks on a socket with no suspension point, like [McpToolCatalog.refreshAll].
+     *   blocks on a socket with no suspension point, like [McpToolCatalog.refreshAll]. Checked again
+     *   after the delay and, inside [AutomaticServers.refresh], after its blocking read: deactivation
+     *   clears the automatic entries, and a refresh that outlived it would restore them.
+     * @param intervalMs the wait between cycles; a seam for tests.
      */
-    private suspend fun probeHealth(keepGoing: () -> Boolean) {
+    internal suspend fun probeHealth(keepGoing: () -> Boolean, intervalMs: Long = PROBE_INTERVAL_MS) {
         var cycle = 0
         while (keepGoing()) {
-            delay(PROBE_INTERVAL_MS)
+            delay(intervalMs)
+            if (!keepGoing()) return
             cycle++
-            if (AutomaticServers.refresh()) settingsChanged()
+            if (AutomaticServers.refresh(keepGoing) && keepGoing()) settingsChanged()
             val due = McpServers.all().filter { server ->
                 val health = McpServerHealth.of(server.id)
                 server.enabled && health?.refused != true && (cycle % HEALTHY_PROBE_EVERY == 0 ||
