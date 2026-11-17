@@ -13,9 +13,10 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Ro
  * @param formatToolResults words each batch's results as the next user turn.
  * @param unfinishedTurn words the turn sent when a run that has used tools ends a reply without
  *   [terminalTool]; null ends the run on that reply instead.
- * @param repeatedAfterSuccessTurn words the turn sent once when a run re-issues the batch it has just
- *   run successfully, asking it to answer the user instead. Null sends none, so such a repeat ends
- *   the run at once, through [Events.onRepeatAfterSuccess].
+ * @param repeatedAfterSuccessTurn words the turn sent when a run re-issues the batch it has just
+ *   run successfully, asking it to answer the user instead. Sent at most once until a different
+ *   batch succeeds, then again for a later repeat. Null sends none, so such a repeat ends the run
+ *   at once, through [Events.onRepeatAfterSuccess].
  * @param requiredToolTurn words the turn sent when a run told to call a tool first tries to finish
  *   without it; receives the tool's name. Null never asks.
  * @param unappliedWriteTurn words the turn sent when a run answers while a file change it attempted
