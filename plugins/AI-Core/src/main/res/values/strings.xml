@@ -221,7 +221,7 @@
     <string name="agent_repeated_calls">Stopped: the model kept requesting the same action. Try rephrasing your request.</string>
     <string name="agent_change_not_made">A change was not made: a file change failed and the assistant did not manage to redo it, whatever its last message says. Try again, or ask for a smaller change.</string>
     <string name="agent_no_progress">Stopped: the model kept redoing actions it had already taken instead of making progress. Try rephrasing your request, or asking for a smaller step.</string>
-    <string name="agent_repeated_step">Stopped: the Agent repeated the same step instead of answering. Try asking again, or rephrasing your question.</string>
+    <string name="agent_repeated_step">The step the Agent repeated had already succeeded and was not run again. The Agent stopped without answering. Try asking again, or rephrasing your question.</string>
     <string name="chat_compacted">Earlier messages were summarized to stay within the model\'s limit.</string>
     <string name="chat_compaction_failed">Earlier messages could not be summarized, so only the most recent ones were kept to stay within the model\'s limit.</string>
     <string name="chat_compaction_trimmed">Only the most recent messages were kept to stay within the on-device model\'s limit.</string>
