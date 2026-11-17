@@ -31,4 +31,11 @@ class ApprovalPresentationTest {
         assertEquals(ApprovalPreview.ARGS, ApprovalPresentation.named(null))
         assertEquals(ApprovalPreview.ARGS, ApprovalPresentation.named("is_edit"))
     }
+
+    @Test
+    fun givenAWindowHeight_whenTheMessageIsBounded_thenItGetsHalfSoTheButtonsKeepTheRest() {
+        assertEquals(1200, ApprovalPresentation.messageMaxHeightPx(2400))
+        assertEquals(0, ApprovalPresentation.messageMaxHeightPx(0))
+        assertEquals(0, ApprovalPresentation.messageMaxHeightPx(-5))
+    }
 }

@@ -1,13 +1,18 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import android.app.Dialog
+import android.content.Context
 import android.content.res.Resources
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.widget.EditText
+import android.util.TypedValue
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.res.use
+import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
@@ -135,8 +140,9 @@ class ApprovalDialogFragment : DialogFragment() {
         }
 
         val builder = MaterialAlertDialogBuilder(requireContext())
+        builder
             .setTitle(getString(R.string.approval_confirm_title, toolName))
-            .setMessage(message)
+            .setView(messageView(builder.context, message))
             .setNegativeButton(getString(R.string.approval_decline)) { _, _ ->
                 decide(ApprovalResult.DENIED)
                 dismiss()
@@ -199,6 +205,40 @@ class ApprovalDialogFragment : DialogFragment() {
         dialog.setCanceledOnTouchOutside(false)
 
         return dialog
+    }
+
+    /**
+     * The message as a scrolling view no taller than half the window ([ApprovalPresentation.messageMaxHeightPx]).
+     * The stock message panel takes its space before the button panel, so a long message squeezed the
+     * stacked buttons off screen at a large font scale; bounding it leaves the buttons their full height.
+     * The text looks like the stock message: it takes the dialog theme's own `materialAlertDialogBodyTextStyle`
+     * and `dialogPreferredPadding`, from [context] (the builder's, so it carries the dialog theme overlay).
+     */
+    private fun messageView(context: Context, message: CharSequence): View {
+        val style = TypedValue()
+        val styleRes = if (context.theme.resolveAttribute(
+                com.google.android.material.R.attr.materialAlertDialogBodyTextStyle, style, true,
+            )
+        ) style.resourceId else 0
+        val padding = context.obtainStyledAttributes(
+            intArrayOf(androidx.appcompat.R.attr.dialogPreferredPadding),
+        ).use { it.getDimensionPixelSize(0, 0) }
+        val text = TextView(context, null, 0, styleRes).apply {
+            this.text = message
+            setPadding(padding, paddingTop, padding, paddingBottom)
+        }
+        val maxHeight = ApprovalPresentation.messageMaxHeightPx(context.resources.displayMetrics.heightPixels)
+        return BoundedScrollView(context, maxHeight).apply { addView(text) }
+    }
+
+    /** A [NestedScrollView] that never measures taller than [maxHeightPx]. */
+    private class BoundedScrollView(context: Context, private val maxHeightPx: Int) : NestedScrollView(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val bounded = View.MeasureSpec.makeMeasureSpec(
+                minOf(maxHeightPx, View.MeasureSpec.getSize(heightMeasureSpec)), View.MeasureSpec.AT_MOST,
+            )
+            super.onMeasure(widthMeasureSpec, bounded)
+        }
     }
 
     /**

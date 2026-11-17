@@ -38,4 +38,11 @@ internal object ApprovalPresentation {
     /** The preview saved as [name] in the dialog's arguments; [ApprovalPreview.ARGS] when it is missing or unknown. */
     fun named(name: String?): ApprovalPreview =
         ApprovalPreview.entries.firstOrNull { it.name == name } ?: ApprovalPreview.ARGS
+
+    /**
+     * The tallest the approval message may grow, given the window's height: half of it. Whatever
+     * the message holds, the title and the stacked buttons (three at a large font scale) keep the
+     * other half, so no button can be pushed off screen.
+     */
+    fun messageMaxHeightPx(windowHeightPx: Int): Int = (windowHeightPx / 2).coerceAtLeast(0)
 }
