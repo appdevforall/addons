@@ -177,12 +177,17 @@
   <p>These tools are treated more cautiously than the agent's own, because only
   the plugin that supplied one knows what it does:</p>
   <ul>
-    <li><b>They ask every time.</b> The approval dialog names the plugin the tool
-      came from — <i>From MCP servers</i>, for example — and does not offer
-      <b>Always Allow</b>. A plugin cannot waive this for
-      its own tools, and the title shows the name the agent registered rather than
-      the one the tool came with, so a remote tool cannot pass itself off as a
-      built-in one.</li>
+    <li><b>The dialog names where they come from.</b> The approval dialog names the
+      plugin the tool came from — <i>From MCP servers</i>, for example. A plugin cannot
+      skip this dialog for its own tools, and the title shows the name the agent
+      registered rather than the one the tool came with, so a remote tool cannot
+      pass itself off as a built-in one.</li>
+    <li><b>Most ask every time.</b> The dialog offers <b>Always Allow</b> only for
+      a tool its plugin says only reads, and then says that Code on the Go cannot
+      check that. Allowing it stops the questions for that tool, whatever its
+      arguments, until you start a new chat, open another one or clear this one.
+      If the plugin changes the tool's description or inputs, you are asked again.
+      Every other tool from a plugin asks on every call.</li>
     <li><b>They are not confined to the project root.</b> A contributed tool runs
       inside its own plugin, under the permissions that plugin declared, so one
       from a plugin with network access can send what it is given off the device.

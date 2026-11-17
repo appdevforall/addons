@@ -645,14 +645,15 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             summary = "Stop asking about this tool for the rest of this chat.",
             detail = """
                 <p>Approves this tool for the rest of this chat, so the agent can use
-                it again without prompting. The grant is by <b>tool name only</b> —
-                it does not depend on the arguments. It is forgotten when you start
-                a new chat, open another one or clear this one, and when the IDE
-                closes.</p>
+                it again without prompting. The grant does not depend on the
+                arguments. It is forgotten when you start a new chat, open another
+                one or clear this one, and when the IDE closes.</p>
                 <p>For a tool from another plugin, the button appears only when
                 that plugin says the tool only reads. Code on the Go cannot check
                 that, and after one tap the agent can call the tool with any
-                arguments.</p>
+                arguments. If the plugin changes the tool's description or inputs,
+                you are asked again. A tool from another plugin that may change
+                something asks every time.</p>
                 <p>It is deliberately unavailable for file edits: those are
                 re-confirmed every time, with the change on screen.</p>
             """.trimIndent(),
