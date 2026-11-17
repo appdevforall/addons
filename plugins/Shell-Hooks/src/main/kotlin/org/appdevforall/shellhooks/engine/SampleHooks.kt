@@ -66,8 +66,9 @@ object SampleHooks {
         |# Arguments: ${'$'}1 = the file
         |
         |# Read from stdin, so wc does not print the file's name: a name can hold terminal control
-        |# codes, and the Terminal would act on them.
-        |wc -l -w -c < "${'$'}1"
+        |# codes, and the Terminal would act on them. For the same reason the shell's own error, which
+        |# names the file, is dropped for a fixed message.
+        |{ wc -l -w -c < "${'$'}1"; } 2>/dev/null || { echo "word-count: cannot read the file" >&2; exit 1; }
         |
         """.trimMargin()
 }

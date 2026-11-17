@@ -283,10 +283,14 @@ class ShellHooksPlugin :
             } ?: return failed("The IDE's Terminal is not available")
         // The Terminal takes a command line, so every value is quoted as one word.
         val command =
-            ShellQuote.command(
-                HookInvocation.actionEnvironment(action, paths.actions, currentProjectDir(), ideVersion()),
-                listOf("sh", runnerScript.path, action.path, file.path),
-            )
+            try {
+                ShellQuote.command(
+                    HookInvocation.actionEnvironment(action, paths.actions, currentProjectDir(), ideVersion()),
+                    listOf("sh", runnerScript.path, action.path, file.path),
+                )
+            } catch (e: IllegalArgumentException) {
+                return failed(e.message ?: "The command line could not be built")
+            }
         scope.launch {
             try {
                 val result = terminal.runInTerminal(command)

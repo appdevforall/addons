@@ -41,6 +41,12 @@ class ShellQuoteTest {
         assertEquals("''\$'\\xc2\\x9b'''", ShellQuote.quote("\u009b"))
     }
 
+    // Bash ends a $'...' string at \x00, so a NUL would silently cut the word short.
+    @Test(expected = IllegalArgumentException::class)
+    fun aNulIsRefusedRatherThanCutShort() {
+        ShellQuote.quote("a\u0001\u0000b")
+    }
+
     // The Terminal prints the line before running it; a raw control code there would reach the terminal.
     @Test
     fun noControlCharacterReachesTheCommandLineRaw() {

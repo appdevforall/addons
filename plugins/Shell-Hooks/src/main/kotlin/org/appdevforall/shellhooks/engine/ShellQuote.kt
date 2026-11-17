@@ -15,9 +15,11 @@ object ShellQuote {
      * line before running it, so a raw escape sequence in a file's name would reach the terminal
      * and could, for example, set the clipboard (OSC 52). The line printed is then one line of
      * plain text, and the program still gets the exact bytes. `$'...'` is bash's: dash has no such
-     * quoting.
+     * quoting. A NUL is refused: bash ends a `$'...'` string there, so no quoting carries one,
+     * and no path or environment value can hold one anyway.
      */
     fun quote(value: String): String {
+        require('\u0000' !in value) { "A shell word cannot hold a NUL character" }
         val out = StringBuilder("'")
         var i = 0
         while (i < value.length) {

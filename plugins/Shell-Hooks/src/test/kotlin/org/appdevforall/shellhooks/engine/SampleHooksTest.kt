@@ -52,6 +52,24 @@ class SampleHooksTest {
         assertFalse(out, out.contains('\u001b'))
     }
 
+    // The shell's own error for an unreadable file names it, control codes and all.
+    @Test
+    fun theSampleActionNamesNoFileWhenItCannotReadIt() {
+        val bash = listOf("/bin/bash", "/usr/bin/bash").map(::File).firstOrNull { it.canExecute() }
+        assumeTrue("needs bash", bash != null)
+        SampleHooks.write(paths)
+        // Gone before the run: a missing file fails even for root, which a mode-000 file would not.
+        val missing = File(appFiles, "x\u001b]52;c;ZWNobw==\u0007.txt")
+
+        val process = ProcessBuilder(bash!!.path, File(paths.actions, SampleHooks.ACTION_SAMPLE).path, missing.path).redirectErrorStream(true).start()
+        val out = process.inputStream.readBytes().toString(Charsets.UTF_8)
+        process.waitFor(10, TimeUnit.SECONDS)
+
+        assertEquals(1, process.exitValue())
+        assertEquals("word-count: cannot read the file", out.trim())
+        assertFalse(out, out.contains('\u001b'))
+    }
+
     @Test
     fun eachSampleDocumentsItsArguments() {
         Hook.entries.forEach { assertTrue(it.id, SampleHooks.hookSample(it).contains(it.argsDoc)) }
