@@ -14,7 +14,8 @@ package com.itsaky.androidide.plugins.aiagentmcp.settings
  * @property enabledTools the tools the user switched on; empty is the default, so a new server
  *   contributes nothing until its tools are chosen deliberately.
  * @property automatic true for the entry Code on the Go supplies for a debuggable app: never
- *   stored, no Keystore token, and the only kind whose read-only tools start on.
+ *   stored, no Keystore token, and the only kind with tools that start on (four read-only ones,
+ *   see `ReadOnlyTrust.CORE_TOOLS`).
  */
 data class McpServer(
     val id: String,

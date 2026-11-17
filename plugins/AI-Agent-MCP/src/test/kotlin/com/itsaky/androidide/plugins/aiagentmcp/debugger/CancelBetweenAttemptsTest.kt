@@ -70,7 +70,7 @@ class CancelBetweenAttemptsTest {
 
     @Test
     fun `a cancel between the attempts sends nothing to the new endpoint`() {
-        val first = fake("t1", tool("list_tables", true))
+        val first = fake("t1", tool("list_databases", true))
         var stored = listOf(AutomaticEndpoint(app, first.port, "t1"))
         var cancelOnRead = false
         AutomaticServers.install {
@@ -83,7 +83,7 @@ class CancelBetweenAttemptsTest {
         // The app relaunches: the first attempt is refused, and the retry's re-read is where the
         // cancel lands.
         first.stop()
-        val second = fake("t2", tool("list_tables", true))
+        val second = fake("t2", tool("list_databases", true))
         stored = listOf(AutomaticEndpoint(app, second.port, "t2"))
         cancelOnRead = true
         val future = invoke(name)

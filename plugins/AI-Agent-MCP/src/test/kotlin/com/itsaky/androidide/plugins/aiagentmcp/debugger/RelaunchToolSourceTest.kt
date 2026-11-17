@@ -68,7 +68,7 @@ class RelaunchToolSourceTest {
             }
         ).get(30, TimeUnit.SECONDS)
 
-    private fun debuggerTools() = arrayOf(tool("list_tables", true), tool("run_sql", false), tool("unmarked", null))
+    private fun debuggerTools() = arrayOf(tool("list_databases", true), tool("run_sql", false), tool("unmarked", null))
 
     @Test
     fun `a relaunch keeps the read-only tools offered and the next call reaches the new endpoint`() {
@@ -98,7 +98,7 @@ class RelaunchToolSourceTest {
         McpToolCatalog.connect(AutomaticServers.servers().single())
 
         val spec = offered().values.single()
-        assertTrue(spec.name.endsWith("list_tables"))
+        assertTrue(spec.name.endsWith("list_databases"))
         assertFalse(spec.requiresApproval())
         assertTrue(spec.isReadOnly)
     }

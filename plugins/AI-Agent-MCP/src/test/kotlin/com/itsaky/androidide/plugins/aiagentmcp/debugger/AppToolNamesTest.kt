@@ -71,7 +71,7 @@ class AppToolNamesTest {
             }
         ).get(30, TimeUnit.SECONDS)
 
-    private fun debuggerTools() = arrayOf(tool("list_tables", true), tool("run_sql", false), tool("unmarked", null))
+    private fun debuggerTools() = arrayOf(tool("list_databases", true), tool("run_sql", false), tool("unmarked", null))
 
     private fun connectAll(vararg apps: Pair<String, FakeMcpServer>, reversed: Boolean = false) {
         val endpoints = apps.map { (id, server) -> AutomaticEndpoint(id, server.port, server.token) }

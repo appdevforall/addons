@@ -59,8 +59,23 @@ class ReadOnlyHintParsingTest {
     @Test fun `json null is not`() = assertFalse(hint(JSONObject.NULL).readOnlyHint)
 
     @Test
-    fun `trust enables exactly the true ones`() {
-        val tools = listOf(McpTool("a", "", readOnlyHint = true), McpTool("b", ""))
-        assertEquals(setOf("a"), ReadOnlyTrust.enabledTools(tools))
+    fun `trust enables exactly the core tools that declared true`() {
+        val tools = listOf(
+            McpTool("query", "", readOnlyHint = true),
+            McpTool("get_schema", ""),
+            McpTool("get_stats", "", readOnlyHint = true),
+        )
+        assertEquals(setOf("query"), ReadOnlyTrust.enabledTools(tools))
+    }
+
+    @Test
+    fun `the core tools are exactly these four`() {
+        assertEquals(setOf("list_databases", "get_schema", "query", "get_events"), ReadOnlyTrust.CORE_TOOLS)
+    }
+
+    @Test
+    fun `a query tool that is not read only stays off`() {
+        val tools = listOf(McpTool("query", "", readOnlyHint = false), McpTool("list_databases", ""))
+        assertEquals(emptySet<String>(), ReadOnlyTrust.enabledTools(tools))
     }
 }

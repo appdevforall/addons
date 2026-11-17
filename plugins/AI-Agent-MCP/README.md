@@ -36,8 +36,8 @@ Configuration → MCP servers**:
 1. **Add server** — name, endpoint URL, optional token.
 2. **Connect** — saves the server, performs the MCP handshake and lists the tools
    it offers, all in one step.
-3. Switch on the tools you want. **They start off** (except the read-only tools
-   of the automatic debugger entry, below): one popular GitHub server
+3. Switch on the tools you want. **They start off** (except four read-only tools
+   of the automatic SQLite debugger entry, below): one popular GitHub server
    advertises around ninety tools, which would fill a phone-sized context window
    on its own.
 4. **Clear stored credential** — removes the stored token and headers. The token
@@ -70,9 +70,15 @@ Servers you add yourself keep the name prefix taken from their label.
 
 - It is held in memory only and is **not shown in the settings screen in this
   version**, so there is no switch to turn it off there.
-- The tools that declare MCP's `readOnlyHint: true` start switched **on**. Any
-  other tool of that entry starts off. The hint is trusted for this entry only,
-  never for a server you add yourself.
+- Four tools start switched **on**: `list_databases`, `get_schema`, `query` and
+  `get_events`, each only when the server declares MCP's `readOnlyHint: true` for
+  it. Every other tool of that entry (today `list_connections`,
+  `explain_query_plan`, `get_stats` and `integrity_check`) starts off, and so
+  does any tool without that hint. The hint is trusted for this entry only, never
+  for a server you add yourself. Four, not all eight, because AI-Core describes
+  at most 12 contributed tools per message (4 for a small on-device model), in
+  order, and drops the rest; every app has its own entry. Switching the others
+  on will come with showing this entry in the settings screen (phase 2).
 - The Agent still asks for approval on every call: AI-Core makes every
   contributed tool ask (it ignores the tool's own `requiresApproval`). Approving
   read-only calls automatically is tracked in ADFA-7147.

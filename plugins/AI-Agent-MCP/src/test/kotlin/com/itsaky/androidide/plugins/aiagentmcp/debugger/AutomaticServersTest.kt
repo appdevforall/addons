@@ -72,14 +72,14 @@ class AutomaticServersTest {
         var current = listOf(endpoint())
         AutomaticServers.install { current }
         val id = AutomaticServers.idFor("com.example.app")
-        AutomaticServers.recordTools(id, endpoint(), listOf(McpTool("q", "", readOnlyHint = true)))
+        AutomaticServers.recordTools(id, endpoint(), listOf(McpTool("query", "", readOnlyHint = true)))
 
         current = listOf(endpoint(port = 4002))
         AutomaticServers.refresh()
 
         val server = AutomaticServers.servers().single()
-        assertEquals(listOf("q"), server.knownTools)
-        assertEquals(setOf("q"), server.enabledTools)
+        assertEquals(listOf("query"), server.knownTools)
+        assertEquals(setOf("query"), server.enabledTools)
         assertTrue(server.url.endsWith(":4002/mcp"))
     }
 
@@ -161,22 +161,41 @@ class AutomaticServersTest {
     }
 
     @Test
-    fun `only readOnlyHint tools of the automatic entry start on`() {
+    fun `only readOnlyHint core tools of the automatic entry start on`() {
         AutomaticServers.install { listOf(endpoint()) }
         val id = AutomaticServers.idFor("com.example.app")
         AutomaticServers.recordTools(
             id,
             endpoint(),
             listOf(
-                McpTool("reads", "", readOnlyHint = true),
-                McpTool("writes", "", readOnlyHint = false),
-                McpTool("unmarked", ""),
+                McpTool("query", "", readOnlyHint = true),
+                McpTool("get_stats", "", readOnlyHint = true),
+                McpTool("get_schema", "", readOnlyHint = false),
+                McpTool("get_events", ""),
             ),
         )
 
         val server = AutomaticServers.servers().single()
-        assertEquals(listOf("reads", "writes", "unmarked"), server.knownTools)
-        assertEquals(setOf("reads"), server.enabledTools)
-        assertEquals(listOf("reads"), server.activeTools)
+        assertEquals(listOf("query", "get_stats", "get_schema", "get_events"), server.knownTools)
+        assertEquals(setOf("query"), server.enabledTools)
+        assertEquals(listOf("query"), server.activeTools)
+    }
+
+    @Test
+    fun `the four core tools start on and the other four stay known but off`() {
+        AutomaticServers.install { listOf(endpoint()) }
+        val names = listOf(
+            "list_connections", "list_databases", "get_schema", "query",
+            "explain_query_plan", "get_stats", "integrity_check", "get_events",
+        )
+        AutomaticServers.recordTools(
+            AutomaticServers.idFor("com.example.app"),
+            endpoint(),
+            names.map { McpTool(it, "", readOnlyHint = true) },
+        )
+
+        val server = AutomaticServers.servers().single()
+        assertEquals(names, server.knownTools)
+        assertEquals(setOf("list_databases", "get_schema", "query", "get_events"), server.enabledTools)
     }
 }
