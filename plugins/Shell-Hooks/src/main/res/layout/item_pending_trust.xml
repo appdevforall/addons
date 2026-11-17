@@ -23,6 +23,7 @@
         android:layout_height="wrap_content"
         android:minHeight="@dimen/touch_target_min"
         android:text="@string/hk_review"
+        android:textColor="@color/plugin_primary"
         android:textSize="@dimen/text_body" />
 
 </LinearLayout>
