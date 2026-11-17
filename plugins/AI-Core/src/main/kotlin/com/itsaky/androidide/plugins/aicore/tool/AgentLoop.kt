@@ -399,6 +399,10 @@ class AgentLoop(
             if (realCalls.any { it.name == requiredTool }) requiredPending = false
             toolsRan = true
             askedToFinish = false
+            // The extra turn invited a different call: once one has worked, a later repeat has the
+            // run's progress behind it again and is asked too. Alternating between calls cannot make
+            // this loop for ever, as the progress guard ends a run that keeps reissuing known batches.
+            if (results.isNotEmpty() && results.all { it.success }) askedToAnswerAfterRepeat = false
             progress.recordResults(results)
             unapplied.record(realCalls.zip(results), writesFiles, changesPaths, writtenFilesOf, changeOf)
             events.onToolResults(turn, realCalls, results)

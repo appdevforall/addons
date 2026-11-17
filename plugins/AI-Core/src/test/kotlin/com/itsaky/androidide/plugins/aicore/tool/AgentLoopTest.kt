@@ -1678,6 +1678,39 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenARepeatAnsweredByADifferentSuccessfulCall_whenItIsRepeatedAgain_thenItGetsTheExtraTurnAgain() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(
+                toolCall("read_file", "a"), toolCall("read_file", "a"),
+                toolCall("read_file", "b"), toolCall("read_file", "b"),
+                respond,
+            ),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(5, result.turns)
+        assertEquals(listOf("repeat-retry", "repeat-retry", "final"), events)
+        assertEquals(2, history.count { it.content == REPEATED })
+    }
+
+    @Test
+    fun givenAModelAlternatingBetweenTwoRepeatedCalls_whenTheExtraTurnIsRearmed_thenTheRunStillEndsAsCycling() = runTest {
+        val a = toolCall("read_file", "a")
+        val b = toolCall("read_file", "b")
+        val (result, _, events) = runWriting(
+            listOf(a, a, b, b, a, a, b, b, a, a, b, b),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertEquals(AgentLoop.StopReason.CYCLING, result.reason)
+        assertTrue(result.turns < 12)
+        assertEquals(listOf("repeat-retry", "repeat-retry"), events.filter { it == "repeat-retry" })
+    }
+
+    @Test
     fun theShippedRepeatTurnNamesTheTerminalToolAndRendersCleanly() {
         val text = ToolResultsPrompt.renderRepeatedAfterSuccess(shippedConfig, "respond")
         assertTrue(text, text.contains("\"respond\""))
