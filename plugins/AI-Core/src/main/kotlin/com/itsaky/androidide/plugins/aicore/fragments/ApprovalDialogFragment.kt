@@ -231,7 +231,11 @@ class ApprovalDialogFragment : DialogFragment() {
             this.text = message
             setPadding(padding, paddingTop, padding, paddingBottom)
         }
-        return BoundedScrollView(context).apply { addView(text) }
+        return BoundedScrollView(context).apply {
+            // The stock content panel shows these edge indicators while it can scroll; setView drops them.
+            scrollIndicators = View.SCROLL_INDICATOR_TOP or View.SCROLL_INDICATOR_BOTTOM
+            addView(text)
+        }
     }
 
     /**
