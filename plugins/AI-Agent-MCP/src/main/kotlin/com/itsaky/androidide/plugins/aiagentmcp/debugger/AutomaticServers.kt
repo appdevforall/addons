@@ -118,6 +118,10 @@ object AutomaticServers {
 
     /**
      * Re-reads the endpoints. Blocking host call: use a background thread.
+     * Nothing is stored when the source that was read is no longer installed, so a refresh in
+     * flight when deactivation cleared the entries (or a later activation replaced the source)
+     * cannot restore them, whichever caller started it.
+     *
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
      */
@@ -134,7 +138,7 @@ object AutomaticServers {
         val moved = mutableListOf<String>()
         val removed: List<String>
         val changed = synchronized(this) {
-            if (!keepGoing()) return false
+            if (source !== read || !keepGoing()) return false
             val old = states
             val next = fresh.mapValues { (id, endpoint) ->
                 val previous = old[id]

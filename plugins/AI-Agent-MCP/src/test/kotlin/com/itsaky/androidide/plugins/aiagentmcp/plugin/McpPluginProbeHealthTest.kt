@@ -4,8 +4,10 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticEndpoint
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
+import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import io.mockk.every
 import io.mockk.mockk
+import java.net.ConnectException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
@@ -17,7 +19,8 @@ import org.junit.Test
 
 /**
  * The health probe must not refresh or re-publish the automatic entries once its activation is
- * over: deactivation has cleared them, and a refresh that outlived it would restore them.
+ * over: deactivation has cleared them, and a refresh that outlived it would restore them. The same
+ * holds for the endpoint retry's refresh.
  */
 class McpPluginProbeHealthTest {
 
@@ -71,6 +74,24 @@ class McpPluginProbeHealthTest {
         onRead = { active.set(false) }
 
         runBlocking { plugin.probeHealth({ active.get() }, intervalMs = 10) }
+
+        assertTrue(AutomaticServers.servers().isEmpty())
+    }
+
+    @Test
+    fun `an endpoint retry in flight at deactivation restores nothing`() {
+        installSource()
+        current = listOf(AutomaticEndpoint("com.example.app", 4000, "t1"))
+        AutomaticServers.refresh()
+        val server = AutomaticServers.servers().single()
+        current = listOf(AutomaticEndpoint("com.example.app", 4001, "t2"))
+        // Deactivation lands while the retry's refresh is reading the host.
+        onRead = { AutomaticServers.install(null) }
+
+        try {
+            McpToolCatalog.retry.call(server) { throw ConnectException("refused") }
+        } catch (expected: ConnectException) {
+        }
 
         assertTrue(AutomaticServers.servers().isEmpty())
     }
