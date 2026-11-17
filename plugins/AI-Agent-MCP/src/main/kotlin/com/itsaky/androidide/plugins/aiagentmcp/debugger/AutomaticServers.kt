@@ -63,11 +63,6 @@ object AutomaticServers {
 
     /**
      * Where endpoints come from; null (deactivation) clears every entry.
-     *
-     * @param keepGoing false once the activation installing [source] is over. The first read blocks
-     *   and cannot be cancelled, so an activation that ended during it must neither keep [source]
-     *   nor publish what it read: deactivation has already cleared everything, and a later
-     *   activation owns the state now.
      */
     fun install(source: (() -> List<AutomaticEndpoint>)?) {
         if (source == null) {
@@ -79,7 +74,14 @@ object AutomaticServers {
         }
     }
 
-    /** As [install], for a source that may be superseded while its first read is blocked. */
+    /**
+     * As [install], for a source that may be superseded while its first read is blocked.
+     *
+     * @param keepGoing false once the activation installing [source] is over. The first read blocks
+     *   and cannot be cancelled, so an activation that ended during it must neither keep [source]
+     *   nor publish what it read: deactivation has already cleared everything, and a later
+     *   activation owns the state now.
+     */
     fun install(source: () -> List<AutomaticEndpoint>, keepGoing: () -> Boolean) {
         synchronized(this) {
             if (!keepGoing()) return

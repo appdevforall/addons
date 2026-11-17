@@ -268,7 +268,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             delay(intervalMs)
             if (!keepGoing()) return
             cycle++
-            if (AutomaticServers.refresh(keepGoing) && keepGoing()) settingsChanged()
+            // A change already told the agent: refresh fires the change listener added on activation.
+            AutomaticServers.refresh(keepGoing)
             val due = McpServers.all().filter { server ->
                 val health = McpServerHealth.of(server.id)
                 server.enabled && health?.refused != true && (cycle % HEALTHY_PROBE_EVERY == 0 ||
