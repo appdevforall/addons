@@ -4,11 +4,18 @@ import android.app.Dialog
 import android.content.res.Resources
 import android.os.Bundle
 import android.text.InputType
+import android.graphics.Color
+import android.util.TypedValue
 import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
+import androidx.core.widget.TextViewCompat
 import androidx.fragment.app.DialogFragment
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.R
@@ -134,65 +141,98 @@ class ApprovalDialogFragment : DialogFragment() {
             append(argsText)
         }
 
-        val builder = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(getString(R.string.approval_confirm_title, toolName))
-            .setMessage(message)
-            .setNegativeButton(getString(R.string.approval_decline)) { _, _ ->
-                decide(ApprovalResult.DENIED)
-                dismiss()
-            }
-            .setOnCancelListener {
-                decide(ApprovalResult.DENIED)
+        // Not the stock AlertDialog title/message/buttons: with arguments and a large font its
+        // button bar was pushed off the window. Title and text scroll inside a bounded area; the
+        // buttons sit below it and stack when they do not fit in a row (ApprovalDialogLayout).
+        val context = requireContext()
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+
+        val titleView = TextView(context).apply {
+            text = getString(R.string.approval_confirm_title, toolName)
+            applyTextAppearance(this, com.google.android.material.R.attr.textAppearanceHeadlineSmall)
+            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurface))
+        }
+        val messageView = TextView(context).apply {
+            text = message
+            applyTextAppearance(this, com.google.android.material.R.attr.textAppearanceBodyMedium)
+            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+        }
+        val textColumn = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(24), dp(24), dp(8))
+            addView(titleView)
+            addView(
+                messageView,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(16) },
+            )
+        }
+        val scroll = BoundedScrollView(context).apply { addView(textColumn) }
+
+        fun button(label: String, onClick: () -> Unit) =
+            MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
+                text = label
+                setOnClickListener { onClick() }
             }
 
+        val decline = button(getString(R.string.approval_decline)) {
+            decide(ApprovalResult.DENIED)
+            dismiss()
+        }
+        val positive: MaterialButton
+        var neutral: MaterialButton? = null
         if (isEdit) {
             // No "Always Allow": keyed by tool name, it would cover every future file.
-            builder.setPositiveButton(getString(R.string.approval_accept)) { _, _ ->
+            positive = button(getString(R.string.approval_accept)) {
                 decide(ApprovalResult.APPROVED_ONCE)
                 dismiss()
             }
-            builder.setNeutralButton(getString(R.string.approval_correct), null)
+            // "Correct" must not auto-dismiss.
+            neutral = button(getString(R.string.approval_correct)) { showCorrectionPrompt() }
         } else {
-            builder.setPositiveButton(getString(R.string.approval_run_now)) { _, _ ->
+            positive = button(getString(R.string.approval_run_now)) {
                 decide(ApprovalResult.APPROVED_ONCE)
                 dismiss()
             }
             if (offersAlwaysAllow) {
-                builder.setNeutralButton(getString(R.string.approval_always_allow)) { _, _ ->
+                neutral = button(getString(R.string.approval_always_allow)) {
                     decide(ApprovalResult.APPROVED_FOR_SESSION)
                     dismiss()
                 }
             }
         }
 
-        val dialog = builder.create()
-
-        // Bound after show(): buttons don't exist before it, and "Correct" must not auto-dismiss.
-        dialog.setOnShowListener {
-            if (isEdit) {
-                dialog.getButton(Dialog.BUTTON_NEUTRAL)?.setOnClickListener {
-                    showCorrectionPrompt()
-                }
-            }
-            // Long-press help on the consent gate: which button actually writes to the project.
-            wireTooltip(
-                dialog.getButton(Dialog.BUTTON_POSITIVE),
-                when (preview) {
-                    ApprovalPreview.EDIT -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
-                    ApprovalPreview.SHELL_COMMAND -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_COMMAND
-                    ApprovalPreview.STOP_COMMAND, ApprovalPreview.ARGS -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW
-                },
-            )
-            wireTooltip(
-                dialog.getButton(Dialog.BUTTON_NEUTRAL),
-                if (isEdit) AiCorePlugin.TOOLTIP_TAG_APPROVAL_CORRECT
-                else AiCorePlugin.TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW,
-            )
-            wireTooltip(
-                dialog.getButton(Dialog.BUTTON_NEGATIVE),
-                AiCorePlugin.TOOLTIP_TAG_APPROVAL_DECLINE,
-            )
+        val bar = ApprovalButtonBar(context).apply {
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            // Same order as the stock dialog: neutral at the start, then decline, then the primary.
+            setButtons(listOfNotNull(neutral, decline, positive), leading = if (neutral != null) 1 else 0)
         }
+
+        val dialog = MaterialAlertDialogBuilder(context)
+            .setView(ApprovalDialogLayout(context, scroll, bar))
+            .setOnCancelListener {
+                decide(ApprovalResult.DENIED)
+            }
+            .create()
+
+        // Long-press help on the consent gate: which button actually writes to the project.
+        wireTooltip(
+            positive,
+            when (preview) {
+                ApprovalPreview.EDIT -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_ACCEPT
+                ApprovalPreview.SHELL_COMMAND -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_COMMAND
+                ApprovalPreview.STOP_COMMAND, ApprovalPreview.ARGS -> AiCorePlugin.TOOLTIP_TAG_APPROVAL_RUN_NOW
+            },
+        )
+        wireTooltip(
+            neutral,
+            if (isEdit) AiCorePlugin.TOOLTIP_TAG_APPROVAL_CORRECT
+            else AiCorePlugin.TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW,
+        )
+        wireTooltip(decline, AiCorePlugin.TOOLTIP_TAG_APPROVAL_DECLINE)
 
         // Prevent accidental dismissal
         dialog.setCancelable(false)
@@ -212,6 +252,16 @@ class ApprovalDialogFragment : DialogFragment() {
     private fun decide(result: ApprovalResult, correction: String? = null) {
         (parentFragment as? Host)?.onApprovalDecision(result, correction)
     }
+
+    private fun applyTextAppearance(view: TextView, attr: Int) {
+        val tv = TypedValue()
+        if (view.context.theme.resolveAttribute(attr, tv, true) && tv.resourceId != 0) {
+            TextViewCompat.setTextAppearance(view, tv.resourceId)
+        }
+    }
+
+    private fun themeColor(attr: Int): Int =
+        MaterialColors.getColor(requireContext(), attr, Color.GRAY)
 
     /** Shows this plugin's tooltip for [tag] when [view] is long-pressed (Tier 1/2 + guide). */
     private fun wireTooltip(view: View?, tag: String) {
