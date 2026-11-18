@@ -55,7 +55,7 @@ For an app built in Code on the Go with `cogo.sqliteDebugger=true`, the plugin
 adds a server entry on its own, named "SQLite debugger (<application ID>)", with
 no URL or token to type. Code on the Go stores the port and token the running
 debug app reports; the plugin reads them through the `DebuggerEndpointService`
-(permission `debugger.endpoints`, so it needs Code on the Go 26.47 or later) and
+(permission `debugger.endpoints`, so it needs Code on the Go 26.48 or later) and
 points the entry at `http://127.0.0.1:<port>/mcp`. A relaunched app gets a new
 port and token, and the plugin reads them again after a refused connection. An
 app that has not reported yet has no entry, and no error is shown.
@@ -147,10 +147,11 @@ Two dependencies were deliberately not taken:
   such a URL, and the transport refuses it again, so a server saved before the rule
   is listed with a warning and never contacted until it is switched to `https://`.
 - The plugin declares the `debugger.endpoints` permission, to offer the SQLite debugger of the
-  open project's app without typing a port or token. Code on the Go 26.46 and older reject a
+  open project's app without typing a port or token. Code on the Go 26.47 and older reject a
   manifest that names a permission they do not know (`PluginSecurityManager.validatePlugin`), so this
-  version needs **26.47 or newer**, the first release that ships `DebuggerEndpointService`
-  (`plugin.min_ide_version`); users on 26.46 or older cannot install it.
+  version needs **26.48 or later**, the first release that ships `DebuggerEndpointService`
+  (`plugin.min_ide_version`); users on 26.47 or older cannot install it. 26.48 assumes the
+  release after 26.47 ships it; recheck it against the real release number before merging.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.
