@@ -91,7 +91,7 @@
 <header>
   <h1>Shell Hooks</h1>
   <p class="subtitle">Run your own shell scripts when Code on the Go opens a project, saves a file, or finishes a build</p>
-  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.shellhooks</code> &middot; Needs Code on the Go 26.47 or later</div>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.shellhooks</code> &middot; Needs Code on the Go 26.48 or later</div>
 </header>
 
 <nav>
@@ -308,7 +308,7 @@ HookLog -> Hooks tab</div>
     <tr><td><code>engine/TrustStore</code></td><td>Approvals keyed on project, path and SHA-256.</td></tr>
     <tr><td><code>engine/ShellQuote</code></td><td>Quoting for the Terminal, which takes a command line.</td></tr>
     <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a <code>/bin</code> or <code>/usr/bin</code> shebang onto <code>$PREFIX/bin</code>, changes to the event's project folder (to <code>HOME</code> with none, or when it is gone), and runs the script under <code>timeout</code> so a timeout stops the whole process group. Under <code>timeout</code> it keeps the script's output in deleted files and prints it when the script ends, so a job left running in the background does not hold the run open.</td></tr>
-    <tr><td><code>WorkspaceHooks</code></td><td>The 26.47 project and save listeners, kept apart so an older IDE runs the other hooks.</td></tr>
+    <tr><td><code>WorkspaceHooks</code></td><td>The 26.48 project and save listeners, kept apart so an older IDE runs the other hooks.</td></tr>
   </table>
 </section>
 
@@ -317,8 +317,8 @@ HookLog -> Hooks tab</div>
   <h2>5. Integration Points</h2>
   <table>
     <tr><th>Hook</th><th>Plugin API</th></tr>
-    <tr><td>project-opened / project-closed</td><td><code>IdeProjectService.addProjectLifecycleListener</code> (26.47)</td></tr>
-    <tr><td>file-saved</td><td><code>IdeEditorService.addFileSaveListener</code> (26.47)</td></tr>
+    <tr><td>project-opened / project-closed</td><td><code>IdeProjectService.addProjectLifecycleListener</code> (26.48)</td></tr>
+    <tr><td>file-saved</td><td><code>IdeEditorService.addFileSaveListener</code> (26.48)</td></tr>
     <tr><td>file-activated</td><td><code>IdeEditorService.addFileChangeListener</code></td></tr>
     <tr><td>file-opened / file-closed</td><td><code>FileOpenExtension.onFileOpened</code> / <code>onFileClosed</code></td></tr>
     <tr><td>build-*</td><td><code>IdeBuildService.addBuildStatusListener</code></td></tr>
@@ -329,7 +329,7 @@ HookLog -> Hooks tab</div>
   <p>
     Permissions: <code>system.commands</code> to run scripts, <code>filesystem.read</code> for the
     file and project listeners, and <code>filesystem.write</code> to write the sample hooks. On an
-    IDE older than 26.47 the plugin still loads; project-opened, project-closed and file-saved never
+    IDE older than 26.48 the plugin still loads; project-opened, project-closed and file-saved never
     run there. Actions need the Terminal service plugins got in 26.42; on an older IDE,
     "Run &lt;name&gt;" records a run that did not start.
   </p>

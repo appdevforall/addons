@@ -26,11 +26,11 @@
             android:name="plugin.author"
             android:value="App Dev For All" />
 
-        <!-- 26.47: IdeProjectService.addProjectLifecycleListener and
+        <!-- 26.48: IdeProjectService.addProjectLifecycleListener and
              IdeEditorService.addFileSaveListener first ship there. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.47" />
+            android:value="26.48" />
 
         <meta-data
             android:name="plugin.max_ide_version"

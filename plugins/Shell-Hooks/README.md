@@ -3,7 +3,7 @@
 Runs the user's shell scripts at Code on the Go's integration points, git-hooks style, so IT
 staff can fit the IDE into existing workflows without Android development (ADFA-3570).
 
-Off until the user turns it on. Requires Code on the Go **26.47** (`plugin.min_ide_version`),
+Off until the user turns it on. Requires Code on the Go **26.48** (`plugin.min_ide_version`),
 the first release with `IdeProjectService.addProjectLifecycleListener` and
 `IdeEditorService.addFileSaveListener`.
 
@@ -148,7 +148,7 @@ and a trusted project script runs from a private copy the plugin marks executabl
 - **Notifications only.** No hook can veto a save or a build; the host callbacks report the past.
 - **Paths.** `HOME` and `PREFIX` are `<app files>/home` and `<app files>/usr`, the values
   `TermuxProcessEnvironment` gives every command, derived from `PluginContext.getAppFilesDir()`.
-- **Older IDEs.** The 26.47 listeners live in `WorkspaceHooks`, which only loads inside a guarded
+- **Older IDEs.** The 26.48 listeners live in `WorkspaceHooks`, which only loads inside a guarded
   block, so on an older IDE the plugin still loads and runs every hook except project-opened,
   project-closed and file-saved. Actions need the plugin Terminal service from 26.42; before that
   "Run <name>" records a run that did not start instead of failing. (The host does not enforce

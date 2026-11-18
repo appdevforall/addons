@@ -8,7 +8,7 @@ import org.appdevforall.shellhooks.engine.HookEvent
 import java.io.File
 
 /**
- * The listeners for the IDE events added in 26.47: project opened and closed, and file saved.
+ * The listeners for the IDE events added in 26.48: project opened and closed, and file saved.
  * They live in their own class so that [ShellHooksPlugin] never names those types itself. On an
  * older IDE only this class fails to load, inside the plugin's guarded `listen` blocks, and the
  * plugin runs with the other hooks instead of failing to load.

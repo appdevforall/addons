@@ -331,7 +331,7 @@ class ShellHooksPlugin :
         } catch (e: Exception) {
             context.logger.warn("Shell Hooks: no $what events: ${e.message}")
         } catch (e: LinkageError) {
-            // A host older than 26.47 has no such method; that hook simply never fires.
+            // A host older than 26.48 has no such method; that hook simply never fires.
             context.logger.warn("Shell Hooks: this IDE has no $what events")
         }
     }
