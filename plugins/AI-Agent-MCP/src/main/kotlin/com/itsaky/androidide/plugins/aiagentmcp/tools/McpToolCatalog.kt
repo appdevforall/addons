@@ -147,6 +147,9 @@ object McpToolCatalog {
      * a cancelled refresh carries on filling this cache and [McpConnections] after both were
      * cleared, leaving sockets nothing can reach.
      *
+     * A server that fails with an Exception or a LinkageError is skipped; any other Error, an
+     * OutOfMemoryError above all, ends the walk and propagates.
+     *
      * @param keepGoing false once the caller has stopped caring; the walk stops there.
      * @return how many servers answered.
      */
@@ -162,11 +165,15 @@ object McpToolCatalog {
                 refreshed++
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Throwable) {
-                // One unreachable server must not cost the user the tools of the others. Throwable,
-                // not Exception: connect calls the host (its Keystore, its ServerUrl), and a
-                // plugin-api that does not match the host's fails there with a LinkageError, which
-                // would otherwise end the activation's coroutine and crash Code on the Go.
+            } catch (e: Exception) {
+                // One unreachable server must not cost the user the tools of the others.
+                Log.w(TAG, "Could not list tools for '${server.name}': $e")
+            } catch (e: LinkageError) {
+                // Costs only this server too: connect calls the host (its Keystore, its ServerUrl),
+                // and a plugin-api that does not match the host's fails there with a LinkageError,
+                // which would otherwise end the activation's coroutine and crash Code on the Go.
+                // Nothing broader: an OutOfMemoryError is the process failing, not this server, and
+                // has to reach the IDE's uncaught-exception handler.
                 Log.w(TAG, "Could not list tools for '${server.name}': $e")
             }
         }

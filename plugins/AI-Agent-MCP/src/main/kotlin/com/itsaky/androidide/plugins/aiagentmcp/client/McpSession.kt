@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.ReadOnlyTrust
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
@@ -193,11 +194,16 @@ class McpSession(
         runCatching { liveConnection?.disconnect() }
     }
 
-    /** Ends the server-side session, if there is one, and forgets the handshake. */
+    /**
+     * Ends the server-side session, if there is one, and forgets the handshake.
+     *
+     * The DELETE is best effort; its credentials come from the host's Keystore, so a LinkageError
+     * is survived as well as an Exception, and any other Error propagates.
+     */
     @Synchronized
     fun close() {
         sessionId?.let { id ->
-            runCatching {
+            runCatchingRecoverable {
                 val current = credentials()
                 http.deleteSession(endpoint, current.token, id, current.headers)
             }

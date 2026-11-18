@@ -171,6 +171,10 @@ class McpToolSource :
         McpServerHealth.available(server.id)
         Outcome(result.success, result.text, result.errorMessage)
     } catch (e: Throwable) {
+        // Throwable, unlike the other host-facing catches in this plugin: this runs inside
+        // CompletableFuture.supplyAsync, which catches every Throwable itself, so narrowing this
+        // would not bring an OutOfMemoryError to the IDE's handler. It would only hand AI Core an
+        // exceptionally completed future in place of the failure outcome it expects.
         Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
         McpToolCatalog.recordFailure(server, e)
         val context = McpPlugin.getContext()?.androidContext

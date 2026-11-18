@@ -11,6 +11,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -208,6 +209,37 @@ class AutomaticServersTest {
         assertEquals(4001, AutomaticServers.endpoint(id)?.port)
         assertEquals("t2", AutomaticServers.token(id))
         assertFalse(olderChanged)
+    }
+
+    /** The process failing, not the read: the IDE's handler has to see it, not a log line every 20 s. */
+    @Test
+    fun `a read that throws an OutOfMemoryError reaches the caller`() {
+        var failing = false
+        AutomaticServers.install {
+            if (failing) throw OutOfMemoryError("reading the debugger endpoints")
+            listOf(endpoint())
+        }
+
+        failing = true
+        val thrown = assertThrows(OutOfMemoryError::class.java) { AutomaticServers.refresh() }
+
+        assertEquals("reading the debugger endpoints", thrown.message)
+    }
+
+    /** The listener added on activation tells the host, so it can fail like a host call. */
+    @Test
+    fun `a change listener that throws an OutOfMemoryError reaches the caller`() {
+        var current = listOf(endpoint())
+        AutomaticServers.install { current }
+        val listener: () -> Unit = { throw OutOfMemoryError("telling the agent") }
+        AutomaticServers.addChangeListener(listener)
+        try {
+            current = listOf(endpoint(port = 4001))
+
+            assertThrows(OutOfMemoryError::class.java) { AutomaticServers.refresh() }
+        } finally {
+            AutomaticServers.removeChangeListener(listener)
+        }
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
@@ -65,19 +66,19 @@ object McpConnections {
 
         stale?.let {
             Log.i(TAG, "Server '${server.name}' changed; dropping its session")
-            runCatching { it.close() }
+            runCatchingRecoverable { it.close() }
         }
         return session
     }
 
     /** Drops the session for [serverId], ending it server-side when it had one. */
     fun invalidate(serverId: String) {
-        sessions.remove(serverId)?.second?.let { runCatching { it.close() } }
+        sessions.remove(serverId)?.second?.let { runCatchingRecoverable { it.close() } }
     }
 
     /** Ends every session, for the plugin shutting down. */
     fun closeAll() {
-        sessions.values.forEach { (_, session) -> runCatching { session.close() } }
+        sessions.values.forEach { (_, session) -> runCatchingRecoverable { session.close() } }
         sessions.clear()
     }
 

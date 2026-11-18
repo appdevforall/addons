@@ -338,11 +338,18 @@ object McpServerStore {
     private fun prefs(): SharedPreferences? =
         McpPlugin.getContext()?.getPluginSharedPreferences(PREFERENCE_FILE)
 
+    /**
+     * Tells every listener, one failing listener costing only itself. A listener may call the
+     * host, so a LinkageError is survived as well as an Exception; anything else, an
+     * OutOfMemoryError above all, propagates to whoever made the change.
+     */
     private fun fireChanged() {
         for (listener in listeners) {
             try {
                 listener()
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
+                Log.e(TAG, "A settings change listener threw", e)
+            } catch (e: LinkageError) {
                 Log.e(TAG, "A settings change listener threw", e)
             }
         }

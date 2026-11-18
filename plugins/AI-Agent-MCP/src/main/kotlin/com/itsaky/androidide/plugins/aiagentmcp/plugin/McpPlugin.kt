@@ -8,6 +8,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpSettingsFragment
@@ -128,8 +129,14 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
          * Logs a failure that escaped a coroutine of [newScope]. Platform logging, not
          * `context.logger`: a handler that itself threw would hand both failures to the IDE's
          * uncaught-exception handler, and a scope exists before [initialize] sets the context.
+         *
+         * A [VirtualMachineError] (OutOfMemoryError, StackOverflowError) or a [ThreadDeath] is
+         * rethrown instead: it is the process failing, not this plugin's work, and the IDE's
+         * handler has to see it. The coroutine machinery hands a failure its handler rethrows,
+         * unwrapped, to the thread's uncaught-exception handler.
          */
         private val BACKSTOP = CoroutineExceptionHandler { _, e ->
+            if (e is VirtualMachineError || e is ThreadDeath) throw e
             Log.e(TAG, "Background work failed; it stops here and Code on the Go carries on", e)
         }
 
@@ -162,14 +169,17 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /**
      * Tells the agent to re-read the tool list whenever a server or a toggle changes.
      *
-     * Guarded against [Throwable], like [healthChanged]: it runs on this plugin's own coroutines,
-     * and the registry is AI Core's, built against a plugin-api of its own. A LinkageError from it
-     * would otherwise end the coroutine in the IDE's uncaught-exception handler.
+     * Guarded against a [LinkageError] as well as an [Exception], like [healthChanged]: it runs on
+     * this plugin's own coroutines, and the registry is AI Core's, built against a plugin-api of
+     * its own. A LinkageError from it would otherwise end the coroutine in the IDE's
+     * uncaught-exception handler. Nothing broader: an OutOfMemoryError has to reach that handler.
      */
     private val settingsChanged: () -> Unit = {
         try {
             resolveToolSourceRegistry()?.notifyToolsChanged(PLUGIN_ID)
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
+            context.logger.warn("McpPlugin: could not tell the agent the tools changed: $e")
+        } catch (e: LinkageError) {
             context.logger.warn("McpPlugin: could not tell the agent the tools changed: $e")
         }
     }
@@ -181,7 +191,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     private val healthChanged: () -> Unit = {
         try {
             if (registered) resolveToolSourceRegistry()?.notifyToolSourceStatusChanged(PLUGIN_ID)
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
+            context.logger.debug("McpPlugin: could not report a health change: ${e.message}")
+        } catch (e: LinkageError) {
             // An AI Core built before contract 2 has no such method; its tags cannot show health.
             context.logger.debug("McpPlugin: could not report a health change: ${e.message}")
         }
@@ -195,7 +207,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         scope.launch {
             val server = McpServers.all().firstOrNull { it.id == id && it.enabled }
             if (server != null) {
-                runCatching { McpToolCatalog.connect(server) }
+                runCatchingRecoverable { McpToolCatalog.connect(server) }
                 if (isActive) settingsChanged()
             }
         }
@@ -260,7 +272,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     override fun dispose() {
-        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
+        runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
         AutomaticServers.removeChangeListener(settingsChanged)
         McpServerHealth.removeChangeListener(healthChanged)
@@ -306,7 +318,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                         if (!keepGoing()) return@async false
                         val before = McpToolCatalog.tools(server.id)
                         // Recorded by connect itself; a failure here is what the tag already shows.
-                        runCatching { McpToolCatalog.connect(server) }
+                        runCatchingRecoverable { McpToolCatalog.connect(server) }
                         McpToolCatalog.tools(server.id) != before
                     }
                 }.awaitAll().any { it }
@@ -343,11 +355,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * the entries as they were: [AutomaticServers.refresh] catches it.
      */
     private fun installDebuggerEndpoints(keepGoing: () -> Boolean) {
-        val service = try {
+        val service = runCatchingRecoverable {
             context.services.get(DebuggerEndpointService::class.java)
-        } catch (e: Throwable) {
-            null
-        }
+        }.getOrNull()
         if (service == null) {
             context.logger.info("McpPlugin: this IDE has no debugger endpoint service")
             return
@@ -361,7 +371,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * [BACKSTOP] logs what escapes a coroutine here. Each host call is guarded where it is made, so
      * a failure costs only that call; this catches the one nobody foresaw, which would otherwise
      * reach the IDE's uncaught-exception handler and crash Code on the Go, whose process this
-     * plugin runs in. Internal as a seam, so a test can watch such a failure stop there.
+     * plugin runs in. A VirtualMachineError or a ThreadDeath it passes on to that handler. Internal
+     * as a seam, so a test can watch where such a failure ends up.
      */
     internal fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO + BACKSTOP)
 
@@ -414,9 +425,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /**
      * Registers this plugin's tools with AI Core, if the registry is reachable.
      *
-     * Guarded against [Throwable] rather than [Exception]: on an IDE older than the release that
-     * ships the contract the class is simply absent, and a [NoClassDefFoundError] here would fail
-     * the whole plugin rather than the one thing it cannot do.
+     * Guarded against a [LinkageError] as well as an [Exception]: on an IDE older than the release
+     * that ships the contract the class is simply absent, and a [NoClassDefFoundError] here would
+     * fail the whole plugin rather than the one thing it cannot do. Nothing broader: an
+     * OutOfMemoryError has to reach the IDE's uncaught-exception handler.
      *
      * @return true when registered (now or already), false when AI Core is absent.
      */
@@ -430,24 +442,30 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             registered = true
             context.logger.info("McpPlugin: registered the MCP tool source with AI Core")
             true
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
+            context.logger.error("McpPlugin: could not register the MCP tool source", e)
+            false
+        } catch (e: LinkageError) {
             context.logger.error("McpPlugin: could not register the MCP tool source", e)
             false
         }
     }
 
-    /** Withdraws the tools, so a disabled plugin stops appearing in the agent's tool list. */
+    /**
+     * Withdraws the tools, so a disabled plugin stops appearing in the agent's tool list.
+     *
+     * Guarded like [registerToolSource]: an Exception or a LinkageError is logged, anything else
+     * propagates.
+     */
     private fun unregisterToolSource() {
         if (!registered) return
         val source = toolSource
-        try {
+        runCatchingRecoverable {
             if (source != null) {
                 resolveToolSourceRegistry()?.unregisterToolSource(source)
                 context.logger.info("McpPlugin: unregistered the MCP tool source")
             }
-        } catch (e: Throwable) {
-            context.logger.warn("McpPlugin: could not unregister the MCP tool source", e)
-        }
+        }.onFailure { e -> context.logger.warn("McpPlugin: could not unregister the MCP tool source", e) }
         registered = false
     }
 
@@ -463,12 +481,13 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /**
      * Resolves AI Core's tool registry, preferring the process-global registry and falling back to
      * the provider-scoped lookup so a registry cleared by another plugin is not fatal.
-     * @return the registry, or null when AI Core is absent or too old to carry the contract.
+     * @return the registry, or null when AI Core is absent or too old to carry the contract, or
+     *   the lookup failed with an Exception or a LinkageError. Any other Error propagates.
      */
-    private fun resolveToolSourceRegistry(): ToolSourceRegistry? = try {
+    private fun resolveToolSourceRegistry(): ToolSourceRegistry? = runCatchingRecoverable {
         SharedServices.get(ToolSourceRegistry::class.java)
             ?: context.getPluginService(AI_CORE_PLUGIN_ID, ToolSourceRegistry::class.java)
-    } catch (e: Throwable) {
+    }.getOrElse { e ->
         context.logger.warn("McpPlugin: could not resolve the tool registry: ${e.message}")
         null
     }

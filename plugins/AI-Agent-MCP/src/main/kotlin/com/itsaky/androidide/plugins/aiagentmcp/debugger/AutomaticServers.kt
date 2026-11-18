@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.debugger
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
@@ -138,6 +139,9 @@ object AutomaticServers {
      * overlap, and the read that started first may finish last with the endpoint the other has
      * already replaced.
      *
+     * A read that fails with an Exception or a LinkageError leaves the entries as they were; any
+     * other Error, an OutOfMemoryError above all, propagates to the caller.
+     *
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
      */
@@ -150,12 +154,18 @@ object AutomaticServers {
             read().associateBy { idFor(it.applicationId) }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             // A failed read is not "no apps": the entries stay as they were, since wiping them
             // would take every debugger tool away from the agent on a transient database error.
-            // Throwable, not Exception: a plugin-api that does not match the host's fails here with
-            // an AbstractMethodError or another LinkageError, and one that escaped would end the
-            // caller's coroutine in the IDE's uncaught-exception handler and crash Code on the Go.
+            readFailures.report(e)
+            return false
+        } catch (e: LinkageError) {
+            // Treated as a failed read too: a plugin-api that does not match the host's fails here
+            // with an AbstractMethodError or another LinkageError, and one that escaped would end
+            // the caller's coroutine in the IDE's uncaught-exception handler and crash Code on the
+            // Go. Nothing broader than these two: an OutOfMemoryError or a StackOverflowError is
+            // the process failing, not the read, and has to reach that handler rather than be
+            // logged here every 20 s as a read that failed.
             readFailures.report(e)
             return false
         }
@@ -246,8 +256,9 @@ object AutomaticServers {
     /** The application ID an automatic entry's id was made from. */
     fun applicationIdOf(serverId: String) = serverId.removePrefix(ID_PREFIX)
 
+    /** A listener that tells the host may fail like any host call; see [runCatchingRecoverable]. */
     private fun fireChanged() {
-        for (l in listeners) runCatching { l() }
+        for (l in listeners) runCatchingRecoverable { l() }
     }
 }
 
