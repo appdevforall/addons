@@ -96,7 +96,9 @@
   <h2>What is sent</h2>
   <ul>
     <li>The tool's arguments, as the model composed them, to that server only.</li>
-    <li>Nothing else: this plugin has <b>network access and no other permission</b>.
+    <li>Nothing else: this plugin has <b>network access</b>, plus
+      <b>debugger.endpoints</b> to read the SQLite debugger endpoints Code on the Go
+      stores, <b>and no other permission</b>.
       It cannot read your project or your files. Anything from your project reaches
       a server only if the model puts it in an argument and you approve the call.</li>
     <li>Server and tool names are reduced here to the alphabet a tool name may

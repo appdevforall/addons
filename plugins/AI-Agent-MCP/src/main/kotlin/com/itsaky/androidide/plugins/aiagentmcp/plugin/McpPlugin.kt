@@ -41,8 +41,9 @@ private const val TAG = "$LOG_PREFIX.McpPlugin"
  * Connects the Agent to Model Context Protocol servers.
  *
  * Deliberately a plugin of its own rather than part of AI Core: everything here is network work,
- * so it declares `network.access` and nothing else, while AI Core declares the filesystem, shell
- * and project permissions its own tools need and no network at all.
+ * so it declares `network.access`, plus `debugger.endpoints` to read the SQLite debugger endpoints
+ * Code on the Go stores, and nothing else, while AI Core declares the filesystem, shell and project
+ * permissions its own tools need and no network at all.
  */
 class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 

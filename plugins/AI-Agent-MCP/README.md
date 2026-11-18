@@ -12,7 +12,8 @@ This is a *tool* plugin, not a model backend: it adds no inference. Install
 
 `ai-core` declares the filesystem, shell and project permissions its own tools
 need, and **no network access**. MCP is the mirror image: it declares
-`network.access` and nothing else. Keeping them apart is what lets a user install
+`network.access`, plus `debugger.endpoints` to read the SQLite debugger endpoints
+Code on the Go stores, and nothing else. Keeping them apart is what lets a user install
 the Agent without granting it the network, or add remote tools without widening
 what the Agent itself may touch.
 

@@ -52,7 +52,8 @@
   <p>It is deliberately a plugin of its own rather than part of AI Core. AI Core
   declares the filesystem, shell and project permissions its own tools need and
   <b>no network access</b>; this plugin is the mirror image, declaring
-  <b>network.access and nothing else</b>. That split is what lets you run the
+  <b>network.access</b>, plus <b>debugger.endpoints</b> to read the SQLite debugger
+  endpoints Code on the Go stores, <b>and nothing else</b>. That split is what lets you run the
   Agent without granting it the network, or add remote tools without widening
   what the Agent itself may touch.</p>
 
@@ -119,7 +120,8 @@
   which is a Kotlin Multiplatform library with no stated Android target, ships no
   HTTP engine, and required a Kotlin version these plugins do not standardise
   on.</p>
-  <p>The plugin declares <b>network.access</b> and nothing else. It holds no
+  <p>The plugin declares <b>network.access</b> and <b>debugger.endpoints</b>, which
+  only reads the SQLite debugger endpoints Code on the Go stores, and nothing else. It holds no
   filesystem, shell or project permission, so it cannot read your project;
   project content reaches a server only if the model puts it in a tool argument
   and you approve that call.</p>
