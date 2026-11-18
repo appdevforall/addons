@@ -112,40 +112,21 @@ class ApprovalDialogFragment : DialogFragment() {
         val offersAlwaysAllow = allowsAlwaysAllow && !isEdit
         val readOnlyOnProvidersWord = arguments?.getBoolean(ARG_READ_ONLY_ON_PROVIDERS_WORD) ?: false
 
-        // Provenance before the description: a tool that leaves the device is a different
-        // decision from a local edit, and only the source says which this is.
-        val provenance = buildList {
-            if (!source.isNullOrBlank()) {
-                add(getString(R.string.approval_source, source))
-                // Both names, when they differ: the title says what runs, this says what the
-                // source calls it, so neither can be passed off as the other.
-                if (!providerName.isNullOrBlank()) {
-                    add(getString(R.string.approval_provider_name, providerName))
-                }
-            }
-            // "Always Allow" rests on the plugin's own word here, so the user is told whose it is.
-            if (offersAlwaysAllow && readOnlyOnProvidersWord) {
-                add(getString(R.string.approval_read_only_claim))
-            }
-        }
-
-        val message = buildString {
-            append(getString(R.string.approval_header))
-            append("\n\n")
-            if (provenance.isNotEmpty()) {
-                provenance.forEach { append(it).append("\n") }
-                append("\n")
-            }
-            append(description)
-            append("\n\n")
-            append(getString(ApprovalPresentation.argsLabel(preview)))
-            append("\n")
-            append(argsText)
-        }
+        // The full name opens the message, not the title, which a long name overflows; see message().
+        val message = ApprovalPresentation.message(
+            toolName = toolName,
+            source = source,
+            providerName = providerName,
+            readOnlyClaim = offersAlwaysAllow && readOnlyOnProvidersWord,
+            description = description,
+            preview = preview,
+            argsText = argsText,
+            resources = resources,
+        )
 
         val builder = MaterialAlertDialogBuilder(requireContext())
         builder
-            .setTitle(getString(R.string.approval_confirm_title, toolName))
+            .setTitle(getString(R.string.approval_confirm_title))
             .setView(messageView(builder.context, message))
             .setNegativeButton(getString(R.string.approval_decline)) { _, _ ->
                 decide(ApprovalResult.DENIED)

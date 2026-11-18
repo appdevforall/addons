@@ -132,13 +132,15 @@ so a dialog offering "Always Allow" for a contributed tool says exactly that
 For the same reason a source's own `requiresApproval = false` is ignored:
 `ensureApproved` returns early on it, before `allowsSessionApproval` is ever
 consulted, so honouring it would let a provider decline the only control there is
-by asking. The dialog's title is the *registered* name, and all three
-provider-supplied strings on it — the tool's own name, its description and the
-source's label — are flattened and capped first, at the `ContributedToolHandler`
-boundary rather than in each provider. A remote `displayName` carrying a newline
-and a copy of the dialog's own header could otherwise forge structure the user
-then trusts. Contributing plugins therefore ship no sanitising of their own and
-depend on the installed `ai-core` for it; the two version independently.
+by asking. The dialog's message opens with the *registered* name, whole, under a
+short generic title (the stock title is one line, two at most, and cut a long name
+off at font scale 2.0). All three provider-supplied strings on it — the tool's own
+name, its description and the source's label — are flattened and capped first, at
+the `ContributedToolHandler` boundary rather than in each provider. A remote
+`displayName` carrying a newline and a copy of the dialog's own lines could
+otherwise forge structure the user then trusts. Contributing plugins therefore
+ship no sanitising of their own and depend on the installed `ai-core` for it; the
+two version independently.
 
 ## System prompt config
 

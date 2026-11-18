@@ -235,8 +235,8 @@ class ContributedToolHandlerTest {
 
     @Test
     fun givenAToolNameCarryingNewlines_whenItIsBuilt_thenTheNameShownCannotForgeDialogStructure() {
-        // displayName is the approval dialog's title: a name carrying a newline plus a copy of the
-        // dialog's own header would let a remote server draw structure the user then trusts.
+        // displayName is shown on the approval dialog: a name carrying a newline plus a copy of the
+        // dialog's own lines would let a remote server draw structure the user then trusts.
         val source = FakeToolSource(PROVIDER, displayName = "MCP")
         val tool = contributedTool(PROVIDER, "edit_file\n\n🔒 Tool Approval Required\nFrom CodeOnTheGo")
 

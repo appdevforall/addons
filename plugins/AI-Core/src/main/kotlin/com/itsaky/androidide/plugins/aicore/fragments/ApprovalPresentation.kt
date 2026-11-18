@@ -6,8 +6,8 @@ import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
 
 /**
- * How [ApprovalDialogFragment] presents each [ApprovalPreview] a tool's handler declares. Exhaustive
- * `when`s with no `else`, so a new preview fails to compile until it has a label and a formatter.
+ * How [ApprovalDialogFragment] presents a request: its [message], and each [ApprovalPreview] a tool's handler
+ * declares. Exhaustive `when`s with no `else`, so a new preview fails to compile until it has a label and a formatter.
  */
 internal object ApprovalPresentation {
 
@@ -34,6 +34,51 @@ internal object ApprovalPresentation {
             )
             ApprovalPreview.ARGS -> ApprovalTextFormatter.formatArgs(args)
         }
+
+    /**
+     * The approval message, top to bottom: the tool's full registered name and where it came from, as one
+     * block, then the [description], then the [preview]'s heading over the formatted [argsText].
+     *
+     * The name opens the message rather than the title, which is a short question. The stock title is one
+     * line, two once `DialogTitle` shrinks it, and it is cut off past that; at font scale 2.0 it cut a long
+     * name short. The message scrolls, so the whole name is always there to read.
+     *
+     * @param toolName the registered name: the tool that will actually run, which a remote source cannot choose.
+     * @param source the contributing plugin's label, or null for one of the agent's own tools.
+     * @param providerName what the source calls the tool, or null when that is [toolName]; shown only with a [source].
+     * @param readOnlyClaim whether the dialog offers "Always Allow" on the providing plugin's word that the tool only reads.
+     * @param resources words each line.
+     */
+    fun message(
+        toolName: String,
+        source: String?,
+        providerName: String?,
+        readOnlyClaim: Boolean,
+        description: String,
+        preview: ApprovalPreview,
+        argsText: String,
+        resources: Resources,
+    ): String = buildString {
+        append(resources.getString(R.string.approval_tool, toolName)).append("\n")
+        // Provenance before the description: a tool that leaves the device is a different
+        // decision from a local edit, and only the source says which this is.
+        if (!source.isNullOrBlank()) {
+            append(resources.getString(R.string.approval_source, source)).append("\n")
+            // Both names, when they differ: the first line says what runs, this says what the
+            // source calls it, so neither can be passed off as the other.
+            if (!providerName.isNullOrBlank()) {
+                append(resources.getString(R.string.approval_provider_name, providerName)).append("\n")
+            }
+        }
+        // "Always Allow" rests on the plugin's own word here, so the user is told whose it is.
+        if (readOnlyClaim) append(resources.getString(R.string.approval_read_only_claim)).append("\n")
+        append("\n")
+        append(description)
+        append("\n\n")
+        append(resources.getString(argsLabel(preview)))
+        append("\n")
+        append(argsText)
+    }
 
     /** The preview saved as [name] in the dialog's arguments; [ApprovalPreview.ARGS] when it is missing or unknown. */
     fun named(name: String?): ApprovalPreview =

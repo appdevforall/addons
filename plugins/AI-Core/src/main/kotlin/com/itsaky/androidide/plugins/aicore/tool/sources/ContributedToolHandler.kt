@@ -41,7 +41,7 @@ class ContributedToolHandler(
      * The tool's own name, never the qualified form a collision may have forced on it.
      *
      * Flattened and capped: this is a remote string on a consent dialog, where a newline plus a
-     * copy of the dialog's own header is enough to forge structure the user then trusts.
+     * copy of the dialog's own lines is enough to forge structure the user then trusts.
      */
     override val displayName: String = ContributedText.label(tool.name)
 

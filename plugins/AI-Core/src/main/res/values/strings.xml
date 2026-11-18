@@ -143,8 +143,9 @@
     <string name="approval_approve_once">Approve Once</string>
     <string name="approval_approve_session">Approve for Session</string>
     <string name="approval_deny">Deny</string>
-    <string name="approval_header">🔒 Tool Approval Required</string>
-    <string name="approval_confirm_title">⚠️ Confirm: %s</string>
+    <!-- Short, so the stock title (one line, two at most) never cuts it off; the tool's full name opens the message instead. -->
+    <string name="approval_confirm_title">Allow this tool?</string>
+    <string name="approval_tool">Tool: %1$s</string>
     <string name="approval_source">From %1$s</string>
     <string name="approval_provider_name">The source calls this tool “%1$s”</string>
     <!-- Shown when "Always Allow" is offered for another plugin's tool: it rests on that plugin's own claim. -->

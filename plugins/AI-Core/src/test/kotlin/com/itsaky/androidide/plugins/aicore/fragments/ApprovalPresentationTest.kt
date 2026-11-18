@@ -1,13 +1,16 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
+import android.content.res.Resources
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalPreview
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
  * Unit tests for [ApprovalPresentation]: the dialog picks its presentation from the preview the
- * handler declares, never from the tool's name.
+ * handler declares, never from the tool's name, and its message always carries that name whole.
  */
 class ApprovalPresentationTest {
 
@@ -24,6 +27,64 @@ class ApprovalPresentationTest {
         ApprovalPreview.entries.forEach { preview ->
             assertEquals(preview, ApprovalPresentation.named(preview.name))
         }
+    }
+
+    /** Words each string as its tag plus its arguments, so a test reads which line is which without copying the English. */
+    private val resources = mockk<Resources> {
+        val tags = mapOf(
+            R.string.approval_tool to "TOOL",
+            R.string.approval_source to "FROM",
+            R.string.approval_provider_name to "CALLED",
+            R.string.approval_read_only_claim to "READ_ONLY",
+            R.string.approval_args to "ARGS",
+            R.string.approval_proposed_change to "PROPOSED",
+        )
+        every { getString(any()) } answers { tags.getValue(firstArg()) }
+        every { getString(any(), *anyVararg()) } answers {
+            val words = args.drop(1).flatMap { (it as? Array<*>)?.toList() ?: listOf(it) }
+            (listOf(tags.getValue(firstArg())) + words).joinToString(" ")
+        }
+    }
+
+    // F222: at font scale 2.0 the title "⚠️ Confirm: <name>" showed "db_devchec_list_…". The stock title is one
+    // line, two at most, so the name moved to the message, which scrolls and is never cut short.
+    @Test
+    fun givenASixtyCharacterToolName_whenTheMessageIsBuilt_thenItOpensWithTheWholeName() {
+        val name = "db_devcheck_list_tables_with_their_columns_and_indexes_" + "x".repeat(5)
+        assertEquals(60, name.length)
+
+        val message = ApprovalPresentation.message(name, "SQLite debugger", null, false, "Lists them.", ApprovalPreview.ARGS, "{}", resources)
+
+        assertEquals("TOOL $name", message.lines().first())
+    }
+
+    @Test
+    fun givenAContributedReadOnlyTool_whenTheMessageIsBuilt_thenTheNameAndItsProvenanceFormOneBlockAboveTheRest() {
+        val message = ApprovalPresentation.message(
+            toolName = "mcp_list_tables",
+            source = "MCP servers",
+            providerName = "list_tables",
+            readOnlyClaim = true,
+            description = "Lists the tables.",
+            preview = ApprovalPreview.ARGS,
+            argsText = "db: app.db",
+            resources = resources,
+        )
+
+        assertEquals(
+            "TOOL mcp_list_tables\nFROM MCP servers\nCALLED list_tables\nREAD_ONLY\n\nLists the tables.\n\nARGS\ndb: app.db",
+            message,
+        )
+    }
+
+    @Test
+    fun givenABuiltInEdit_whenTheMessageIsBuilt_thenTheNameStandsAloneAboveTheChange() {
+        // No source, so no provider name either, even when one is passed.
+        val message = ApprovalPresentation.message(
+            "edit_file", null, "edit_file_alias", false, "Edits a file.", ApprovalPreview.EDIT, "- a\n+ b", resources,
+        )
+
+        assertEquals("TOOL edit_file\n\nEdits a file.\n\nPROPOSED\n- a\n+ b", message)
     }
 
     @Test
