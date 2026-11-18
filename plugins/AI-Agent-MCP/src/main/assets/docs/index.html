@@ -72,16 +72,24 @@
   </ul>
 
   <h2>Choosing tools</h2>
-  <p>Every tool starts <b>switched off</b>. That is deliberate: each enabled tool
-  costs prompt space on every message you send, and a large server can advertise
-  ninety of them — enough to fill a phone-sized context window on its own. Switch
-  on the handful you actually want.</p>
+  <p>Every tool starts <b>switched off</b>, with the one exception below. That is
+  deliberate: each enabled tool costs prompt space on every message you send, and a
+  large server can advertise ninety of them — enough to fill a phone-sized context
+  window on its own. Switch on the handful you actually want.</p>
+  <p>The one exception is the <b>SQLite debugger</b> entry, which Code on the Go
+  adds by itself for an app you build with the SQLite debugger, named
+  "SQLite debugger (<i>application ID</i>)". Four of its read-only tools start
+  switched on: <code>list_databases</code>, <code>get_schema</code>,
+  <code>query</code> and <code>get_events</code>. Its other tools start off. This
+  version does not show the entry on the MCP servers screen, so it has no switches
+  there yet.</p>
   <p>The Agent reads this list from memory, so tap <b>Connect</b> again after the
   server changes; a chat that is already open picks the new list up.</p>
 
   <h2>Approval</h2>
   <p>Every remote tool asks for your approval before it runs, showing the
-  arguments it would send, and there is no "always allow" for them. The Agent's
+  arguments it would send, and there is no "always allow" for them. That includes
+  the four SQLite debugger tools that start switched on. The Agent's
   own file tools are confined to the open project; a remote tool is confined by
   nothing this device controls, so the dialog is the only gate — read it.</p>
 

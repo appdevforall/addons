@@ -508,8 +508,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 MCP (Model Context Protocol) servers give the Agent extra tools, such as
                 access to an issue tracker or a documentation site.<br><br>To use this
                 add-on, you must also install AI Core. Then go to <b>Preferences → MCP
-                servers</b> and add a server. Each tool stays off until you turn it on, and
-                the Agent asks for your approval every time it uses one.
+                servers</b> and add a server. Each tool stays off until you turn it
+                on.<br><br>The one exception is the SQLite debugger entry that CoGo adds
+                for an app you build with the SQLite debugger: four of its read-only tools
+                start on (list databases, get schema, query, and get events). This version
+                doesn't list that entry on the MCP servers screen.<br><br>The Agent asks for
+                your approval every time it uses a tool, including those four.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
