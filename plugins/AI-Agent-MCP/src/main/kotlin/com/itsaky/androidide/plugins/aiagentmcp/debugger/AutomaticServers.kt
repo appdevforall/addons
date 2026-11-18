@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.services.DebuggerEndpoint
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val TAG = "$LOG_PREFIX.AutomaticServers"
 
@@ -55,7 +56,10 @@ object AutomaticServers {
 
     private val endpointListeners = CopyOnWriteArrayList<(String) -> Unit>()
 
-    /** The probe calls [refresh] every 20 s, so a refused permission would otherwise log a stack trace forever. */
+    /**
+     * The probe calls [refresh] every 20 s, so a refused permission or a plugin-api mismatch would
+     * otherwise log a stack trace forever.
+     */
     private val readFailures = RepeatedFailureLog(
         first = { e -> Log.w(TAG, "Could not read the debugger endpoints; keeping the previous entries", e) },
         later = { e -> Log.d(TAG, "Still cannot read the debugger endpoints: $e") },
@@ -131,9 +135,14 @@ object AutomaticServers {
         val read = source ?: return false
         val fresh = try {
             read().associateBy { idFor(it.applicationId) }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
             // A failed read is not "no apps": the entries stay as they were, since wiping them
             // would take every debugger tool away from the agent on a transient database error.
+            // Throwable, not Exception: a plugin-api that does not match the host's fails here with
+            // an AbstractMethodError or another LinkageError, and one that escaped would end the
+            // caller's coroutine in the IDE's uncaught-exception handler and crash Code on the Go.
             readFailures.report(e)
             return false
         }

@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentmcp.plugin
 
+import android.util.Log
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
@@ -7,6 +8,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
+import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpSettingsFragment
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
@@ -20,6 +22,7 @@ import com.itsaky.androidide.plugins.extensions.SettingsExtension
 import com.itsaky.androidide.plugins.services.DebuggerEndpointService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +34,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private const val TAG = "$LOG_PREFIX.McpPlugin"
 
 /**
  * Connects the Agent to Model Context Protocol servers.
@@ -118,6 +123,15 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_HEADER_REMOVE = "mcp_header_remove"
         const val TOOLTIP_TAG_BACK = "mcp_back"
 
+        /**
+         * Logs a failure that escaped a coroutine of [newScope]. Platform logging, not
+         * `context.logger`: a handler that itself threw would hand both failures to the IDE's
+         * uncaught-exception handler, and a scope exists before [initialize] sets the context.
+         */
+        private val BACKSTOP = CoroutineExceptionHandler { _, e ->
+            Log.e(TAG, "Background work failed; it stops here and Code on the Go carries on", e)
+        }
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -144,9 +158,19 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         }
     }
 
-    /** Tells the agent to re-read the tool list whenever a server or a toggle changes. */
+    /**
+     * Tells the agent to re-read the tool list whenever a server or a toggle changes.
+     *
+     * Guarded against [Throwable], like [healthChanged]: it runs on this plugin's own coroutines,
+     * and the registry is AI Core's, built against a plugin-api of its own. A LinkageError from it
+     * would otherwise end the coroutine in the IDE's uncaught-exception handler.
+     */
     private val settingsChanged: () -> Unit = {
-        resolveToolSourceRegistry()?.notifyToolsChanged(PLUGIN_ID)
+        try {
+            resolveToolSourceRegistry()?.notifyToolsChanged(PLUGIN_ID)
+        } catch (e: Throwable) {
+            context.logger.warn("McpPlugin: could not tell the agent the tools changed: $e")
+        }
     }
 
     /**
@@ -314,7 +338,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * `plugin.min_ide_version` keeps this plugin off an IDE that lacks the service: such an IDE
      * rejects the unknown `debugger.endpoints` permission when it validates the manifest. The catch
      * is defence only, for a host that registers no service anyway. A call that later throws (no
-     * permission, unreadable database) leaves the entries as they were.
+     * permission, unreadable database, a LinkageError from a host whose plugin-api differs) leaves
+     * the entries as they were: [AutomaticServers.refresh] catches it.
      */
     private fun installDebuggerEndpoints(keepGoing: () -> Boolean) {
         val service = try {
@@ -329,8 +354,15 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         AutomaticServers.install(AutomaticServers.fromHost { service.endpoints }, keepGoing)
     }
 
-    /** A fresh scope for this activation; the previous one is cancelled, never reused. */
-    private fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * A fresh scope for this activation; the previous one is cancelled, never reused.
+     *
+     * [BACKSTOP] logs what escapes a coroutine here. Each host call is guarded where it is made, so
+     * a failure costs only that call; this catches the one nobody foresaw, which would otherwise
+     * reach the IDE's uncaught-exception handler and crash Code on the Go, whose process this
+     * plugin runs in. Internal as a seam, so a test can watch such a failure stop there.
+     */
+    internal fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO + BACKSTOP)
 
     /**
      * Installs [next] as the current scope and cancels whichever scope it displaced.

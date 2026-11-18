@@ -16,6 +16,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonRpc
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeListener
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val TAG = "$LOG_PREFIX.McpToolCatalog"
 
@@ -159,9 +160,14 @@ object McpToolCatalog {
             try {
                 connect(server)
                 refreshed++
-            } catch (e: Exception) {
-                // One unreachable server must not cost the user the tools of the others.
-                Log.w(TAG, "Could not list tools for '${server.name}': ${e.message}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // One unreachable server must not cost the user the tools of the others. Throwable,
+                // not Exception: connect calls the host (its Keystore, its ServerUrl), and a
+                // plugin-api that does not match the host's fails there with a LinkageError, which
+                // would otherwise end the activation's coroutine and crash Code on the Go.
+                Log.w(TAG, "Could not list tools for '${server.name}': $e")
             }
         }
         return refreshed

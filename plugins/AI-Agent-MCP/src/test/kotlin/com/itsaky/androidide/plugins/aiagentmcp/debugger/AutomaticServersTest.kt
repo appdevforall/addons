@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class AutomaticServersTest {
@@ -141,6 +142,31 @@ class AutomaticServersTest {
         failing = true
         assertFalse(AutomaticServers.refresh())
 
+        val server = AutomaticServers.servers().single()
+        assertEquals(listOf("q"), server.knownTools)
+        assertEquals("t1", AutomaticServers.token(id))
+    }
+
+    /** A host whose plugin-api differs from this plugin's: an Error, which `catch (Exception)` misses. */
+    @Test
+    fun `a read that throws a linkage error keeps the entries as they were`() {
+        var failing = false
+        AutomaticServers.install {
+            if (failing) throw AbstractMethodError("DebuggerEndpointService.getEndpoints")
+            listOf(endpoint())
+        }
+        val id = AutomaticServers.idFor("com.example.app")
+        AutomaticServers.recordTools(id, endpoint(), listOf(McpTool("q", "", readOnlyHint = true)))
+
+        failing = true
+        val changed = try {
+            AutomaticServers.refresh()
+        } catch (e: LinkageError) {
+            fail("refresh let $e escape to its caller's coroutine")
+            return
+        }
+
+        assertFalse(changed)
         val server = AutomaticServers.servers().single()
         assertEquals(listOf("q"), server.knownTools)
         assertEquals("t1", AutomaticServers.token(id))
