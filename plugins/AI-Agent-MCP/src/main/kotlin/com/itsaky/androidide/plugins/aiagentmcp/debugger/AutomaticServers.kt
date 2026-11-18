@@ -52,6 +52,13 @@ object AutomaticServers {
 
     @Volatile private var source: (() -> List<AutomaticEndpoint>)? = null
 
+    /**
+     * Numbers each [refresh]'s read in the order the reads start, and the number of the read now
+     * stored. Both are guarded by this object's lock.
+     */
+    private var readsStarted = 0L
+    private var storedRead = 0L
+
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 
     private val endpointListeners = CopyOnWriteArrayList<(String) -> Unit>()
@@ -126,13 +133,19 @@ object AutomaticServers {
      * Re-reads the endpoints. Blocking host call: use a background thread.
      * Nothing is stored when the source that was read is no longer installed, so a refresh in
      * flight when deactivation cleared the entries (or a later activation replaced the source)
-     * cannot restore them, whichever caller started it.
+     * cannot restore them, whichever caller started it. Nor is it stored when a refresh that
+     * started later has already stored its own: the probe's refresh and a failing call's retry can
+     * overlap, and the read that started first may finish last with the endpoint the other has
+     * already replaced.
      *
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
      */
     fun refresh(keepGoing: () -> Boolean = { true }): Boolean {
-        val read = source ?: return false
+        val (read, ticket) = synchronized(this) {
+            val current = source ?: return false
+            current to ++readsStarted
+        }
         val fresh = try {
             read().associateBy { idFor(it.applicationId) }
         } catch (e: CancellationException) {
@@ -149,7 +162,8 @@ object AutomaticServers {
         val moved = mutableListOf<String>()
         val removed: List<String>
         val changed = synchronized(this) {
-            if (source !== read || !keepGoing()) return false
+            if (source !== read || !keepGoing() || ticket < storedRead) return false
+            storedRead = ticket
             val old = states
             val next = fresh.mapValues { (id, endpoint) ->
                 val previous = old[id]

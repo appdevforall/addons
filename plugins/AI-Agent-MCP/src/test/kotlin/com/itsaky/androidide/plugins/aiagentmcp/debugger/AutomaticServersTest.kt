@@ -3,6 +3,10 @@ package com.itsaky.androidide.plugins.aiagentmcp.debugger
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -170,6 +174,40 @@ class AutomaticServersTest {
         val server = AutomaticServers.servers().single()
         assertEquals(listOf("q"), server.knownTools)
         assertEquals("t1", AutomaticServers.token(id))
+    }
+
+    /**
+     * The probe's refresh and a failing call's retry can overlap. The read that started first
+     * returns the endpoint from before the relaunch, and here it finishes last.
+     */
+    @Test
+    fun `an older read that finishes last does not store over a newer one`() {
+        val olderEntered = CountDownLatch(1)
+        val releaseOlder = CountDownLatch(1)
+        val reads = AtomicInteger()
+        AutomaticServers.install {
+            when (reads.incrementAndGet()) {
+                1 -> listOf(endpoint(port = 4000))
+                2 -> {
+                    olderEntered.countDown()
+                    releaseOlder.await(10, TimeUnit.SECONDS)
+                    listOf(endpoint(port = 4000))
+                }
+                else -> listOf(endpoint(port = 4001, token = "t2"))
+            }
+        }
+        val id = AutomaticServers.idFor("com.example.app")
+        var olderChanged = true
+        val older = thread { olderChanged = AutomaticServers.refresh() }
+        assertTrue("the older read never started", olderEntered.await(10, TimeUnit.SECONDS))
+
+        assertTrue(AutomaticServers.refresh())
+        releaseOlder.countDown()
+        older.join(10_000)
+
+        assertEquals(4001, AutomaticServers.endpoint(id)?.port)
+        assertEquals("t2", AutomaticServers.token(id))
+        assertFalse(olderChanged)
     }
 
     @Test
