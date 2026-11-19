@@ -15,6 +15,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -28,7 +30,8 @@ class CancelBetweenAttemptsTest {
 
     private val app = "com.example.app"
     private val servers = mutableListOf<FakeMcpServer>()
-    private val source = McpToolSource()
+    private val executor = Executors.newSingleThreadExecutor()
+    private val source = McpToolSource(executor)
     private lateinit var plugin: McpPlugin
 
     @Before
@@ -73,8 +76,15 @@ class CancelBetweenAttemptsTest {
         val first = fake("t1", tool("list_databases", true))
         var stored = listOf(AutomaticEndpoint(app, first.port, "t1"))
         var cancelOnRead = false
+        // invoke stores the call's future only after its worker has started, and a cancel that
+        // landed first would find no future to cancel: the outcome would come back as an ordinary
+        // failure, which is not what this test is about. So the cancel waits for invoke to return.
+        val invoked = CountDownLatch(1)
         AutomaticServers.install {
-            if (cancelOnRead) source.cancel("call-1")
+            if (cancelOnRead) {
+                check(invoked.await(10, TimeUnit.SECONDS)) { "invoke never returned" }
+                source.cancel("call-1")
+            }
             stored
         }
         McpToolCatalog.connect(AutomaticServers.servers().single())
@@ -87,11 +97,12 @@ class CancelBetweenAttemptsTest {
         stored = listOf(AutomaticEndpoint(app, second.port, "t2"))
         cancelOnRead = true
         val future = invoke(name)
+        invoked.countDown()
 
         // The agent's future is cancelled with the call; the worker behind it is what must stop.
-        // Bounded wait: without the check the retry reaches the new endpoint within milliseconds.
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
-        while (second.requests.isEmpty() && System.nanoTime() < deadline) Thread.sleep(20)
+        // Waits for the worker itself, so whatever it was going to send has been sent.
+        executor.shutdown()
+        assertTrue("the call never finished", executor.awaitTermination(10, TimeUnit.SECONDS))
         assertTrue(future.isCompletedExceptionally)
         assertTrue("the retry was sent anyway: ${second.requests}", second.requests.isEmpty())
     }
