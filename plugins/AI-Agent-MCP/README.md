@@ -60,6 +60,21 @@ points the entry at `http://127.0.0.1:<port>/mcp`. A relaunched app gets a new
 port and token, and the plugin reads them again after a refused connection. An
 app that has not reported yet has no entry, and no error is shown.
 
+When the entry cannot reach its app, the reason the Agent tab shows says what to
+do, told apart by exception type (`SocketTimeoutException` or `ConnectException`,
+anywhere in the cause chain):
+
+- **No answer** (a socket timeout): "The app <application ID> did not answer. If
+  the app is in the background, Android may have paused it. Bring the app to the
+  front and try again." Some phones freeze an app in the background: a Galaxy
+  Note 20 froze one about 13 minutes after it left the screen.
+- **Refused** (nothing listens on the port): "The app <application ID> is not
+  running with the SQLite debugger. Open the app again from Code on the Go." The
+  app's process has ended, or the app was rebuilt without the SQLite debugger.
+
+Any other failure of the entry, and every failure of a server you add yourself,
+keeps the generic reason, such as "Could not reach <name>: <detail>".
+
 Each app's tools are told apart for the model. Their names start with `db_` and
 the first seven characters of the application ID's last segment
 (`db_notes_query` for `com.example.notes`, `db_myappli_query` for

@@ -287,7 +287,7 @@ class McpSettingsViewModel(
                     val context = getContext()?.androidContext
                     // The cached tools: a failed reconnect must not blank out the switches.
                     ConnectResult(
-                        message = McpErrorFormatter.format(context, server.name, e),
+                        message = McpErrorFormatter.format(context, server, e),
                         log = McpTranscript.log(
                             exchanges.snapshot(), e, McpTranscriptStrings(context), exchanges::redact,
                         ),

@@ -98,7 +98,7 @@ object McpToolCatalog {
         if (!isConfigured(server.id)) return
         val context = McpPlugin.getContext()?.androidContext
         val refused = failure is McpFailure.TokenRefused || failure is McpFailure.Forbidden
-        McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server.name, error), refused)
+        McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server, error), refused)
     }
 
     private fun isConfigured(serverId: String): Boolean =

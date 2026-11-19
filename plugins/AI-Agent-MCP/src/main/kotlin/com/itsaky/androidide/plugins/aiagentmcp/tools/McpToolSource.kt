@@ -178,7 +178,7 @@ class McpToolSource :
         Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
         McpToolCatalog.recordFailure(server, e)
         val context = McpPlugin.getContext()?.androidContext
-        Outcome(false, "", McpErrorFormatter.format(context, server.name, e))
+        Outcome(false, "", McpErrorFormatter.format(context, server, e))
     } finally {
         running -= callId
         cancelled -= callId

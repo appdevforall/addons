@@ -84,6 +84,10 @@
     <string name="mcp_error_secret_unavailable">%1$s\'s saved credentials could not be read just now. They are still stored — try again in a moment.</string>
     <string name="mcp_error_failed">Could not reach %1$s.</string>
     <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
+    <!-- %1$s is the application ID of an app built with the SQLite debugger. -->
+    <string name="mcp_error_app_not_answering">The app %1$s did not answer. If the app is in the background, Android may have paused it. Bring the app to the front and try again.</string>
+    <!-- %1$s is the application ID of an app built with the SQLite debugger. -->
+    <string name="mcp_error_app_not_listening">The app %1$s is not running with the SQLite debugger. Open the app again from Code on the Go.</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>
 
     <!-- What a failed Connect sent and received (see McpTranscript) -->
