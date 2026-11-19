@@ -3,6 +3,8 @@ package com.itsaky.androidide.plugins.aiagentlocal.model
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
+import android.provider.DocumentsContract
 import java.io.Closeable
 import java.io.File
 import java.io.FileInputStream
@@ -40,7 +42,8 @@ class OpenModelFile(
     /**
      * Whether [nativePath] can be opened *by name*, which is all the native loader ever does with
      * it. That open re-resolves to the real inode against this app's own credentials rather than
-     * the SAF grant, so removable storage can refuse it where the descriptor was not. ADFA-5253.
+     * the SAF grant, so removable storage — and, with FUSE passthrough, shared storage — can refuse
+     * it where the descriptor was not. ADFA-5253, ADFA-7214.
      */
     fun isReopenable(): Boolean = try {
         openStream()?.use { true } ?: false
@@ -204,12 +207,42 @@ class ContentNativeModelSource(
      * Takes the document's descriptor and hands the native loader its procfs path. `"r"` is the
      * only mode asked for, which is all the persisted grant covers. The descriptor need not be a
      * file — a pipe is reported through [OpenModelFile.isSeekable] for the caller to refuse.
+     *
+     * With FUSE passthrough (API 36) a shared-storage descriptor is on the lower filesystem, owned
+     * by MediaProvider, so the procfs path cannot be re-opened by name. The same document's path
+     * under shared storage can — the IDE holds all-files access — so that is handed over instead,
+     * when it opens and is the same size. The descriptor is then closed: while MediaProvider holds
+     * the file open on the lower filesystem it serves FUSE opens as direct I/O, and llama.cpp's
+     * `mmap` of the path fails with ENODEV. ADFA-7214.
      */
     private fun openDocument(uriString: String): OpenModelFile? = try {
-        context.contentResolver.openFileDescriptor(Uri.parse(uriString), "r")
-            ?.let { OpenModelFile("$FD_DIR${it.fd}", it.statSize, it) }
+        val uri = Uri.parse(uriString)
+        context.contentResolver.openFileDescriptor(uri, "r")?.let { descriptor ->
+            val procfs = OpenModelFile("$FD_DIR${descriptor.fd}", descriptor.statSize, descriptor)
+            if (procfs.isReopenable()) return@let procfs
+            sharedStoragePathOf(uri)
+                ?.takeIf { File(it).length() == descriptor.statSize }
+                ?.let { OpenModelFile(it, descriptor.statSize, null) }
+                ?.takeIf { it.isReopenable() }
+                ?.also { procfs.close() }
+                ?: procfs
+        }
     } catch (e: Exception) {
         onError("could not open the selected model $uriString", e)
+        null
+    }
+
+    /**
+     * The filesystem path of a document on the primary shared volume, from its
+     * `primary:<relative path>` id; null for any other provider or volume.
+     */
+    private fun sharedStoragePathOf(uri: Uri): String? = try {
+        if (uri.authority != EXTERNAL_STORAGE_AUTHORITY) null
+        else DocumentsContract.getDocumentId(uri)
+            .split(':', limit = 2)
+            .takeIf { it.size == 2 && it[0] == PRIMARY_VOLUME }
+            ?.let { File(Environment.getExternalStorageDirectory(), it[1]).absolutePath }
+    } catch (_: Exception) {
         null
     }
 
@@ -262,5 +295,7 @@ class ContentNativeModelSource(
     private companion object {
         const val CONTENT_SCHEME = "content://"
         const val FD_DIR = "/proc/self/fd/"
+        const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
+        const val PRIMARY_VOLUME = "primary"
     }
 }

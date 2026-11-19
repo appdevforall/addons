@@ -4,7 +4,9 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.os.DeadObjectException
+import android.os.Environment
 import android.os.ParcelFileDescriptor
+import android.provider.DocumentsContract
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -206,6 +208,63 @@ class ContentNativeModelSourceTest {
         val opened = OpenModelFile("/proc/self/fd/99999", 64L, null)
 
         assertFalse(opened.isReopenable())
+    }
+
+    @Test
+    fun givenASharedStorageDocumentWhoseProcfsPathCannotReopen_whenOpened_thenTheLoaderGetsItsStoragePath() {
+        // ADFA-7214: with FUSE passthrough the procfs path of a Download file is refused by name,
+        // but the same file under shared storage opens. fd 99999 stands in for the refused path.
+        val model = File(temporaryFolder.newFolder("Download"), "model.gguf").apply { writeBytes(ByteArray(64)) }
+        val opened = openSharedStorageDocument(documentId = "primary:Download/model.gguf", statSize = 64L)
+
+        assertEquals(model.absolutePath, opened.nativePath)
+        assertEquals(64L, opened.sizeBytes)
+        assertTrue(opened.isReopenable())
+        // Held open, MediaProvider serves the path as direct I/O and llama.cpp's mmap gets ENODEV.
+        io.mockk.verify { lastDescriptor.close() }
+    }
+
+    @Test
+    fun givenASharedStoragePathOfAnotherSize_whenOpened_thenTheProcfsPathIsKept() {
+        // A different file at that path is not the picked document; the loader must not get it.
+        File(temporaryFolder.newFolder("Download"), "model.gguf").writeBytes(ByteArray(32))
+
+        val opened = openSharedStorageDocument(documentId = "primary:Download/model.gguf", statSize = 64L)
+
+        assertEquals("/proc/self/fd/99999", opened.nativePath)
+        // The procfs path is still the loader's, so its descriptor must stay open.
+        io.mockk.verify(exactly = 0) { lastDescriptor.close() }
+    }
+
+    @Test
+    fun givenADocumentOnARemovableVolume_whenOpened_thenTheProcfsPathIsKept() {
+        // Only the primary volume maps to a known path; anything else keeps today's behaviour.
+        File(temporaryFolder.newFolder("Download"), "model.gguf").writeBytes(ByteArray(64))
+
+        val opened = openSharedStorageDocument(documentId = "1A2B-3C4D:Download/model.gguf", statSize = 64L)
+
+        assertEquals("/proc/self/fd/99999", opened.nativePath)
+    }
+
+    private lateinit var lastDescriptor: ParcelFileDescriptor
+
+    private fun openSharedStorageDocument(documentId: String, statSize: Long): OpenModelFile {
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.authority } returns "com.android.externalstorage.documents"
+        every { Uri.parse(any()) } returns uri
+        mockkStatic(DocumentsContract::class, Environment::class)
+        every { DocumentsContract.getDocumentId(uri) } returns documentId
+        every { Environment.getExternalStorageDirectory() } returns temporaryFolder.root
+        val descriptor = mockk<ParcelFileDescriptor>(relaxed = true)
+        every { descriptor.fd } returns 99999
+        every { descriptor.statSize } returns statSize
+        every { resolver.openFileDescriptor(uri, "r") } returns descriptor
+        lastDescriptor = descriptor
+        try {
+            return source.open(CONTENT_URI)!!
+        } finally {
+            unmockkStatic(DocumentsContract::class, Environment::class)
+        }
     }
 
     @Test
