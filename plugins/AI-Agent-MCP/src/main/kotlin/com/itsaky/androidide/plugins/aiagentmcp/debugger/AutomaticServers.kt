@@ -158,7 +158,12 @@ object AutomaticServers {
      *
      * A read that fails with an Exception or a LinkageError leaves the entries as they were; any
      * other Error, an OutOfMemoryError above all, propagates to the caller. So does one from a
-     * change or endpoint listener.
+     * change or endpoint listener, or from closing the session of an entry that went away. Such an
+     * Error comes after the new entries are stored, so it skips what was still to run for this
+     * read: the remaining endpoint listeners, the reset of a refused credential for the remaining
+     * moved entries, and the change listeners. No later read repeats them, since it finds those
+     * entries unchanged. That is accepted rather than guarded against: the Error is the process
+     * failing, and the IDE's uncaught-exception handler, which it is on its way to, ends it.
      *
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
