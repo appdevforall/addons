@@ -10,10 +10,13 @@ import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeMcpServer.Companion.
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
+import com.itsaky.androidide.plugins.services.DebuggerEndpoint
 import com.itsaky.androidide.plugins.services.DebuggerEndpointService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -25,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -61,6 +65,14 @@ class McpPluginHostErrorTest {
 
     private fun fake(token: String, vararg tools: org.json.JSONObject) =
         FakeMcpServer(token, tools.toList()).also { servers += it }
+
+    private fun awaitUntil(what: String, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (!condition()) {
+            check(System.nanoTime() < deadline) { "timed out waiting until $what" }
+            Thread.sleep(10)
+        }
+    }
 
     /** Runs [block], turning an Error that escapes it into this test's failure. */
     private fun <T> survives(what: String, block: () -> T): T = try {
@@ -128,6 +140,39 @@ class McpPluginHostErrorTest {
         } finally {
             unmockkObject(McpServerStore)
         }
+    }
+
+    /**
+     * The removal comes first in deactivate, so an Error from it used to skip every later step: the
+     * scope and its 20 s probe kept running, and nothing was released.
+     */
+    @Test
+    fun `a listener removal that throws a linkage error still stops the scope and releases the connections`() {
+        val app = fake("t1", tool("query", true))
+        val service = mockk<DebuggerEndpointService> {
+            every { endpoints } returns listOf(DebuggerEndpoint("com.example.app", app.port, "t1", 0L))
+        }
+        every { context.services.get(DebuggerEndpointService::class.java) } returns service
+        val id = AutomaticServers.idFor("com.example.app")
+        assertTrue(plugin.activate())
+        val job = requireNotNull(plugin.scopeJob)
+        awaitUntil("the activation listed the tools") { McpToolCatalog.tools(id).isNotEmpty() }
+        every { context.removePluginLifecycleListener(any()) } throws
+            AbstractMethodError("PluginContext.removePluginLifecycleListener")
+
+        val escaped = try {
+            plugin.deactivate()
+            null
+        } catch (e: Error) {
+            e
+        } finally {
+            every { context.removePluginLifecycleListener(any()) } just Runs
+        }
+
+        assertTrue("the activation's scope must be stopped", job.isCancelled)
+        assertTrue("the automatic entries must be released", AutomaticServers.servers().isEmpty())
+        assertTrue("the cached tools must be released", McpToolCatalog.tools(id).isEmpty())
+        assertNull("deactivate let $escaped escape", escaped)
     }
 
     @Test

@@ -253,7 +253,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     override fun deactivate(): Boolean = try {
-        context.removePluginLifecycleListener(aiCoreLifecycle)
+        // Guarded like dispose's: a host whose plugin-api differs answers with a LinkageError, and
+        // one escaping here would skip every step below, leaving the scope and its probe running.
+        runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
+            .onFailure { e -> context.logger.warn("McpPlugin: could not remove the lifecycle listener", e) }
         McpServerStore.removeChangeListener(settingsChanged)
         AutomaticServers.removeChangeListener(settingsChanged)
         McpServerHealth.removeChangeListener(healthChanged)
