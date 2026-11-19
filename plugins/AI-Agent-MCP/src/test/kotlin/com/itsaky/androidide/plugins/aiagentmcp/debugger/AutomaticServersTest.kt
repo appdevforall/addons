@@ -242,6 +242,43 @@ class AutomaticServersTest {
         }
     }
 
+    /** Guarded like the change listeners: the process failing is not a relist that failed. */
+    @Test
+    fun `an endpoint listener that throws an OutOfMemoryError reaches the caller`() {
+        var current = listOf(endpoint())
+        AutomaticServers.install { current }
+        val listener: (String) -> Unit = { throw OutOfMemoryError("relisting a relaunched app") }
+        AutomaticServers.addEndpointListener(listener)
+        try {
+            current = listOf(endpoint(port = 4001))
+
+            assertThrows(OutOfMemoryError::class.java) { AutomaticServers.refresh() }
+        } finally {
+            AutomaticServers.removeEndpointListener(listener)
+        }
+    }
+
+    /** The other half of that guard: a host whose plugin-api differs costs only the one listener. */
+    @Test
+    fun `an endpoint listener that throws a linkage error costs only its own call`() {
+        var current = listOf(endpoint())
+        AutomaticServers.install { current }
+        val asked = mutableListOf<String>()
+        val failing: (String) -> Unit = { throw AbstractMethodError("ToolSourceRegistry.notifyToolsChanged") }
+        val working: (String) -> Unit = { asked += it }
+        AutomaticServers.addEndpointListener(failing)
+        AutomaticServers.addEndpointListener(working)
+        try {
+            current = listOf(endpoint(port = 4001))
+
+            assertTrue(AutomaticServers.refresh())
+            assertEquals(listOf(AutomaticServers.idFor("com.example.app")), asked)
+        } finally {
+            AutomaticServers.removeEndpointListener(failing)
+            AutomaticServers.removeEndpointListener(working)
+        }
+    }
+
     @Test
     fun `an entry that disappears has its health and cached tools forgotten`() {
         var current = listOf(endpoint())

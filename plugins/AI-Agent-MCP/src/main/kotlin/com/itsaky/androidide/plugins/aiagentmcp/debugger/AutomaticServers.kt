@@ -118,6 +118,9 @@ object AutomaticServers {
     /**
      * Registers [listener], called with the id of an entry that appeared or whose port or token
      * changed, so the owner can list its tools at once instead of at the next probe.
+     *
+     * Guarded like the change listeners: an Exception or a LinkageError from [listener] costs only
+     * that call, and any other Error propagates to [refresh]'s caller; see [runCatchingRecoverable].
      */
     fun addEndpointListener(listener: (String) -> Unit) {
         endpointListeners.add(listener)
@@ -140,7 +143,8 @@ object AutomaticServers {
      * already replaced.
      *
      * A read that fails with an Exception or a LinkageError leaves the entries as they were; any
-     * other Error, an OutOfMemoryError above all, propagates to the caller.
+     * other Error, an OutOfMemoryError above all, propagates to the caller. So does one from a
+     * change or endpoint listener.
      *
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
@@ -197,7 +201,7 @@ object AutomaticServers {
         for (id in moved) {
             // A refused credential is not final for this entry: the new one has not been tried.
             McpServerHealth.credentialChanged(id)
-            for (l in endpointListeners) runCatching { l(id) }
+            for (l in endpointListeners) runCatchingRecoverable { l(id) }
         }
         if (changed) fireChanged()
         return changed
