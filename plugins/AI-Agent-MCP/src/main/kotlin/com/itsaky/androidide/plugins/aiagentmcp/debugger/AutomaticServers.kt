@@ -89,6 +89,11 @@ object AutomaticServers {
     /**
      * As [install], for a source that may be superseded while its first read is blocked.
      *
+     * The first read tells no endpoint listener (see [addEndpointListener]): whoever installs a
+     * source lists every entry straight after, as the plugin's activation does with
+     * `McpToolCatalog.refreshAll`, and a listener told of each entry would list it a second time.
+     * Change listeners are told as on any read.
+     *
      * @param keepGoing false once the activation installing [source] is over. The first read blocks
      *   and cannot be cancelled, so an activation that ended during it must neither keep [source]
      *   nor publish what it read: deactivation has already cleared everything, and a later
@@ -99,7 +104,7 @@ object AutomaticServers {
             if (!keepGoing()) return
             this.source = source
         }
-        refresh(keepGoing)
+        readEndpoints(keepGoing, tellEndpointListeners = false)
     }
 
     /** Adapts the host's service. A host without the service, or without the permission, is no source. */
@@ -107,23 +112,32 @@ object AutomaticServers {
         read().map { AutomaticEndpoint(it.applicationId, it.port, it.token) }
     }
 
+    /**
+     * Registers [listener], called after the set of entries, a port, a token or a tool list
+     * changed. Adding one already registered does nothing, so a host that activates the plugin
+     * twice still gets one call per change, and one [removeChangeListener] takes it out.
+     */
     fun addChangeListener(listener: () -> Unit) {
-        listeners.add(listener)
+        listeners.addIfAbsent(listener)
     }
 
     fun removeChangeListener(listener: () -> Unit) {
         listeners.remove(listener)
     }
 
+    /** How many change listeners are registered; a test seam for a listener registered twice. */
+    internal val changeListenerCount: Int get() = listeners.size
+
     /**
      * Registers [listener], called with the id of an entry that appeared or whose port or token
-     * changed, so the owner can list its tools at once instead of at the next probe.
+     * changed, so the owner can list its tools at once instead of at the next probe. Adding one
+     * already registered does nothing, as for [addChangeListener].
      *
      * Guarded like the change listeners: an Exception or a LinkageError from [listener] costs only
      * that call, and any other Error propagates to [refresh]'s caller; see [runCatchingRecoverable].
      */
     fun addEndpointListener(listener: (String) -> Unit) {
-        endpointListeners.add(listener)
+        endpointListeners.addIfAbsent(listener)
     }
 
     fun removeEndpointListener(listener: (String) -> Unit) {
@@ -149,7 +163,15 @@ object AutomaticServers {
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
      */
-    fun refresh(keepGoing: () -> Boolean = { true }): Boolean {
+    fun refresh(keepGoing: () -> Boolean = { true }): Boolean =
+        readEndpoints(keepGoing, tellEndpointListeners = true)
+
+    /**
+     * [refresh] itself.
+     *
+     * @param tellEndpointListeners false for [install]'s first read; see there.
+     */
+    private fun readEndpoints(keepGoing: () -> Boolean, tellEndpointListeners: Boolean): Boolean {
         val (read, ticket) = synchronized(this) {
             val current = source ?: return false
             current to ++readsStarted
@@ -201,7 +223,7 @@ object AutomaticServers {
         for (id in moved) {
             // A refused credential is not final for this entry: the new one has not been tried.
             McpServerHealth.credentialChanged(id)
-            for (l in endpointListeners) runCatchingRecoverable { l(id) }
+            if (tellEndpointListeners) for (l in endpointListeners) runCatchingRecoverable { l(id) }
         }
         if (changed) fireChanged()
         return changed

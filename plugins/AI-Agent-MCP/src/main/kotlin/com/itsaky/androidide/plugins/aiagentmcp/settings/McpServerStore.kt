@@ -49,15 +49,22 @@ object McpServerStore {
      */
     private val lock = Any()
 
-    /** Registers [listener], called after any change to the servers or their toggles. */
+    /**
+     * Registers [listener], called after any change to the servers or their toggles. Adding one
+     * already registered does nothing, so a host that activates the plugin twice still gets one
+     * call per change, and one [removeChangeListener] takes it out.
+     */
     fun addChangeListener(listener: () -> Unit) {
-        listeners.add(listener)
+        listeners.addIfAbsent(listener)
     }
 
     /** Removes a listener added by [addChangeListener]. */
     fun removeChangeListener(listener: () -> Unit) {
         listeners.remove(listener)
     }
+
+    /** How many change listeners are registered; a test seam for a listener registered twice. */
+    internal val changeListenerCount: Int get() = listeners.size
 
     /**
      * Every configured server, in the order they were added.

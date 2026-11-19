@@ -201,7 +201,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
     /**
      * Lists an automatic entry's tools as soon as its endpoint appears or changes, so a relaunched
-     * app's next call does not wait for the probe's cadence.
+     * app's next call does not wait for the probe's cadence. Registered by [activate] beside the
+     * change listeners, and removed with them. The activation's own install of the endpoints tells
+     * it nothing (see [AutomaticServers.install]): the `refreshAll` that follows lists those entries.
      */
     private val relistAutomatic: (String) -> Unit = { id ->
         scope.launch {
@@ -227,8 +229,13 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         val active = swapScope(newScope())
         activationJob = active.coroutineContext[Job]
         toolSource = McpToolSource()
+        // Here, not on the coroutine below: a lifecycle call registers and removes every listener,
+        // so a late coroutine of an activation that has ended cannot add one, or remove the next
+        // activation's. The add methods ignore a listener already registered, so a host that
+        // activates twice still registers each once.
         McpServerStore.addChangeListener(settingsChanged)
         AutomaticServers.addChangeListener(settingsChanged)
+        AutomaticServers.addEndpointListener(relistAutomatic)
         McpServerHealth.addChangeListener(healthChanged)
         context.addPluginLifecycleListener(aiCoreLifecycle)
 
@@ -259,14 +266,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             .onFailure { e -> context.logger.warn("McpPlugin: could not remove the lifecycle listener", e) }
         McpServerStore.removeChangeListener(settingsChanged)
         AutomaticServers.removeChangeListener(settingsChanged)
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         // Before the connections are closed: an in-flight refresh would otherwise repopulate the
         // catalogue and the session map straight after they were cleared.
         stopScope()
-        // After the scope ends, not before: startDebuggerEntry adds this listener and then checks
-        // the scope, so one added late is removed by that check and one added early is removed here.
-        AutomaticServers.removeEndpointListener(relistAutomatic)
         releaseConnections()
         true
     } catch (e: Exception) {
@@ -278,10 +283,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
         AutomaticServers.removeChangeListener(settingsChanged)
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         stopScope()
-        AutomaticServers.removeEndpointListener(relistAutomatic)
         releaseConnections()
         pluginContext = null
         context.logger.info("McpPlugin: disposed")
@@ -332,20 +337,18 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     /**
-     * Installs the host's endpoints and starts listening for changes, unless the activation ends first.
+     * Installs the host's endpoints, unless the activation ends first.
      *
      * The host's database read blocks and cancellation cannot interrupt it, so [keepGoing] is
-     * consulted around it. The listener is re-checked after it is added: [deactivate] ends the scope
-     * before it removes the listener, so one added in between is seen here and taken out again.
+     * consulted before it and, inside [AutomaticServers.install], after it. No listener is added
+     * or removed here: [activate] registers [relistAutomatic] and [deactivate] removes it, so this
+     * call, which can outlive its activation, cannot touch the listener a later activation relies on.
      *
      * @param keepGoing false once this activation is over.
      */
     internal fun startDebuggerEntry(keepGoing: () -> Boolean) {
         if (!keepGoing()) return
         installDebuggerEndpoints(keepGoing)
-        if (!keepGoing()) return
-        AutomaticServers.addEndpointListener(relistAutomatic)
-        if (!keepGoing()) AutomaticServers.removeEndpointListener(relistAutomatic)
     }
 
     /**

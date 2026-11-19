@@ -18,7 +18,9 @@ import org.junit.Test
 
 /**
  * An activation that ends during the host's blocking first read of the debugger endpoints must
- * leave no source and no listener behind: nothing removes them after [McpPlugin.deactivate].
+ * leave no source behind: nothing removes it after [McpPlugin.deactivate]. Nor does the read add
+ * or remove a listener: [McpPlugin.activate] owns that, so a late read cannot take away the
+ * listener of the activation that replaced its own.
  */
 class McpPluginDebuggerStartTest {
 
@@ -55,7 +57,7 @@ class McpPluginDebuggerStartTest {
     }
 
     @Test
-    fun `an activation that ends during the first read installs nothing and adds no listener`() {
+    fun `an activation that ends during the first read installs nothing and touches no listener`() {
         val listeners = AutomaticServers.endpointListenerCount
         val active = AtomicBoolean(true)
         val start = Thread { plugin.startDebuggerEntry { active.get() } }.also { it.start() }
@@ -70,12 +72,12 @@ class McpPluginDebuggerStartTest {
     }
 
     @Test
-    fun `a live activation installs the entry and the listener once`() {
+    fun `a live activation installs the entry and leaves the listener to activate`() {
         val listeners = AutomaticServers.endpointListenerCount
         release.countDown()
         plugin.startDebuggerEntry { true }
 
         assertEquals(1, AutomaticServers.servers().size)
-        assertEquals(listeners + 1, AutomaticServers.endpointListenerCount)
+        assertEquals(listeners, AutomaticServers.endpointListenerCount)
     }
 }

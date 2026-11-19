@@ -104,6 +104,30 @@ class AutomaticServersTest {
         assertEquals(listOf(AutomaticServers.idFor("com.example.app")), asked)
     }
 
+    /**
+     * The plugin registers its endpoint listener on activation, before it installs the source, and
+     * lists every entry itself straight after the install. A listener told of each entry by the
+     * install's read would list each one a second time.
+     */
+    @Test
+    fun `the install's first read tells no endpoint listener and a later change does`() {
+        var current = listOf(endpoint(), endpoint(app = "com.example.other", port = 4001))
+        val asked = mutableListOf<String>()
+        val listener: (String) -> Unit = { asked += it }
+        AutomaticServers.addEndpointListener(listener)
+        try {
+            AutomaticServers.install { current }
+            assertEquals(2, AutomaticServers.servers().size)
+            assertEquals("the install's read told the listener", emptyList<String>(), asked)
+
+            current = listOf(endpoint(port = 4002, token = "t2"), endpoint(app = "com.example.other", port = 4001))
+            AutomaticServers.refresh()
+            assertEquals(listOf(AutomaticServers.idFor("com.example.app")), asked)
+        } finally {
+            AutomaticServers.removeEndpointListener(listener)
+        }
+    }
+
     @Test
     fun `a relaunch lets the probe ask an entry that had refused its credential`() {
         var current = listOf(endpoint())

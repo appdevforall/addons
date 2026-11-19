@@ -79,15 +79,22 @@ object McpServerHealth {
         fireChanged()
     }
 
-    /** Registers [listener], called after any server's health changes. */
+    /**
+     * Registers [listener], called after any server's health changes. Adding one already
+     * registered does nothing, so a host that activates the plugin twice still gets one call per
+     * change, and one [removeChangeListener] takes it out.
+     */
     fun addChangeListener(listener: () -> Unit) {
-        listeners.add(listener)
+        listeners.addIfAbsent(listener)
     }
 
     /** Removes a listener added by [addChangeListener]. */
     fun removeChangeListener(listener: () -> Unit) {
         listeners.remove(listener)
     }
+
+    /** How many change listeners are registered; a test seam for a listener registered twice. */
+    internal val changeListenerCount: Int get() = listeners.size
 
     /** Stores [health], telling the listeners only when it differs from what was there. */
     private fun set(serverId: String, health: Health) {
