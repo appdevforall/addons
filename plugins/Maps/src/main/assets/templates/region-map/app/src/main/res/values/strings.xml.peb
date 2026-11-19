@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">${{APP_NAME}}</string>
+    <string name="msg_location_permission_required">Location permission is required to centre the map on your position.</string>
+</resources>

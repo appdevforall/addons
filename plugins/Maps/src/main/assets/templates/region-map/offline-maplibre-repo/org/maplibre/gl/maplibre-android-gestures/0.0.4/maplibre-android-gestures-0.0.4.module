@@ -1,0 +1,113 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.maplibre.gl",
+    "module": "maplibre-android-gestures",
+    "version": "0.0.4",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.9"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "maplibre-android-gestures-0.0.4.aar",
+          "url": "maplibre-android-gestures-0.0.4.aar",
+          "size": 42725,
+          "sha512": "370ee0bf8b7373b29bbc9c418fd3940d7121cf3cbe441d1618351775ffafcb3d4ca62d24e117a93655409e4176cb8618e927e8a53ce0fed176d854c420c8da68",
+          "sha256": "44ff4fc2dd8bfbcf54a06f219e7ab40a2062eb6b4a10dcbf1f4e02b4a30c61af",
+          "sha1": "7387c25d908d07f8a57ee5648f99dc24e7ad416a",
+          "md5": "c2bea5deebe02566cdbed4e640b544b5"
+        }
+      ]
+    },
+    {
+      "name": "releaseRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.8.2"
+          }
+        },
+        {
+          "group": "androidx.core",
+          "module": "core-ktx",
+          "version": {
+            "requires": "1.13.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "maplibre-android-gestures-0.0.4.aar",
+          "url": "maplibre-android-gestures-0.0.4.aar",
+          "size": 42725,
+          "sha512": "370ee0bf8b7373b29bbc9c418fd3940d7121cf3cbe441d1618351775ffafcb3d4ca62d24e117a93655409e4176cb8618e927e8a53ce0fed176d854c420c8da68",
+          "sha256": "44ff4fc2dd8bfbcf54a06f219e7ab40a2062eb6b4a10dcbf1f4e02b4a30c61af",
+          "sha1": "7387c25d908d07f8a57ee5648f99dc24e7ad416a",
+          "md5": "c2bea5deebe02566cdbed4e640b544b5"
+        }
+      ]
+    },
+    {
+      "name": "releaseSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "maplibre-android-gestures-0.0.4-sources.jar",
+          "url": "maplibre-android-gestures-0.0.4-sources.jar",
+          "size": 56021,
+          "sha512": "7676fc802677c742b54e78942addffd5d7d2417b86dfe2bc33eb97e8bb66b5223f3c8e25ed85cbb03edf4c6cc89f8d66173e1d4565a9a7a8aa808de033740595",
+          "sha256": "155574301748bbae2aa39cac8a94865eb671e0215b1140a022d5c5bbe554d26b",
+          "sha1": "a83cfab9be23a09237e887ed6d5307a1a0a8fbcd",
+          "md5": "2d32fef8be9dd68468122840931e0118"
+        }
+      ]
+    }
+  ]
+}

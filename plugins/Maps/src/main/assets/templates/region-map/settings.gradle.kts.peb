@@ -1,0 +1,24 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        // Project-local Maven repo bundled inside this project (see
+        // `offline-maplibre-repo/`). It vendors MapLibre 13.1.0 + the
+        // androidx/material transitive closure that CoGo's bundled offline repo
+        // lacks, so the app builds with ZERO network on an offline device.
+        // CoGo's settings plugin SUPPLEMENTS (never clears) repositories, so
+        // offline this coexists with the bundled localMvnRepository; online it
+        // coexists with google()/mavenCentral() below. (ADFA-2436 / E13)
+        maven { url = uri("${rootDir}/offline-maplibre-repo") }
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "${{APP_NAME}}"
+include(":app")
