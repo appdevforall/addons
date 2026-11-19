@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentmcp.plugin
 
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticEndpoint
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
@@ -8,6 +9,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeMcpServer
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeMcpServer.Companion.tool
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
+import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.DebuggerEndpoint
@@ -28,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -173,6 +176,64 @@ class McpPluginHostErrorTest {
         assertTrue("the automatic entries must be released", AutomaticServers.servers().isEmpty())
         assertTrue("the cached tools must be released", McpToolCatalog.tools(id).isEmpty())
         assertNull("deactivate let $escaped escape", escaped)
+    }
+
+    /** Every listener registry the plugin registers with, so a test can see one left behind. */
+    private fun listenerCounts() = mapOf(
+        "AutomaticServers change" to AutomaticServers.changeListenerCount,
+        "AutomaticServers endpoint" to AutomaticServers.endpointListenerCount,
+        "McpServerStore change" to McpServerStore.changeListenerCount,
+        "McpServerHealth change" to McpServerHealth.changeListenerCount,
+    )
+
+    /**
+     * The lifecycle listener is added after the scope has started and the change listeners are in.
+     * The Error used to escape activate, which caught only an Exception, and the host need not call
+     * deactivate after a failed activate: the scope and the listeners were left behind. Now the
+     * failure costs only the listener, as its removal's does in deactivate.
+     */
+    @Test
+    fun `a lifecycle listener the host cannot add costs only that listener`() {
+        every { context.addPluginLifecycleListener(any()) } throws
+            AbstractMethodError("PluginContext.addPluginLifecycleListener")
+        val before = listenerCounts()
+
+        val activated = survives("activate") { plugin.activate() }
+
+        assertTrue("the activation must carry on", activated)
+        assertTrue("the activation's scope must be live", requireNotNull(plugin.scopeJob).isActive)
+        assertEquals(before.mapValues { it.value + 1 }, listenerCounts())
+        plugin.deactivate()
+        assertEquals(before, listenerCounts())
+    }
+
+    @Test
+    fun `an activation that fails with a linkage error leaves no scope and no listener behind`() {
+        assertFailedActivationLeavesNothing(AbstractMethodError("PluginLogger.info"))
+    }
+
+    @Test
+    fun `an activation that fails with an exception leaves no scope and no listener behind`() {
+        assertFailedActivationLeavesNothing(IllegalStateException("PluginLogger.info"))
+    }
+
+    /**
+     * Fails an activation after it has started its scope and registered its listeners, at the one
+     * host call left unguarded by then: the note that AI Core is not active yet.
+     * @param failure what that call throws.
+     */
+    private fun assertFailedActivationLeavesNothing(failure: Throwable) {
+        val logger = mockk<PluginLogger>(relaxed = true)
+        every { context.logger } returns logger
+        every { context.getPluginService(any(), ToolSourceRegistry::class.java) } returns null
+        every { logger.info(match { it.contains("AI Core is not active") }) } throws failure
+        val before = listenerCounts()
+
+        val activated = survives("activate") { plugin.activate() }
+
+        assertFalse("a failed activation must say so", activated)
+        assertTrue("the failed activation's scope must be stopped", requireNotNull(plugin.activationJob).isCancelled)
+        assertEquals("listeners left behind", before, listenerCounts())
     }
 
     @Test

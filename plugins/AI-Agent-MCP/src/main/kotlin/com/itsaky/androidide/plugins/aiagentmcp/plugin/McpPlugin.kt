@@ -237,7 +237,11 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         AutomaticServers.addChangeListener(settingsChanged)
         AutomaticServers.addEndpointListener(relistAutomatic)
         McpServerHealth.addChangeListener(healthChanged)
-        context.addPluginLifecycleListener(aiCoreLifecycle)
+        // Guarded like the removal in teardown: a host whose plugin-api differs answers with a
+        // LinkageError. That costs only the re-registration when AI Core activates later; with AI
+        // Core already active, the registration below still works.
+        runCatchingRecoverable { context.addPluginLifecycleListener(aiCoreLifecycle) }
+            .onFailure { e -> context.logger.warn("McpPlugin: could not add the lifecycle listener", e) }
 
         if (!registerToolSource()) {
             context.logger.info("McpPlugin: AI Core is not active yet; will register when it is")
@@ -255,13 +259,50 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         }
         true
     } catch (e: Exception) {
-        context.logger.error("McpPlugin: activation failed", e)
-        false
+        activationFailed(e)
+    } catch (e: LinkageError) {
+        // A host call outside the guards above, from a host whose plugin-api differs.
+        activationFailed(e)
+    }
+
+    /**
+     * Undoes a failed [activate] and logs why.
+     *
+     * The host need not call [deactivate] after an activation that failed, so nothing else would
+     * stop the scope it had started or remove the listeners it had registered by then.
+     *
+     * @param e what ended the activation.
+     * @return false, for [activate] to return.
+     */
+    private fun activationFailed(e: Throwable): Boolean {
+        teardown()
+        runCatchingRecoverable { context.logger.error("McpPlugin: activation failed", e) }
+        return false
     }
 
     override fun deactivate(): Boolean = try {
-        // Guarded like dispose's: a host whose plugin-api differs answers with a LinkageError, and
-        // one escaping here would skip every step below, leaving the scope and its probe running.
+        teardown()
+        true
+    } catch (e: Exception) {
+        context.logger.error("McpPlugin: deactivation failed", e)
+        false
+    }
+
+    override fun dispose() {
+        teardown()
+        pluginContext = null
+        context.logger.info("McpPlugin: disposed")
+    }
+
+    /**
+     * Stops what [activate] started: the lifecycle and change listeners, the tool source's
+     * registration, the scope with its work, and the connections. The one teardown path, shared by
+     * [deactivate], [dispose] and a failed [activate], so the three cannot drift apart. Safe to run
+     * on an activation that got only part of the way, and on none at all.
+     */
+    private fun teardown() {
+        // Guarded: a host whose plugin-api differs answers with a LinkageError, and one escaping
+        // here would skip every step below, leaving the scope and its probe running.
         runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
             .onFailure { e -> context.logger.warn("McpPlugin: could not remove the lifecycle listener", e) }
         McpServerStore.removeChangeListener(settingsChanged)
@@ -273,23 +314,6 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         // catalogue and the session map straight after they were cleared.
         stopScope()
         releaseConnections()
-        true
-    } catch (e: Exception) {
-        context.logger.error("McpPlugin: deactivation failed", e)
-        false
-    }
-
-    override fun dispose() {
-        runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
-        McpServerStore.removeChangeListener(settingsChanged)
-        AutomaticServers.removeChangeListener(settingsChanged)
-        AutomaticServers.removeEndpointListener(relistAutomatic)
-        McpServerHealth.removeChangeListener(healthChanged)
-        unregisterToolSource()
-        stopScope()
-        releaseConnections()
-        pluginContext = null
-        context.logger.info("McpPlugin: disposed")
     }
 
     /**
