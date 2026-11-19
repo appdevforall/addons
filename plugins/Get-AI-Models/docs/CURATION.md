@@ -59,10 +59,13 @@ All 10 entries passed that final HEAD cross-check, re-run on 2026-11-18 after th
 
 ## Catalog entries (maintainer-selected)
 
-**This catalog is a maintainer override, not a gate-derived list.** The first six models below were
-named explicitly by the ticket owner, replacing the eleven gate-passing entries that shipped
-earlier; the seventh was requested later in ADFA-6321, and the last three in ADFA-7213. Three of the six break at least one hard gate; those gates are therefore **no longer enforced** in
-`CatalogLoader` (licence, 16k context) nor asserted in `CatalogLoaderTest`.
+**This catalog is a maintainer override, not a gate-derived list.** It has ten entries. The first
+six in the table below were named explicitly by the ticket owner, replacing the eleven gate-passing
+entries that shipped earlier; `qwen2-5-coder-1-5b-instruct-q4_k_m` was requested later in
+ADFA-6321, and the last three in ADFA-7213. Six of the ten break at least one hard gate — four of
+the owner's first six, plus SmolLM2 1.7B and OLMo 2 1B — as the *Gate waived* column shows. The
+licence and 16k-context gates are therefore **no longer enforced** in `CatalogLoader` nor asserted
+in `CatalogLoaderTest`.
 
 | Entry id | Base model | GGUF uploader | Ctx | Licence | Gate waived |
 |---|---|---|---|---|---|
@@ -142,8 +145,9 @@ Each row's evidence was read from the same API, not from recollection.
    want from `/api/models/{repo}/tree/{sha}?recursive=true`.
 3. Build the URL as `https://huggingface.co/{repo}/resolve/{sha}/{file}` — a commit sha, never
    `main`, or a re-upload would break the pinned checksum.
-4. `HEAD` that URL and confirm `Content-Length` matches `size` and `X-Linked-Etag` matches
-   `lfs.oid`.
+4. `HEAD` that URL (without following the redirect) and confirm `X-Linked-Size` matches `size`
+   and `X-Linked-Etag` matches `lfs.oid`. `Content-Length` on that 302 is the redirect body, not
+   the file.
 5. Write the strengths-and-weaknesses paragraph for **that quantization**, not for the model family,
    and say what it is bad at.
 6. Add the row here, then run `../gradlew test` — `CatalogLoaderTest` re-validates the whole asset.
