@@ -27,10 +27,16 @@ private const val TAG = "$LOG_PREFIX.McpToolSource"
  * Only tools the user switched on are offered: one popular GitHub server advertises around ninety,
  * which would exhaust a phone-sized context window on its own, so the toggle defaults to off and
  * this class never widens it.
+ *
+ * @param executor where remote calls run; see [newExecutor]. A seam, so a test can wait for a
+ *   call's worker to finish rather than poll for something it might still send.
  */
-class McpToolSource :
-    ToolSourceRegistry.StatusReportingToolSource,
+class McpToolSource internal constructor(
+    private val executor: ExecutorService,
+) : ToolSourceRegistry.StatusReportingToolSource,
     ToolSourceRegistry.GroupedToolSource {
+
+    constructor() : this(newExecutor())
 
     /** Calls in flight, so a stopped agent run can drop the socket instead of waiting it out. */
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
@@ -50,17 +56,10 @@ class McpToolSource :
     /**
      * Running calls that were cancelled. The session drop in [cancel] reaches only a request in
      * flight; one landing between the two attempts of the endpoint retry finds no session, so the
-     * retry reads this before it sends anything.
+     * retry reads this before it sends anything. So does one landing while an attempt looks its
+     * session up, which is why the attempt reads it again once the session is in [liveSessions].
      */
     private val cancelled: MutableSet<String> = ConcurrentHashMap.newKeySet()
-
-    /**
-     * Remote calls run here rather than on the common pool: an MCP call blocks on a socket for as
-     * long as the read timeout, and the common pool is sized for CPU work.
-     */
-    private val executor: ExecutorService = Executors.newCachedThreadPool { runnable ->
-        Thread(runnable, "mcp-tool-call").apply { isDaemon = true }
-    }
 
     override fun getProviderId(): String = McpPlugin.PLUGIN_ID
 
@@ -162,6 +161,10 @@ class McpToolSource :
             val session = McpConnections.session(target)
             liveSessions[callId] = session
             try {
+                // Again, now the session is published: a cancel that landed during the lookup
+                // found no session to drop, and only its flag can stop the request. One landing
+                // after this read finds the session and drops it.
+                if (callId in cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
                 session.callTool(tool.name, arguments)
             } finally {
                 liveSessions.remove(callId)
@@ -347,5 +350,13 @@ class McpToolSource :
     private companion object {
         /** Shown wherever tool provenance is surfaced. */
         const val DISPLAY_NAME = "MCP servers"
+
+        /**
+         * Remote calls run here rather than on the common pool: an MCP call blocks on a socket for
+         * as long as the read timeout, and the common pool is sized for CPU work.
+         */
+        fun newExecutor(): ExecutorService = Executors.newCachedThreadPool { runnable ->
+            Thread(runnable, "mcp-tool-call").apply { isDaemon = true }
+        }
     }
 }
