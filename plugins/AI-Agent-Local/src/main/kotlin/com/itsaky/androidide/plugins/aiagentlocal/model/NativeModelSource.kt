@@ -3,13 +3,13 @@ package com.itsaky.androidide.plugins.aiagentlocal.model
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
-import android.provider.DocumentsContract
 import java.io.Closeable
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Paths
 
 /**
  * A model file held open for the native loader.
@@ -154,6 +154,19 @@ internal fun probeFilePath(path: String, onError: (Throwable) -> Unit): SourceRe
 }
 
 /**
+ * The shared-storage path for a descriptor's link target on the emulated volume, or null for
+ * anything else (removable storage, app-private files). Inside the app's mount namespace a
+ * lower-filesystem descriptor already links to `/storage/emulated/<user>/<path>` — measured on
+ * API 36 — while the same descriptor seen from outside the sandbox links to
+ * `/data/media/<user>/<path>`; both name the one file. ADFA-7214.
+ */
+internal fun sharedStoragePathFor(linkTarget: String): String? =
+    EMULATED_VOLUME_PATH.matchEntire(linkTarget)?.destructured
+        ?.let { (user, path) -> "/storage/emulated/$user/$path" }
+
+private val EMULATED_VOLUME_PATH = Regex("""(?:/storage/emulated|/data/media)/(\d+)/(.+)""")
+
+/**
  * Opens the user's selected model for the native loader, in place and without copying it.
  * An interface so the backend's load path can be exercised without a device.
  */
@@ -192,10 +205,17 @@ interface NativeModelSource {
  * [NativeModelSource] over the document provider and the filesystem.
  *
  * @param context supplies the resolver holding the picker's persisted read grant
+ * @param sharedStoragePathOf maps a descriptor's procfs path to the same file's shared-storage
+ *   path, or null; a parameter so tests can stand in for `/proc` and `/storage`
  * @param onError reports a failed open, so a bare "model unavailable" can still be explained
  */
 class ContentNativeModelSource(
     private val context: Context,
+    private val sharedStoragePathOf: (String) -> String? = { procfsPath ->
+        runCatching { Files.readSymbolicLink(Paths.get(procfsPath)).toString() }
+            .getOrNull()
+            ?.let(::sharedStoragePathFor)
+    },
     private val onError: (String, Throwable) -> Unit = { _, _ -> },
 ) : NativeModelSource {
 
@@ -208,19 +228,20 @@ class ContentNativeModelSource(
      * only mode asked for, which is all the persisted grant covers. The descriptor need not be a
      * file — a pipe is reported through [OpenModelFile.isSeekable] for the caller to refuse.
      *
-     * With FUSE passthrough (API 36) a shared-storage descriptor is on the lower filesystem, owned
-     * by MediaProvider, so the procfs path cannot be re-opened by name. The same document's path
-     * under shared storage can — the IDE holds all-files access — so that is handed over instead,
-     * when it opens and is the same size. The descriptor is then closed: while MediaProvider holds
-     * the file open on the lower filesystem it serves FUSE opens as direct I/O, and llama.cpp's
-     * `mmap` of the path fails with ENODEV. ADFA-7214.
+     * Without FUSE passthrough (Android 11+, any device that does not opt in), MediaProvider
+     * answers for a shared-storage file with a descriptor on the lower filesystem — whether the
+     * document came from the external-storage provider or as a Downloads `msf:` id. Its procfs
+     * path then links to `/data/media/<user>/…`, a MediaProvider-owned inode this app cannot open
+     * by name. The same file's `/storage/emulated/<user>/…` path can — the IDE holds all-files
+     * access — so that is handed over instead, when it opens and is the same size. The descriptor
+     * is then closed: while MediaProvider holds the file open on the lower filesystem it serves
+     * FUSE opens as direct I/O, and llama.cpp's `mmap` of the path fails with ENODEV. ADFA-7214.
      */
     private fun openDocument(uriString: String): OpenModelFile? = try {
-        val uri = Uri.parse(uriString)
-        context.contentResolver.openFileDescriptor(uri, "r")?.let { descriptor ->
+        context.contentResolver.openFileDescriptor(Uri.parse(uriString), "r")?.let { descriptor ->
             val procfs = OpenModelFile("$FD_DIR${descriptor.fd}", descriptor.statSize, descriptor)
             if (procfs.isReopenable()) return@let procfs
-            sharedStoragePathOf(uri)
+            sharedStoragePathOf(procfs.nativePath)
                 ?.takeIf { File(it).length() == descriptor.statSize }
                 ?.let { OpenModelFile(it, descriptor.statSize, null) }
                 ?.takeIf { it.isReopenable() }
@@ -229,20 +250,6 @@ class ContentNativeModelSource(
         }
     } catch (e: Exception) {
         onError("could not open the selected model $uriString", e)
-        null
-    }
-
-    /**
-     * The filesystem path of a document on the primary shared volume, from its
-     * `primary:<relative path>` id; null for any other provider or volume.
-     */
-    private fun sharedStoragePathOf(uri: Uri): String? = try {
-        if (uri.authority != EXTERNAL_STORAGE_AUTHORITY) null
-        else DocumentsContract.getDocumentId(uri)
-            .split(':', limit = 2)
-            .takeIf { it.size == 2 && it[0] == PRIMARY_VOLUME }
-            ?.let { File(Environment.getExternalStorageDirectory(), it[1]).absolutePath }
-    } catch (_: Exception) {
         null
     }
 
@@ -295,7 +302,5 @@ class ContentNativeModelSource(
     private companion object {
         const val CONTENT_SCHEME = "content://"
         const val FD_DIR = "/proc/self/fd/"
-        const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
-        const val PRIMARY_VOLUME = "primary"
     }
 }

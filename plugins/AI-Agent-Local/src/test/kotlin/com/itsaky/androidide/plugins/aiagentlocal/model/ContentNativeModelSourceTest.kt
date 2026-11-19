@@ -4,13 +4,12 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.os.DeadObjectException
-import android.os.Environment
 import android.os.ParcelFileDescriptor
-import android.provider.DocumentsContract
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import io.mockk.verify
 import java.io.File
 import org.junit.After
 import org.junit.Assert.*
@@ -211,60 +210,80 @@ class ContentNativeModelSourceTest {
     }
 
     @Test
-    fun givenASharedStorageDocumentWhoseProcfsPathCannotReopen_whenOpened_thenTheLoaderGetsItsStoragePath() {
-        // ADFA-7214: with FUSE passthrough the procfs path of a Download file is refused by name,
-        // but the same file under shared storage opens. fd 99999 stands in for the refused path.
-        val model = File(temporaryFolder.newFolder("Download"), "model.gguf").apply { writeBytes(ByteArray(64)) }
-        val opened = openSharedStorageDocument(documentId = "primary:Download/model.gguf", statSize = 64L)
+    fun givenADocumentWhoseProcfsPathCannotReopen_whenOpened_thenTheLoaderGetsItsStoragePath() {
+        // ADFA-7214: without FUSE passthrough a Download file's descriptor is on the lower
+        // filesystem and its procfs path is refused by name, but the same file under /storage
+        // opens. fd 99999 stands in for the refused path.
+        val model = temporaryFolder.newFile("model.gguf").apply { writeBytes(ByteArray(64)) }
+        val asked = mutableListOf<String>()
 
+        val (opened, descriptor) = openDocument(statSize = 64L) { asked += it; model.absolutePath }
+
+        assertEquals(listOf("/proc/self/fd/99999"), asked)
         assertEquals(model.absolutePath, opened.nativePath)
         assertEquals(64L, opened.sizeBytes)
         assertTrue(opened.isReopenable())
         // Held open, MediaProvider serves the path as direct I/O and llama.cpp's mmap gets ENODEV.
-        io.mockk.verify { lastDescriptor.close() }
+        verify { descriptor.close() }
     }
 
     @Test
-    fun givenASharedStoragePathOfAnotherSize_whenOpened_thenTheProcfsPathIsKept() {
+    fun givenAStoragePathOfAnotherSize_whenOpened_thenTheProcfsPathIsKept() {
         // A different file at that path is not the picked document; the loader must not get it.
-        File(temporaryFolder.newFolder("Download"), "model.gguf").writeBytes(ByteArray(32))
+        val other = temporaryFolder.newFile("model.gguf").apply { writeBytes(ByteArray(32)) }
 
-        val opened = openSharedStorageDocument(documentId = "primary:Download/model.gguf", statSize = 64L)
+        val (opened, descriptor) = openDocument(statSize = 64L) { other.absolutePath }
 
         assertEquals("/proc/self/fd/99999", opened.nativePath)
         // The procfs path is still the loader's, so its descriptor must stay open.
-        io.mockk.verify(exactly = 0) { lastDescriptor.close() }
+        verify(exactly = 0) { descriptor.close() }
     }
 
     @Test
-    fun givenADocumentOnARemovableVolume_whenOpened_thenTheProcfsPathIsKept() {
-        // Only the primary volume maps to a known path; anything else keeps today's behaviour.
-        File(temporaryFolder.newFolder("Download"), "model.gguf").writeBytes(ByteArray(64))
-
-        val opened = openSharedStorageDocument(documentId = "1A2B-3C4D:Download/model.gguf", statSize = 64L)
+    fun givenAStoragePathThatDoesNotExist_whenOpened_thenTheProcfsPathIsKept() {
+        val (opened, descriptor) = openDocument(statSize = 64L) { "/nonexistent/model.gguf" }
 
         assertEquals("/proc/self/fd/99999", opened.nativePath)
+        verify(exactly = 0) { descriptor.close() }
     }
 
-    private lateinit var lastDescriptor: ParcelFileDescriptor
+    @Test
+    fun givenADescriptorWithNoStoragePath_whenOpened_thenTheProcfsPathIsKept() {
+        // Removable storage, app-private files, anything not on the emulated volume.
+        val (opened, descriptor) = openDocument(statSize = 64L) { null }
 
-    private fun openSharedStorageDocument(documentId: String, statSize: Long): OpenModelFile {
-        val uri = mockk<Uri>(relaxed = true)
-        every { uri.authority } returns "com.android.externalstorage.documents"
-        every { Uri.parse(any()) } returns uri
-        mockkStatic(DocumentsContract::class, Environment::class)
-        every { DocumentsContract.getDocumentId(uri) } returns documentId
-        every { Environment.getExternalStorageDirectory() } returns temporaryFolder.root
+        assertEquals("/proc/self/fd/99999", opened.nativePath)
+        verify(exactly = 0) { descriptor.close() }
+    }
+
+    @Test
+    fun givenEmulatedVolumeLinkTargets_whenMapped_thenTheStoragePathIsUsed() {
+        // Inside the app a lower-FS descriptor (external-storage document or Downloads msf: id)
+        // links to /storage/emulated/<user>/; seen from outside the sandbox, /data/media/<user>/.
+        assertEquals(
+            "/storage/emulated/0/Download/model.gguf",
+            sharedStoragePathFor("/storage/emulated/0/Download/model.gguf"),
+        )
+        assertEquals(
+            "/storage/emulated/0/Download/model.gguf",
+            sharedStoragePathFor("/data/media/0/Download/model.gguf"),
+        )
+        assertEquals("/storage/emulated/10/Models/m.gguf", sharedStoragePathFor("/data/media/10/Models/m.gguf"))
+        assertNull(sharedStoragePathFor("/mnt/media_rw/1A2B-3C4D/model.gguf"))
+        assertNull(sharedStoragePathFor("/data/user/0/com.example/files/model.gguf"))
+        assertNull(sharedStoragePathFor("/storage/emulated/0/"))
+    }
+
+    private fun openDocument(
+        statSize: Long,
+        storagePathOf: (String) -> String?,
+    ): Pair<OpenModelFile, ParcelFileDescriptor> {
         val descriptor = mockk<ParcelFileDescriptor>(relaxed = true)
         every { descriptor.fd } returns 99999
         every { descriptor.statSize } returns statSize
-        every { resolver.openFileDescriptor(uri, "r") } returns descriptor
-        lastDescriptor = descriptor
-        try {
-            return source.open(CONTENT_URI)!!
-        } finally {
-            unmockkStatic(DocumentsContract::class, Environment::class)
-        }
+        every { resolver.openFileDescriptor(any(), "r") } returns descriptor
+        val opened = ContentNativeModelSource(context, sharedStoragePathOf = storagePathOf).open(CONTENT_URI)!!
+        return opened to descriptor
     }
 
     @Test
