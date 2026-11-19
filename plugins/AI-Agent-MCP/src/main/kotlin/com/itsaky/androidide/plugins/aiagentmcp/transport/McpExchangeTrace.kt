@@ -40,6 +40,15 @@ internal class McpExchangeTrace(
     }
 
     /**
+     * As [received], for a body kept only in part: [dropped] more characters came after [body]
+     * and were read and thrown away; the record counts them with what its own cap leaves out.
+     */
+    fun received(body: String, dropped: Long) {
+        val kept = McpExchange.Body.capped(redactor.scrub(body))
+        responseBody = kept.copy(omitted = (kept.omitted + dropped).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+    }
+
+    /**
      * The finished record.
      * @param failure what ended the request early, or null when it ran to the end.
      */

@@ -1,9 +1,11 @@
 package com.itsaky.androidide.plugins.aiagentmcp.transport
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONObject
@@ -46,7 +48,50 @@ open class McpHttpClient(
 
         /** Same-origin redirects followed before giving up, so a redirect loop cannot spin. */
         private const val MAX_REDIRECTS = 5
+
+        /**
+         * Characters of a drained body kept for the connection log: twice what the log shows, so
+         * a credential the redactor has to find is whole even where the log's own cut falls.
+         */
+        private const val DRAINED_CHARS_KEPT = 2 * McpExchange.Body.MAX_CHARS
+
+        /**
+         * Reads a body to its end through a fixed buffer, keeping only its first [keep] characters.
+         *
+         * For a 202, which should carry no body: one left unread keeps the socket out of the pool,
+         * and a server that sends a huge one must not cost Code on the Go, whose process this
+         * plugin runs in, its memory. A read that fails with an Exception or a LinkageError is
+         * returned as a failure, which the caller survives by not reusing the socket; any other
+         * Error, an OutOfMemoryError above all, propagates.
+         *
+         * @param keep how many characters to keep.
+         * @param open opens the body; called inside the guard, since opening it can fail too.
+         * @return what was kept and how much was dropped, or the recoverable failure.
+         */
+        internal fun drain(keep: Int = DRAINED_CHARS_KEPT, open: () -> InputStream): Result<Drained> =
+            runCatchingRecoverable {
+                open().reader(Charsets.UTF_8).use { reader ->
+                    val kept = StringBuilder()
+                    val buffer = CharArray(8 * 1024)
+                    var dropped = 0L
+                    while (true) {
+                        val read = reader.read(buffer)
+                        if (read < 0) break
+                        val room = (keep - kept.length).coerceIn(0, read)
+                        kept.append(buffer, 0, room)
+                        dropped += read - room
+                    }
+                    Drained(kept.toString(), dropped)
+                }
+            }
     }
+
+    /**
+     * What [drain] read.
+     * @property text the body's first characters.
+     * @property dropped how many characters came after [text] and were read and thrown away.
+     */
+    internal class Drained(val text: String, val dropped: Long)
 
     /**
      * One answer to a POST.
@@ -115,8 +160,8 @@ open class McpHttpClient(
                     // than ignored, since a body left unread keeps the socket out of the pool.
                     if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
                         // A half-read body is neither pooled nor closed, so only a whole drain counts.
-                        val drained = runCatching { conn.inputStream.use { it.readBytes() } }
-                        drained.getOrNull()?.let { trace.received(String(it, Charsets.UTF_8)) }
+                        val drained = drain { conn.inputStream }
+                        drained.getOrNull()?.let { trace.received(it.text, it.dropped) }
                         reusable = drained.isSuccess
                         return Response(null, assignedSession)
                     }
