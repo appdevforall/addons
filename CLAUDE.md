@@ -55,6 +55,10 @@ Each kind has its own script. Each script builds only its own kind and ignores a
 
 `update-libs.sh` is plugin-only and builds nothing by itself. Both scripts take their lists from `addons discover --kind plugin|template`, which is the single definition of each kind and matches a NAME by directory name or slug, in any case. Every workflow (**Build addon artifacts**, **Publish addons**, **Update libs from CodeOnTheGo**, **Check toolchain**) calls these scripts, so a local build and a CI build run the same code.
 
+## Versioning
+
+**Any change to a plugin increments its version**, following [Semantic Versioning](https://semver.org/): MAJOR for an incompatible change (removed features or settings, a raised `plugin.min_ide_version`), MINOR for a backwards-compatible feature, PATCH for a backwards-compatible fix. The version is `versionName` in the plugin's `build.gradle.kts`, which the builder substitutes for `${pluginVersion}` in the manifest; increment `versionCode` by one in the same change. Bump once per pull request, not once per commit.
+
 ## Verification
 
 **A successful build is not verification.** It only proves the addon compiles or packages. Real verification is device-level: install on a connected emulator or device, exercise the feature end to end, and observe the expected behaviour (UI element appears, file written, build hook fires, DB row replaced, template generates a project that opens).
