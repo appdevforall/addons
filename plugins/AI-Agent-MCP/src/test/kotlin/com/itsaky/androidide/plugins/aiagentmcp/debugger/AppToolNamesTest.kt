@@ -117,6 +117,30 @@ class AppToolNamesTest {
         assertEquals(forward, byApp())
     }
 
+    /**
+     * `com.a.db` and `com.d.db` share `db_db`, and `com.a.db`'s digest form is `db_ec81`, the plain
+     * prefix of `com.c.ec81`. Were both to take it, the numbering that keeps tool names apart would
+     * give `_2` to whichever app was read second, and a reordered read would hand `db_ec81_query`
+     * to the other app's database.
+     */
+    @Test
+    fun `an app whose digest prefix is another app's plain prefix keeps its names whatever the row order`() {
+        val apps = listOf("com.a.db", "com.d.db", "com.c.ec81")
+        connectAll(*apps.map { it to fake(it, tool("query", true)) }.toTypedArray())
+        val forward = byApp()
+        assertEquals(apps.toSet(), forward.keys)
+        assertEquals("db_ec81_query", forward.getValue("com.c.ec81").first)
+        assertEquals(3, forward.values.map { it.first }.toSet().size)
+
+        AutomaticServers.install(null)
+        McpToolCatalog.clear()
+        servers.forEach { it.stop() }
+        servers.clear()
+        connectAll(*apps.map { it to fake(it, tool("query", true)) }.toTypedArray(), reversed = true)
+
+        assertEquals(forward, byApp())
+    }
+
     @Test
     fun `an app listed between two reads of the server list cannot break the listing`() {
         connectAll(

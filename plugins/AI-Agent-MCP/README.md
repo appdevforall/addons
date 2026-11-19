@@ -80,8 +80,12 @@ the first seven characters of the application ID's last segment
 (`db_notes_query` for `com.example.notes`, `db_myappli_query` for
 `com.example.myapplication`); when two apps would share that prefix, both use the first
 five characters of the segment and four hex digits derived from the full
-application ID (`notes_3fa1_query`), so a name never depends on which app was
-read first. Each description starts with the application ID, as
+application ID (`notes_3fa1_query`). If that prefix is still another app's, as
+when two apps' digits agree or the prefix equals another app's `db_` prefix, the
+app uses the segment's first character and eight hex digits (`n_3fa1c2d4_query`),
+and past that `db_` and a number in application-ID order (`db_1_query`). An app
+keeps the first prefix that no other app shares, so the names never depend on
+which app was read first. Each description starts with the application ID, as
 "com.example.notes (SQLite debugger): ...", and the approval dialog shows it.
 Servers you add yourself keep the name prefix taken from their label.
 
