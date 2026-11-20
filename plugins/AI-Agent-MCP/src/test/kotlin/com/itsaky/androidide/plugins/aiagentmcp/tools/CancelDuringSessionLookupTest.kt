@@ -26,11 +26,11 @@ import org.junit.Test
 /**
  * A cancel that lands while a call looks up its session must stop the call.
  *
- * The lookup sits between the call's check of the cancel flag and the moment its session becomes
- * reachable from [McpToolSource.cancel]. A cancel in that window sets the flag but finds no session
- * to drop, so only a second read of the flag, once the session is published, keeps the request
- * from going out. The test lands the cancel there for certain: the lookup reads the server's token,
- * and the first read after the test arms it cancels the call.
+ * The lookup sits between the worker's check of the cancel flag and the call's first request. A
+ * cancel in that window sets the flag but finds no connection to drop, so only a later read of the
+ * flag, once the request has published its connection to the call's handle, keeps the request from
+ * going out. The test lands the cancel there for certain: the lookup reads the server's token, and
+ * the first read after the test arms it cancels the call.
  */
 class CancelDuringSessionLookupTest {
 

@@ -131,7 +131,8 @@ Two dependencies were deliberately not taken:
   parallel with no ordering
 - `transport/` — `JsonRpc` framing, `SseChunk` line parsing, `McpHttpClient`
 - `client/` — `McpSession` (handshake, `tools/list`, `tools/call`),
-  `McpConnections` (one session per server)
+  `McpConnections` (one session per server, shared by every call and listing),
+  `McpCallHandle` (one tool call's cancel: its flag and its own connection)
 - `tools/` — `McpToolSource` (the `ToolSourceRegistry.ToolSource`),
   `McpToolCatalog` (what each server last advertised), `McpToolText` (sanitising)
 - `settings/` — server CRUD, per-tool toggles, the settings pane

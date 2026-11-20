@@ -93,7 +93,8 @@
     <tr><td><code>McpToolSource</code></td><td>The tool source AI Core sees.
       Publishes the enabled tools of the enabled servers, runs a call on its own
       thread pool, and drops that call's own connection when an Agent run is
-      stopped, leaving any concurrent call against another server alone.</td></tr>
+      stopped. Any other call, and the health check's listing, is left alone,
+      whether it is against the same server or another.</td></tr>
     <tr><td><code>McpToolCatalog</code></td><td>What each server last advertised,
       held in memory. The Agent reads its tool list on a UI-adjacent path, so that
       list is answered from memory and never blocks on the network.</td></tr>

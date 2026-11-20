@@ -1,13 +1,12 @@
 package com.itsaky.androidide.plugins.aiagentmcp.tools
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpCallHandle
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
-import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
-import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
@@ -43,8 +42,11 @@ private const val TAG = "$LOG_PREFIX.McpToolSource"
  *   [invoke] itself when scheduling threw. The loser does nothing, and a worker that loses sends
  *   nothing.
  * - [inFlight]: [invoke] adds it once the future exists; the future's completion removes it.
- * - [liveSessions]: the attempt that opened the session adds it and removes it when the request
- *   ends; [cancel] removes it too, to drop the socket.
+ *
+ * A cancel reaches a call through its [Call.handle] alone: the flag the worker reads, and the
+ * connection the call's current request is using. Not through its session, which every call to
+ * that server, the health probe's listing and a SQLite debugger entry's relisting share; see
+ * [McpCallHandle] for the handshake that keeps a cancelled call from sending anything.
  */
 class McpToolSource internal constructor(
     private val executor: ExecutorService,
@@ -54,17 +56,8 @@ class McpToolSource internal constructor(
 
     constructor() : this(newExecutor())
 
-    /** Calls in flight, so a stopped agent run can drop the socket instead of waiting it out. */
+    /** Each accepted call's future, so a cancel completes it at once rather than when its worker ends. */
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
-
-    /**
-     * The session each in-flight call is using.
-     *
-     * Per call rather than "every session there is": two tools can be in flight against different
-     * servers at once, and cancelling both would report the survivor to the model as a transport
-     * failure for a call nobody cancelled.
-     */
-    private val liveSessions = ConcurrentHashMap<String, McpSession>()
 
     /**
      * Every accepted call that has not finished, so [cancel] knows a call exists whatever its worker
@@ -75,17 +68,18 @@ class McpToolSource internal constructor(
     /**
      * One accepted call.
      *
-     * [cancelled] is what a cancel leaves for the worker. The session drop in [cancel] reaches only
-     * a request in flight; one landing between the two attempts of the endpoint retry, during a
-     * session lookup, or before the worker's first line finds no session, so the worker reads this
-     * before it sends anything, and again once its session is in [liveSessions]. It lives on the
-     * call, so it goes with the call and a late cancel cannot leave a stray flag behind.
+     * [handle] is what a cancel reaches: its flag, which the worker reads before it looks up a
+     * session (so a cancel between the two attempts of the endpoint retry, or before the worker's
+     * first line, sends nothing), and the connection of the call's current request, which each
+     * request publishes and then checks the flag against before it sends anything. It lives on the
+     * call, so it goes with the call and a late cancel cannot leave a stray flag behind, nor reach
+     * another call's or a listing's connection.
      *
      * [claimed] is the cleanup ownership: the first party to set it, the worker as it starts or the
      * completion callback as it finds the call finished without one, is the only one to clean up.
      */
     private class Call {
-        @Volatile var cancelled = false
+        val handle = McpCallHandle()
         val claimed = AtomicBoolean(false)
     }
 
@@ -172,26 +166,23 @@ class McpToolSource internal constructor(
     internal fun pendingCalls(): Int = calls.size
 
     override fun cancel(callId: String) {
-        calls[callId]?.cancelled = true
+        // Sets the flag and drops the call's connection: the worker is blocked on a socket read,
+        // where an interrupt does nothing, so dropping the connection is what actually ends it.
+        // Only this call's, so another call or a listing against the same server keeps its socket.
+        calls[callId]?.handle?.cancel()
         inFlight.remove(callId)?.cancel(true)
-        // The worker is blocked on a socket read, where an interrupt does nothing; dropping the
-        // connection is what actually ends it. Only this call's, so a concurrent call against
-        // another server keeps its socket. An Exception or a LinkageError from the drop is survived;
-        // any other Error propagates.
-        liveSessions.remove(callId)?.let { runCatchingRecoverable { it.cancel() } }
     }
 
     /** Ends the executor, for the plugin shutting down. */
     fun close() {
         executor.shutdownNow()
         inFlight.clear()
-        liveSessions.clear()
         calls.clear()
     }
 
     /**
      * Runs one remote tool.
-     * @param callId the agent's id for this call, so [cancel] can reach the session it is using.
+     * @param callId the agent's id for this call, named in the failure a cancel leaves.
      * @param call the call's entry, registered by [invoke] before this was scheduled.
      * @param server the server that owns it.
      * @param tool the tool, as the server described it.
@@ -212,20 +203,16 @@ class McpToolSource internal constructor(
         }
         return try {
             val result = McpToolCatalog.retry.call(server) { target ->
-                // Cancelled between two attempts (or before the first): nothing is sent. Signalled as
-                // an interrupted read, which is how a dropped connection already reports a cancel.
-                if (call.cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
-                val session = McpConnections.session(target)
-                liveSessions[callId] = session
-                try {
-                    // Again, now the session is published: a cancel that landed during the lookup
-                    // found no session to drop, and only its flag can stop the request. One landing
-                    // after this read finds the session and drops it.
-                    if (call.cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
-                    session.callTool(tool.name, arguments)
-                } finally {
-                    liveSessions.remove(callId)
+                // Cancelled between two attempts (or before the first): nothing is looked up or sent.
+                // Signalled as an interrupted read, which is how a dropped connection already
+                // reports a cancel.
+                if (call.handle.isCancelled) {
+                    throw InterruptedIOException("Tool call $callId was cancelled")
                 }
+                // A cancel landing from here on, during the session lookup or while a request reads
+                // its credentials, is caught by the handle: each request publishes its connection
+                // there and reads the flag again before it sends anything.
+                McpConnections.session(target).callTool(tool.name, arguments, call.handle)
             }
             // A reply of any kind, a tool's own failure included, means the server is answering.
             McpServerHealth.available(server.id)
