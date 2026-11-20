@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One script's run. Tapping it shows or hides what the script printed. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/runRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:minHeight="@dimen/touch_target_min"
+    android:orientation="vertical"
+    android:paddingTop="@dimen/space_sm"
+    android:paddingBottom="@dimen/space_sm">
+
+    <TextView
+        android:id="@+id/runTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/plugin_on_surface"
+        android:textSize="@dimen/text_body" />
+
+    <TextView
+        android:id="@+id/runDetail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="@dimen/text_small" />
+
+    <TextView
+        android:id="@+id/runOutput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:background="@color/plugin_surface_variant"
+        android:fontFamily="monospace"
+        android:padding="@dimen/space_sm"
+        android:textColor="@color/plugin_on_surface"
+        android:textIsSelectable="true"
+        android:textSize="@dimen/text_mono"
+        android:visibility="gone" />
+
+</LinearLayout>

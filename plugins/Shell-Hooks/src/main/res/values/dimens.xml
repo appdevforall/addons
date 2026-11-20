@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spacing in dp, text in sp: rows grow with the user's font scale instead of clipping. -->
+<resources>
+    <dimen name="toolbar_min_height">48dp</dimen>
+    <dimen name="toolbar_icon_size">40dp</dimen>
+    <dimen name="toolbar_icon_padding">8dp</dimen>
+    <dimen name="title_text_size">18sp</dimen>
+
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+
+    <dimen name="text_small">13sp</dimen>
+    <dimen name="text_body">15sp</dimen>
+    <dimen name="text_mono">12sp</dimen>
+    <dimen name="touch_target_min">48dp</dimen>
+</resources>
