@@ -189,9 +189,14 @@ class McpSession(
         }
     }
 
-    /** Drops the connection a call is blocked on, so a stopped agent run does not wait it out. */
+    /**
+     * Drops the connection a call is blocked on, so a stopped agent run does not wait it out.
+     *
+     * A disconnect that fails with an Exception or a LinkageError is survived, since the call is
+     * being abandoned anyway; any other Error, an OutOfMemoryError above all, propagates.
+     */
     fun cancel() {
-        runCatching { liveConnection?.disconnect() }
+        runCatchingRecoverable { liveConnection?.disconnect() }
     }
 
     /**

@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
@@ -175,8 +176,9 @@ class McpToolSource internal constructor(
         inFlight.remove(callId)?.cancel(true)
         // The worker is blocked on a socket read, where an interrupt does nothing; dropping the
         // connection is what actually ends it. Only this call's, so a concurrent call against
-        // another server keeps its socket.
-        liveSessions.remove(callId)?.let { runCatching { it.cancel() } }
+        // another server keeps its socket. An Exception or a LinkageError from the drop is survived;
+        // any other Error propagates.
+        liveSessions.remove(callId)?.let { runCatchingRecoverable { it.cancel() } }
     }
 
     /** Ends the executor, for the plugin shutting down. */

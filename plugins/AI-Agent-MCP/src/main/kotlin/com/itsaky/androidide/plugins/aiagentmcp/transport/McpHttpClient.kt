@@ -111,6 +111,7 @@ open class McpHttpClient(
      * @param protocolVersion the negotiated revision, or null before `initialize` has answered.
      * @param onConnected receives the live connection, so a caller can disconnect it to cancel.
      * @param exchangeListener receives each request made and what came back, redirects included.
+     *   An Exception or a LinkageError it throws is dropped; any other Error propagates.
      * @return the reply document and any session id the server sent.
      * @throws McpHttpException on a non-2xx answer, carrying the server's error body.
      */
@@ -186,7 +187,10 @@ open class McpHttpClient(
                 throw e
             } finally {
                 if (!reusable) conn.disconnect()
-                runCatching { exchangeListener.onExchange(trace.toExchange(failure), redactor) }
+                // The connection log is a convenience: a listener failing with an Exception or a
+                // LinkageError costs only its record. Any other Error, an OutOfMemoryError above
+                // all, is the process failing and propagates.
+                runCatchingRecoverable { exchangeListener.onExchange(trace.toExchange(failure), redactor) }
             }
 
             if (++hops > MAX_REDIRECTS) {
