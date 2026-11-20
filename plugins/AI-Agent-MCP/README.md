@@ -182,3 +182,8 @@ Two dependencies were deliberately not taken:
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.
 - Error bodies stay in logcat. The transcript gets one sentence.
+- The connection log masks every credential the request carried wherever the
+  server echoes it, escaped or not (`McpRedactor`). The body of a `202 Accepted`
+  is kept only in part, cut at a fixed length; when the cut falls inside a
+  credential, what was kept of it is masked too, so the log never shows the
+  start of one.

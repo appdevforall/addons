@@ -38,6 +38,9 @@ class McpRedactor(
         /** Characters JSON may escape with a backslash alone. */
         private const val JSON_BACKSLASHED = "\"\\/"
 
+        /** The longest form [encodedForms] matches one character in: `\uXXXX`. */
+        private const val LONGEST_CHAR_FORM = 6
+
         /**
          * A redactor for one request to [url], which also masks what the URL itself carries.
          * @param credentials the token, session and the user's header values, as sent.
@@ -58,13 +61,18 @@ class McpRedactor(
         }
     }
 
-    /** Longest first, so no secret is left half-masked by a shorter one inside it. */
-    private val secrets: List<Regex> = credentials
+    /** The secrets as given, longest first, so none is left half-masked by a shorter one inside it. */
+    private val plainSecrets: List<String> = credentials
         .flatMap { listOfNotNull(it, SCHEMED.matchEntire(it)?.groupValues?.get(2)) }
         .filter { it.isNotEmpty() }
         .distinct()
         .sortedByDescending { it.length }
+
+    private val secrets: List<Regex> = plainSecrets
         .map { if (it.length >= MIN_SUBSTRING_LENGTH) Regex(encodedForms(it)) else wholeToken(it) }
+
+    /** How many characters one secret can take up in a text at most, in its longest escaped form. */
+    private val longestForm: Int = (plainSecrets.firstOrNull()?.length ?: 0) * LONGEST_CHAR_FORM
 
     /**
      * A header this client sent, its value hidden when it is a credential.
@@ -88,6 +96,52 @@ class McpRedactor(
      * @return the text, safe to show.
      */
     fun scrub(text: String): String = secrets.fold(text) { acc, secret -> acc.replace(secret, MASK) }
+
+    /**
+     * As [scrub], for a text that is the start of something longer, cut at a fixed length without
+     * regard to what it cut through. [scrub] masks whole credentials only, so one the cut fell
+     * inside would show its start. Here the end is masked from where such a credential starts,
+     * in any form [scrub] matches, escaped or not, so the text ends in [MASK] rather than in part
+     * of one. That start is the first character from which a credential reads on to the cut
+     * unfinished, moved back over any whole credential that runs past it, so no part of one is
+     * left before the mask either.
+     *
+     * Only the last characters, as many as a credential can take up, are examined, and nothing is
+     * copied but the result, so the cost is bounded whatever the length of [text].
+     *
+     * @param text the first characters of a body, the rest of which was not kept.
+     * @return the text, safe to show.
+     */
+    fun scrubCut(text: String): String {
+        val start = credentialAtEnd(text)
+        return if (start == text.length) scrub(text) else scrub(text.substring(0, start)) + MASK
+    }
+
+    /**
+     * Where the credential that [text] may end partway through starts; see [scrubCut].
+     * @return its index, or the length of [text] when its end is not part of one.
+     */
+    private fun credentialAtEnd(text: String): Int {
+        // Transparent bounds, so a short secret's "not inside a word" check sees what precedes.
+        val matchers = secrets.map { it.toPattern().matcher(text).useTransparentBounds(true) }
+        var start = text.length
+        while (true) {
+            val from = (start - longestForm).coerceAtLeast(0)
+            val earlier = (from until start).firstOrNull { index ->
+                matchers.any { it.reachesPast(index, start, text.length) }
+            } ?: return start
+            start = earlier
+        }
+    }
+
+    /**
+     * Whether a credential read from [index] runs past [mark]: a whole match that ends after it, or
+     * one the end of the text cut short, which is what `hitEnd` reports when nothing matched.
+     */
+    private fun java.util.regex.Matcher.reachesPast(index: Int, mark: Int, length: Int): Boolean {
+        region(index, length)
+        return if (lookingAt()) end() > mark else hitEnd()
+    }
 
     /**
      * A URL as it may be shown: its userinfo and every query value masked, then scrubbed.

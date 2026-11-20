@@ -194,4 +194,42 @@ class McpHttpClientDrainTest {
             server.stop(0)
         }
     }
+
+    /**
+     * The drain keeps the start of a 202 body and the record masks credentials in what was kept,
+     * so the cut can fall inside one: the redactor masks whole credentials only, and a copy of the
+     * token cut in two would show its start. A body of nothing but the token, repeated, with the
+     * cut inside a copy: the record shows masks and nothing else.
+     */
+    @Test
+    fun `a 202 body cut inside a repeated credential shows no part of it`() {
+        val token = "tok_9f2c7e1a4b8d3f6e0a5c9b2d7e4f1a3c5b7d"
+        val kept = McpHttpClient.DRAINED_CHARS_KEPT
+        assertTrue("the cut must fall inside a copy of the token", kept % token.length != 0)
+        val bytes = token.repeat(kept / token.length + 10).toByteArray()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/mcp") { exchange ->
+                exchange.requestBody.use { it.readBytes() }
+                exchange.sendResponseHeaders(202, bytes.size.toLong())
+                exchange.responseBody.use { it.write(bytes) }
+            }
+            start()
+        }
+        try {
+            var recorded: McpExchange? = null
+            McpHttpClient().post(
+                "http://127.0.0.1:${server.address.port}/mcp",
+                token,
+                JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"),
+                exchangeListener = { exchange, _ -> recorded = exchange },
+            )
+
+            val text = requireNotNull(recorded?.responseBody).text
+            val unmasked = text.replace(McpRedactor.MASK, "")
+            assertEquals("the record kept part of the credential: '$unmasked'", "", unmasked)
+            assertTrue("the record ends unmasked: '${text.takeLast(16)}'", text.endsWith(McpRedactor.MASK))
+        } finally {
+            server.stop(0)
+        }
+    }
 }

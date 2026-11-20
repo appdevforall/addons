@@ -42,9 +42,13 @@ internal class McpExchangeTrace(
     /**
      * As [received], for a body kept only in part: [dropped] more characters came after [body]
      * and were read and thrown away; the record counts them with what its own cap leaves out.
+     *
+     * When anything was dropped, [body] was cut at a fixed length and may end partway through a
+     * credential, which [McpRedactor.scrub] would leave showing; [McpRedactor.scrubCut] masks it.
      */
     fun received(body: String, dropped: Long) {
-        val kept = McpExchange.Body.capped(redactor.scrub(body))
+        val scrubbed = if (dropped > 0) redactor.scrubCut(body) else redactor.scrub(body)
+        val kept = McpExchange.Body.capped(scrubbed)
         responseBody = kept.copy(omitted = (kept.omitted + dropped).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
     }
 

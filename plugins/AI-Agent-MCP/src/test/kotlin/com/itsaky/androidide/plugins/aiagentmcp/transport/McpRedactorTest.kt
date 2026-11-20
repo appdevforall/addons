@@ -127,4 +127,36 @@ class McpRedactorTest {
 
         assertEquals("https://mcp.example.test/mcp?t=${McpRedactor.MASK} redirected off its origin", message)
     }
+
+    @Test
+    fun givenATextCutInsideACredential_whenScrubbedAsCut_thenItEndsInAMask() {
+        val mask = McpRedactor.MASK
+
+        val shown = redactor("secret-token-123456").scrubCut("ok secret-token-123456 then secret-to")
+
+        assertEquals("ok $mask then $mask", shown)
+    }
+
+    @Test
+    fun givenATextCutInsideAnEscapedCredential_whenScrubbedAsCut_thenItEndsInAMask() {
+        // The cut falls inside the `\u006b` that escapes the token's `k`.
+        val shown = redactor("secret-token").scrubCut("""{"error":"bad secret-to\u006""")
+
+        assertEquals("""{"error":"bad ${McpRedactor.MASK}""", shown)
+    }
+
+    @Test
+    fun givenACutInsideACredentialThatStartsInsideAnother_whenScrubbedAsCut_thenNeitherShows() {
+        // The second credential's start, cut short, begins inside a whole copy of the first.
+        val shown = redactor("header-value-123456", "123456-token-abcdef").scrubCut("ok header-value-123456-tok")
+
+        assertEquals("ok ${McpRedactor.MASK}", shown)
+    }
+
+    @Test
+    fun givenACutThatEndsInNoCredential_whenScrubbedAsCut_thenOnlyWholeOnesAreMasked() {
+        val shown = redactor("secret-token").scrubCut("secret-token, and the rest")
+
+        assertEquals("${McpRedactor.MASK}, and the rest", shown)
+    }
 }

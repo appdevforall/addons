@@ -51,9 +51,11 @@ open class McpHttpClient(
 
         /**
          * Characters of a drained body kept for the connection log: twice what the log shows, so
-         * a credential the redactor has to find is whole even where the log's own cut falls.
+         * a credential the redactor has to find is whole even where the log's own cut falls. The
+         * drain's own cut, at this length, can fall inside one; the trace masks what was kept of
+         * it with [McpRedactor.scrubCut], so the log never shows the start of a credential.
          */
-        private const val DRAINED_CHARS_KEPT = 2 * McpExchange.Body.MAX_CHARS
+        internal const val DRAINED_CHARS_KEPT = 2 * McpExchange.Body.MAX_CHARS
 
         /**
          * Characters of a 202 body read and thrown away, past the ones kept, before the drain gives
@@ -79,6 +81,9 @@ open class McpHttpClient(
          *
          * Only a 202 is bounded this way. A JSON reply and an error body are read whole, with
          * `readText()`: each is the document the caller needs.
+         *
+         * What is kept is cut at [keep] characters wherever that falls, inside a credential the
+         * server echoed too; [McpExchangeTrace.received] masks the end of a cut body for that.
          *
          * @param keep how many characters to keep.
          * @param budget how many characters past [keep] may be read and dropped before the body is
