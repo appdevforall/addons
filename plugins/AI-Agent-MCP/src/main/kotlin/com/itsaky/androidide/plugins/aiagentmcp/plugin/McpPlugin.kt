@@ -49,6 +49,11 @@ private const val TAG = "$LOG_PREFIX.McpPlugin"
 class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
+
+    /**
+     * The tool source registered with AI Core: built by the first [activate], kept by a second, and
+     * closed and cleared by [teardown].
+     */
     private var toolSource: McpToolSource? = null
 
     /** True once [toolSource] is registered with AI Core, so re-registration is idempotent. */
@@ -228,7 +233,11 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         // a concurrent lifecycle call has since installed.
         val active = swapScope(newScope())
         activationJob = active.coroutineContext[Job]
-        toolSource = McpToolSource()
+        // Kept by a second activate: it is the one registered with AI Core, whose registry
+        // unregisters by identity, and [registered] is already true, so a replacement would never be
+        // registered while this one stayed registered and was never closed. [teardown] closes it and
+        // clears the field, so the activation after a deactivate builds a fresh one.
+        toolSource = toolSource ?: McpToolSource()
         // Here, not on the coroutine below: a lifecycle call registers and removes every listener,
         // so a late coroutine of an activation that has ended cannot add one, or remove the next
         // activation's. The add methods ignore a listener already registered, so a host that
