@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "$LOG_PREFIX.McpToolSource"
 
@@ -30,9 +31,23 @@ private const val TAG = "$LOG_PREFIX.McpToolSource"
  *
  * @param executor where remote calls run; see [newExecutor]. A seam, so a test can wait for a
  *   call's worker to finish rather than poll for something it might still send.
+ * @param beforeWork runs on the worker thread with the call's id, before the worker does anything
+ *   else. A seam, so a test can land a cancel at the one point after the worker has started.
+ *
+ * A call is owned from the moment [invoke] accepts it, not from the moment its worker starts, so a
+ * [cancel] always finds it. The ownership rule, for every entry:
+ * - [calls]: [invoke] adds the entry before it schedules the worker. Exactly one party then removes
+ *   it, whichever wins [Call.claimed]: the worker, in [runTool]'s `finally`, or [invoke]'s
+ *   completion callback when the call finished without the worker (cancelled before it ran), or
+ *   [invoke] itself when scheduling threw. The loser does nothing, and a worker that loses sends
+ *   nothing.
+ * - [inFlight]: [invoke] adds it once the future exists; the future's completion removes it.
+ * - [liveSessions]: the attempt that opened the session adds it and removes it when the request
+ *   ends; [cancel] removes it too, to drop the socket.
  */
 class McpToolSource internal constructor(
     private val executor: ExecutorService,
+    private val beforeWork: (String) -> Unit = {},
 ) : ToolSourceRegistry.StatusReportingToolSource,
     ToolSourceRegistry.GroupedToolSource {
 
@@ -50,16 +65,28 @@ class McpToolSource internal constructor(
      */
     private val liveSessions = ConcurrentHashMap<String, McpSession>()
 
-    /** Calls whose worker is running, so [cancel] knows whether a flag will ever be read. */
-    private val running: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /**
+     * Every accepted call that has not finished, so [cancel] knows a call exists whatever its worker
+     * has reached. See the class KDoc for who removes an entry.
+     */
+    private val calls = ConcurrentHashMap<String, Call>()
 
     /**
-     * Running calls that were cancelled. The session drop in [cancel] reaches only a request in
-     * flight; one landing between the two attempts of the endpoint retry finds no session, so the
-     * retry reads this before it sends anything. So does one landing while an attempt looks its
-     * session up, which is why the attempt reads it again once the session is in [liveSessions].
+     * One accepted call.
+     *
+     * [cancelled] is what a cancel leaves for the worker. The session drop in [cancel] reaches only
+     * a request in flight; one landing between the two attempts of the endpoint retry, during a
+     * session lookup, or before the worker's first line finds no session, so the worker reads this
+     * before it sends anything, and again once its session is in [liveSessions]. It lives on the
+     * call, so it goes with the call and a late cancel cannot leave a stray flag behind.
+     *
+     * [claimed] is the cleanup ownership: the first party to set it, the worker as it starts or the
+     * completion callback as it finds the call finished without one, is the only one to clean up.
      */
-    private val cancelled: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private class Call {
+        @Volatile var cancelled = false
+        val claimed = AtomicBoolean(false)
+    }
 
     override fun getProviderId(): String = McpPlugin.PLUGIN_ID
 
@@ -115,17 +142,37 @@ class McpToolSource internal constructor(
                 Outcome(false, "", string(R.string.mcp_error_tool_gone, invocation.toolName))
             )
 
-        val future = CompletableFuture.supplyAsync(
-            { runTool(invocation.callId, target.first, target.second, invocation.arguments) },
-            executor,
-        )
-        inFlight[invocation.callId] = future
-        return future.whenComplete { _, _ -> inFlight.remove(invocation.callId) }
+        val callId = invocation.callId
+        // Before the worker is scheduled, so a cancel landing at any point after this finds the call.
+        val call = Call()
+        calls[callId] = call
+        val future = try {
+            CompletableFuture.supplyAsync(
+                {
+                    beforeWork(callId)
+                    runTool(callId, call, target.first, target.second, invocation.arguments)
+                },
+                executor,
+            )
+        } catch (e: Throwable) {
+            // Scheduling failed (a rejected task, a shut-down executor): no worker will ever run.
+            calls.remove(callId, call)
+            throw e
+        }
+        inFlight[callId] = future
+        return future.whenComplete { _, _ ->
+            inFlight.remove(callId)
+            // Finished without the worker (cancelled before it ran): nobody else will clean up.
+            if (call.claimed.compareAndSet(false, true)) calls.remove(callId, call)
+        }
     }
 
+    /** How many accepted calls have not finished; for a test to prove nothing is left behind. */
+    internal fun pendingCalls(): Int = calls.size
+
     override fun cancel(callId: String) {
+        calls[callId]?.cancelled = true
         inFlight.remove(callId)?.cancel(true)
-        if (callId in running) cancelled += callId
         // The worker is blocked on a socket read, where an interrupt does nothing; dropping the
         // connection is what actually ends it. Only this call's, so a concurrent call against
         // another server keeps its socket.
@@ -137,11 +184,13 @@ class McpToolSource internal constructor(
         executor.shutdownNow()
         inFlight.clear()
         liveSessions.clear()
+        calls.clear()
     }
 
     /**
      * Runs one remote tool.
      * @param callId the agent's id for this call, so [cancel] can reach the session it is using.
+     * @param call the call's entry, registered by [invoke] before this was scheduled.
      * @param server the server that owns it.
      * @param tool the tool, as the server described it.
      * @param arguments the agent's arguments.
@@ -149,42 +198,48 @@ class McpToolSource internal constructor(
      */
     private fun runTool(
         callId: String,
+        call: Call,
         server: McpServer,
         tool: McpTool,
         arguments: Map<String, Any?>,
-    ): ToolSourceRegistry.ToolOutcome = try {
-        running += callId
-        val result = McpToolCatalog.retry.call(server) { target ->
-            // Cancelled between two attempts (or before the first): nothing is sent. Signalled as
-            // an interrupted read, which is how a dropped connection already reports a cancel.
-            if (callId in cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
-            val session = McpConnections.session(target)
-            liveSessions[callId] = session
-            try {
-                // Again, now the session is published: a cancel that landed during the lookup
-                // found no session to drop, and only its flag can stop the request. One landing
-                // after this read finds the session and drops it.
-                if (callId in cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
-                session.callTool(tool.name, arguments)
-            } finally {
-                liveSessions.remove(callId)
-            }
+    ): ToolSourceRegistry.ToolOutcome {
+        // Lost: the call finished (cancelled) before this worker began, and the completion callback
+        // has cleaned up. The result is discarded, so send nothing.
+        if (!call.claimed.compareAndSet(false, true)) {
+            return Outcome(false, "", string(R.string.mcp_error_cancelled, server.name))
         }
-        // A reply of any kind, a tool's own failure included, means the server is answering.
-        McpServerHealth.available(server.id)
-        Outcome(result.success, result.text, result.errorMessage)
-    } catch (e: Throwable) {
-        // Throwable, unlike the other host-facing catches in this plugin: this runs inside
-        // CompletableFuture.supplyAsync, which catches every Throwable itself, so narrowing this
-        // would not bring an OutOfMemoryError to the IDE's handler. It would only hand AI Core an
-        // exceptionally completed future in place of the failure outcome it expects.
-        Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
-        McpToolCatalog.recordFailure(server, e)
-        val context = McpPlugin.getContext()?.androidContext
-        Outcome(false, "", McpErrorFormatter.format(context, server, e))
-    } finally {
-        running -= callId
-        cancelled -= callId
+        return try {
+            val result = McpToolCatalog.retry.call(server) { target ->
+                // Cancelled between two attempts (or before the first): nothing is sent. Signalled as
+                // an interrupted read, which is how a dropped connection already reports a cancel.
+                if (call.cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
+                val session = McpConnections.session(target)
+                liveSessions[callId] = session
+                try {
+                    // Again, now the session is published: a cancel that landed during the lookup
+                    // found no session to drop, and only its flag can stop the request. One landing
+                    // after this read finds the session and drops it.
+                    if (call.cancelled) throw InterruptedIOException("Tool call $callId was cancelled")
+                    session.callTool(tool.name, arguments)
+                } finally {
+                    liveSessions.remove(callId)
+                }
+            }
+            // A reply of any kind, a tool's own failure included, means the server is answering.
+            McpServerHealth.available(server.id)
+            Outcome(result.success, result.text, result.errorMessage)
+        } catch (e: Throwable) {
+            // Throwable, unlike the other host-facing catches in this plugin: this runs inside
+            // CompletableFuture.supplyAsync, which catches every Throwable itself, so narrowing this
+            // would not bring an OutOfMemoryError to the IDE's handler. It would only hand AI Core an
+            // exceptionally completed future in place of the failure outcome it expects.
+            Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
+            McpToolCatalog.recordFailure(server, e)
+            val context = McpPlugin.getContext()?.androidContext
+            Outcome(false, "", McpErrorFormatter.format(context, server, e))
+        } finally {
+            calls.remove(callId, call)
+        }
     }
 
     /**
