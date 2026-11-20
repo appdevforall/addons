@@ -134,7 +134,10 @@ Two dependencies were deliberately not taken:
   `McpConnections` (one session per server, shared by every call and listing),
   `McpCallHandle` (one tool call's cancel: its flag and its own connection)
 - `tools/` — `McpToolSource` (the `ToolSourceRegistry.ToolSource`),
-  `McpToolCatalog` (what each server last advertised), `McpToolText` (sanitising)
+  `McpToolCatalog` (what each server last advertised; a SQLite debugger entry's
+  list is kept beside its endpoint in `debugger/AutomaticServers`, under the lock
+  that checks the endpoint, so a listing of a replaced endpoint cannot overwrite
+  the new one's), `McpToolText` (sanitising)
 - `settings/` — server CRUD, per-tool toggles, the settings pane
 - `errors/` — HTTP and JSON-RPC failures reduced to one translated sentence
 - `security/SecureTokenStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`

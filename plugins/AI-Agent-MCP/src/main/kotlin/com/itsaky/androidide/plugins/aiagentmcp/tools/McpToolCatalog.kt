@@ -26,9 +26,14 @@ private const val TAG = "$LOG_PREFIX.McpToolCatalog"
  * The agent reads the tool list on a UI-adjacent path and the contract forbids blocking on the
  * network there, so the list has to be answered from memory. This is that memory: filled by an
  * explicit [connect] — on activation, on Connect, after an edit — and read by the source.
+ *
+ * A SQLite debugger entry's list is not held here but beside its endpoint in [AutomaticServers],
+ * which checks the endpoint and stores the list under one lock: a copy here, written after that
+ * lock was let go, could be overwritten by a listing of an endpoint that has since been replaced.
  */
 object McpToolCatalog {
 
+    /** The tools of the user's own servers; an automatic entry's are in [AutomaticServers]. */
     private val toolsByServer = ConcurrentHashMap<String, List<McpTool>>()
 
     /** Re-reads an automatic entry's endpoint and tries once more when the stored one is stale. */
@@ -43,7 +48,9 @@ object McpToolCatalog {
      * @param serverId the server.
      * @return its tools, empty before the first successful connection.
      */
-    fun tools(serverId: String): List<McpTool> = toolsByServer[serverId].orEmpty()
+    fun tools(serverId: String): List<McpTool> =
+        if (AutomaticServers.isAutomatic(serverId)) AutomaticServers.tools(serverId)
+        else toolsByServer[serverId].orEmpty()
 
     /**
      * What one handshake-and-list answered.
@@ -123,13 +130,13 @@ object McpToolCatalog {
             }
         }
         if (server.automatic) {
+            // Stored by recordTools alone, beside the endpoint it checks, under the same lock.
             val current = origin != null && AutomaticServers.urlFor(origin) == server.url &&
                 AutomaticServers.recordTools(server.id, origin, tools)
             if (!current) {
                 Log.i(TAG, "Dropping a tool list from an endpoint '${server.name}' has since left")
                 return Listing(session.serverName, tools)
             }
-            toolsByServer[server.id] = tools
         } else {
             toolsByServer[server.id] = tools
             McpServerStore.setKnownTools(server.id, tools.map { it.name })

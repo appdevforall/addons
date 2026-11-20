@@ -47,6 +47,11 @@ object AutomaticServers {
 
     const val ID_PREFIX = "debugger:"
 
+    /**
+     * One entry: its endpoint and the tools that endpoint listed. Kept together, and replaced
+     * together under this object's lock, so a list can only ever be stored beside the endpoint it
+     * came from; see [recordTools].
+     */
     private class State(val endpoint: AutomaticEndpoint, val tools: List<McpTool> = emptyList())
 
     @Volatile private var states: Map<String, State> = emptyMap()
@@ -255,14 +260,25 @@ object AutomaticServers {
     /** The endpoint now stored for [serverId], or null when it has no entry. */
     fun endpoint(serverId: String): AutomaticEndpoint? = states[serverId]?.endpoint
 
+    /**
+     * The tools [serverId] last listed, as [recordTools] stored them; `McpToolCatalog.tools`
+     * answers an automatic entry from here.
+     *
+     * @return them, empty before its first listing or when it has no entry (any more).
+     */
+    fun tools(serverId: String): List<McpTool> = states[serverId]?.tools.orEmpty()
+
     fun urlFor(endpoint: AutomaticEndpoint) = "http://127.0.0.1:${endpoint.port}/mcp"
 
     /**
-     * Remembers what the server listed.
+     * Remembers what the server listed. The only writer of an automatic entry's tools, which
+     * [tools] and [servers] both read.
      *
      * @param origin the endpoint the list was fetched from. A list from an endpoint that has since
-     *   been replaced belongs to the old process and is dropped; the check and the write share one
-     *   lock, so a refresh cannot slip between them.
+     *   been replaced belongs to the old process and is dropped. The check and the write share one
+     *   lock, so neither a refresh nor the replacement endpoint's own listing can slip between
+     *   them: an old listing that passed its check before a relaunch stores its list beside the old
+     *   endpoint, which the relaunch's read then carries over until the new process lists.
      * @return false when the list was dropped (no entry any more, or [origin] is out of date).
      */
     fun recordTools(serverId: String, origin: AutomaticEndpoint, tools: List<McpTool>): Boolean {

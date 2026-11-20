@@ -97,7 +97,9 @@
       whether it is against the same server or another.</td></tr>
     <tr><td><code>McpToolCatalog</code></td><td>What each server last advertised,
       held in memory. The Agent reads its tool list on a UI-adjacent path, so that
-      list is answered from memory and never blocks on the network.</td></tr>
+      list is answered from memory and never blocks on the network. A SQLite
+      debugger entry's list is kept beside its endpoint, so a listing of an
+      endpoint a relaunch replaced cannot overwrite the new one's.</td></tr>
     <tr><td><code>McpSession</code></td><td>One protocol conversation per server:
       <code>initialize</code>, <code>tools/list</code>, <code>tools/call</code>,
       session lifetime, and one clean re-handshake when a server drops a
