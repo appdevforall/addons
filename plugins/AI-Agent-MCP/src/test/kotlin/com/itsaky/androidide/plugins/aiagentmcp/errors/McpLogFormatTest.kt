@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -57,5 +59,17 @@ class McpLogFormatTest {
         val capped = """{"tools":[{"name":"a"""
 
         assertEquals(capped, McpLogFormat.pretty(capped))
+    }
+
+    @Test
+    fun givenAnExceptionWhileIndenting_whenFormatted_thenTheBodyIsNotJson() {
+        assertNull(McpLogFormat.json("{\"a\":1}") { throw IllegalStateException("bad") })
+    }
+
+    @Test
+    fun givenAnOutOfMemoryErrorWhileIndenting_whenFormatted_thenItPropagates() {
+        assertThrows(OutOfMemoryError::class.java) {
+            McpLogFormat.json("{\"a\":1}") { throw OutOfMemoryError("indenting") }
+        }
     }
 }

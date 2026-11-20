@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentmcp.transport
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /** What an exchange record may show: credentials hidden, echoes of them masked, the rest kept. */
@@ -158,5 +159,19 @@ class McpRedactorTest {
         val shown = redactor("secret-token").scrubCut("secret-token, and the rest")
 
         assertEquals("${McpRedactor.MASK}, and the rest", shown)
+    }
+
+    @Test
+    fun `a URL value that cannot be decoded is still masked as it is`() {
+        val secrets = McpRedactor.urlSecrets("https://h/mcp?key=abcdefgh1234") { throw IllegalArgumentException("bad") }
+
+        assertEquals(listOf("abcdefgh1234", "abcdefgh1234"), secrets)
+    }
+
+    @Test
+    fun `an OutOfMemoryError while decoding a URL value propagates`() {
+        assertThrows(OutOfMemoryError::class.java) {
+            McpRedactor.urlSecrets("https://h/mcp?key=abcdefgh1234") { throw OutOfMemoryError("decoding") }
+        }
     }
 }

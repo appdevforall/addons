@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpTranscript
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -67,7 +68,7 @@ object McpTranscriptDialog {
         val label = pluginContext.getString(R.string.mcp_transcript_title)
         val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
         // On the main thread: a short binder call, and the clipboard service is Looper-bound on old APIs.
-        if (runCatching { clipboard.setPrimaryClip(ClipData.newPlainText(label, text)) }.isFailure) return
+        if (runCatchingRecoverable { clipboard.setPrimaryClip(ClipData.newPlainText(label, text)) }.isFailure) return
         button.isEnabled = false
         button.text = pluginContext.getString(R.string.mcp_transcript_copied)
         // Not restored on cancellation: that only comes with the dialog or its view going.

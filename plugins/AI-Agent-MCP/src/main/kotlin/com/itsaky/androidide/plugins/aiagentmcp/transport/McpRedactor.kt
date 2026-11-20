@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentmcp.transport
 
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import java.net.URLDecoder
 
 /**
@@ -49,14 +50,22 @@ class McpRedactor(
         fun forRequest(url: String, credentials: Collection<String>, userHeaderNames: Collection<String>) =
             McpRedactor(credentials + urlSecrets(url), userHeaderNames)
 
-        /** The userinfo and query values of [url], long enough to be masked wherever echoed. */
-        private fun urlSecrets(url: String): List<String> {
+        /**
+         * The userinfo and query values of [url], long enough to be masked wherever echoed.
+         * A value that cannot be decoded is kept as it is; an Error other than a LinkageError, an
+         * OutOfMemoryError above all, propagates.
+         * @param decode the URL decoding; injectable so a test can make it fail.
+         */
+        internal fun urlSecrets(
+            url: String,
+            decode: (String) -> String = { URLDecoder.decode(it, "UTF-8") },
+        ): List<String> {
             val userInfo = USERINFO.find(url)?.groupValues?.get(2)
             val values = url.substringAfter('?', "").substringBefore('#')
                 .split('&')
                 .map { it.substringAfter('=', "") }
             return (listOfNotNull(userInfo, userInfo?.substringAfter(':', "")) + values)
-                .flatMap { listOf(it, runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)) }
+                .flatMap { listOf(it, runCatchingRecoverable { decode(it) }.getOrDefault(it)) }
                 .filter { it.length >= MIN_SUBSTRING_LENGTH }
         }
     }
