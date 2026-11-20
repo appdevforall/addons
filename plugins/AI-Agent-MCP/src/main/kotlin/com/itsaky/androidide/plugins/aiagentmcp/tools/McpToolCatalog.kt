@@ -187,7 +187,11 @@ object McpToolCatalog {
         return refreshed
     }
 
-    /** Forgets a server's tools and health, for one that was removed. */
+    /**
+     * Forgets a server's tools and health, for one of the user's own that was removed. A SQLite
+     * debugger entry that went away is cleaned up by `AutomaticServers.refresh` itself, under its
+     * lock, so the entry that replaces it under the same ID keeps its own.
+     */
     fun forget(serverId: String) {
         toolsByServer.remove(serverId)
         McpServerHealth.forget(serverId)

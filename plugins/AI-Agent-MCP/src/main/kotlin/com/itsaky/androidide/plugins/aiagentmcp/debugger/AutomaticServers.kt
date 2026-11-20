@@ -2,13 +2,13 @@ package com.itsaky.androidide.plugins.aiagentmcp.debugger
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
-import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.services.DebuggerEndpoint
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.cancellation.CancellationException
@@ -161,14 +161,22 @@ object AutomaticServers {
      * overlap, and the read that started first may finish last with the endpoint the other has
      * already replaced.
      *
+     * An entry that went away loses its tools with its entry, and its health and session are taken
+     * out in the same step, under this object's lock: by ID they would also be the resources of an
+     * entry a later read restores, so cleaning up after the lock was let go could take the health
+     * and session of the app's new endpoint. Only the session taken out is closed, after the lock
+     * is let go, since closing it sends a DELETE; the health listeners are told then too.
+     *
      * A read that fails with an Exception or a LinkageError leaves the entries as they were; any
      * other Error, an OutOfMemoryError above all, propagates to the caller. So does one from a
-     * change or endpoint listener, or from closing the session of an entry that went away. Such an
-     * Error comes after the new entries are stored, so it skips what was still to run for this
-     * read: the remaining endpoint listeners, the reset of a refused credential for the remaining
-     * moved entries, and the change listeners. No later read repeats them, since it finds those
-     * entries unchanged. That is accepted rather than guarded against: the Error is the process
-     * failing, and the IDE's uncaught-exception handler, which it is on its way to, ends it.
+     * change, health or endpoint listener, or from closing the session of an entry that went away.
+     * Such an Error comes after the new entries are stored, and the resources of the entries that
+     * went away are taken out with them, so it skips only what was still to run for this read:
+     * closing the remaining sessions taken out, telling the health listeners, the remaining
+     * endpoint listeners, the reset of a refused credential for the remaining moved entries, and
+     * the change listeners. No later read repeats them, since it finds those entries unchanged.
+     * That is accepted rather than guarded against: the Error is the process failing, and the
+     * IDE's uncaught-exception handler, which it is on its way to, ends it.
      *
      * @param keepGoing checked after the read, before anything is stored.
      * @return true when the set of entries, a port or a token changed.
@@ -206,7 +214,8 @@ object AutomaticServers {
             return false
         }
         val moved = mutableListOf<String>()
-        val removed: List<String>
+        val detached = mutableListOf<McpSession>()
+        var healthForgotten = false
         val changed = synchronized(this) {
             if (source !== read || !keepGoing() || ticket < storedRead) return false
             storedRead = ticket
@@ -223,13 +232,17 @@ object AutomaticServers {
                 }
             }
             states = next
-            removed = (old.keys - next.keys).toList()
+            // Here, not after the lock: a read that restores the app has to come after this one,
+            // so the health and session taken out are this entry's, never its successor's.
+            // McpConnections takes its own lock inside this one and never calls in here under it.
+            for (id in old.keys - next.keys) {
+                McpConnections.detach(id)?.let { detached += it }
+                if (McpServerHealth.detach(id)) healthForgotten = true
+            }
             old.mapValues { it.value.endpoint } != next.mapValues { it.value.endpoint }
         }
-        for (id in removed) {
-            McpToolCatalog.forget(id)
-            McpConnections.invalidate(id)
-        }
+        for (session in detached) runCatchingRecoverable { session.close() }
+        if (healthForgotten) McpServerHealth.notifyChanged()
         for (id in moved) {
             // A refused credential is not final for this entry: the new one has not been tried.
             McpServerHealth.credentialChanged(id)

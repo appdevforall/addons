@@ -58,7 +58,10 @@ debug app reports; the plugin reads them through the `DebuggerEndpointService`
 (permission `debugger.endpoints`, so it needs Code on the Go 26.48 or later) and
 points the entry at `http://127.0.0.1:<port>/mcp`. A relaunched app gets a new
 port and token, and the plugin reads them again after a refused connection. An
-app that has not reported yet has no entry, and no error is shown.
+app that has not reported yet has no entry, and no error is shown. An app that
+stops reporting loses its entry, and the entry's tools, health and session go
+with it in the same step; if the app comes back before that step has finished
+its cleanup, the new entry keeps its own.
 
 When the entry cannot reach its app, the reason the Agent tab shows says what to
 do, told apart by exception type (`SocketTimeoutException` or `ConnectException`,

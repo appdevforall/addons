@@ -73,8 +73,21 @@ object McpConnections {
 
     /** Drops the session for [serverId], ending it server-side when it had one. */
     fun invalidate(serverId: String) {
-        sessions.remove(serverId)?.second?.let { runCatchingRecoverable { it.close() } }
+        detach(serverId)?.let { runCatchingRecoverable { it.close() } }
     }
+
+    /**
+     * Takes the session for [serverId] out without ending it, for a caller that must take it out
+     * under a lock of its own and end it once that lock is let go, since `close()` sends a DELETE.
+     * `AutomaticServers` does, for an entry that went away, in the same step that removes it.
+     *
+     * Taken under this object's lock, as [session] replaces a session under it. Safe to call under
+     * another lock: nothing here calls out while holding this one, [session] reading the
+     * credentials before it takes it.
+     *
+     * @return the session taken out, or null when [serverId] had none.
+     */
+    fun detach(serverId: String): McpSession? = synchronized(this) { sessions.remove(serverId)?.second }
 
     /** Ends every session, for the plugin shutting down. */
     fun closeAll() {

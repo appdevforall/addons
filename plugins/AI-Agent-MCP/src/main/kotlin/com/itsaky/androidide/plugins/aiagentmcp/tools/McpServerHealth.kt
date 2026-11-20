@@ -69,8 +69,20 @@ object McpServerHealth {
 
     /** Forgets a server that was removed. */
     fun forget(serverId: String) {
-        if (byServer.remove(serverId) != null) fireChanged()
+        if (detach(serverId)) fireChanged()
     }
+
+    /**
+     * As [forget], without telling the listeners: for a caller that forgets a server under a lock
+     * of its own, which a listener calling the host must not run under. That caller calls
+     * [notifyChanged] once it has let go, when this returned true.
+     *
+     * @return whether anything was known of [serverId].
+     */
+    internal fun detach(serverId: String): Boolean = byServer.remove(serverId) != null
+
+    /** Tells the listeners of a change [detach] made. */
+    internal fun notifyChanged() = fireChanged()
 
     /** Forgets everything, for the plugin shutting down. */
     fun clear() {
