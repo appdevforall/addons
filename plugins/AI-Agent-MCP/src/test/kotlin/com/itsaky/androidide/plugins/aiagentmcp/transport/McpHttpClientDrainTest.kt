@@ -73,6 +73,32 @@ class McpHttpClientDrainTest {
     }
 
     @Test
+    fun `a body that outlasts the deadline is abandoned though it is far inside the budget`() {
+        var now = 0L
+        val body = object : InputStream() {
+            var reads = 0
+            var closed = false
+            override fun read(): Int = 'a'.code.also { now += 4_000; reads++ }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                b[off] = read().toByte()
+                return 1
+            }
+            override fun close() {
+                closed = true
+            }
+        }
+
+        val drained = McpHttpClient.drain(deadlineMs = 10_000, nowMs = { now }) { body }
+
+        assertTrue(
+            "a trickling body was not abandoned at the deadline: ${drained.exceptionOrNull()}",
+            drained.exceptionOrNull() is McpHttpClient.DrainBudgetException,
+        )
+        assertEquals("reads before the deadline passed", 3, body.reads)
+        assertTrue("the body was not closed", body.closed)
+    }
+
+    @Test
     fun `an OutOfMemoryError while draining reaches the caller`() {
         val body = object : InputStream() {
             override fun read(): Int = throw OutOfMemoryError("reading a 202 body")
@@ -130,6 +156,61 @@ class McpHttpClientDrainTest {
             client.post(url, "", JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "ping"))
 
             assertNull(accepted.document)
+            assertEquals("requests seen", 2, ports.size)
+            assertNotEquals("the abandoned socket was reused", ports[0], ports[1])
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    /**
+     * A 202 whose body trickles a byte at a time, never tripping a read timeout: the POST returns
+     * at the drain's deadline and the next request arrives on a new connection.
+     */
+    @Test(timeout = 30_000)
+    fun `a 202 body that trickles returns at the deadline and its socket is not reused`() {
+        val ports = java.util.concurrent.CopyOnWriteArrayList<Int>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/mcp") { exchange ->
+                ports += exchange.remoteAddress.port
+                val request = JSONObject(exchange.requestBody.use { String(it.readBytes()) })
+                if (request.optString("method") == "notifications/initialized") {
+                    exchange.sendResponseHeaders(202, 0)
+                    runCatching {
+                        exchange.responseBody.use { out ->
+                            while (true) {
+                                out.write('a'.code)
+                                out.flush()
+                                Thread.sleep(20)
+                            }
+                        }
+                    }
+                } else {
+                    val bytes = JSONObject().put("jsonrpc", "2.0").put("id", 1)
+                        .put("result", JSONObject()).toString().toByteArray()
+                    exchange.responseHeaders.add("Content-Type", "application/json")
+                    exchange.sendResponseHeaders(200, bytes.size.toLong())
+                    exchange.responseBody.use { it.write(bytes) }
+                }
+                exchange.close()
+            }
+            start()
+        }
+        try {
+            val url = "http://127.0.0.1:${server.address.port}/mcp"
+            val client = McpHttpClient(drainDeadlineMs = 300)
+
+            val started = System.nanoTime()
+            val accepted = client.post(
+                url,
+                "",
+                JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"),
+            )
+            val tookMs = (System.nanoTime() - started) / 1_000_000
+            client.post(url, "", JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "ping"))
+
+            assertNull(accepted.document)
+            assertTrue("the drain took $tookMs ms against a 300 ms deadline", tookMs < 5_000)
             assertEquals("requests seen", 2, ports.size)
             assertNotEquals("the abandoned socket was reused", ports[0], ports[1])
         } finally {
