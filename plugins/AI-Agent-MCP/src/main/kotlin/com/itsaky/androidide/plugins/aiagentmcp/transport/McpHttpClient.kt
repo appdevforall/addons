@@ -56,19 +56,42 @@ open class McpHttpClient(
         private const val DRAINED_CHARS_KEPT = 2 * McpExchange.Body.MAX_CHARS
 
         /**
+         * Characters of a 202 body read and thrown away, past the ones kept, before the drain gives
+         * up on it: about 1 MiB of ASCII. Far more than any server sends by mistake, and little
+         * enough that a body which never ends costs a moment rather than the call.
+         */
+        internal const val DRAIN_BUDGET_CHARS = 1L shl 20
+
+        /**
          * Reads a body to its end through a fixed buffer, keeping only its first [keep] characters.
          *
          * For a 202, which should carry no body: one left unread keeps the socket out of the pool,
          * and a server that sends a huge one must not cost Code on the Go, whose process this
-         * plugin runs in, its memory. A read that fails with an Exception or a LinkageError is
-         * returned as a failure, which the caller survives by not reusing the socket; any other
-         * Error, an OutOfMemoryError above all, propagates.
+         * plugin runs in, its memory. Nor its time: a body that runs on past [budget] dropped
+         * characters is abandoned as a failure. A server streaming one forever would otherwise hold
+         * the read, and with it `initialize`, which is synchronized, and every health check behind
+         * it. A read that fails with an Exception or a LinkageError is returned as a failure too.
+         * The caller survives either by not reusing the socket; any other Error, an OutOfMemoryError
+         * above all, propagates.
+         *
+         * The budget bounds how much is read, not how long it takes: a server that trickles a body
+         * slower than the read timeout can still hold the read until it has sent [budget].
+         *
+         * Only a 202 is bounded this way. A JSON reply and an error body are read whole, with
+         * `readText()`: each is the document the caller needs.
          *
          * @param keep how many characters to keep.
+         * @param budget how many characters past [keep] may be read and dropped before the body is
+         *   abandoned.
          * @param open opens the body; called inside the guard, since opening it can fail too.
-         * @return what was kept and how much was dropped, or the recoverable failure.
+         * @return what was kept and how much was dropped, or the failure: a recoverable read
+         *   failure, or a [DrainBudgetException] for a body that ran past [budget].
          */
-        internal fun drain(keep: Int = DRAINED_CHARS_KEPT, open: () -> InputStream): Result<Drained> =
+        internal fun drain(
+            keep: Int = DRAINED_CHARS_KEPT,
+            budget: Long = DRAIN_BUDGET_CHARS,
+            open: () -> InputStream,
+        ): Result<Drained> =
             runCatchingRecoverable {
                 open().reader(Charsets.UTF_8).use { reader ->
                     val kept = StringBuilder()
@@ -80,6 +103,11 @@ open class McpHttpClient(
                         val room = (keep - kept.length).coerceIn(0, read)
                         kept.append(buffer, 0, room)
                         dropped += read - room
+                        if (dropped > budget) {
+                            throw DrainBudgetException(
+                                "A 202 body ran past ${kept.length + budget} characters; abandoned it"
+                            )
+                        }
                     }
                     Drained(kept.toString(), dropped)
                 }
@@ -92,6 +120,9 @@ open class McpHttpClient(
      * @property dropped how many characters came after [text] and were read and thrown away.
      */
     internal class Drained(val text: String, val dropped: Long)
+
+    /** A 202 body that ran past [DRAIN_BUDGET_CHARS]; its socket is disconnected, not reused. */
+    internal class DrainBudgetException(message: String) : IOException(message)
 
     /**
      * One answer to a POST.
@@ -163,6 +194,9 @@ open class McpHttpClient(
                         // A half-read body is neither pooled nor closed, so only a whole drain counts.
                         val drained = drain { conn.inputStream }
                         drained.getOrNull()?.let { trace.received(it.text, it.dropped) }
+                        drained.exceptionOrNull()?.let { e ->
+                            Log.w(TAG, "Not reusing the connection after its 202 body: ${e.message}")
+                        }
                         reusable = drained.isSuccess
                         return Response(null, assignedSession)
                     }
