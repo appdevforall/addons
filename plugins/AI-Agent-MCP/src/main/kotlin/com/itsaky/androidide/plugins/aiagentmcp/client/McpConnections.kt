@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
@@ -44,6 +45,14 @@ object McpConnections {
      *
      * Reads the token and the headers, so call this off the main thread.
      *
+     * A server no longer configured gets a session that is not kept: the caller is a call or a
+     * listing that outlived the server's removal, and a session stored for it would outlive the
+     * server with nothing left to close it. The check is made under this object's lock, which the
+     * removal of a SQLite debugger entry takes, to detach its session, only after the entry has
+     * left the list; so either that removal takes the session out or this sees the entry gone. A
+     * server of the user's is removed from the store after its session is ended, so its DELETE
+     * still has the credentials; a lookup between the two still stores one.
+     *
      * @param server the server to connect to.
      * @return its session, not yet initialized.
      */
@@ -57,11 +66,12 @@ object McpConnections {
         val session = synchronized(this) {
             val current = sessions[server.id]
             if (current != null && current.first == key) return current.second
-            stale = current?.second
             // A supplier, not the values: the session is kept for the life of the process, and a
             // token in one of its fields would be readable in a heap dump for just as long.
-            McpSession(server.url, { credentialsFor(server.id, server.url) })
-                .also { sessions[server.id] = key to it }
+            val fresh = McpSession(server.url, { credentialsFor(server.id, server.url) })
+            if (!McpServers.isConfigured(server.id)) return fresh
+            stale = current?.second
+            fresh.also { sessions[server.id] = key to it }
         }
 
         stale?.let {
@@ -82,8 +92,8 @@ object McpConnections {
      * `AutomaticServers` does, for an entry that went away, in the same step that removes it.
      *
      * Taken under this object's lock, as [session] replaces a session under it. Safe to call under
-     * another lock: nothing here calls out while holding this one, [session] reading the
-     * credentials before it takes it.
+     * another lock: under this one, [session] only reads the configured servers, which takes no
+     * lock (`McpServers.all`), and it reads the credentials before it takes this one.
      *
      * @return the session taken out, or null when [serverId] had none.
      */

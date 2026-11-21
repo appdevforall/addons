@@ -214,8 +214,9 @@ class McpToolSource internal constructor(
                 // there and reads the flag again before it sends anything.
                 McpConnections.session(target).callTool(tool.name, arguments, call.handle)
             }
-            // A reply of any kind, a tool's own failure included, means the server is answering.
-            McpServerHealth.available(server.id)
+            // A reply of any kind, a tool's own failure included, means the server is answering;
+            // unless it was removed while the call ran, when recording it would bring back its row.
+            if (McpServers.isConfigured(server.id)) McpServerHealth.available(server.id)
             Outcome(result.success, result.text, result.errorMessage)
         } catch (e: Throwable) {
             // Throwable, unlike the other host-facing catches in this plugin: this runs inside

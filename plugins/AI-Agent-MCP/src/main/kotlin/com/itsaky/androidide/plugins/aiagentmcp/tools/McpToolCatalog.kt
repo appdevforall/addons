@@ -85,7 +85,7 @@ object McpToolCatalog {
             throw e
         }
         // Deleted while the handshake was in flight: recording it would resurrect its entry.
-        if (isConfigured(server.id)) McpServerHealth.available(server.id)
+        if (McpServers.isConfigured(server.id)) McpServerHealth.available(server.id)
         return listing
     }
 
@@ -102,14 +102,11 @@ object McpToolCatalog {
             McpServerHealth.cancelConnecting(server.id)
             return
         }
-        if (!isConfigured(server.id)) return
+        if (!McpServers.isConfigured(server.id)) return
         val context = McpPlugin.getContext()?.androidContext
         val refused = failure is McpFailure.TokenRefused || failure is McpFailure.Forbidden
         McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server, error), refused)
     }
-
-    private fun isConfigured(serverId: String): Boolean =
-        McpServers.all().any { it.id == serverId }
 
     /** The handshake-and-list itself; see [connect]. */
     private fun list(server: McpServer, exchangeListener: McpExchangeListener): Listing {

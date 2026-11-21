@@ -61,7 +61,8 @@ port and token, and the plugin reads them again after a refused connection. An
 app that has not reported yet has no entry, and no error is shown. An app that
 stops reporting loses its entry, and the entry's tools, health and session go
 with it in the same step; if the app comes back before that step has finished
-its cleanup, the new entry keeps its own.
+its cleanup, the new entry keeps its own. A call or a listing still running
+when the entry goes leaves no session or health behind for it.
 
 When the entry cannot reach its app, the reason the Agent tab shows says what to
 do, told apart by exception type (`SocketTimeoutException` or `ConnectException`,

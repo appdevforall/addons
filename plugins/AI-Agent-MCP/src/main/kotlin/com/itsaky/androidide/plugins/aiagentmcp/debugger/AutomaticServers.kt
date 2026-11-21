@@ -325,4 +325,10 @@ object AutomaticServers {
 /** Every server the agent may use: the user's own plus the automatic entries. */
 object McpServers {
     fun all(): List<McpServer> = McpServerStore.servers() + AutomaticServers.servers()
+
+    /**
+     * Whether [serverId] is configured now: the check that keeps a call or a listing which outlived
+     * a server's removal from bringing back that server's session or health.
+     */
+    fun isConfigured(serverId: String): Boolean = all().any { it.id == serverId }
 }
