@@ -130,6 +130,14 @@ class McpLogFormatTest {
         assertNotNull("brackets inside strings were counted", McpLogFormat.json(body))
     }
 
+    @Test
+    fun givenABodyThatIsNotStrictJson_whenFormatted_thenItIsShownAsItCame() {
+        val body = """{"jsonrpc":"2.0","id":2,"result":{}} // done"""
+
+        assertNull(McpLogFormat.json(body))
+        assertEquals(body, McpLogFormat.pretty(body))
+    }
+
     /** Descends once per opening bracket at the start of [text], as a recursive-descent parser does. */
     private fun recursiveIndent(text: String): String? {
         fun descend(index: Int): Int =

@@ -111,7 +111,7 @@ class JsonRpcTest {
      */
     @Test
     fun givenAReplyNestedTenThousandDeep_whenParsed_thenItIsRefusedBeforeAnyParserRuns() {
-        assertThrows(JsonRpc.TooDeepException::class.java) { JsonRpc.parseReply("[".repeat(10_000)) }
+        assertThrows(JsonRpc.UnparsedReplyException::class.java) { JsonRpc.parseReply("[".repeat(10_000)) }
     }
 
     @Test
@@ -119,7 +119,26 @@ class JsonRpcTest {
         val nested = "[".repeat(JsonDepth.MAX) + "]".repeat(JsonDepth.MAX)
         val payload = """{"jsonrpc":"2.0","id":"7","result":{"tools":[],"extra":$nested}}"""
 
-        assertThrows(JsonRpc.TooDeepException::class.java) { JsonRpc.parseReply(payload) }
+        assertThrows(JsonRpc.UnparsedReplyException::class.java) { JsonRpc.parseReply(payload) }
+    }
+
+    @Test
+    fun givenAReplyOneLevelPastTheLimit_whenParsed_thenTheDepthIsTheReason() {
+        val depth = JsonDepth.MAX + 1
+        val failure = assertThrows(JsonRpc.UnparsedReplyException::class.java) {
+            JsonRpc.parseReply("[".repeat(depth) + "]".repeat(depth))
+        }
+
+        assertEquals(JsonDepth.Refusal.TooDeep(JsonDepth.MAX).reason, failure.message)
+    }
+
+    @Test
+    fun givenAReplyWithAComment_whenParsed_thenNotStrictJsonIsTheReason() {
+        val payload = """{"jsonrpc":"2.0","id":"7","result":{}} // done"""
+
+        val failure = assertThrows(JsonRpc.UnparsedReplyException::class.java) { JsonRpc.parseReply(payload) }
+
+        assertEquals(JsonDepth.Refusal.NotStrict('/').reason, failure.message)
     }
 
     @Test

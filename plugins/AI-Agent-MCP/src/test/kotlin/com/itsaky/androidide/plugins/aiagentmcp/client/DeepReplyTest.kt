@@ -19,6 +19,10 @@ import org.junit.Test
  * would end Code on the Go. The reply is now refused before it is parsed. The org.json these tests
  * run on fails such a parse with a JSONException of its own, so the message is what tells the
  * guard's refusal apart.
+ *
+ * The reason is the rule the reply broke. A reply with a comment, refused because it is not strict
+ * JSON, was reported as nested more than 100 levels deep, and its server's author would look for
+ * nesting that is not there.
  */
 class DeepReplyTest {
 
@@ -54,6 +58,34 @@ class DeepReplyTest {
         assertEquals(
             "The server's reply to 'tools/list' nests arrays and objects more than ${JsonDepth.MAX} " +
                 "levels deep; it was not read.",
+            failure.message,
+        )
+    }
+
+    @Test
+    fun `a reply one level past the limit fails the listing with the depth as its reason`() {
+        val depth = JsonDepth.MAX + 1
+        val failure = assertThrows(IOException::class.java) {
+            session("[".repeat(depth) + "]".repeat(depth)).listTools()
+        }
+
+        assertEquals(
+            "The server's reply to 'tools/list' nests arrays and objects more than ${JsonDepth.MAX} " +
+                "levels deep; it was not read.",
+            failure.message,
+        )
+    }
+
+    @Test
+    fun `a reply with a comment fails the listing as not strict JSON, not as nested too deep`() {
+        val reply = """{"jsonrpc":"2.0","id":2, // the listing
+            |"result":{"tools":[]}}""".trimMargin()
+
+        val failure = assertThrows(IOException::class.java) { session(reply).listTools() }
+
+        assertEquals(
+            "The server's reply to 'tools/list' is not strict JSON: a comment, single quote, ';', '=' " +
+                "or stray '\"' outside a string (found '/'); it was not read.",
             failure.message,
         )
     }

@@ -57,11 +57,12 @@ object McpLogFormat {
      * [text] as indented JSON, or null when it is not JSON. An Exception or LinkageError from
      * [indent] is a body that is not JSON; any other Error, an OutOfMemoryError above all, propagates.
      * So would a StackOverflowError, which is why [text] never reaches [indent] when it nests
-     * deeper than [JsonDepth.MAX]: it is shown as it came.
+     * deeper than [JsonDepth.MAX], or is not strict JSON and could hide such nesting: it is shown
+     * as it came.
      * @param indent the parsing and indenting; injectable so a test can make it fail.
      */
     internal fun json(text: String, indent: (String) -> String? = ::indentJson): String? {
-        if (JsonDepth.exceeds(text)) return null
+        if (JsonDepth.refusal(text) != null) return null
         val indented = runCatchingRecoverable { indent(text) }.getOrNull()
         // org.json escapes every '/', which turns each URL in a reply into noise.
         return indented?.replace("\\/", "/")

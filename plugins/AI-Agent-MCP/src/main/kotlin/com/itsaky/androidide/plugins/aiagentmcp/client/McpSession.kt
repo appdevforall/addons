@@ -308,9 +308,9 @@ class McpSession(
 
         val reply = try {
             JsonRpc.parseReply(document)
-        } catch (e: JsonRpc.TooDeepException) {
-            // Refused rather than parsed, so the call or listing fails with this reason instead of
-            // a StackOverflowError ending Code on the Go.
+        } catch (e: JsonRpc.UnparsedReplyException) {
+            // Refused rather than parsed, so the call or listing fails with the rule the reply broke
+            // instead of a StackOverflowError ending Code on the Go.
             throw IOException("The server's reply to '$method' ${e.message}; it was not read.", e)
         } catch (e: Exception) {
             throw IOException("The server's reply to '$method' was not JSON-RPC: ${e.message}")

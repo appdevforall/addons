@@ -6,8 +6,9 @@ package com.itsaky.androidide.plugins.aiagentmcp.transport
  * org.json parses recursively, once per array or object, and Android's has no limit of its own:
  * a body of nothing but `[` runs the thread out of stack, and the StackOverflowError ends Code on
  * the Go, whose process this plugin runs in. So a server's text is scanned first, in one pass with
- * no recursion, and text nested deeper than [MAX] is never handed to a parser: a reply is refused
- * ([JsonRpc.parseReply]), and a body in the connection log is shown as it came.
+ * no recursion, and text nested deeper than [MAX], or not strict JSON, is never handed to a parser:
+ * a reply is refused with the rule it broke ([JsonRpc.parseReply]), and a body in the connection
+ * log is shown as it came.
  */
 internal object JsonDepth {
 
@@ -15,9 +16,32 @@ internal object JsonDepth {
     const val MAX = 100
 
     /**
-     * Whether [text] opens more than [limit] arrays or objects one inside another, or is not strict
-     * JSON where that could hide brackets; one pass, no recursion. A bracket inside a string does
-     * not count.
+     * Why [refusal] refused a text, kept apart so a server's author is told the rule their reply
+     * broke: a reply refused for a comment but reported as nested too deep sends them looking for
+     * nesting that is not there.
+     * @property reason what is wrong with the text, to follow "The server's reply to 'm' ".
+     */
+    sealed interface Refusal {
+        val reason: String
+
+        /** More than [limit] arrays or objects one inside another. */
+        data class TooDeep(val limit: Int) : Refusal {
+            override val reason: String get() = "nests arrays and objects more than $limit levels deep"
+        }
+
+        /** [found] outside a string, where strict JSON never has it. */
+        data class NotStrict(val found: Char) : Refusal {
+            override val reason: String
+                get() = "is not strict JSON: a comment, single quote, ';', '=' or stray '\"' outside " +
+                    "a string (found '$found')"
+        }
+    }
+
+    /**
+     * Why [text] may not be parsed: it opens more than [limit] arrays or objects one inside
+     * another, or it is not strict JSON where that could hide brackets; null when it may. One
+     * pass, no recursion; the first rule broken is the one reported. A bracket inside a string
+     * does not count.
      *
      * The scan reads strict JSON, because Android's org.json is lenient: it also reads `;` as a
      * separator, `=` and `=>` between a name and its value, `//`, `/* */` and `#` comments, single
@@ -32,7 +56,7 @@ internal object JsonDepth {
      *
      * Valid JSON is never refused for these rules, so no MCP reply is.
      */
-    fun exceeds(text: String, limit: Int = MAX): Boolean {
+    fun refusal(text: String, limit: Int = MAX): Refusal? {
         var depth = 0
         var inString = false
         var escaped = false
@@ -49,16 +73,18 @@ internal object JsonDepth {
             }
             when (c) {
                 ' ', '\t', '\n', '\r' -> continue
-                '\'', ';', '=', '/', '#' -> return true
+                '\'', ';', '=', '/', '#' -> return Refusal.NotStrict(c)
                 '"' -> {
-                    if (last != null && last != '[' && last != '{' && last != ',' && last != ':') return true
+                    if (last != null && last != '[' && last != '{' && last != ',' && last != ':') {
+                        return Refusal.NotStrict(c)
+                    }
                     inString = true
                 }
-                '[', '{' -> if (++depth > limit) return true
+                '[', '{' -> if (++depth > limit) return Refusal.TooDeep(limit)
                 ']', '}' -> if (depth > 0) depth--
             }
             last = c
         }
-        return false
+        return null
     }
 }
