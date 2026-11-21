@@ -180,6 +180,9 @@ Two dependencies were deliberately not taken:
   version needs **26.48 or later**, the first release that ships `DebuggerEndpointService`
   (`plugin.min_ide_version`); users on 26.47 or older cannot install it. 26.48 assumes the
   release after 26.47 ships it; recheck it against the real release number before merging.
+- A server's token and headers go only to the URL it is saved with. When the URL
+  is edited, the old session is ended, and any of its requests still running
+  finish, with neither: the token entered for the new URL never reaches the old.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.

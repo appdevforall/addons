@@ -184,9 +184,13 @@ object McpConnections {
      * does not register, and it is what keeps the plaintext from outliving the request.
      *
      * @param serverId the server being called.
-     * @param url the url the calling session was built for. An automatic entry's token is released
-     *   only while the entry still points there; a session for a replaced endpoint gets none, so
-     *   its `close()` and any call still in flight cannot hand the new process's token to the old port.
+     * @param url the url the calling session was built for. A server's credentials are released
+     *   only while it still points there; a session for a URL it has left gets none, so its
+     *   `close()` and any call still in flight cannot hand the credentials meant for the new URL
+     *   to the old one. That holds for an automatic entry, whose replaced endpoint would get the
+     *   new process's token, and for a server of the user's, whose old URL would get the token
+     *   and headers the user entered for the new one: the settings pane stores them before it
+     *   ends the old session.
      * @return its token and headers; either may be empty.
      * @throws UnreadableSecretException when a stored credential cannot be decrypted here. Sending
      *   the request without it would earn a 401 and tell the user their token was refused.
@@ -198,6 +202,9 @@ object McpConnections {
             // Read per request, so a token refreshed on the same port is used without a new session.
             return automaticCredentials(AutomaticServers.endpoint(serverId), url)
         }
+        // A server removed since, or moved to another URL, gets nothing; checked before the
+        // Keystore is read, so its secrets are not even decrypted.
+        if (McpServerStore.server(serverId)?.url != url) return McpCredentials("", emptyMap())
         val token = when (val stored = McpServerStore.token(serverId)) {
             // Trimmed here, not by the store: the host's readAndMigrate migrates verbatim, and a
             // legacy token saved with a stray newline is one `setRequestProperty` refuses to send.

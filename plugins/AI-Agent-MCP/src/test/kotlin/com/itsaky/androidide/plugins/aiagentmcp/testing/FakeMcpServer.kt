@@ -22,14 +22,21 @@ class FakeMcpServer(
     private val sessionId: String? = null,
 ) {
 
-    /** One request as the server saw it. */
-    data class Seen(val httpMethod: String, val authorization: String?)
+    /**
+     * One request as the server saw it.
+     * @property headerNames the names of every header it carried, in lower case.
+     */
+    data class Seen(val httpMethod: String, val authorization: String?, val headerNames: Set<String> = emptySet())
 
     val requests = java.util.concurrent.CopyOnWriteArrayList<Seen>()
 
     private val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/mcp") { exchange ->
-            requests += Seen(exchange.requestMethod, exchange.requestHeaders.getFirst("Authorization"))
+            requests += Seen(
+                exchange.requestMethod,
+                exchange.requestHeaders.getFirst("Authorization"),
+                exchange.requestHeaders.keys.mapTo(mutableSetOf()) { it.lowercase() },
+            )
             if (exchange.requestMethod == "DELETE") {
                 exchange.sendResponseHeaders(200, -1)
                 exchange.close()
