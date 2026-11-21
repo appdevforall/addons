@@ -48,7 +48,9 @@ object McpConnections {
      *
      * A server no longer configured gets a session that is not kept: the caller is a call or a
      * listing that outlived the server's removal, and a session stored for it would outlive the
-     * server with nothing left to close it. The check is made under this object's lock, which the
+     * server with nothing left to close it. So does a server of the user's whose URL has been
+     * edited since the caller read it ([McpServers.isConfigured]): its session, for the old URL,
+     * would replace the one for the new. The check is made under this object's lock, which the
      * removal of a SQLite debugger entry takes, to detach its session, only after the entry has
      * left the list; so either that removal takes the session out or this sees the entry gone. A
      * server of the user's is removed from the store after its session is ended, so its DELETE
@@ -89,7 +91,7 @@ object McpConnections {
     /**
      * What [lookUp] found.
      * @property kept whether [session] is the one stored for its server; false for a server no
-     *   longer configured.
+     *   longer configured, or no longer at the URL the caller had.
      */
     private class Found(val session: McpSession, val kept: Boolean)
 
@@ -107,7 +109,7 @@ object McpConnections {
             // A supplier, not the values: the session is kept for the life of the process, and a
             // token in one of its fields would be readable in a heap dump for just as long.
             val fresh = McpSession(server.url, { credentialsFor(server.id, server.url) })
-            if (!McpServers.isConfigured(server.id)) return Found(fresh, kept = false)
+            if (!McpServers.isConfigured(server)) return Found(fresh, kept = false)
             stale = current?.second
             fresh.also { sessions[server.id] = key to it }
         }

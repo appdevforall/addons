@@ -87,15 +87,17 @@ object McpToolCatalog {
         exchangeListener: McpExchangeListener = McpExchangeListener.NONE,
     ): Listing {
         // Each checked with its write, under the lock a removal takes: a server deleted while the
-        // handshake was in flight, even just after a check, gets no row back.
-        McpServerHealth.connectingIfUnknown(server.id, McpServers::isConfigured)
+        // handshake was in flight, even just after a check, gets no row back, nor one whose URL was
+        // edited since [server] was read.
+        val configured = { _: String -> McpServers.isConfigured(server) }
+        McpServerHealth.connectingIfUnknown(server.id, configured)
         val listing = try {
             retry.call(server) { list(it, exchangeListener) }
         } catch (e: Throwable) {
             recordFailure(server, e)
             throw e
         }
-        McpServerHealth.available(server.id, McpServers::isConfigured)
+        McpServerHealth.available(server.id, configured)
         return listing
     }
 
@@ -114,13 +116,13 @@ object McpToolCatalog {
         }
         val context = McpPlugin.getContext()?.androidContext
         val refused = failure is McpFailure.TokenRefused || failure is McpFailure.Forbidden
-        // Not for a server removed meanwhile, checked with the write as in connect.
+        // Not for a server removed meanwhile, or moved to another URL, checked with the write as in
+        // connect: a stale caller's 401 from the old URL must not mark the moved server refused.
         McpServerHealth.degraded(
             server.id,
             McpErrorFormatter.format(context, server, error),
             refused,
-            McpServers::isConfigured,
-        )
+        ) { McpServers.isConfigured(server) }
     }
 
     /** The handshake-and-list itself; see [connect]. */
@@ -154,10 +156,10 @@ object McpToolCatalog {
             }
         } else {
             val stored = synchronized(lock) {
-                McpServers.isConfigured(server.id).also { if (it) toolsByServer[server.id] = tools }
+                McpServers.isConfigured(server).also { if (it) toolsByServer[server.id] = tools }
             }
             if (!stored) {
-                Log.i(TAG, "Dropping a tool list from '${server.name}', removed while it listed")
+                Log.i(TAG, "Dropping a tool list from '${server.name}', removed or moved while it listed")
                 return Listing(serverName, tools)
             }
             McpServerStore.setKnownTools(server.id, tools.map { it.name })

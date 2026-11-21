@@ -328,8 +328,18 @@ object McpServers {
     fun all(): List<McpServer> = McpServerStore.servers() + AutomaticServers.servers()
 
     /**
-     * Whether [serverId] is configured now: the check that keeps a call or a listing which outlived
-     * a server's removal from bringing back that server's session or health.
+     * Whether [server] is configured now: the check that keeps a call or a listing which outlived
+     * a server's removal from bringing back that server's session, health or tools.
+     *
+     * A server of the user's counts only at the URL [server] carries. A probe, a listing or a call
+     * handed the server before its URL was edited asks the old URL, which gets no credentials
+     * (`McpConnections.credentialsFor`): its 401 would otherwise mark the server refused after the
+     * edit had cleared that, so the probe skipped it until the next edit, and its session would
+     * replace the one for the new URL. A SQLite debugger entry counts by id: a call retried on its
+     * new endpoint (`EndpointRetry`) records its outcome under the entry it started with, and its
+     * session is keyed by URL and token anyway.
      */
-    fun isConfigured(serverId: String): Boolean = all().any { it.id == serverId }
+    fun isConfigured(server: McpServer): Boolean =
+        if (AutomaticServers.isAutomatic(server.id)) AutomaticServers.endpoint(server.id) != null
+        else McpServerStore.server(server.id)?.url == server.url
 }

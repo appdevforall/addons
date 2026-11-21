@@ -70,7 +70,7 @@ class RemovalDuringRecordTest {
             val configured = callOriginal()
             if (trigger() && fired.compareAndSet(false, true)) {
                 val checking = Thread.currentThread()
-                val id = firstArg<String>()
+                val id = firstArg<McpServer>().id
                 val removal = thread(name = "removing") { McpSettingsViewModel { null }.deleteNow(id) }
                 removals += removal
                 awaitFinishedOrBlockedBy(removal, checking)

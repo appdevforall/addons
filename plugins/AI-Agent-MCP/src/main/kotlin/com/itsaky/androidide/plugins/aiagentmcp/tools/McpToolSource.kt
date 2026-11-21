@@ -217,9 +217,10 @@ class McpToolSource internal constructor(
                 McpConnections.withSession(target) { it.callTool(tool.name, arguments, call.handle) }
             }
             // A reply of any kind, a tool's own failure included, means the server is answering;
-            // unless it was removed while the call ran, when recording it would bring back its row.
-            // Checked with the write, under the lock the removal takes, so it cannot land between.
-            McpServerHealth.available(server.id, McpServers::isConfigured)
+            // unless it was removed while the call ran, when recording it would bring back its row,
+            // or moved to another URL. Checked with the write, under the lock the removal takes, so
+            // it cannot land between.
+            McpServerHealth.available(server.id) { McpServers.isConfigured(server) }
             Outcome(result.success, result.text, result.errorMessage)
         } catch (e: Throwable) {
             // Throwable, unlike the other host-facing catches in this plugin: this runs inside
