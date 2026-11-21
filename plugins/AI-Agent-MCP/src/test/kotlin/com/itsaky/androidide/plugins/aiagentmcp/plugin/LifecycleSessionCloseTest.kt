@@ -133,8 +133,7 @@ class LifecycleSessionCloseTest {
      *
      * A health listener holds the deactivation at its teardown's last steps, after the sessions are
      * taken out, in a wait on the lifecycle lock, which lets that lock go: the window, opened for as
-     * long as the test needs. The lock is private, so the test reaches it by reflection. Nothing
-     * sleeps.
+     * long as the test needs. The lock is internal for this test. Nothing sleeps.
      */
     @Test
     @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN") // wait and notifyAll on the lock's own monitor
@@ -146,9 +145,7 @@ class LifecycleSessionCloseTest {
         McpConnections.session(saved).initialize()
         // A health row, so the teardown's clearing of the cache tells the health listeners.
         McpServerHealth.available(saved.id)
-        val lock = McpPlugin::class.java.getDeclaredField("lifecycleLock")
-            .apply { isAccessible = true }
-            .get(plugin) as java.lang.Object
+        val lock = plugin.lifecycleLock as java.lang.Object
         val held = CountDownLatch(1)
         var resume = false
         val hold = {

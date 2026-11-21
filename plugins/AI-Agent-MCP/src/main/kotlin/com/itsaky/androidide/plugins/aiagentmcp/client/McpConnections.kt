@@ -205,7 +205,24 @@ object McpConnections {
 
     /** Ends every session, for the plugin shutting down. */
     fun closeAll() {
-        detachAll().forEach { it.close() }
+        endAll(detachAll())
+    }
+
+    /**
+     * Ends each of [released], best effort, as [Released.close] does one. An Error from one, which
+     * [Released.close] lets through, does not stop the rest: each is ended, and the first Error is
+     * thrown once they all have been, the others added to it as suppressed.
+     */
+    fun endAll(released: List<Released>) {
+        var first: Error? = null
+        for (session in released) {
+            try {
+                session.close()
+            } catch (e: Error) {
+                first?.addSuppressed(e) ?: run { first = e }
+            }
+        }
+        first?.let { throw it }
     }
 
     /**
