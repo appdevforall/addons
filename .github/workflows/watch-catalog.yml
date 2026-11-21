@@ -66,6 +66,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
+      # Its own step, so a PyPI failure is a failed step the fallback alert
+      # below reports, not a silent failure inside the comparison step.
+      - name: Install the addons tool
+        run: uv sync --directory tools/addons
+
       - name: Compare the catalog with the snapshot
         id: watch
         env:

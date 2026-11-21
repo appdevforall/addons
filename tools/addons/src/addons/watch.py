@@ -42,10 +42,12 @@ def validate(document) -> None:
         raise WatchError("catalog has 0 add-ons")
     seen = set()
     for i, addon in enumerate(addons):
+        # A non-string that became the baseline would break every later diff.
         missing = [k for k in ("addonId", "name", "type")
-                   if not isinstance(addon, dict) or not addon.get(k)]
+                   if not isinstance(addon, dict)
+                   or not isinstance(addon.get(k), str) or not addon[k]]
         if missing:
-            raise WatchError(f"add-on #{i} is missing {', '.join(missing)}")
+            raise WatchError(f"add-on #{i} has no string {', '.join(missing)}")
         if addon["addonId"] in seen:
             raise WatchError(f"duplicate addonId {addon['addonId']}")
         seen.add(addon["addonId"])

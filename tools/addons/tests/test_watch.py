@@ -106,6 +106,7 @@ def test_7_edits_to_other_fields_are_not_changes(env):
     json.dumps({}),
     json.dumps({"addons": [BRACKETS, BRACKETS]}),
     json.dumps({"addons": [{"addonId": "a", "name": "A"}]}),
+    json.dumps({"addons": [{"addonId": "a", "name": 1, "type": "plugin"}]}),
 ])
 def test_8_a_bad_catalog_reports_and_keeps_the_snapshot(env, bad):
     env.publish(BRACKETS)
