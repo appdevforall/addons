@@ -1,0 +1,104 @@
+name: Watch addons catalog
+
+# Once a day, tells Slack which addons were added to or removed from the
+# published catalog (ADFA-7231, docs/catalog-watcher-design.md). The logic is
+# `addons watch` in tools/addons; this file only schedules it and keeps state.
+#
+# The snapshot lives on its own branch, catalog-watcher-state, not on main: the
+# main ruleset requires a reviewed pull request and GITHUB_TOKEN cannot bypass
+# it. That branch's history is the record of what was published and when.
+#
+# Configuration, in Settings > Secrets and variables > Actions:
+#   secret   SLACK_WEBHOOK_URL   incoming webhook for #documentation
+#   variable ADDONS_CATALOG_URL  https://addons.appdevforall.org/v2/catalog.json
+
+on:
+  # GitHub cron is UTC with no daylight saving, so both entries fire and the
+  # gate below keeps the one that is 03:17 in New York today. Off the top of
+  # the hour, which GitHub says is when scheduled runs are delayed or dropped.
+  schedule:
+    - cron: '17 7 * * *'  # 03:17 EDT
+    - cron: '17 8 * * *'  # 03:17 EST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two runs pushing the same state branch would race.
+concurrency: watch-catalog
+
+env:
+  STATE_BRANCH: catalog-watcher-state
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - id: gate
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          zone="$(TZ=America/New_York date +%Z)"
+          case "$zone:$SCHEDULE" in
+            *:|EDT:'17 7 * * *'|EST:'17 8 * * *') echo run=true >> "$GITHUB_OUTPUT" ;;
+            *) echo "New York is on $zone today; the other schedule entry runs." ;;
+          esac
+
+  watch:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      CATALOG_URL: ${{ vars.ADDONS_CATALOG_URL }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Pre-flight checks
+        run: |
+          failed=0
+          [ -n "$SLACK_WEBHOOK_URL" ] || { echo "::error::Repository secret SLACK_WEBHOOK_URL is missing or empty."; failed=1; }
+          [ -n "$CATALOG_URL" ] || { echo "::error::Repository variable ADDONS_CATALOG_URL is missing or empty."; failed=1; }
+          exit "$failed"
+
+      - uses: actions/checkout@v4
+
+      - name: Check out the snapshot branch
+        run: |
+          set -euo pipefail
+          if git fetch --depth=1 origin "$STATE_BRANCH"; then
+            git worktree add -B "$STATE_BRANCH" state FETCH_HEAD
+          else
+            echo "No $STATE_BRANCH yet; this run saves the baseline."
+            git worktree add --orphan -b "$STATE_BRANCH" state
+          fi
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Compare the catalog with the snapshot
+        id: watch
+        run: uv run --directory tools/addons addons watch --url "$CATALOG_URL" --snapshot "$GITHUB_WORKSPACE/state/catalog-snapshot.json"
+
+      # Every successful run commits, changed or not, so the branch also shows
+      # the check ran. Only reached once any Slack post has succeeded.
+      - name: Commit the snapshot
+        working-directory: state
+        run: |
+          set -euo pipefail
+          date -u +%Y-%m-%dT%H:%M:%SZ > last-checked
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalog-snapshot.json last-checked
+          git commit -q -m "Catalog check $(cat last-checked)"
+          git push origin "$STATE_BRANCH"
+
+      # `addons watch` reports its own failures; this covers every other step.
+      - name: Report a failed run to Slack
+        if: failure() && steps.watch.outcome != 'failure' && env.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\":\"⚠️ Add-ons catalog check failed outside the comparison. Snapshot not updated. $RUN_URL\"}" \
+            "$SLACK_WEBHOOK_URL"
