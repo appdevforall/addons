@@ -34,6 +34,18 @@ class JsonDepthTest {
     }
 
     @Test
+    fun `valid strict JSON is accepted`() {
+        listOf(
+            // A byte order mark, which a JSON parser may ignore and Android's org.json skips.
+            "\uFEFF{\"a\":1}",
+            """{"n":1e5,"m":-0.5,"p":1E-3,"z":-0,"t":true,"f":false,"x":null}""",
+            """{"s":"é","u":"\u00e9","q":"\"\\\/"}""",
+            """{"a":[[],[[]],{"b":[]}],"o":{}}""",
+            """[{"jsonrpc":"2.0","id":1,"result":{}}]""",
+        ).forEach { text -> assertNull("refused: $text", JsonDepth.refusal(text)) }
+    }
+
+    @Test
     fun `a single-quoted string is refused`() {
         // Not JSON; Android's org.json reads it, and a quote inside it hides nothing from that parser.
         assertEquals(Refusal.NotStrict('\''), JsonDepth.refusal("['a']"))

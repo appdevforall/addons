@@ -12,6 +12,8 @@ object JsonRpc {
 
     private const val VERSION = "2.0"
 
+    private const val BYTE_ORDER_MARK = "\uFEFF"
+
     /** JSON-RPC's own code for a method the server does not implement. */
     const val METHOD_NOT_FOUND = -32601
 
@@ -64,6 +66,7 @@ object JsonRpc {
      *
      * A batch — which the spec allows and some servers send even for a single request — is reduced
      * to its first non-notification member, since this client only ever has one call in flight.
+     * A leading byte order mark is ignored.
      *
      * A document nested deeper than [JsonDepth.MAX], or not strict JSON, is refused before any
      * parser sees it: parsing recurses once per level, and on Android a server's reply nested
@@ -77,7 +80,9 @@ object JsonRpc {
      *   strict JSON, its message naming which.
      */
     fun parseReply(payload: String): Reply? {
-        val trimmed = payload.trim()
+        // A byte order mark is dropped: a parser may ignore one (RFC 8259, 8.1), Android's org.json
+        // does, and the checks below took a reply that starts with one for no JSON at all.
+        val trimmed = payload.trim().removePrefix(BYTE_ORDER_MARK).trim()
         JsonDepth.refusal(trimmed)?.let { throw UnparsedReplyException(it.reason) }
         val json = when {
             trimmed.startsWith("{") -> JSONObject(trimmed)

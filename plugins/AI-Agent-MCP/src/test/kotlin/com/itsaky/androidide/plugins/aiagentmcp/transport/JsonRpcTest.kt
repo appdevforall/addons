@@ -142,6 +142,19 @@ class JsonRpcTest {
     }
 
     @Test
+    fun givenValidStrictJsonAfterAByteOrderMark_whenParsed_thenItIsRead() {
+        val payload = "\uFEFF" +
+            """{"jsonrpc":"2.0","id":"7","result":{"n":1e5,"m":-0.5,"s":"é","a":[[],[[]],{"b":[]}]}}"""
+
+        val result = JsonRpc.parseReply(payload)?.result
+
+        assertEquals(1e5, result?.getDouble("n"))
+        assertEquals(-0.5, result?.getDouble("m"))
+        assertEquals("é", result?.getString("s"))
+        assertEquals(3, result?.getJSONArray("a")?.length())
+    }
+
+    @Test
     fun givenAReplyNestedWithinTheLimit_whenParsed_thenItIsRead() {
         val depth = JsonDepth.MAX - 3
         val nested = "[".repeat(depth) + "]".repeat(depth)
