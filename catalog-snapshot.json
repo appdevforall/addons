@@ -1,0 +1,1252 @@
+{
+  "addons": [
+    {
+      "addonId": "com.itsaky.androidide.plugins.aiagentclaude",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Connects the AI Core Agent to Anthropic's Claude API with your own API key, billed to your Claude Console account. The Agent's tools are declared to Claude directly, so it reads and edits your project through structured calls. Prompts and any file contents the Agent sends go to Anthropic.",
+      "download": {
+        "sha256": "2d864e79bca8b1a706e18be6e39c5155b22e6f21f994c3c88c525b2cf08ec9c5",
+        "size": 10229142,
+        "url": "https://addons.appdevforall.org/dl/ai-agent-claude.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-claude-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-agent-claude.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.42",
+      "name": "AI Agent Claude",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-agent-claude.html",
+      "slug": "ai-agent-claude",
+      "sourceTarball": {
+        "sha256": "9e2412589de27e1e602a108eafc6c68e69e108e36b7666af59c28ee941d55b3d",
+        "size": 627362,
+        "url": "https://addons.appdevforall.org/src/ai-agent-claude-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Agent-Claude",
+      "summary": "Use Anthropic's Claude as the AI backend for the Agent. Requires the AI Core addon and a Claude API key.",
+      "tags": [
+        "ai",
+        "agent",
+        "claude"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.aiagentgemini",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Connects the AI Core Agent and the other AI addons to Google's Gemini API with your own API key. Prompts and any file contents the Agent sends go to Google.",
+      "download": {
+        "sha256": "805165cfe582d65dbd6ad05c8fb37418322dddb3b21762b13eb3b943c79a9481",
+        "size": 10158981,
+        "url": "https://addons.appdevforall.org/dl/ai-agent-gemini.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-gemini-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-agent-gemini.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.42",
+      "name": "AI Agent Gemini",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-agent-gemini.html",
+      "slug": "ai-agent-gemini",
+      "sourceTarball": {
+        "sha256": "efb1db5fc85f7550f5e44bee93e7e4aec3529f8e9a559280ac54194f1a75b77c",
+        "size": 595950,
+        "url": "https://addons.appdevforall.org/src/ai-agent-gemini-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Agent-Gemini",
+      "summary": "Use Google Gemini as the AI backend for the Agent. Requires the AI Core addon and a Gemini API key.",
+      "tags": [
+        "ai",
+        "agent",
+        "gemini"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.aiagentlocal",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Runs GGUF models on the device with llama.cpp and serves them to the AI Core Agent and the other AI addons. It asks for no network permission, so your prompts and code never leave the device.",
+      "download": {
+        "sha256": "ea7422d341b6d1c54942d7ebb2eeace41e5840cd9922ec01e763d50439b755ba",
+        "size": 17474809,
+        "url": "https://addons.appdevforall.org/dl/ai-agent-local.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-local-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-agent-local.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.42",
+      "name": "AI Agent Local",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-agent-local.html",
+      "slug": "ai-agent-local",
+      "sourceTarball": {
+        "sha256": "25358ad882367dded139ba314ec930e5c7bc8170c586ee44dc6f551dfcb06382",
+        "size": 4616319,
+        "url": "https://addons.appdevforall.org/src/ai-agent-local-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Agent-Local",
+      "summary": "Run AI models on your device, with no internet connection. Requires the AI Core addon and a 64-bit ARM device.",
+      "tags": [
+        "ai",
+        "agent",
+        "offline",
+        "local"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.aiagentmcp",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Connects to MCP servers you configure and adds the tools they offer to the AI Core Agent, next to its own. Each tool starts switched off until you enable it. When the Agent calls a tool, the arguments it chose, which can include your code, are sent to the MCP server that offers that tool. This addon adds tools, not a model, so you still need an AI backend.",
+      "download": {
+        "sha256": "c8a36aa3a2cb40715416ce94a1b9e02003e88e034d5ceb754091256b583eb43d",
+        "size": 10221516,
+        "url": "https://addons.appdevforall.org/dl/ai-agent-mcp.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-mcp-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-agent-mcp.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.42",
+      "name": "AI Agent MCP",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-agent-mcp.html",
+      "slug": "ai-agent-mcp",
+      "sourceTarball": {
+        "sha256": "d2335ee674c700808ace072e783e5ef574664856c31cc795cc4f5cfe94050a2d",
+        "size": 589988,
+        "url": "https://addons.appdevforall.org/src/ai-agent-mcp-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Agent-MCP",
+      "summary": "Give the Agent tools from Model Context Protocol (MCP) servers. Requires the AI Core addon and an AI backend.",
+      "tags": [
+        "ai",
+        "agent",
+        "mcp"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.aiagentopenai",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Connects the AI Core Agent and the other AI addons to any server that speaks the OpenAI chat completions API: OpenAI itself, OpenRouter, or a local Ollama, LM Studio or llama-server. Set the server URL and, where needed, an API key. Prompts and any file contents the Agent sends go to that server.",
+      "download": {
+        "sha256": "0ba612ec7879bdafff958a3a7ef928a178d9cb6af0f93900a3b1b72f7629702e",
+        "size": 10298869,
+        "url": "https://addons.appdevforall.org/dl/ai-agent-openai.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-openai-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-agent-openai.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.42",
+      "name": "AI Agent OpenAI",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-agent-openai.html",
+      "slug": "ai-agent-openai",
+      "sourceTarball": {
+        "sha256": "6ed6cad24d0c1a332577f53eb14f32bfc755f6286412296f62c30dfbec58fb92",
+        "size": 649299,
+        "url": "https://addons.appdevforall.org/src/ai-agent-openai-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Agent-OpenAI",
+      "summary": "Use OpenAI or a compatible server as the AI backend. Requires the AI Core addon and, for most servers, an API key.",
+      "tags": [
+        "ai",
+        "agent",
+        "openai"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.aicodesuggestions",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Adds grey ghost text to the editor that completes the line you are writing. It runs no model itself: AI Core sends the code before the cursor to the AI backend you select, which runs on the device or sends it to that backend's cloud service.",
+      "download": {
+        "sha256": "0bec6515823cef1ecfc7365719534e11488fddc0f058c3852cb838da30f2752f",
+        "size": 9785924,
+        "url": "https://addons.appdevforall.org/dl/ai-code-suggestions.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-code-suggestions-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-code-suggestions.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.17",
+      "name": "AI Code Suggestions",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-code-suggestions.html",
+      "slug": "ai-code-suggestions",
+      "sourceTarball": {
+        "sha256": "77d161b150e8b538f3231e5d8c774dede5de26abce4dbf97bed1302916ba7ec2",
+        "size": 522880,
+        "url": "https://addons.appdevforall.org/src/ai-code-suggestions-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Code-Suggestions",
+      "summary": "Inline code completions as you type. Requires the AI Core addon and an AI backend.",
+      "tags": [
+        "ai",
+        "completion",
+        "editor"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.aicore",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Adds an Agent chat tab that can read, search and edit the open project, asking for your approval before it changes anything. It also routes requests from other AI addons, such as Code Suggestions, Speech to Text and Vector Search, to a model. AI Core runs no model itself: install at least one backend, such as AI Agent Local, Gemini, OpenAI or Claude. Prompts and any file contents the Agent sends go to the backend you select: they stay on the device with AI Agent Local, and go to that provider's service with a cloud backend.",
+      "download": {
+        "sha256": "7e6e70eebb5b4e50d4edafe0b0db44a0da45e3360d5a338892cb6402279c7f49",
+        "size": 11661980,
+        "url": "https://addons.appdevforall.org/dl/ai-core.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-core-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-core.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.42",
+      "name": "AI Core",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-core.html",
+      "slug": "ai-core",
+      "sourceTarball": {
+        "sha256": "0fa6a6eba2bf788f2ed67950505cfa9370719478450e74a0239bc41375fbe4ff",
+        "size": 995722,
+        "url": "https://addons.appdevforall.org/src/ai-core-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Core",
+      "summary": "An AI Agent that reads, searches and edits your project. Required by every AI addon, and needs one AI backend addon.",
+      "tags": [
+        "ai",
+        "agent",
+        "chat",
+        "core"
+      ],
+      "type": "plugin",
+      "version": "3.5.0"
+    },
+    {
+      "addonId": "org.appdevforall.ailiteracycourse",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "An offline \"Introduction to AI\" course from Learn AI Anywhere: 26 lesson videos plus interactive activities, the NeuroPocket app, and teacher resources. Everything runs fully offline inside Code on the Go — no internet required.",
+      "download": {
+        "sha256": "b897f51d40fe602008171d5ba34619e0f3e7abe8214a2e309c0e72488cb2ba50",
+        "size": 123751936,
+        "url": "https://addons.appdevforall.org/dl/ai-literacy-course.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ai-literacy-course-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ai-literacy-course.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "AI Literacy Course",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ai-literacy-course.html",
+      "slug": "ai-literacy-course",
+      "sourceTarball": {
+        "sha256": "3a0743ccc0e4e071f2c6cfbd45d1312f5bb074774ff854c329476e4913fcc94f",
+        "size": 536507,
+        "url": "https://addons.appdevforall.org/src/ai-literacy-course-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Literacy-Course",
+      "summary": "An offline \"Introduction to AI\" course: 26 lesson videos, activities, and teacher resources.",
+      "tags": [
+        "education",
+        "ai",
+        "course",
+        "offline"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.example.apkanalyzer",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Opens an APK and shows what is inside it: the manifest, the resources, the DEX classes, and the signing information. You do not need a desktop tool to look into a build.",
+      "download": {
+        "sha256": "a111f2d282afc01002b85e65aa1290cd4c093827be71b2cc47494c24ab8510f7",
+        "size": 4544755,
+        "url": "https://addons.appdevforall.org/dl/apk-analyzer.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/apk-analyzer-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/apk-analyzer.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "APK Analyzer",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/apk-analyzer.html",
+      "slug": "apk-analyzer",
+      "sourceTarball": {
+        "sha256": "2460f90618b7f6e442ba6831de64b90f01ece0dd37b988b348699db23db37c9c",
+        "size": 510902,
+        "url": "https://addons.appdevforall.org/src/apk-analyzer-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/APK-Analyzer",
+      "summary": "Inspects the structure of an APK file inside the editor.",
+      "tags": [
+        "apk",
+        "analysis",
+        "build"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.bookshelfplugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Adds a shelf of reference books to the Code on the Go help system. The books are stored on the device, so they work with no network.",
+      "download": {
+        "sha256": "83733e119b74a1acb43e437fbeac1b692648da16fcfe8f977c6bbe9231e03c38",
+        "size": 21029620,
+        "url": "https://addons.appdevforall.org/dl/bookshelf.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/bookshelf-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/bookshelf.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.22",
+      "name": "Bookshelf",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/bookshelf.html",
+      "slug": "bookshelf",
+      "sourceTarball": {
+        "sha256": "ed6e71889e1372c0b7d4f5dfb4e7e43e2cbef22d37b6a873fe4e4e54abc2f276",
+        "size": 20866752,
+        "url": "https://addons.appdevforall.org/src/bookshelf-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Bookshelf",
+      "summary": "Offline reference textbooks inside the in-app help.",
+      "tags": [
+        "docs",
+        "reference",
+        "offline"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.buildanimation",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "A wrench rocks on the editor toolbar while Gradle works, then a tick or a cross shows whether the build passed. When nothing is building the icon is greyed out.",
+      "download": {
+        "sha256": "d20eb89f64b6766f59029760b9b3443ca632a14a33f720d2961df83559d66b54",
+        "size": 693507,
+        "url": "https://addons.appdevforall.org/dl/build-animation.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/build-animation-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/build-animation.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.29",
+      "name": "Build Animation",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/build-animation.html",
+      "slug": "build-animation",
+      "sourceTarball": {
+        "sha256": "1f468bbdeca21d87f731d9a6663c0319b494a69ca463bcd798aa3b2cd9929075",
+        "size": 516115,
+        "url": "https://addons.appdevforall.org/src/build-animation-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Build-Animation",
+      "summary": "Animates a toolbar icon while your app builds.",
+      "tags": [
+        "build",
+        "fun",
+        "notification"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "com.appdevforall.contractor.plugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Records how long you work on each project and turns those records into an invoice. Useful when you write code for clients from the device.",
+      "download": {
+        "sha256": "b5f88984f1b3ad8680912a26e3b79208fb9e504c538051f868202e8a25398e60",
+        "size": 5663666,
+        "url": "https://addons.appdevforall.org/dl/client-time-tracker.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/client-time-tracker-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/client-time-tracker.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Client Time Tracker",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/client-time-tracker.html",
+      "slug": "client-time-tracker",
+      "sourceTarball": {
+        "sha256": "f229ef9f2cfa0b43fa84056dda7d524bf2822734277a16c6525fae0c4205d506",
+        "size": 604432,
+        "url": "https://addons.appdevforall.org/src/client-time-tracker-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Client-Time-Tracker",
+      "summary": "Tracks billable time for each project and creates invoices.",
+      "tags": [
+        "time",
+        "invoicing",
+        "productivity"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "com.appdevforall.pair.plugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Two people edit the same file at the same time, over WiFi, with live cursors. There is no server and nothing leaves the local network.",
+      "download": {
+        "sha256": "f3900d69271a3fa0f775916832a343a02df3df7462a4e10d409652cf379f45e2",
+        "size": 6736644,
+        "url": "https://addons.appdevforall.org/dl/code-together.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/code-together-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/code-together.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.32",
+      "name": "Code Together",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/code-together.html",
+      "slug": "code-together",
+      "sourceTarball": {
+        "sha256": "50258e241748fc9632ae605d8421db21edc8b26db54645d98984c7e11b5d3f54",
+        "size": 677987,
+        "url": "https://addons.appdevforall.org/src/code-together-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Code-Together",
+      "summary": "Pair programming between two devices on the same network.",
+      "tags": [
+        "collaboration",
+        "pair-programming",
+        "network"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.customkeyboard",
+      "author": {
+        "name": "James Turner",
+        "url": ""
+      },
+      "description": "Installs a Custom Keyboard template on the New Project screen. It creates a working Android keyboard: the input method service, a key view with long-press alternatives, shift and symbols pages, and a setup screen that walks the user through turning it on. Each language is a JSON file you edit, with no code changes, so a keyboard for a language Android does not cover is a matter of writing its layout. It ships with English and Hindi layouts, and every key can type several code points, which scripts such as Devanagari need for conjuncts.",
+      "download": {
+        "sha256": "2459c442d590d357c8ab7ac261a930f8971b16f141f8bcc583b9ac290a52e7fb",
+        "size": 216614,
+        "url": "https://addons.appdevforall.org/dl/custom-keyboard.cgt"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/custom-keyboard-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/custom-keyboard.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.40",
+      "name": "Custom Keyboard",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/custom-keyboard.html",
+      "slug": "custom-keyboard",
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/templates/Custom-Keyboard",
+      "summary": "Adds a starter project for building an Android keyboard in your own language.",
+      "tags": [
+        "keyboard",
+        "input-method",
+        "languages",
+        "kotlin",
+        "templates"
+      ],
+      "type": "template",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.favoritesnippets",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Keeps a personal library of code fragments. Save a block once, then insert it into any file from the editor.",
+      "download": {
+        "sha256": "42fac3351fa7ea177282d3f431c16c1f3e00c0be384af24ca9807dbbbdd61521",
+        "size": 4592859,
+        "url": "https://addons.appdevforall.org/dl/favorite-snippets.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/favorite-snippets-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/favorite-snippets.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.36",
+      "name": "Favorite Snippets",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/favorite-snippets.html",
+      "slug": "favorite-snippets",
+      "sourceTarball": {
+        "sha256": "8e9e0ce9bca1e26579537a760045893a2b108af4d160caa6c1e7e7b5acf60b33",
+        "size": 513794,
+        "url": "https://addons.appdevforall.org/src/favorite-snippets-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Favorite-Snippets",
+      "summary": "Saves your own code snippets and inserts them in the editor.",
+      "tags": [
+        "snippets",
+        "editor",
+        "productivity"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.flutterstarterkit",
+      "author": {
+        "name": "RJ Ali",
+        "url": ""
+      },
+      "description": "Installs Flutter project templates so you can start a Flutter app from the New Project screen instead of building the structure by hand. Five starters, one for each state-management approach: plain setState, BLoC, Provider, GetX and Riverpod. Contributed to Code on the Go by RJ Ali, from an original idea by Raju Kumar.",
+      "download": {
+        "sha256": "10ca2925f5ba3de3edde05e0cb606e4036aa81daf7e77ec0294af77bb67e7470",
+        "size": 117662,
+        "url": "https://addons.appdevforall.org/dl/flutter-starter-kit.cgt"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/flutter-starter-kit-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/flutter-starter-kit.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.36",
+      "name": "Flutter Starter Kit",
+      "origin": "community",
+      "pageUrl": "https://addons.appdevforall.org/p/flutter-starter-kit.html",
+      "slug": "flutter-starter-kit",
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/templates/Flutter-Starter-Kit",
+      "summary": "Adds five Flutter starter projects to the New Project screen.",
+      "tags": [
+        "flutter",
+        "templates",
+        "dart"
+      ],
+      "type": "template",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.funandgamesjme",
+      "author": {
+        "name": "James Turner",
+        "url": ""
+      },
+      "description": "Installs three small Android game projects built with jMonkeyEngine, so you can start from a complete, playable game instead of an empty activity. Demo is a 3D Earth you spin by touch with an orbiting rocket, written in Java. Block Game is a falling-block puzzle and Bubble Wand is a first-person bubble shooter, both written in Kotlin. Each project builds and runs on the device.",
+      "download": {
+        "sha256": "a9b73748f21cc77d8e7c9c60e90072c147ae07100057327b285cfa0b499101f2",
+        "size": 22070537,
+        "url": "https://addons.appdevforall.org/dl/fun-and-games-jme.cgt"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/fun-and-games-jme-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/fun-and-games-jme.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.40",
+      "name": "Fun and Games JME",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/fun-and-games-jme.html",
+      "slug": "fun-and-games-jme",
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/templates/Fun-and-Games-JME",
+      "summary": "Adds three playable jMonkeyEngine games to the New Project screen: a 3D demo, Block Game and Bubble Wand.",
+      "tags": [
+        "games",
+        "jmonkeyengine",
+        "templates",
+        "kotlin",
+        "java"
+      ],
+      "type": "template",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.funandgameslibgdx",
+      "author": {
+        "name": "James Turner",
+        "url": ""
+      },
+      "description": "Installs three small Android game projects built with libGDX, so you can start from a complete, playable game instead of an empty activity. Demo is a 3D Earth you spin by touch with an orbiting rocket, written in Java. Block Game is a falling-block puzzle and Bubble Wand is a first-person bubble shooter, both written in Kotlin. Each project builds and runs on the device. These are libGDX ports of the Fun and Games JME templates.",
+      "download": {
+        "sha256": "79dccb9e8e092de50b74551703f13bc397f7ad67a2f0250a08893927dd9a6060",
+        "size": 10161502,
+        "url": "https://addons.appdevforall.org/dl/fun-and-games-libgdx.cgt"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/fun-and-games-libgdx-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/fun-and-games-libgdx.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.40",
+      "name": "Fun and Games LibGDX",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/fun-and-games-libgdx.html",
+      "slug": "fun-and-games-libgdx",
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/templates/Fun-and-Games-LibGDX",
+      "summary": "Adds three playable libGDX games to the New Project screen: a 3D demo, Block Game and Bubble Wand.",
+      "tags": [
+        "games",
+        "libgdx",
+        "templates",
+        "kotlin",
+        "java"
+      ],
+      "type": "template",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.getaimodels",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Lists a curated set of small GGUF language models and downloads the one you choose. The AI addons then run that model on the device.",
+      "download": {
+        "sha256": "81fe045e4c0772a94f9fb1883bce411586939fa434d0819be00db62321c07693",
+        "size": 4854760,
+        "url": "https://addons.appdevforall.org/dl/get-ai-models.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/get-ai-models-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/get-ai-models.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.29",
+      "name": "Get AI Models",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/get-ai-models.html",
+      "slug": "get-ai-models",
+      "sourceTarball": {
+        "sha256": "cbcd654e87c26f87a551db9c619ff4d1e8454dc152f5614cc9a460dc5851b3be",
+        "size": 564036,
+        "url": "https://addons.appdevforall.org/src/get-ai-models-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Get-AI-Models",
+      "summary": "Downloads small language models for on-device AI addons.",
+      "tags": [
+        "ai",
+        "models",
+        "download"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "dev.omar.plugin.iconsrepo",
+      "author": {
+        "name": "Omar Haidar",
+        "url": "https://github.com/omar-haidar"
+      },
+      "description": "Browses a library of vector drawable icons and writes the one you pick straight into the project resources. Contributed to Code on the Go by Omar Haidar.",
+      "download": {
+        "sha256": "4ff15a3fa23a6d1bd3646df33a90a21792907dcb62e3e17971132e07ce54fdc3",
+        "size": 8163791,
+        "url": "https://addons.appdevforall.org/dl/icons-repository.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/icons-repository-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/icons-repository.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.17",
+      "name": "Icons Repository",
+      "origin": "community",
+      "pageUrl": "https://addons.appdevforall.org/p/icons-repository.html",
+      "slug": "icons-repository",
+      "sourceTarball": {
+        "sha256": "46ed6d461d8556735cd4ab2e2bae3ac81ab902b08b643817c1253a5f3b798c00",
+        "size": 2762203,
+        "url": "https://addons.appdevforall.org/src/icons-repository-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Icons-Repository",
+      "summary": "Adds vector icons to a project from inside the editor.",
+      "tags": [
+        "icons",
+        "resources",
+        "design"
+      ],
+      "type": "plugin",
+      "version": "1.0.1"
+    },
+    {
+      "addonId": "com.appdevforall.jvm.plugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Compiles a folder of Java and Kotlin files on the device and runs the main class you choose, with the arguments you give it. Output appears in Build Output. Adds a Java/Kotlin Program template.",
+      "download": {
+        "sha256": "c35ba29d8adfb056f29204a93fec95140dda6e9097d3e1a2b98602c940e29c16",
+        "size": 1090221,
+        "url": "https://addons.appdevforall.org/dl/jvm-tools.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/jvm-tools-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/jvm-tools.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.37",
+      "name": "JVM Tools",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/jvm-tools.html",
+      "slug": "jvm-tools",
+      "sourceTarball": {
+        "sha256": "bb6d29ecdda70c7e2f014091c2fe6287bdd3a314e3d775b0d10ad86f4e8b84d4",
+        "size": 538665,
+        "url": "https://addons.appdevforall.org/src/jvm-tools-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/JVM-Tools",
+      "summary": "Runs Java and Kotlin programs, with a main-class picker and program arguments.",
+      "tags": [
+        "java",
+        "kotlin",
+        "templates"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.composepreview",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Draws a Jetpack Compose @Preview function without building and running the whole app, so you see a layout change quickly.",
+      "download": {
+        "sha256": "c0ab5955691ed06043ea453bafc863339b697b0d04595a29a4c35e943899716b",
+        "size": 30194323,
+        "url": "https://addons.appdevforall.org/dl/jetpack-compose-preview.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/jetpack-compose-preview-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/jetpack-compose-preview.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Jetpack Compose Preview",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/jetpack-compose-preview.html",
+      "slug": "jetpack-compose-preview",
+      "sourceTarball": {
+        "sha256": "c17a4e070b14556e70c5c5744d3691b719d9c1315a0a5318a1b24cab78d7e46d",
+        "size": 21634118,
+        "url": "https://addons.appdevforall.org/src/jetpack-compose-preview-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Jetpack-Compose-Preview",
+      "summary": "Renders Compose preview functions on the device.",
+      "tags": [
+        "compose",
+        "preview",
+        "ui"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "com.appdevforall.keygen.plugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Generates an Android release keystore and stores it safely, so you can sign a release build without a desktop machine.",
+      "download": {
+        "sha256": "f1fc5aa4454f5e3accb6ac640d25d6ae6ab5c0f6d16ac3992871659b04fa72b7",
+        "size": 7945185,
+        "url": "https://addons.appdevforall.org/dl/keystore-generator.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/keystore-generator-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/keystore-generator.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Keystore Generator",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/keystore-generator.html",
+      "slug": "keystore-generator",
+      "sourceTarball": {
+        "sha256": "f40f7a1b83c9c707b5ef6b750dd620a08a4fca704f2bd464ad953dd004d4ab71",
+        "size": 516740,
+        "url": "https://addons.appdevforall.org/src/keystore-generator-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Keystore-Generator",
+      "summary": "Creates and manages app signing keystores on the device.",
+      "tags": [
+        "signing",
+        "release",
+        "security"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.codeonthego.layouteditor",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "A visual editor for Android XML layouts. Drag a view onto the canvas and the editor writes the XML for you.",
+      "download": {
+        "sha256": "e1352ca1a6d73b2afbec0f1f7a222179a5fcaea88e31603387e0aba7253b063f",
+        "size": 9141770,
+        "url": "https://addons.appdevforall.org/dl/layout-editor.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/layout-editor-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/layout-editor.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Layout Editor",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/layout-editor.html",
+      "slug": "layout-editor",
+      "sourceTarball": {
+        "sha256": "ebdfea73a3efbea77a61d89aa6dfe9a94da376fd85479249d16c0706802b4b14",
+        "size": 1789002,
+        "url": "https://addons.appdevforall.org/src/layout-editor-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Layout-Editor",
+      "summary": "Edits Android XML layouts by dragging views.",
+      "tags": [
+        "layout",
+        "ui",
+        "xml"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.markdownpreviewer",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Renders the Markdown or HTML file you are editing beside the source, and updates the preview as you type.",
+      "download": {
+        "sha256": "43f6946eff7548601bafd1d4bd63412f2b6b12891137e183c1011f38c923605e",
+        "size": 4575829,
+        "url": "https://addons.appdevforall.org/dl/markdown-previewer.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/markdown-previewer-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/markdown-previewer.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Markdown Previewer",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/markdown-previewer.html",
+      "slug": "markdown-previewer",
+      "sourceTarball": {
+        "sha256": "653a2cd8c9bb9048060837d29e65db9e15c6f02f9fda0b2d3405d4807cafc1e0",
+        "size": 511103,
+        "url": "https://addons.appdevforall.org/src/markdown-previewer-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Markdown-Previewer",
+      "summary": "Shows a live preview of Markdown and HTML files.",
+      "tags": [
+        "markdown",
+        "preview",
+        "docs"
+      ],
+      "type": "plugin",
+      "version": "1.0.1"
+    },
+    {
+      "addonId": "org.appdevforall.ndkinstaller",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Downloads and installs the Android NDK and CMake on the device, then adds a native activity template so you can start a C++ project.",
+      "download": {
+        "sha256": "d881af65c5e867b842137bc269198cec9198b0bc907849b82c6d613e6a295a5c",
+        "size": 202752594,
+        "url": "https://addons.appdevforall.org/dl/ndk-installer.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/ndk-installer-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/ndk-installer.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "NDK Installer",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/ndk-installer.html",
+      "slug": "ndk-installer",
+      "sourceTarball": {
+        "sha256": "c838ac3bc54ee3a1b926b752acd68a36b399638d49ff7b34160635b47b171e4d",
+        "size": 636115,
+        "url": "https://addons.appdevforall.org/src/ndk-installer-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/NDK-Installer",
+      "summary": "Installs the NDK and CMake, and adds a native project template.",
+      "tags": [
+        "ndk",
+        "cpp",
+        "native"
+      ],
+      "type": "plugin",
+      "version": "1.1.1"
+    },
+    {
+      "addonId": "org.appdevforall.nativeloggingdemos",
+      "author": {
+        "name": "James Turner",
+        "url": ""
+      },
+      "description": "Installs two small native Android projects on the New Project screen. Each has one button that writes a series of lines to the Android log from native code, which Code on the Go shows in its App Logs window: one line at each priority, formatted values, a failed system call, and a line from a second thread. The C project uses C11 and the liblog calls directly; the C++ project uses C++17 with a type-safe stream logger and an RAII timer. Both need the NDK-Installer plugin, which provides the NDK and CMake.",
+      "download": {
+        "sha256": "a278e2e0b2939038cb731f7b870fadb0bed41fa15201e495aff5527f9358d696",
+        "size": 352927,
+        "url": "https://addons.appdevforall.org/dl/native-logging-demos.cgt"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/native-logging-demos-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/native-logging-demos.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.40",
+      "name": "Native Logging Demos",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/native-logging-demos.html",
+      "slug": "native-logging-demos",
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/templates/Native-Logging-Demos",
+      "summary": "Adds two projects that show how to write to the App Logs window from C and from C++.",
+      "tags": [
+        "ndk",
+        "c",
+        "cpp",
+        "logging",
+        "templates"
+      ],
+      "type": "template",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.projecttotemplate",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Takes the project you have open and writes it out as a Code on the Go template, so you can start new projects from it.",
+      "download": {
+        "sha256": "bd750aaae46462108968a93fef6ae848bcae51e8394b9ee0b8bce4c40ac7b1e5",
+        "size": 4642305,
+        "url": "https://addons.appdevforall.org/dl/project-to-template.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/project-to-template-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/project-to-template.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Project to Template",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/project-to-template.html",
+      "slug": "project-to-template",
+      "sourceTarball": {
+        "sha256": "ceca0efbc09ccb1ee27a3a2ece3e3645a4fb26ab55ebd82cf3f7a67fb9922e14",
+        "size": 526075,
+        "url": "https://addons.appdevforall.org/src/project-to-template-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Project-to-Template",
+      "summary": "Turns the open project into a reusable template.",
+      "tags": [
+        "templates",
+        "project",
+        "reuse"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "com.appdevforall.python.plugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Installs Python and Flask starter projects and gives them a run experience inside the editor.",
+      "download": {
+        "sha256": "d18cf60a63b10d6fade0663f31b959aedbe272874716608c0e00ed89343a6582",
+        "size": 16113093,
+        "url": "https://addons.appdevforall.org/dl/python-tools.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/python-tools-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/python-tools.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.41",
+      "name": "Python Tools",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/python-tools.html",
+      "slug": "python-tools",
+      "sourceTarball": {
+        "sha256": "b1aa4fcf808cac36393240814e2f68fb20bb4809b511bff596fc8695c1a20ab6",
+        "size": 608500,
+        "url": "https://addons.appdevforall.org/src/python-tools-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Python-Tools",
+      "summary": "Adds Python and Flask project templates, and runs them.",
+      "tags": [
+        "python",
+        "flask",
+        "templates"
+      ],
+      "type": "plugin",
+      "version": "1.2.0"
+    },
+    {
+      "addonId": "org.appdevforall.rainbowbrackets",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Gives each level of parentheses, brackets, and braces its own colour, so you can see which opening bracket matches which closing one.",
+      "download": {
+        "sha256": "7414a4ff7540039e5ce23a63f93e70b8d24d5ca68e3d634d3e6b2f5fb78b2dad",
+        "size": 663188,
+        "url": "https://addons.appdevforall.org/dl/rainbow-brackets.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/rainbow-brackets-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/rainbow-brackets.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.27",
+      "name": "Rainbow Brackets",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/rainbow-brackets.html",
+      "slug": "rainbow-brackets",
+      "sourceTarball": {
+        "sha256": "57cbae13c99f00b41cdb78524434bfbc1cf262ddd1f9f41e5275c7e0f326ceb3",
+        "size": 500863,
+        "url": "https://addons.appdevforall.org/src/rainbow-brackets-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Rainbow-Brackets",
+      "summary": "Colours brackets by depth so pairs are easy to see.",
+      "tags": [
+        "editor",
+        "readability",
+        "brackets"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.randomxkcd",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Fetches a comic from xkcd and shows it in the bottom sheet. A small break without leaving the editor.",
+      "download": {
+        "sha256": "ae029122dab2af9b1b9f8fa443416cf0d75a95ffd5e2e90fc5fbac4a2c39b86e",
+        "size": 5042985,
+        "url": "https://addons.appdevforall.org/dl/random-xkcd.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/random-xkcd-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/random-xkcd.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Random XKCD",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/random-xkcd.html",
+      "slug": "random-xkcd",
+      "sourceTarball": {
+        "sha256": "1a4c933ce91c49db2a7428ea018d9798fdeaecf653ad7eace1c93ef9b82ff379",
+        "size": 522191,
+        "url": "https://addons.appdevforall.org/src/random-xkcd-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Random-XKCD",
+      "summary": "Shows xkcd comics in the editor's bottom sheet.",
+      "tags": [
+        "fun",
+        "comics"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    },
+    {
+      "addonId": "org.appdevforall.shareyourapps",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Turns the apps you build into a small web store that people on the same Wi-Fi network or hotspot open in their phone's browser, with no internet and no accounts. The companion Share Your Apps Server serves the store, and a store can be copied to another phone by QR code, typed code or sound.",
+      "download": {
+        "sha256": "a7e86411a36e8fc579da9ed96c64a4d0f4788ff598012c1944719678395b73f6",
+        "size": 561012,
+        "url": "https://addons.appdevforall.org/dl/share-your-apps.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/share-your-apps-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/share-your-apps.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Share Your Apps",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/share-your-apps.html",
+      "slug": "share-your-apps",
+      "sourceTarball": {
+        "sha256": "b8294935e775827b0139e44aaa77702cf7ca8c8f2de3f09c5037f9498f8fb85c",
+        "size": 8028780,
+        "url": "https://addons.appdevforall.org/src/share-your-apps-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Share-Your-Apps",
+      "summary": "Publish your apps and their source to a store on your local network.",
+      "tags": [
+        "publishing",
+        "store",
+        "network",
+        "offline"
+      ],
+      "type": "plugin",
+      "version": "1.0.3"
+    },
+    {
+      "addonId": "com.appdevforall.sketchtoui.plugin",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Takes a photograph of a hand-drawn sketch, or a screenshot of an interface, and produces Android XML layout code from it.",
+      "download": {
+        "sha256": "90d66172bcc4dc4f21a837be0186c90615956a46d0b617db34866a0790b59c94",
+        "size": 91965217,
+        "url": "https://addons.appdevforall.org/dl/sketch-to-ui.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/sketch-to-ui-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/sketch-to-ui.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Sketch to UI",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/sketch-to-ui.html",
+      "slug": "sketch-to-ui",
+      "sourceTarball": {
+        "sha256": "465931544cc244f1c276323859028b314fdf48c5b66db9723dd8712ecc38ec63",
+        "size": 11162456,
+        "url": "https://addons.appdevforall.org/src/sketch-to-ui-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Sketch-to-UI",
+      "summary": "Turns a drawing or screenshot into an Android layout.",
+      "tags": [
+        "ai",
+        "layout",
+        "ui"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.stt",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Adds a microphone button to the editor toolbar. Speak, and the words are written at the cursor. With the AI Core addon installed, speech becomes code.",
+      "download": {
+        "sha256": "79918aedc150f376e500b19e705a93ab048b086b67a4b05fd30477cf64552cfe",
+        "size": 9975005,
+        "url": "https://addons.appdevforall.org/dl/speech-to-text.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/speech-to-text-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/speech-to-text.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.29",
+      "name": "Speech to Text",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/speech-to-text.html",
+      "slug": "speech-to-text",
+      "sourceTarball": {
+        "sha256": "6e1e6abad103d27f2af57367f07133ca55f22e8f3434b0a0762086b39a45a238",
+        "size": 536337,
+        "url": "https://addons.appdevforall.org/src/speech-to-text-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Speech-to-Text",
+      "summary": "Dictates code and text into the editor with your voice.",
+      "tags": [
+        "voice",
+        "accessibility",
+        "editor"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "com.itsaky.androidide.plugins.vectorsearch",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Ranks search results by how close their meaning is to the words you typed, so you find related code that a plain text search would miss. Needs AI Core and an agent plugin whose backend produces embeddings.",
+      "download": {
+        "sha256": "e397824068d96aaaf39c03e55a4d6fc463f095e33516248de119d696cd924c1c",
+        "size": 10062324,
+        "url": "https://addons.appdevforall.org/dl/vector-search.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/vector-search-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/vector-search.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "26.41",
+      "name": "Vector Search",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/vector-search.html",
+      "slug": "vector-search",
+      "sourceTarball": {
+        "sha256": "ea2f006eeedc09bfc182e4b694fe7e6dde7440cfc5d291d76946c830cb2327bb",
+        "size": 579620,
+        "url": "https://addons.appdevforall.org/src/vector-search-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Vector-Search",
+      "summary": "Searches the project by meaning, not only by exact text.",
+      "tags": [
+        "search",
+        "ai",
+        "navigation"
+      ],
+      "type": "plugin",
+      "version": "1.1.0"
+    },
+    {
+      "addonId": "org.appdevforall.voicealerts",
+      "author": {
+        "name": "App Dev For All",
+        "url": "https://www.appdevforall.org"
+      },
+      "description": "Plays a short sound for each build result, so you know whether the build passed without watching the screen.",
+      "download": {
+        "sha256": "42b0de0fe7a858d6dc1dae94bfa750005ddc4993218030858739abbab7ec9ea3",
+        "size": 10131067,
+        "url": "https://addons.appdevforall.org/dl/voice-alerts.cgp"
+      },
+      "iconDarkUrl": "https://addons.appdevforall.org/p/voice-alerts-night.png",
+      "iconUrl": "https://addons.appdevforall.org/p/voice-alerts.png",
+      "license": "AGPL-3.0-or-later",
+      "minAppVersion": "",
+      "name": "Voice Alerts",
+      "origin": "appdevforall",
+      "pageUrl": "https://addons.appdevforall.org/p/voice-alerts.html",
+      "slug": "voice-alerts",
+      "sourceTarball": {
+        "sha256": "64a5d1f2ae9b0da821415662559e80553c0b9416c56d1f668c5274e5d441e5fe",
+        "size": 719171,
+        "url": "https://addons.appdevforall.org/src/voice-alerts-src.tar.gz"
+      },
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Voice-Alerts",
+      "summary": "Plays a sound when a build finishes or fails.",
+      "tags": [
+        "build",
+        "audio",
+        "notification"
+      ],
+      "type": "plugin",
+      "version": "1.0.0"
+    }
+  ],
+  "generated": "2026-11-19T07:29:49Z",
+  "schemaVersion": 2
+}
