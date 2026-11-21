@@ -55,7 +55,10 @@
     <li>Enter the <b>endpoint URL</b>. It usually ends in <code>/mcp</code>.</li>
     <li>Add an <b>access token</b> if the server needs one. It is encrypted with a
       key held in the Android Keystore, and sent only to that server, as an
-      <code>Authorization: Bearer</code> header.</li>
+      <code>Authorization: Bearer</code> header. Leaving the field empty keeps the
+      stored token, so if you change a server's URL and leave it empty, the stored
+      token is sent to the new URL. To send the new URL no token, use
+      <b>Clear stored credential</b> first.</li>
     <li>The URL must be <b>https://</b> unless the server runs on this device.
       Plain <code>http://</code> is accepted only for <code>localhost</code>,
       <code>127.0.0.1</code> or <code>[::1]</code>, such as a server started in the

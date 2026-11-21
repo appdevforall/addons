@@ -192,6 +192,12 @@ Two dependencies were deliberately not taken:
   change, so the new URL never gets them; the pane reports the failure and the
   credential has to be entered again. If forgetting them fails too, the URL
   stays as it was.
+  Limit, on purpose: a blank token field means "keep the stored token", so
+  changing only the URL and leaving the token blank sends the stored token to
+  the new URL. Headers behave the same only when the stored ones could not be
+  read, which the pane cannot draw; rows it did draw replace the stored set,
+  so none left in the pane forgets them. To send the new URL no token, use
+  **Clear stored credential**.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.

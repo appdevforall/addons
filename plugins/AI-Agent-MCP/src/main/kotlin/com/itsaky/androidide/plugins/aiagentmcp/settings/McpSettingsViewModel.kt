@@ -197,6 +197,10 @@ class McpSettingsViewModel(
      * while the URL changes forgets the old value in that step (or keeps the old URL, when
      * forgetting fails too), so the new URL is never sent the old credential.
      *
+     * One limit, on purpose: a null [token] means "keep the stored one", so a URL change with the
+     * token field left blank sends the stored token to the new URL. [clearCredentialNow] is the way
+     * to a URL with no token.
+     *
      * The session is ended even when the save throws: it is out of the map by then, so nothing else
      * would end it. The exception then propagates, and the health row is left as it was.
      *

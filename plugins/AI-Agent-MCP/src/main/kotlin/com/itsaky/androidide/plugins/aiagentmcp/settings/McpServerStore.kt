@@ -176,6 +176,9 @@ object McpServerStore {
      * the returned record then carries the old URL. Either way the failure is reported in the
      * result, and the user enters the credential again.
      *
+     * A null [token] or [headers] keeps the stored value, also when the URL changes: the new URL
+     * is then sent that stored credential, on purpose. Pass blank or empty to forget it.
+     *
      * Keystore work, so call this off the main thread.
      *
      * @param server the candidate, carrying the id plus the edited name and URL.
