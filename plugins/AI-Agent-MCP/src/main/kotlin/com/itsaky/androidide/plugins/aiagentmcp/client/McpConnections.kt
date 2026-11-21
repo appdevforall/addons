@@ -55,10 +55,46 @@ object McpConnections {
      * still has the credentials; the settings pane ends whatever a lookup stored between the two
      * once the server is gone.
      *
+     * A session that is not kept is the caller's to end; [withSession] does that, and is what a
+     * request should use.
+     *
      * @param server the server to connect to.
      * @return its session, not yet initialized.
      */
-    fun session(server: McpServer): McpSession {
+    fun session(server: McpServer): McpSession = lookUp(server).session
+
+    /**
+     * Runs [block] with [server]'s session, as [session] finds or builds it, and ends the session
+     * once [block] is done when it was not kept, for a server no longer configured. Nothing else
+     * would end that one, so the server would keep the session its `initialize` assigned. Its DELETE
+     * reads the credentials as each of its requests did, under the same rule: only for the URL it
+     * was built for, while the server still has it, so a server that is gone gets none, as the
+     * requests did.
+     *
+     * Blocking, like [block]: ending the session sends a DELETE.
+     *
+     * @param server the server to connect to.
+     * @param block the calls to make; the session is not yet initialized.
+     * @return what [block] returned.
+     */
+    fun <T> withSession(server: McpServer, block: (McpSession) -> T): T {
+        val found = lookUp(server)
+        try {
+            return block(found.session)
+        } finally {
+            if (!found.kept) found.session.close()
+        }
+    }
+
+    /**
+     * What [lookUp] found.
+     * @property kept whether [session] is the one stored for its server; false for a server no
+     *   longer configured.
+     */
+    private class Found(val session: McpSession, val kept: Boolean)
+
+    /** [session] itself, telling a session it kept from one it did not. */
+    private fun lookUp(server: McpServer): Found {
         val key = keyFor(server)
 
         // Locked, so two tool calls arriving together cannot each build a session and leave one of
@@ -67,11 +103,11 @@ object McpConnections {
         var stale: McpSession? = null
         val session = synchronized(this) {
             val current = sessions[server.id]
-            if (current != null && current.first == key) return current.second
+            if (current != null && current.first == key) return Found(current.second, kept = true)
             // A supplier, not the values: the session is kept for the life of the process, and a
             // token in one of its fields would be readable in a heap dump for just as long.
             val fresh = McpSession(server.url, { credentialsFor(server.id, server.url) })
-            if (!McpServers.isConfigured(server.id)) return fresh
+            if (!McpServers.isConfigured(server.id)) return Found(fresh, kept = false)
             stale = current?.second
             fresh.also { sessions[server.id] = key to it }
         }
@@ -80,7 +116,7 @@ object McpConnections {
             Log.i(TAG, "Server '${server.name}' changed; dropping its session")
             runCatchingRecoverable { it.close() }
         }
-        return session
+        return Found(session, kept = true)
     }
 
     /**

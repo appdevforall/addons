@@ -128,18 +128,21 @@ object McpToolCatalog {
         // Taken before the request: if the endpoint is replaced while this list is in flight, the
         // list is the old process's and must not be attached to the new one.
         val origin = if (server.automatic) AutomaticServers.endpoint(server.id) else null
-        // Kept, not just its tools: the name the handshake returned lands on the session.
-        val session = McpConnections.session(server)
-        val tools = session.recording(exchangeListener) {
-            // Explicit, so a catalogue refused below is told apart from a refused connection.
-            session.initialize()
-            try {
-                session.listTools()
-            } catch (e: McpProtocolException) {
-                // No tools capability: some servers expose only prompts or resources, and still work.
-                if (e.code != JsonRpc.METHOD_NOT_FOUND) throw e
-                emptyList()
+        // The name too: the handshake returns it on the session, which is ended here for a server
+        // removed meanwhile.
+        val (serverName, tools) = McpConnections.withSession(server) { session ->
+            val listed = session.recording(exchangeListener) {
+                // Explicit, so a catalogue refused below is told apart from a refused connection.
+                session.initialize()
+                try {
+                    session.listTools()
+                } catch (e: McpProtocolException) {
+                    // No tools capability: some servers expose only prompts or resources, and still work.
+                    if (e.code != JsonRpc.METHOD_NOT_FOUND) throw e
+                    emptyList()
+                }
             }
+            session.serverName to listed
         }
         if (server.automatic) {
             // Stored by recordTools alone, beside the endpoint it checks, under the same lock.
@@ -147,7 +150,7 @@ object McpToolCatalog {
                 AutomaticServers.recordTools(server.id, origin, tools)
             if (!current) {
                 Log.i(TAG, "Dropping a tool list from an endpoint '${server.name}' has since left")
-                return Listing(session.serverName, tools)
+                return Listing(serverName, tools)
             }
         } else {
             val stored = synchronized(lock) {
@@ -155,12 +158,12 @@ object McpToolCatalog {
             }
             if (!stored) {
                 Log.i(TAG, "Dropping a tool list from '${server.name}', removed while it listed")
-                return Listing(session.serverName, tools)
+                return Listing(serverName, tools)
             }
             McpServerStore.setKnownTools(server.id, tools.map { it.name })
         }
         Log.i(TAG, "Server '${server.name}' listed ${tools.size} tool(s)")
-        return Listing(session.serverName, tools)
+        return Listing(serverName, tools)
     }
 
     /**

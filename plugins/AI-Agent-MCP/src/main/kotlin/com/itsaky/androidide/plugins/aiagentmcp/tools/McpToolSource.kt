@@ -212,7 +212,9 @@ class McpToolSource internal constructor(
                 // A cancel landing from here on, during the session lookup or while a request reads
                 // its credentials, is caught by the handle: each request publishes its connection
                 // there and reads the flag again before it sends anything.
-                McpConnections.session(target).callTool(tool.name, arguments, call.handle)
+                // The session is ended after the call when it was not kept: a server removed
+                // meanwhile would otherwise keep the session this call's handshake opened.
+                McpConnections.withSession(target) { it.callTool(tool.name, arguments, call.handle) }
             }
             // A reply of any kind, a tool's own failure included, means the server is answering;
             // unless it was removed while the call ran, when recording it would bring back its row.
