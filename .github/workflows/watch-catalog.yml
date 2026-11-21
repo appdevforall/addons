@@ -33,19 +33,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # Secrets go only to the steps that use them, never job-wide, so the
+    # third-party setup-uv action never sees the webhook or a write token.
     env:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       CATALOG_URL: ${{ vars.ADDONS_CATALOG_URL }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Pre-flight checks
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           failed=0
           [ -n "$SLACK_WEBHOOK_URL" ] || { echo "::error::Repository secret SLACK_WEBHOOK_URL is missing or empty."; failed=1; }
           [ -n "$CATALOG_URL" ] || { echo "::error::Repository variable ADDONS_CATALOG_URL is missing or empty."; failed=1; }
           exit "$failed"
 
+      # No stored token: the repo is public, so fetching needs none, and the
+      # push step is handed one of its own.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Check out the snapshot branch
         run: |
@@ -61,12 +68,16 @@ jobs:
 
       - name: Compare the catalog with the snapshot
         id: watch
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: uv run --directory tools/addons addons watch --url "$CATALOG_URL" --snapshot "$GITHUB_WORKSPACE/state/catalog-snapshot.json"
 
       # Every successful run commits, changed or not, so the branch also shows
       # the check ran. Only reached once any Slack post has succeeded.
       - name: Commit the snapshot
         working-directory: state
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           date -u +%Y-%m-%dT%H:%M:%SZ > last-checked
@@ -74,12 +85,16 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add catalog-snapshot.json last-checked
           git commit -q -m "Catalog check $(cat last-checked)"
-          git push origin "$STATE_BRANCH"
+          # The token is masked in the log and never written to git config.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$STATE_BRANCH"
 
       # `addons watch` reports its own failures; this covers every other step.
       - name: Report a failed run to Slack
-        if: failure() && steps.watch.outcome != 'failure' && env.SLACK_WEBHOOK_URL != ''
+        if: failure() && steps.watch.outcome != 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          [ -n "$SLACK_WEBHOOK_URL" ] || exit 0  # pre-flight already said so
           curl -fsS -X POST -H 'Content-Type: application/json' \
             --data "{\"text\":\"⚠️ Add-ons catalog check failed outside the comparison. Snapshot not updated. $RUN_URL\"}" \
             "$SLACK_WEBHOOK_URL"
