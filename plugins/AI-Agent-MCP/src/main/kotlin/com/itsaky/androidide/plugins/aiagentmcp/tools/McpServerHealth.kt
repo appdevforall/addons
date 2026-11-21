@@ -30,6 +30,19 @@ object McpServerHealth {
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 
     /**
+     * Taken by every removal ([detach], [forget], [clear]), and by a write made only while its
+     * server is configured, around the check and the write together. A removal landing between the
+     * two would otherwise be undone by the write, bringing back the row of a server that is gone. A
+     * removal takes its server out of the list first and forgets its row after, so under this lock
+     * either the write comes first and the removal takes its row, or the check sees the server gone.
+     * Nothing is called under it but that check, and never a listener.
+     */
+    private val lock = Any()
+
+    /** Writes a row whatever the list holds; the default of every `configured` below. */
+    private val always: (String) -> Boolean = { true }
+
+    /**
      * @param serverId the server.
      * @return what is known of it, or null before it was ever asked.
      */
@@ -38,9 +51,15 @@ object McpServerHealth {
     /**
      * Records a first attempt under way. Only for a server with no answer yet: a re-probe of a
      * known server keeps its last answer until the new one lands, so the tag does not flicker.
+     *
+     * @param configured whether [serverId] is still configured; checked with the write, under the
+     *   lock a removal takes, and false skips the write.
      */
-    fun connectingIfUnknown(serverId: String) {
-        if (byServer.putIfAbsent(serverId, Health(State.CONNECTING)) == null) fireChanged()
+    fun connectingIfUnknown(serverId: String, configured: (String) -> Boolean = always) {
+        val added = synchronized(lock) {
+            configured(serverId) && byServer.putIfAbsent(serverId, Health(State.CONNECTING)) == null
+        }
+        if (added) fireChanged()
     }
 
     /**
@@ -51,16 +70,25 @@ object McpServerHealth {
         if (byServer.remove(serverId, Health(State.CONNECTING))) fireChanged()
     }
 
-    /** Records that the server answered. */
-    fun available(serverId: String) = set(serverId, Health(State.AVAILABLE))
+    /**
+     * Records that the server answered.
+     * @param configured as for [connectingIfUnknown].
+     */
+    fun available(serverId: String, configured: (String) -> Boolean = always) =
+        set(serverId, Health(State.AVAILABLE), configured)
 
     /**
      * Records that the server could not be used.
      * @param message why, for the user, in the words the settings pane would use.
      * @param refused whether it refused the credential; see [Health.refused].
+     * @param configured as for [connectingIfUnknown].
      */
-    fun degraded(serverId: String, message: String, refused: Boolean = false) =
-        set(serverId, Health(State.DEGRADED, message, refused))
+    fun degraded(
+        serverId: String,
+        message: String,
+        refused: Boolean = false,
+        configured: (String) -> Boolean = always,
+    ) = set(serverId, Health(State.DEGRADED, message, refused), configured)
 
     /** Lets the probe ask a server that refused its credential again, once the user changed it. */
     fun credentialChanged(serverId: String) {
@@ -79,16 +107,15 @@ object McpServerHealth {
      *
      * @return whether anything was known of [serverId].
      */
-    internal fun detach(serverId: String): Boolean = byServer.remove(serverId) != null
+    internal fun detach(serverId: String): Boolean = synchronized(lock) { byServer.remove(serverId) != null }
 
     /** Tells the listeners of a change [detach] made. */
     internal fun notifyChanged() = fireChanged()
 
     /** Forgets everything, for the plugin shutting down. */
     fun clear() {
-        if (byServer.isEmpty()) return
-        byServer.clear()
-        fireChanged()
+        val had = synchronized(lock) { byServer.isNotEmpty().also { byServer.clear() } }
+        if (had) fireChanged()
     }
 
     /**
@@ -108,9 +135,16 @@ object McpServerHealth {
     /** How many change listeners are registered; a test seam for a listener registered twice. */
     internal val changeListenerCount: Int get() = listeners.size
 
-    /** Stores [health], telling the listeners only when it differs from what was there. */
-    private fun set(serverId: String, health: Health) {
-        if (byServer.put(serverId, health) != health) fireChanged()
+    /**
+     * Stores [health] while [configured] holds, telling the listeners, after the lock is let go,
+     * only when it differs from what was there.
+     */
+    private fun set(serverId: String, health: Health, configured: (String) -> Boolean) {
+        val changed = synchronized(lock) {
+            if (!configured(serverId)) return
+            byServer.put(serverId, health) != health
+        }
+        if (changed) fireChanged()
     }
 
     /**

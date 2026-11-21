@@ -36,6 +36,15 @@ object McpToolCatalog {
     /** The tools of the user's own servers; an automatic entry's are in [AutomaticServers]. */
     private val toolsByServer = ConcurrentHashMap<String, List<McpTool>>()
 
+    /**
+     * Taken by [forget] and [clear], and around the check and the write that store a listing of one
+     * of the user's servers. The deletion removes the server from the store before it forgets its
+     * tools, so under this lock either the listing is stored first and forgotten with the server, or
+     * the check sees the server gone; written with no check, a listing that outlived the deletion
+     * brought the tools of a server that no longer exists back.
+     */
+    private val lock = Any()
+
     /** Re-reads an automatic entry's endpoint and tries once more when the stored one is stale. */
     val retry = EndpointRetry(
         refresh = AutomaticServers::refresh,
@@ -77,15 +86,16 @@ object McpToolCatalog {
         server: McpServer,
         exchangeListener: McpExchangeListener = McpExchangeListener.NONE,
     ): Listing {
-        McpServerHealth.connectingIfUnknown(server.id)
+        // Each checked with its write, under the lock a removal takes: a server deleted while the
+        // handshake was in flight, even just after a check, gets no row back.
+        McpServerHealth.connectingIfUnknown(server.id, McpServers::isConfigured)
         val listing = try {
             retry.call(server) { list(it, exchangeListener) }
         } catch (e: Throwable) {
             recordFailure(server, e)
             throw e
         }
-        // Deleted while the handshake was in flight: recording it would resurrect its entry.
-        if (McpServers.isConfigured(server.id)) McpServerHealth.available(server.id)
+        McpServerHealth.available(server.id, McpServers::isConfigured)
         return listing
     }
 
@@ -102,10 +112,15 @@ object McpToolCatalog {
             McpServerHealth.cancelConnecting(server.id)
             return
         }
-        if (!McpServers.isConfigured(server.id)) return
         val context = McpPlugin.getContext()?.androidContext
         val refused = failure is McpFailure.TokenRefused || failure is McpFailure.Forbidden
-        McpServerHealth.degraded(server.id, McpErrorFormatter.format(context, server, error), refused)
+        // Not for a server removed meanwhile, checked with the write as in connect.
+        McpServerHealth.degraded(
+            server.id,
+            McpErrorFormatter.format(context, server, error),
+            refused,
+            McpServers::isConfigured,
+        )
     }
 
     /** The handshake-and-list itself; see [connect]. */
@@ -135,7 +150,13 @@ object McpToolCatalog {
                 return Listing(session.serverName, tools)
             }
         } else {
-            toolsByServer[server.id] = tools
+            val stored = synchronized(lock) {
+                McpServers.isConfigured(server.id).also { if (it) toolsByServer[server.id] = tools }
+            }
+            if (!stored) {
+                Log.i(TAG, "Dropping a tool list from '${server.name}', removed while it listed")
+                return Listing(session.serverName, tools)
+            }
             McpServerStore.setKnownTools(server.id, tools.map { it.name })
         }
         Log.i(TAG, "Server '${server.name}' listed ${tools.size} tool(s)")
@@ -190,13 +211,13 @@ object McpToolCatalog {
      * lock, so the entry that replaces it under the same ID keeps its own.
      */
     fun forget(serverId: String) {
-        toolsByServer.remove(serverId)
+        synchronized(lock) { toolsByServer.remove(serverId) }
         McpServerHealth.forget(serverId)
     }
 
     /** Forgets everything, for the plugin shutting down. */
     fun clear() {
-        toolsByServer.clear()
+        synchronized(lock) { toolsByServer.clear() }
         McpServerHealth.clear()
     }
 }
