@@ -162,9 +162,10 @@ object McpConnections {
      *
      * @return them, or null for a server not stored or credentials that could not be read.
      */
-    fun saveCredentials(serverId: String): SavedCredentials? {
-        val url = McpServerStore.server(serverId)?.url ?: return null
-        return runCatchingRecoverable { SavedCredentials(url, credentialsFor(serverId, url)) }
+    fun saveCredentials(serverId: String): SavedCredentials? = McpServerStore.readTogether {
+        // The URL and the credentials read together, so they are the pair the server has.
+        val url = McpServerStore.server(serverId)?.url ?: return@readTogether null
+        runCatchingRecoverable { SavedCredentials(url, credentialsFor(serverId, url)) }
             .onFailure { e -> Log.d(TAG, "Could not read the credentials to end '$serverId' with: $e") }
             .getOrNull()
     }
@@ -249,8 +250,9 @@ object McpConnections {
      *   `close()` and any call still in flight cannot hand the credentials meant for the new URL
      *   to the old one. That holds for an automatic entry, whose replaced endpoint would get the
      *   new process's token, and for a server of the user's, whose old URL would get the token
-     *   and headers the user entered for the new one: the settings pane stores them before it
-     *   ends the old session.
+     *   and headers the user entered for the new one. A user's server's URL is read with its
+     *   credentials, under the store's credentials lock, which a save holds while it writes all
+     *   three: a read between its writes would pair the new URL with the old token and headers.
      * @return its token and headers; either may be empty.
      * @throws UnreadableSecretException when a stored credential cannot be decrypted here. Sending
      *   the request without it would earn a 401 and tell the user their token was refused.
@@ -262,6 +264,11 @@ object McpConnections {
             // Read per request, so a token refreshed on the same port is used without a new session.
             return automaticCredentials(AutomaticServers.endpoint(serverId), url)
         }
+        return McpServerStore.readTogether { storedCredentials(serverId, url) }
+    }
+
+    /** [credentialsFor] for a server of the user's. Call under `McpServerStore.readTogether`. */
+    private fun storedCredentials(serverId: String, url: String): McpCredentials {
         // A server removed since, or moved to another URL, gets nothing; checked before the
         // Keystore is read, so its secrets are not even decrypted.
         if (McpServerStore.server(serverId)?.url != url) return McpCredentials("", emptyMap())

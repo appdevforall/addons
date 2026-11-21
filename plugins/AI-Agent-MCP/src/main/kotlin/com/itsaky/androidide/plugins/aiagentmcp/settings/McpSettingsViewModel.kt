@@ -137,10 +137,10 @@ class McpSettingsViewModel(
      * What the header rows mean when saving, given whether the stored ones could be read.
      *
      * The token's rule, applied to headers: the rows replace what is stored only when the dialog
-     * drew what is stored. Otherwise they mean nothing about it — [setHeaders] replaces the whole
-     * map, so writing one typed row over a set nobody could read would delete headers the user was
-     * just told were intact. The dialog refuses such a save instead, and [clearCredential] is the
-     * way back to none.
+     * drew what is stored. Otherwise they mean nothing about it — [McpServerStore.saveConnection]
+     * replaces the whole map, so writing one typed row over a set nobody could read would delete
+     * headers the user was just told were intact. The dialog refuses such a save instead, and
+     * [clearCredential] is the way back to none.
      *
      * @param collected the header rows as they currently stand.
      * @param headersKnown whether those rows reflect what is stored.
@@ -168,23 +168,41 @@ class McpSettingsViewModel(
         onDone: (McpServer, String?) -> Unit,
     ) {
         viewModelScope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                val merged = McpServerStore.saveDetails(server)
-                val tokenStored = token?.let { McpServerStore.setToken(server.id, it.trim()) } ?: true
-                val headersStored = headers?.let { McpServerStore.setHeaders(server.id, it) } ?: true
-                // A credential change has to invalidate the session, or the old one keeps working.
-                McpConnections.invalidate(server.id)
-                McpServerHealth.credentialChanged(server.id)
-                val failure = when {
-                    !tokenStored -> string(R.string.mcp_token_save_failed)
-                    !headersStored -> string(R.string.mcp_headers_save_failed)
-                    else -> null
-                }
-                merged to failure
-            }
+            val outcome = withContext(Dispatchers.IO) { saveNow(server, token, headers) }
             reload()
             onDone(outcome.first, outcome.second)
         }
+    }
+
+    /**
+     * [save]'s blocking part, off the main thread.
+     *
+     * A credential or URL change has to end the session, or the old one keeps working. It is taken
+     * out first, its credentials read while the store still holds the URL it was built for; then
+     * the URL, token and headers are written in one step that a request's credential read waits
+     * for; then it is ended, outside every lock. So its DELETE carries the old credentials, which a
+     * server that wants its token to end a session needs, and only to the old URL: the old token
+     * never reaches the new URL, nor the new token the old. A call that looks the session up in
+     * between stores one for the old URL, which the next lookup replaces; it ends with no
+     * credentials, since the server no longer points there.
+     *
+     * @return the merged record and a status sentence, null when everything worked.
+     */
+    internal fun saveNow(
+        server: McpServer,
+        token: String?,
+        headers: Map<String, String>?,
+    ): Pair<McpServer, String?> {
+        val released = McpConnections.detach(server.id)
+        val saved = McpServerStore.saveConnection(server, token?.trim(), headers)
+        released?.close()
+        McpServerHealth.credentialChanged(server.id)
+        val failure = when {
+            !saved.tokenStored -> string(R.string.mcp_token_save_failed)
+            !saved.headersStored -> string(R.string.mcp_headers_save_failed)
+            else -> null
+        }
+        return saved.server to failure
     }
 
     /**
@@ -199,16 +217,24 @@ class McpSettingsViewModel(
      */
     fun clearCredential(id: String, onDone: (Boolean) -> Unit) {
         viewModelScope.launch {
-            val cleared = withContext(Dispatchers.IO) {
-                val tokenCleared = McpServerStore.setToken(id, "")
-                val headersCleared = McpServerStore.setHeaders(id, emptyMap())
-                // The session was keyed by the credential it no longer has.
-                McpConnections.invalidate(id)
-                McpServerHealth.credentialChanged(id)
-                tokenCleared && headersCleared
-            }
+            val cleared = withContext(Dispatchers.IO) { clearCredentialNow(id) }
             onDone(cleared)
         }
+    }
+
+    /**
+     * [clearCredential]'s blocking part, off the main thread. The session was keyed by the
+     * credential it no longer has, so it is ended, in [saveNow]'s order: taken out with the
+     * credentials it had, so its DELETE carries them, ended once they are cleared.
+     *
+     * @return true when nothing is stored any more.
+     */
+    internal fun clearCredentialNow(id: String): Boolean {
+        val released = McpConnections.detach(id)
+        val cleared = McpServerStore.clearCredentials(id)
+        released?.close()
+        McpServerHealth.credentialChanged(id)
+        return cleared
     }
 
     /**

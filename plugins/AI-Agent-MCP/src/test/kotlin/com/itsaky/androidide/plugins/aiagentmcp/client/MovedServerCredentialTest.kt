@@ -24,11 +24,16 @@ import org.junit.Test
  * A server of the user's moved to another URL never hands the credentials entered for the new URL
  * to the old one.
  *
- * The settings pane stores the new URL, token and headers, and only then ends the old session. Its
+ * The settings pane stored the new URL, token and headers, and only then ended the old session. Its
  * DELETE read the server's credentials without asking which URL they were for, so it went to the
  * old URL with the new token and headers; so did any request of the old session still running.
  * The credentials are now released only to a session built for the URL the server has, the rule a
  * SQLite debugger entry already followed.
+ *
+ * The save now takes the old session out before it writes, so that session's DELETE carries the
+ * old credentials (SaveServerSessionTest). The rule still holds for any session of the old URL
+ * ended once the server has moved: one a call stored between that take-out and the write, which the
+ * next lookup replaces, and every request still running on the old session.
  */
 class MovedServerCredentialTest {
 
@@ -89,7 +94,7 @@ class MovedServerCredentialTest {
         assertFalse("the old URL was sent the user's headers", "x-team" in listing.headerNames)
     }
 
-    /** What the settings pane's save stores, before it ends the old session. */
+    /** What the settings pane's save stores; a session of the old URL is ended after it. */
     private fun moveToTheNewUrl(saved: McpServer) {
         McpServerStore.saveDetails(saved.copy(url = url(moved)))
         token = "new-token"

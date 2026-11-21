@@ -180,9 +180,14 @@ Two dependencies were deliberately not taken:
   version needs **26.48 or later**, the first release that ships `DebuggerEndpointService`
   (`plugin.min_ide_version`); users on 26.47 or older cannot install it. 26.48 assumes the
   release after 26.47 ships it; recheck it against the real release number before merging.
-- A server's token and headers go only to the URL it is saved with. When the URL
-  is edited, the old session is ended, and any of its requests still running
-  finish, with neither: the token entered for the new URL never reaches the old.
+- A server's token and headers go only to the URL it is saved with. A save
+  writes the URL, token and headers in one step that a request's credential
+  read waits for, so no request pairs the new URL with the old token, or the
+  old URL with the new. The old session is taken out before that step and
+  ended after it, its DELETE carrying the credentials it was opened with, so a
+  server that wants its token to end a session gets it; any of its requests
+  still running after the save finish with neither. Clearing the credential
+  ends the session the same way.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.
