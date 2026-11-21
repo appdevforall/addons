@@ -531,6 +531,10 @@ class ChatViewModel(
      */
     private fun rebuildAgentTools() {
         agentTools = buildAgentTools()
+        // A grant belongs to one definition of a tool; one that changed or went away loses it.
+        approvalManager.retainSessionApprovals(
+            approvalManager.grantableKeys(agentTools.router.getAllHandlers()),
+        )
         android.util.Log.i(
             TAG,
             "Tool set rebuilt: ${agentTools.router.getAllHandlers().size} tools, " +

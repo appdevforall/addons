@@ -651,8 +651,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <p>For a tool from another plugin, the button appears only when
                 that plugin says the tool only reads. Code on the Go cannot check
                 that, and after one tap the agent can call the tool with any
-                arguments. If the plugin changes the tool's description or inputs,
-                you are asked again. A tool from another plugin that may change
+                arguments. If the plugin changes the tool's description or inputs, or
+                stops listing it, you are asked again. A tool from another plugin that may change
                 something asks every time.</p>
                 <p>It is deliberately unavailable for file edits: those are
                 re-confirmed every time, with the change on screen.</p>

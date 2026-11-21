@@ -222,6 +222,30 @@ class ToolApprovalManager(
     }
 
     /**
+     * The keys a session grant may stay under for [handlers]: a built-in's name, and a contributed
+     * tool's [ToolHandler.sessionApprovalKey] only while it still allows session approval. A
+     * tool that changed, stopped being read-only or is gone therefore has no key here.
+     * @param handlers every handler of the current tool set, built-in and contributed.
+     * @return the keys to pass to [retainSessionApprovals].
+     */
+    fun grantableKeys(handlers: Collection<ToolHandler>): Set<String> = handlers
+        .filterNot { isNeverSessionApproved(it.toolName, it) }
+        .mapTo(mutableSetOf()) { grantKey(it.toolName, it) }
+
+    /**
+     * Drops every session grant whose key is not in [validKeys]. `ChatViewModel` calls it when the
+     * tool list changes, so a run that started earlier cannot keep using a grant for a tool whose
+     * definition has since changed or been dropped, and an old definition's grant does not come
+     * back when the tool returns to it (A, then B, then A again).
+     * @param validKeys the keys from [grantableKeys] for the new tool set.
+     */
+    fun retainSessionApprovals(validKeys: Set<String>) {
+        if (sessionApprovedTools.retainAll(validKeys)) {
+            Log.d(TAG, "Session approvals pruned to the current tool set")
+        }
+    }
+
+    /**
      * Forgets every "Always Allow", built-in and contributed alike. `ChatViewModel` calls it when
      * the chat changes or is cleared, which is where a session ends: its manager lives as long as
      * the plugin.

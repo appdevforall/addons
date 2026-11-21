@@ -121,8 +121,8 @@ be allowed for the session (ADFA-7147): still one explicit approval per tool, an
 grant is keyed by provider, the tool's own name and a SHA-256 of its description and
 input schema rather than by the registered name, which can pass to another plugin's tool
 when the sources change. A tool its provider republishes under the same name with
-another description or schema therefore asks again. The grant lapses if the tool stops
-declaring itself read-only, and every grant, built-in or contributed, ends with the chat:
+another description or schema therefore asks again. The grant lapses as soon as the tool list changes and the tool is changed, dropped
+or no longer declares itself read-only (`ToolApprovalManager.retainSessionApprovals`), and every grant, built-in or contributed, ends with the chat:
 `ChatViewModel` clears them whenever the current chat changes (new, opened, imported, or
 deleted and replaced) or is cleared, since its `ToolApprovalManager` lives as long as the
 plugin. The declaration is the provider's own and nothing checks it,

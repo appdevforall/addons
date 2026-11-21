@@ -375,6 +375,58 @@ class ToolApprovalManagerTest {
     }
 
     @Test
+    fun givenASessionGrant_whenTheToolListChangesWithoutThatTool_thenTheUserIsAskedAgain() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val query = contributed(provider, "query", readOnly = true)
+        assertTrue(answer(manager, query, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        manager.retainSessionApprovals(manager.grantableKeys(emptyList()))
+
+        assertFalse(
+            "a tool dropped from the list loses its grant",
+            answer(manager, query, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenASessionGrant_whenTheListNowHoldsTheToolAsWriting_thenTheGrantIsGoneWhenItReturnsToReadOnly() {
+        // A run that began before the relist must not use the grant, and A, B, A must not revive it.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val reads = contributed(provider, "query", readOnly = true)
+        assertTrue(answer(manager, reads, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        manager.retainSessionApprovals(
+            manager.grantableKeys(listOf(contributed(provider, "query", readOnly = false))),
+        )
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(reads)))
+
+        assertFalse(answer(manager, reads, ApprovalResult.DENIED).approved)
+    }
+
+    @Test
+    fun givenASessionGrant_whenTheSameToolIsStillListed_thenRetainingKeepsItAndBuiltInGrants() = runBlocking {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val query = contributed(provider, "query", readOnly = true)
+        val builtIn = object : ToolHandler {
+            override val toolName = "add_dependency"
+            override val description = "fake"
+            override val requiresApproval = true
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ok")
+        }
+        assertTrue(answer(manager, query, ApprovalResult.APPROVED_FOR_SESSION).approved)
+        assertTrue(answer(manager, builtIn, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(query, builtIn)))
+
+        assertTrue(withTimeout(5_000) { manager.ensureApproved("query", query, emptyMap()) }.approved)
+        assertTrue(withTimeout(5_000) { manager.ensureApproved("add_dependency", builtIn, emptyMap()) }.approved)
+        assertFalse(manager.hasPendingApproval())
+    }
+
+    @Test
     fun givenAReadOnlyContributedTool_whenTheDialogOffersAlwaysAllow_thenItSaysTheClaimIsThePluginsOwn() {
         // Review F11: the button rests on the provider's word, so the request must carry that.
         val manager = ToolApprovalManager({ shippedConfig })
