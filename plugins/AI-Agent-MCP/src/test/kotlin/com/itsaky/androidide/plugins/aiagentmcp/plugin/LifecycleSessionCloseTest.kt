@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
 import com.itsaky.androidide.plugins.aiagentmcp.testing.awaitFinishedOrBlockedBy
+import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
@@ -119,5 +120,70 @@ class LifecycleSessionCloseTest {
 
         assertEquals("activate waited for the deactivation's DELETE", Thread.State.TERMINATED, state)
         assertFalse("deactivate never finished", deactivating.isAlive)
+    }
+
+    /**
+     * An activate that runs after a deactivation has taken its sessions out, and before that
+     * deactivation has ended them, leaves them to it: it neither ends them nor waits for them.
+     *
+     * The sessions taken out were kept in one list that every lifecycle call emptied once it had
+     * let go of the lock. An activate taking the lock in that window emptied it, ended the
+     * deactivation's sessions itself, and waited for their DELETEs, up to about 70 s each. Each
+     * lifecycle call now ends only the sessions its own teardown took out.
+     *
+     * A health listener holds the deactivation at its teardown's last steps, after the sessions are
+     * taken out, in a wait on the lifecycle lock, which lets that lock go: the window, opened for as
+     * long as the test needs. The lock is private, so the test reaches it by reflection. Nothing
+     * sleeps.
+     */
+    @Test
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN") // wait and notifyAll on the lock's own monitor
+    fun `an activate between a deactivation's teardown and its DELETEs leaves the sessions to it`() {
+        val saved = McpServerStore.saveDetails(
+            McpServerStore.newServer("Docs", "http://127.0.0.1:${server.address.port}/mcp")
+        )
+        plugin.activate()
+        McpConnections.session(saved).initialize()
+        // A health row, so the teardown's clearing of the cache tells the health listeners.
+        McpServerHealth.available(saved.id)
+        val lock = McpPlugin::class.java.getDeclaredField("lifecycleLock")
+            .apply { isAccessible = true }
+            .get(plugin) as java.lang.Object
+        val held = CountDownLatch(1)
+        var resume = false
+        val hold = {
+            if (Thread.currentThread().name == "deactivating" && held.count > 0) {
+                synchronized(lock) {
+                    held.countDown()
+                    while (!resume) lock.wait()
+                }
+            }
+        }
+        McpServerHealth.addChangeListener(hold)
+        try {
+            val deactivating = thread(name = "deactivating") { plugin.deactivate() }
+            assertTrue("the deactivation's teardown never took its sessions out", held.await(10, TimeUnit.SECONDS))
+            val activating = thread(name = "activating") { plugin.activate() }
+            // Whichever comes first: the activate ending, or a DELETE sent while the deactivation is held.
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+            while (activating.isAlive && deleteArrived.count > 0 && System.nanoTime() < deadline) activating.join(10)
+            val endedByActivate = deleteArrived.count == 0L
+            val activateEnded = !activating.isAlive
+            synchronized(lock) {
+                resume = true
+                lock.notifyAll()
+            }
+            val endedByDeactivate = deleteArrived.await(10, TimeUnit.SECONDS)
+            releaseDelete.countDown()
+            activating.join(10_000)
+            deactivating.join(10_000)
+
+            assertFalse("activate ended the sessions the deactivation took out", endedByActivate)
+            assertTrue("activate did not end", activateEnded)
+            assertTrue("the deactivation never ended its own session", endedByDeactivate)
+            assertFalse("deactivate never finished", deactivating.isAlive)
+        } finally {
+            McpServerHealth.removeChangeListener(hold)
+        }
     }
 }
