@@ -2,11 +2,15 @@ package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.prompt.config.DirectoryPromptConfigSource.Companion.shippedConfig
+import com.itsaky.androidide.plugins.aicore.tool.sources.ContributedToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.sources.FakeToolSource
+import com.itsaky.androidide.plugins.aicore.tool.sources.contributedTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,6 +49,37 @@ class ToolApprovalManagerTest {
             pending.await()
         }
     }
+
+    /** The request the last [answer] saw on screen. */
+    private var lastRequest: ApprovalRequest? = null
+
+    /**
+     * Runs [ensureApproved] for [handler] and answers its dialog with [result]. Times out when no
+     * dialog appears, which is how a test sees a grant cover a call it must not.
+     */
+    private fun answer(
+        manager: ToolApprovalManager,
+        handler: ToolHandler,
+        result: ApprovalResult,
+    ): ApprovalResponse = runBlocking {
+        val pending = async(Dispatchers.Default) {
+            manager.ensureApproved(handler.toolName, handler, emptyMap())
+        }
+        withTimeout(5_000) {
+            while (!manager.hasPendingApproval()) delay(5)
+            lastRequest = manager.currentApprovalRequest.value
+            manager.submitApproval(result)
+            pending.await()
+        }
+    }
+
+    /** A real contributed handler, registered under the tool's own name. */
+    private fun contributed(providerId: String, name: String, readOnly: Boolean) =
+        ContributedToolHandler(
+            FakeToolSource(providerId),
+            contributedTool(providerId, name, readOnly = readOnly),
+            name,
+        )
 
     @Test
     fun givenAToolDeclaringNoApproval_whenApprovalIsRequested_thenItRunsWithNoDialog() = runBlocking {
@@ -230,6 +265,147 @@ class ToolApprovalManagerTest {
             "edit_file must still be re-confirmed every time",
             decideWith(manager, ApprovalResult.DENIED).approved,
         )
+    }
+
+    @Test
+    fun givenAReadOnlyContributedTool_whenApprovedForTheSession_thenTheNextCallRunsWithNoDialog() {
+        // ADFA-7147: one tap per read-only tool per session, instead of one per call.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val query = contributed("com.itsaky.androidide.plugins.aiagentmcp", "query", readOnly = true)
+
+        assertTrue(answer(manager, query, ApprovalResult.APPROVED_FOR_SESSION).approved)
+        assertTrue("the dialog must offer Always Allow", lastRequest?.allowsSessionApproval == true)
+
+        val second = runBlocking {
+            withTimeout(5_000) { manager.ensureApproved(query.toolName, query, emptyMap()) }
+        }
+        assertTrue(second.approved)
+        assertFalse(manager.hasPendingApproval())
+    }
+
+    @Test
+    fun givenAContributedToolNotDeclaredReadOnly_whenApprovedForTheSession_thenTheUserIsAskedAgain() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val write = contributed("com.itsaky.androidide.plugins.aiagentmcp", "create_issue", readOnly = false)
+
+        assertTrue(answer(manager, write, ApprovalResult.APPROVED_FOR_SESSION).approved)
+        assertFalse("the dialog must not offer Always Allow", lastRequest?.allowsSessionApproval == true)
+
+        assertFalse(
+            "a tool that may change something is confirmed on every call",
+            answer(manager, write, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenASessionGrant_whenAnotherPluginsReadOnlyToolTakesItsName_thenTheUserIsAskedAgain() {
+        // Registered names are first come, first served: once the first source goes, the second
+        // one's tool is published under the same name. The user approved the first plugin's tool.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val mine = contributed("com.example.one", "query", readOnly = true)
+        assertTrue(answer(manager, mine, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        val theirs = contributed("com.example.two", "query", readOnly = true)
+        assertEquals(mine.toolName, theirs.toolName)
+
+        assertFalse(
+            "another plugin's tool must not inherit the grant",
+            answer(manager, theirs, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenASessionGrant_whenTheToolStopsDeclaringReadOnly_thenTheUserIsAskedAgain() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        assertTrue(
+            answer(manager, contributed(provider, "query", readOnly = true), ApprovalResult.APPROVED_FOR_SESSION)
+                .approved,
+        )
+
+        val nowWriting = contributed(provider, "query", readOnly = false)
+
+        assertFalse(
+            "the grant lapses with the read-only declaration",
+            answer(manager, nowWriting, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenASessionGrant_whenTheProviderRepublishesTheToolWithAnotherDescription_thenTheUserIsAskedAgain() {
+        // Same provider, same name, still read-only: only what the tool says it does has changed.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val reads = ContributedToolHandler(
+            FakeToolSource(provider),
+            contributedTool(provider, "query", description = "Runs a SELECT.", readOnly = true),
+            "query",
+        )
+        assertTrue(answer(manager, reads, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        val redescribed = ContributedToolHandler(
+            FakeToolSource(provider),
+            contributedTool(provider, "query", description = "Runs any SQL statement.", readOnly = true),
+            "query",
+        )
+
+        assertFalse(
+            "a tool republished with another description must ask again",
+            answer(manager, redescribed, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenASessionGrant_whenTheSameToolIsListedAgain_thenTheNextCallRunsWithNoDialog() {
+        // The store builds a new handler on every rebuild; an unchanged tool keeps its grant.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        assertTrue(
+            answer(manager, contributed(provider, "query", readOnly = true), ApprovalResult.APPROVED_FOR_SESSION)
+                .approved,
+        )
+
+        val relisted = contributed(provider, "query", readOnly = true)
+        val second = runBlocking {
+            withTimeout(5_000) { manager.ensureApproved(relisted.toolName, relisted, emptyMap()) }
+        }
+
+        assertTrue(second.approved)
+        assertFalse(manager.hasPendingApproval())
+    }
+
+    @Test
+    fun givenAReadOnlyContributedTool_whenTheDialogOffersAlwaysAllow_thenItSaysTheClaimIsThePluginsOwn() {
+        // Review F11: the button rests on the provider's word, so the request must carry that.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+
+        answer(manager, contributed(provider, "query", readOnly = true), ApprovalResult.DENIED)
+
+        assertTrue(lastRequest?.allowsSessionApproval == true)
+        assertTrue("the dialog must say the read-only claim is the plugin's", lastRequest?.readOnlyOnProvidersWord == true)
+    }
+
+    @Test
+    fun givenAToolWhoseAlwaysAllowRestsOnNoClaim_whenTheDialogIsShown_thenItSaysNothingAboutOne() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val builtIn = object : ToolHandler {
+            override val toolName = "add_dependency"
+            override val description = "fake"
+            override val requiresApproval = true
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ok")
+        }
+
+        answer(manager, builtIn, ApprovalResult.DENIED)
+        assertTrue(lastRequest?.allowsSessionApproval == true)
+        assertFalse("a built-in is this plugin's own code", lastRequest?.readOnlyOnProvidersWord == true)
+
+        answer(
+            manager,
+            contributed("com.itsaky.androidide.plugins.aiagentmcp", "create_issue", readOnly = false),
+            ApprovalResult.DENIED,
+        )
+        assertFalse("no Always Allow, so no claim to explain", lastRequest?.readOnlyOnProvidersWord == true)
     }
 
     @Test

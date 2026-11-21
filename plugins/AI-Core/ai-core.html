@@ -89,9 +89,10 @@
       <code>edit_file</code>; one that arrives with a name already in use is
       offered under a provider-prefixed name instead of being dropped.</li>
     <li><b>Approval with provenance</b> — the approval dialog names the plugin a
-      tool came from, and a contributed tool can never be blanket-approved for the
-      session: it asks every time, because it runs outside the path containment
-      that covers the agent's own tools.</li>
+      tool came from, and a contributed tool asks on every call, because it runs
+      outside the path containment that covers the agent's own tools. The one
+      exception is a tool its plugin says only reads: it may be allowed for the
+      rest of the chat, and the dialog says Code on the Go cannot check that claim.</li>
     <li>Text completion, chat with history, and streaming responses, plus a
       single cancellation path so <b>Stop</b> reaches whichever backend is
       running.</li>

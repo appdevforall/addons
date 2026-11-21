@@ -33,14 +33,16 @@ class ToolApprovalManager(
 
     /**
      * Built-in tools that can never be blanket-approved for the session, however the user answers.
-     * Session approval is keyed by tool name alone, so one tap would hand a small model unreviewed
-     * write access to the whole project; a destructive edit is re-confirmed every time.
+     * A built-in's session grant is keyed by its name alone, so one tap would hand a small model
+     * unreviewed write access to the whole project; a destructive edit is re-confirmed every time.
      */
     private val neverSessionApproved = setOf("edit_file")
 
     /**
      * Whether a session grant may cover this call. A predicate rather than a name list because a
-     * plugin-contributed tool cannot be enumerated here and must be prompt-every-time.
+     * plugin-contributed tool cannot be enumerated here; its handler says whether it may be
+     * session-approved (only a tool its provider declared read-only). Checked when a grant is
+     * used as well as when it is made, so a tool that stops declaring itself read-only asks again.
      * @param toolName the tool being approved.
      * @param handler its handler.
      * @return true when "Always Allow" must be downgraded to a single approval.
@@ -48,7 +50,19 @@ class ToolApprovalManager(
     private fun isNeverSessionApproved(toolName: String, handler: ToolHandler): Boolean =
         toolName in neverSessionApproved || !handler.allowsSessionApproval
 
-    // Concurrent: written from the dialog's coroutine, read from the next tool call's thread.
+    /** What a session grant for this call is recorded under: see [ToolHandler.sessionApprovalKey]. */
+    private fun grantKey(toolName: String, handler: ToolHandler): String =
+        handler.sessionApprovalKey ?: toolName
+
+    /**
+     * Whether an earlier "Always Allow" covers this call: granted under its [grantKey], and the
+     * handler may still be session-approved.
+     */
+    private fun isSessionApproved(toolName: String, handler: ToolHandler): Boolean =
+        grantKey(toolName, handler) in sessionApprovedTools && !isNeverSessionApproved(toolName, handler)
+
+    // Keys from grantKey. Concurrent: written from the dialog's coroutine,
+    // read from the next tool call's thread.
     private val sessionApprovedTools: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /**
@@ -85,19 +99,19 @@ class ToolApprovalManager(
             return ApprovalResponse(approved = true)
         }
 
-        // Check if already approved for this session
-        if (sessionApprovedTools.contains(toolName)) {
+        if (isSessionApproved(toolName, handler)) {
             AgentTrace.detail("APPROVAL", "$toolName skipped=session-approved")
             return ApprovalResponse(approved = true)
         }
 
         // Locked from publishing to clearing, so a second caller waits instead of replacing it.
         val result = requestLock.withLock {
-            if (sessionApprovedTools.contains(toolName)) {
+            if (isSessionApproved(toolName, handler)) {
                 AgentTrace.detail("APPROVAL", "$toolName skipped=session-approved while queued")
                 return ApprovalResponse(approved = true)
             }
 
+            val allowsSession = !isNeverSessionApproved(toolName, handler)
             val request = ApprovalRequest(
                 toolName = toolName,
                 displayName = handler.displayName,
@@ -105,7 +119,8 @@ class ToolApprovalManager(
                 args = args,
                 description = describe(handler),
                 preview = handler.approvalPreview,
-                allowsSessionApproval = !isNeverSessionApproved(toolName, handler),
+                allowsSessionApproval = allowsSession,
+                readOnlyOnProvidersWord = allowsSession && handler.readOnlyOnProvidersWord,
             )
 
             val deferred = CompletableDeferred<ApprovalDecision>()
@@ -148,7 +163,7 @@ class ToolApprovalManager(
                 Log.d(TAG, "Approval granted (once; $toolName is never session-approved)")
             } else {
                 Log.d(TAG, "Approval granted (session) for $toolName")
-                sessionApprovedTools.add(toolName)
+                sessionApprovedTools.add(grantKey(toolName, handler))
             }
             ApprovalResponse(approved = true)
         }
@@ -207,7 +222,9 @@ class ToolApprovalManager(
     }
 
     /**
-     * Clear all session-approved tools.
+     * Forgets every "Always Allow", built-in and contributed alike. `ChatViewModel` calls it when
+     * the chat changes or is cleared, which is where a session ends: its manager lives as long as
+     * the plugin.
      */
     fun clearSessionApprovals() {
         sessionApprovedTools.clear()
@@ -230,11 +247,14 @@ data class ApprovalResponse(
 /**
  * Pending approval request.
  *
- * @property toolName the registered name, which is what session approval is keyed by.
+ * @property toolName the registered name. A session grant is keyed by the handler's
+ *   [ToolHandler.sessionApprovalKey], or by this name when it has none (a built-in).
  * @property displayName the name to put on screen; the same string for a built-in.
  * @property sourceLabel the contributing plugin, or null for one of the agent's own tools.
  * @property args the arguments the tool would run with.
  * @property description what the tool does.
+ * @property readOnlyOnProvidersWord "Always Allow" is offered only because the tool's provider says
+ *   it only reads; the dialog tells the user so, and that the claim is not checked.
  */
 data class ApprovalRequest(
     val toolName: String,
@@ -244,6 +264,7 @@ data class ApprovalRequest(
     val sourceLabel: String? = null,
     val preview: ApprovalPreview = ApprovalPreview.ARGS,
     val allowsSessionApproval: Boolean = true,
+    val readOnlyOnProvidersWord: Boolean = false,
 )
 
 /**
