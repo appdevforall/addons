@@ -217,14 +217,27 @@ class McpSettingsViewModel(
      */
     fun delete(id: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                McpConnections.invalidate(id)
-                // Removed first, so a probe finishing in between sees it gone and records nothing.
-                McpServerStore.remove(id)
-                McpToolCatalog.forget(id)
-            }
+            withContext(Dispatchers.IO) { deleteNow(id) }
             reload()
         }
+    }
+
+    /**
+     * [delete]'s blocking part, off the main thread.
+     *
+     * The session is ended before the server is removed, so its DELETE still has the credentials
+     * the removal deletes. A call or a listing that looked the session up between the two stored
+     * a new one, which would outlive the server; it is ended again once the server is gone, when
+     * no lookup stores one any more (McpConnections.session keeps none for a server no longer
+     * configured). That second DELETE goes without credentials, best effort.
+     */
+    internal fun deleteNow(id: String) {
+        McpConnections.invalidate(id)
+        // Removed before the tools are forgotten, so a probe finishing in between sees it gone and
+        // records nothing.
+        McpServerStore.remove(id)
+        McpConnections.invalidate(id)
+        McpToolCatalog.forget(id)
     }
 
     /**

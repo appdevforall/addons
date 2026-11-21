@@ -51,7 +51,8 @@ object McpConnections {
      * removal of a SQLite debugger entry takes, to detach its session, only after the entry has
      * left the list; so either that removal takes the session out or this sees the entry gone. A
      * server of the user's is removed from the store after its session is ended, so its DELETE
-     * still has the credentials; a lookup between the two still stores one.
+     * still has the credentials; the settings pane ends whatever a lookup stored between the two
+     * once the server is gone.
      *
      * @param server the server to connect to.
      * @return its session, not yet initialized.
