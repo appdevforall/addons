@@ -3,12 +3,12 @@ package com.itsaky.androidide.plugins.aiagentmcp.plugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
+import com.itsaky.androidide.plugins.aiagentmcp.testing.awaitFinishedOrBlockedBy
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import java.lang.management.ManagementFactory
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -117,25 +117,6 @@ class ConcurrentLifecycleTest {
         assertFalse("the registration never finished", registeringThread.isAlive)
         assertFalse("deactivate never finished", deactivating.isAlive)
         assertEquals("a tool source is still registered after the deactivate", 0, registered.size)
-    }
-
-    /**
-     * Waits until [waiter] has finished, or is blocked entering a monitor that [holder] holds.
-     * Without the lock the deactivation runs straight to its end; with it, it blocks on the lock
-     * the registering thread holds. Either way the wait ends without depending on how long anything
-     * takes.
-     */
-    private fun awaitFinishedOrBlockedBy(waiter: Thread, holder: Thread) {
-        val threads = ManagementFactory.getThreadMXBean()
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
-        while (System.nanoTime() < deadline) {
-            if (waiter.state == Thread.State.TERMINATED) return
-            if (waiter.state == Thread.State.BLOCKED && threads.getThreadInfo(waiter.id)?.lockOwnerId == holder.id) {
-                return
-            }
-            Thread.yield()
-        }
-        throw AssertionError("${waiter.name} neither finished nor waited for ${holder.name}: ${waiter.state}")
     }
 
     private companion object {

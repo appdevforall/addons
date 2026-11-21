@@ -101,8 +101,18 @@ object McpConnections {
 
     /** Ends every session, for the plugin shutting down. */
     fun closeAll() {
-        sessions.values.forEach { (_, session) -> runCatchingRecoverable { session.close() } }
-        sessions.clear()
+        detachAll().forEach { session -> runCatchingRecoverable { session.close() } }
+    }
+
+    /**
+     * Takes every session out without ending it, as [detach] does one: for a caller that empties
+     * the map under a lock of its own and ends the sessions once that lock is let go, since each
+     * `close()` sends a DELETE and can wait for a handshake in flight.
+     *
+     * @return the sessions taken out.
+     */
+    fun detachAll(): List<McpSession> = synchronized(this) {
+        sessions.values.map { it.second }.also { sessions.clear() }
     }
 
     /**

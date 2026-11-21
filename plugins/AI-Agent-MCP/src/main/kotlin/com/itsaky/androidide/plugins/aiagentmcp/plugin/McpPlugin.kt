@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
@@ -71,12 +72,20 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * with a RejectedExecutionException. Every swap of [scope] takes it too: cancelling the old
      * scope and installing a new one is one transition, not two.
      *
-     * Nothing taken under it waits for this plugin's own work: the host's listener and service
-     * registries do not call back, and the coroutines it cancels never take it. A transition can
-     * still wait for the network, since [teardown] ends every session with a DELETE; a lifecycle
-     * call arriving meanwhile waits with it.
+     * Nothing taken under it waits for this plugin's own work or for the network: the host's
+     * listener and service registries do not call back, the coroutines it cancels never take it,
+     * and [teardown] only takes the sessions out ([releasedSessions]). Each lifecycle call ends
+     * them once it has let go: a session's `close()` sends a DELETE and can first wait, up to about
+     * 70 s, for a handshake in flight to let go of the session, and a lifecycle call or AI Core's
+     * registration arriving meanwhile must not wait behind it.
      */
     private val lifecycleLock = Any()
+
+    /**
+     * Sessions [teardown] took out under [lifecycleLock], for the lifecycle call that ran it to end
+     * once it has let go ([closeReleasedSessions]). Guarded by [lifecycleLock].
+     */
+    private val releasedSessions = mutableListOf<McpSession>()
 
     /**
      * Background work: listing tools is network work and never belongs on the main thread.
@@ -238,7 +247,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         return true
     }
 
-    override fun activate(): Boolean = synchronized(lifecycleLock) { activateLocked() }
+    override fun activate(): Boolean {
+        val activated = synchronized(lifecycleLock) { activateLocked() }
+        // A failed activation tears down what it started, sessions included.
+        closeReleasedSessions()
+        return activated
+    }
 
     /** [activate] itself, under [lifecycleLock]. */
     private fun activateLocked(): Boolean = try {
@@ -303,22 +317,35 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         return false
     }
 
-    override fun deactivate(): Boolean = synchronized(lifecycleLock) {
-        try {
-            teardown()
-            true
-        } catch (e: Exception) {
-            context.logger.error("McpPlugin: deactivation failed", e)
-            false
+    override fun deactivate(): Boolean {
+        val deactivated = synchronized(lifecycleLock) {
+            try {
+                teardown()
+                true
+            } catch (e: Exception) {
+                context.logger.error("McpPlugin: deactivation failed", e)
+                false
+            }
         }
+        closeReleasedSessions()
+        return deactivated
     }
 
     override fun dispose() {
-        synchronized(lifecycleLock) {
-            teardown()
-            pluginContext = null
-        }
+        synchronized(lifecycleLock) { teardown() }
+        // Before the context goes: a session's DELETE reads its credentials through it.
+        closeReleasedSessions()
+        pluginContext = null
         context.logger.info("McpPlugin: disposed")
+    }
+
+    /**
+     * Ends the sessions [teardown] took out, each with a DELETE, best effort. Called by each
+     * lifecycle call once it has let go of [lifecycleLock], never under it; see there.
+     */
+    private fun closeReleasedSessions() {
+        val closing = synchronized(lifecycleLock) { releasedSessions.toList().also { releasedSessions.clear() } }
+        for (session in closing) runCatchingRecoverable { session.close() }
     }
 
     /**
@@ -326,7 +353,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * registration, the scope with its work, and the connections. The one teardown path, shared by
      * [deactivate], [dispose] and a failed [activate], so the three cannot drift apart. Safe to run
      * on an activation that got only part of the way, and on none at all. Each caller holds
-     * [lifecycleLock]; taken here too, so a new caller cannot forget it.
+     * [lifecycleLock]; taken here too, so a new caller cannot forget it. The sessions are only taken
+     * out here; the lifecycle call ends them after it has let go ([closeReleasedSessions]).
      */
     private fun teardown() = synchronized(lifecycleLock) {
         // Guarded: a host whose plugin-api differs answers with a LinkageError, and one escaping
@@ -527,11 +555,14 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         registered = false
     }
 
-    /** Closes every session and forgets the cached tool lists. */
+    /**
+     * Closes the tool source, takes every session out for [closeReleasedSessions], and forgets the
+     * cached tool lists. Under [lifecycleLock], with [teardown].
+     */
     private fun releaseConnections() {
         toolSource?.close()
         toolSource = null
-        McpConnections.closeAll()
+        releasedSessions += McpConnections.detachAll()
         McpToolCatalog.clear()
         AutomaticServers.install(null)
     }
