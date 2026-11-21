@@ -28,10 +28,12 @@ private const val TAG = "$LOG_PREFIX.McpCallHandle"
  * Finding the connection is not enough on its own: [attach] runs before the connection is
  * connected, and a `disconnect()` then does nothing (Android's and the JDK's both return early with
  * no connection to drop), so the first write would connect and send the request anyway. The
- * request reads the flag a second time once its connection is up, before it writes anything
- * ([throwIfCancelled]); a cancel between the two reads is caught there. One after the second read
- * disconnects a connection that is up: Android then fails the write rather than sending it. (The
- * JDK, which only the tests run on, reconnects instead.)
+ * request reads the flag a second time once its connection is up, before it writes anything, and a
+ * third time after the write, before it asks for the answer ([throwIfCancelled]): without a
+ * streaming mode the write only fills a buffer, and the request goes out with that first read of
+ * the answer. A cancel before the last read is caught there. One after it disconnects a connection
+ * that is up: Android's should then fail the request rather than send it, which is inferred, not
+ * run. (The JDK, which only the tests run on, reconnects instead.)
  */
 class McpCallHandle {
 
@@ -76,7 +78,8 @@ class McpCallHandle {
     /**
      * Reads the flag again, once the request's connection is connected and before anything is
      * written to it: a cancel that landed after [attach] read the flag disconnected a connection
-     * that was not connected yet, which does nothing.
+     * that was not connected yet, which does nothing. Read once more after the write, before the
+     * request goes out: the write only filled a buffer.
      *
      * @throws InterruptedIOException when the call was cancelled.
      */

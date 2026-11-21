@@ -170,9 +170,12 @@ open class McpHttpClient(
      * @param protocolVersion the negotiated revision, or null before `initialize` has answered.
      * @param onConnected receives each request's connection, redirect hops included, before it is
      *   connected, so a caller can disconnect it to cancel.
-     * @param beforeSend runs once that connection is connected and before anything is written to
-     *   it; what it throws ends the request unsent. A `disconnect()` before the connection exists
-     *   does nothing, so a cancel landing just after [onConnected] is caught here or not at all.
+     * @param beforeSend runs once that connection is connected, before anything is written to it,
+     *   and again once the body is written, before the answer is asked for; what it throws ends
+     *   the request unsent. A `disconnect()` before the connection exists does nothing, so a cancel
+     *   landing just after [onConnected] is caught here or not at all. Without a streaming mode the
+     *   write only fills a buffer and the request goes out when the answer is first read, so the
+     *   second run catches a cancel that landed during the write.
      * @param exchangeListener receives each request made and what came back, redirects included.
      *   An Exception or a LinkageError it throws is dropped; any other Error propagates.
      * @return the reply document and any session id the server sent.
@@ -219,6 +222,10 @@ open class McpHttpClient(
                 conn.connect()
                 beforeSend()
                 conn.outputStream.use { it.write(bytes) }
+                // Again: the write only filled a buffer, and the request goes out at the first read
+                // of the answer, just below. A cancel that landed meanwhile disconnected a connection
+                // the JDK connects again at that read, sending the request after all.
+                beforeSend()
                 trace.answered(conn)
                 val next = conn.redirectTargetFrom(target)
                 if (next == null) {
