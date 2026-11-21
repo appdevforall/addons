@@ -21,6 +21,9 @@ import org.junit.Test
  * The record was built the same way whether the request had gone out or not, so the log showed
  * the request's headers and body marked as sent, then "no response". It now says the request was
  * cancelled before it was sent, and shows none of it as sent.
+ *
+ * Only a cancel is recorded so. The check caught every Throwable to mark the record, so an
+ * OutOfMemoryError while checking was logged as a cancel; an Error now propagates unmarked.
  */
 class CancelledExchangeLogTest {
 
@@ -71,5 +74,22 @@ class CancelledExchangeLogTest {
             transcript.lines().any { it.startsWith(">") },
         )
         assertTrue("the transcript does not say it was cancelled:\n$transcript", "* <cancelled>" in transcript)
+    }
+
+    @Test
+    fun `an Error from the check before sending is not logged as a cancel`() {
+        val exchanges = CopyOnWriteArrayList<McpExchange>()
+
+        assertThrows(OutOfMemoryError::class.java) {
+            McpHttpClient().post(
+                url = "http://127.0.0.1:${server.address.port}/mcp",
+                token = "",
+                body = JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "tools/call"),
+                beforeSend = { throw OutOfMemoryError("reading the cancel flag") },
+                exchangeListener = { exchange, _ -> exchanges += exchange },
+            )
+        }
+
+        assertFalse("an OutOfMemoryError was recorded as a cancel", exchanges.single().cancelled)
     }
 }

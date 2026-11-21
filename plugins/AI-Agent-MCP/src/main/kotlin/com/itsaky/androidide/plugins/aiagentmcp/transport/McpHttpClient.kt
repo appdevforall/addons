@@ -175,8 +175,9 @@ open class McpHttpClient(
      *   the request unsent. A `disconnect()` before the connection exists does nothing, so a cancel
      *   landing just after [onConnected] is caught here or not at all. Without a streaming mode the
      *   write only fills a buffer and the request goes out when the answer is first read, so the
-     *   second run catches a cancel that landed during the write. A request it ends is recorded
-     *   as cancelled, never as sent ([McpExchange.cancelled]).
+     *   second run catches a cancel that landed during the write. A request it ends with an
+     *   Exception is recorded as cancelled, never as sent ([McpExchange.cancelled]); an Error
+     *   propagates and is recorded as the failure it is.
      * @param exchangeListener receives each request made and what came back, redirects included.
      *   An Exception or a LinkageError it throws is dropped; any other Error propagates.
      * @return the reply document and any session id the server sent.
@@ -218,11 +219,15 @@ open class McpHttpClient(
             var failure: Throwable? = null
             // Set when beforeSend ends the request: nothing went out, and its record must not say so.
             var cancelled = false
-            fun checkBeforeSend() = try {
-                beforeSend()
-            } catch (e: Throwable) {
-                cancelled = true
-                throw e
+            fun checkBeforeSend() {
+                try {
+                    beforeSend()
+                } catch (e: Exception) {
+                    // A cancel, which beforeSend throws as an InterruptedIOException. An Error is
+                    // not one: the process is failing, and its record must not read "cancelled".
+                    cancelled = true
+                    throw e
+                }
             }
             val redirect = try {
                 // Connected here rather than by the first write, so beforeSend runs in between: a
