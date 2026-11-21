@@ -126,23 +126,47 @@ object McpConnections {
      * with the server. Read at the DELETE they would be empty, and the server would refuse it and
      * keep its session open.
      *
+     * @property url the URL the session was built for.
      * @property credentials what the DELETE carries; null when they could not be read, when
      *   [close] reads them again.
      */
     class Released internal constructor(
         private val session: McpSession,
-        internal val credentials: McpCredentials?,
+        private val url: String,
+        private val credentials: McpCredentials?,
     ) {
         /**
          * Ends the session, best effort: sends a DELETE when it has a server-side id, so never under
          * a lock. An Exception or a LinkageError is survived; any other Error propagates.
          *
-         * @param credentials what the DELETE carries: the ones saved here, unless the caller holds
-         *   better ones.
+         * @param saved credentials the caller read before they could go, carried in place of the
+         *   ones saved here when they were read for this session's URL, and ignored for any other:
+         *   they do not belong there.
          */
-        fun close(credentials: McpCredentials? = this.credentials) {
-            runCatchingRecoverable { if (credentials != null) session.close(credentials) else session.close() }
+        fun close(saved: SavedCredentials? = null) {
+            val carried = saved?.takeIf { it.url == url }?.credentials ?: credentials
+            runCatchingRecoverable { if (carried != null) session.close(carried) else session.close() }
         }
+    }
+
+    /**
+     * A server's credentials as read for one URL, for a DELETE sent once they may have gone with
+     * the server; see [saveCredentials].
+     */
+    class SavedCredentials internal constructor(internal val url: String, internal val credentials: McpCredentials)
+
+    /**
+     * [serverId]'s credentials, read now for the URL it has now: for a caller about to delete one of
+     * the user's servers, which may find a session to end once the deletion has taken them away.
+     * [Released.close] carries them only to a session built for that URL.
+     *
+     * @return them, or null for a server not stored or credentials that could not be read.
+     */
+    fun saveCredentials(serverId: String): SavedCredentials? {
+        val url = McpServerStore.server(serverId)?.url ?: return null
+        return runCatchingRecoverable { SavedCredentials(url, credentialsFor(serverId, url)) }
+            .onFailure { e -> Log.d(TAG, "Could not read the credentials to end '$serverId' with: $e") }
+            .getOrNull()
     }
 
     /** Drops the session for [serverId], ending it server-side when it had one. */
@@ -210,7 +234,7 @@ object McpConnections {
     ): Released {
         val read = runCatchingRecoverable { credentials(entry.first.url) }
             .onFailure { e -> Log.d(TAG, "Could not read the credentials to end '$serverId' with: $e") }
-        return Released(entry.second, read.getOrNull())
+        return Released(entry.second, entry.first.url, read.getOrNull())
     }
 
     /**

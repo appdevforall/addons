@@ -110,4 +110,38 @@ class DeleteServerSessionTest {
             guarded.stop()
         }
     }
+
+    /**
+     * The same when the deletion found no session to end first, so no credentials were read for
+     * one: the DELETE for the session a call stored meanwhile carries the token read before the
+     * server was removed, not none.
+     */
+    @Test
+    fun `the second DELETE of a deleted server with no first session carries its token`() {
+        val guarded = FakeMcpServer("ut", listOf(tool("search", true)), sessionId = "session-3")
+        try {
+            var removed = false
+            every { McpServerStore.token(any()) } answers {
+                if (removed) KeystoreSecretStore.Stored.Absent else KeystoreSecretStore.Stored.Value("ut")
+            }
+            val saved = McpServerStore.saveDetails(
+                McpServerStore.newServer("Guarded", "http://127.0.0.1:${guarded.port}/mcp")
+            )
+            every { McpServerStore.remove(saved.id) } answers {
+                // A call landing between the two steps, the server's first session.
+                McpConnections.session(saved).initialize()
+                callOriginal().also { removed = true }
+            }
+
+            McpSettingsViewModel { null }.deleteNow(saved.id)
+
+            assertEquals(
+                "the DELETE ending the session stored during the deletion",
+                listOf("Bearer ut"),
+                guarded.requests.filter { it.httpMethod == "DELETE" }.map { it.authorization },
+            )
+        } finally {
+            guarded.stop()
+        }
+    }
 }
