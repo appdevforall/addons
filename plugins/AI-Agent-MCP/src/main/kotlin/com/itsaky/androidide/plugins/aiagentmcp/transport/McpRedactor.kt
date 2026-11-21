@@ -11,7 +11,7 @@ import java.net.URLDecoder
  * @param userHeaderNames the headers the user configured; their values are stored encrypted.
  */
 class McpRedactor(
-    credentials: Collection<String>,
+    private val credentials: Collection<String>,
     private val userHeaderNames: Collection<String>,
 ) {
 
@@ -82,6 +82,15 @@ class McpRedactor(
 
     /** How many characters one secret can take up in a text at most, in its longest escaped form. */
     private val longestForm: Int = (plainSecrets.firstOrNull()?.length ?: 0) * LONGEST_CHAR_FORM
+
+    /**
+     * This redactor, masking [credential] as well: for a secret the server hands out in its answer,
+     * which the request this redactor was built for could not carry.
+     * @param credential the secret, such as the session id a reply to `initialize` assigns.
+     * @return a redactor masking it and everything this one masks; this one when it already does.
+     */
+    fun with(credential: String): McpRedactor =
+        if (credential in credentials) this else McpRedactor(credentials + credential, userHeaderNames)
 
     /**
      * A header this client sent, its value hidden when it is a credential.

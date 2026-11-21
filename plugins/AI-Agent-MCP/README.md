@@ -183,7 +183,8 @@ Two dependencies were deliberately not taken:
   cannot be replayed to another host in one hop.
 - Error bodies stay in logcat. The transcript gets one sentence.
 - The connection log masks every credential the request carried wherever the
-  server echoes it, escaped or not (`McpRedactor`). The body of a `202 Accepted`
+  server echoes it, escaped or not (`McpRedactor`), and the session id a reply
+  assigns wherever that reply echoes it. The body of a `202 Accepted`
   is kept only in part, cut at a fixed length; when the cut falls inside a
   credential, what was kept of it is masked too, so the log never shows the
   start of one.

@@ -262,7 +262,8 @@ open class McpHttpClient(
                 // The connection log is a convenience: a listener failing with an Exception or a
                 // LinkageError costs only its record. Any other Error, an OutOfMemoryError above
                 // all, is the process failing and propagates.
-                runCatchingRecoverable { exchangeListener.onExchange(trace.toExchange(failure), redactor) }
+                // The trace's redactor, which masks a session id this answer assigned as well.
+                runCatchingRecoverable { exchangeListener.onExchange(trace.toExchange(failure), trace.redactor) }
             }
 
             if (++hops > MAX_REDIRECTS) {
