@@ -15,40 +15,49 @@ internal object JsonDepth {
     const val MAX = 100
 
     /**
-     * Whether [text] opens more than [limit] arrays or objects one inside another; one pass, no
-     * recursion. A bracket inside a string does not count.
+     * Whether [text] opens more than [limit] arrays or objects one inside another, or is not strict
+     * JSON where that could hide brackets; one pass, no recursion. A bracket inside a string does
+     * not count.
      *
-     * A string starts only where a parser starts a value or a key: at a double or single quote
-     * (org.json reads both) that opens the text or follows `[`, `{`, `,` or `:`, past whitespace.
-     * A quote anywhere else, after a comment for instance, starts nothing here, so the brackets
-     * after it count. Erring that way only refuses a body a parser could have read; erring the
-     * other way would let a parser recurse through brackets this scan took for text.
+     * The scan reads strict JSON, because Android's org.json is lenient: it also reads `;` as a
+     * separator, `=` and `=>` between a name and its value, `//`, `/* */` and `#` comments, single
+     * quoted strings, and unquoted text that runs up to the next delimiter, a `"` included. Each is
+     * a way for a parser to take a bracket as structure where a scan of strict JSON takes it as
+     * text, and so to recurse past [limit] through text this scan passed. So, outside a string:
+     * - `'`, `;`, `=`, `/` and `#` refuse the text: valid JSON has none of them there;
+     * - a `"` opens a string where a value or a name starts, at the start or after `[`, `{`, `,` or
+     *   `:`, whitespace aside, and refuses the text anywhere else, where Android's parser reads it
+     *   as part of unquoted text: `[a",[[[` is one array nested in another for it, however many
+     *   brackets follow the quote.
+     *
+     * Valid JSON is never refused for these rules, so no MCP reply is.
      */
     fun exceeds(text: String, limit: Int = MAX): Boolean {
         var depth = 0
-        var quote: Char? = null
+        var inString = false
         var escaped = false
-        var valueStarts = true
+        // The last character outside a string and whitespace, or null at the start of the text.
+        var last: Char? = null
         for (c in text) {
-            if (quote != null) {
+            if (inString) {
                 when {
                     escaped -> escaped = false
                     c == '\\' -> escaped = true
-                    c == quote -> quote = null
+                    c == '"' -> inString = false
                 }
                 continue
             }
-            if (c == ' ' || c == '\t' || c == '\n' || c == '\r') continue
-            if ((c == '"' || c == '\'') && valueStarts) {
-                quote = c
-                valueStarts = false
-                continue
-            }
             when (c) {
+                ' ', '\t', '\n', '\r' -> continue
+                '\'', ';', '=', '/', '#' -> return true
+                '"' -> {
+                    if (last != null && last != '[' && last != '{' && last != ',' && last != ':') return true
+                    inString = true
+                }
                 '[', '{' -> if (++depth > limit) return true
                 ']', '}' -> if (depth > 0) depth--
             }
-            valueStarts = c == '[' || c == '{' || c == ',' || c == ':'
+            last = c
         }
         return false
     }

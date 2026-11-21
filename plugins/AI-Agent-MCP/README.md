@@ -194,7 +194,10 @@ Two dependencies were deliberately not taken:
   levels deep, brackets inside strings not counted (`JsonDepth`): parsing
   recurses once per level, and a body of nothing but `[` would run Code on the
   Go out of stack. A deeper reply fails its call or listing with that reason; a
-  deeper body in the connection log is shown as it came.
+  deeper body in the connection log is shown as it came. The scan reads strict
+  JSON and refuses the same way any text that is not: Android's org.json also
+  reads `;` and `=` separators, comments, single-quoted strings and unquoted
+  text, each a way to make it nest through brackets a strict scan took as text.
 - A `202 Accepted` body is read and thrown away, for at most 1 MiB of characters
   and 10 seconds; one that runs past either is abandoned and its socket
   disconnected, not reused. The worst case is the 10 seconds plus one read

@@ -125,7 +125,7 @@ class McpLogFormatTest {
     fun givenBracketsInsideStrings_whenFormatted_thenTheyDoNotCount() {
         val brackets = "[".repeat(500)
         // An escaped quote at the start of "b" and an escaped backslash at its end: neither ends it.
-        val body = """{"a":"$brackets","b":"\"$brackets\\","c":['$brackets']}"""
+        val body = """{"a":"$brackets","b":"\"$brackets\\","c":["$brackets"]}"""
 
         assertNotNull("brackets inside strings were counted", McpLogFormat.json(body))
     }
