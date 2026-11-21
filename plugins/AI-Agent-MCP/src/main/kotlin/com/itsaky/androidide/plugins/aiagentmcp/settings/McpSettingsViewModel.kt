@@ -95,35 +95,44 @@ class McpSettingsViewModel(
      */
     fun loadForm(id: String, onLoaded: (FormState) -> Unit) {
         viewModelScope.launch {
-            val state = withContext(Dispatchers.IO) {
-                val token = McpServerStore.token(id)
-                var headersUnreadable = false
-                var headersUnavailable = false
-                val headers = try {
-                    McpServerStore.headers(id)
-                } catch (e: UnreadableSecretException) {
-                    headersUnreadable = true
-                    null
-                } catch (e: UnavailableSecretException) {
-                    headersUnavailable = true
-                    null
-                }
-                // Reported per credential, never folded together: a token that decrypts beside
-                // headers that do not must not put "could not be read" on the token's own field,
-                // which is the mis-attribution this pane exists to avoid.
-                FormState(
-                    hasToken = McpServerStore.hasToken(id),
-                    hasHeaders = McpServerStore.hasHeaders(id),
-                    tokenUnreadable = token is KeystoreSecretStore.Stored.Unreadable,
-                    tokenUnavailable = token is KeystoreSecretStore.Stored.Unavailable,
-                    headersKnown = headers != null,
-                    headersUnreadable = headersUnreadable,
-                    headersUnavailable = headersUnavailable,
-                    headers = headers.orEmpty(),
-                )
-            }
+            val state = withContext(Dispatchers.IO) { loadFormNow(id) }
             onLoaded(state)
         }
+    }
+
+    /**
+     * [loadForm]'s blocking part, off the main thread.
+     *
+     * The token, the headers and whether each is stored are read in one [McpServerStore.readTogether],
+     * the lock a save writes them under: read one at a time, a save landing between them showed a
+     * token from after the save beside headers from before it.
+     */
+    internal fun loadFormNow(id: String): FormState = McpServerStore.readTogether {
+        val token = McpServerStore.token(id)
+        var headersUnreadable = false
+        var headersUnavailable = false
+        val headers = try {
+            McpServerStore.headers(id)
+        } catch (e: UnreadableSecretException) {
+            headersUnreadable = true
+            null
+        } catch (e: UnavailableSecretException) {
+            headersUnavailable = true
+            null
+        }
+        // Reported per credential, never folded together: a token that decrypts beside
+        // headers that do not must not put "could not be read" on the token's own field,
+        // which is the mis-attribution this pane exists to avoid.
+        FormState(
+            hasToken = McpServerStore.hasToken(id),
+            hasHeaders = McpServerStore.hasHeaders(id),
+            tokenUnreadable = token is KeystoreSecretStore.Stored.Unreadable,
+            tokenUnavailable = token is KeystoreSecretStore.Stored.Unavailable,
+            headersKnown = headers != null,
+            headersUnreadable = headersUnreadable,
+            headersUnavailable = headersUnavailable,
+            headers = headers.orEmpty(),
+        )
     }
 
     /**
