@@ -187,7 +187,11 @@ Two dependencies were deliberately not taken:
   ended after it, its DELETE carrying the credentials it was opened with, so a
   server that wants its token to end a session gets it; any of its requests
   still running after the save finish with neither. Clearing the credential
-  ends the session the same way.
+  ends the session the same way. If the Keystore refuses to store a new token
+  or headers while the URL changes, the old ones are forgotten with the
+  change, so the new URL never gets them; the pane reports the failure and the
+  credential has to be entered again. If forgetting them fails too, the URL
+  stays as it was.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.

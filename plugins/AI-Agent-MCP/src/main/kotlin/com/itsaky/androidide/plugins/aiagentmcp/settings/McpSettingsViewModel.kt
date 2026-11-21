@@ -184,7 +184,9 @@ class McpSettingsViewModel(
      * server that wants its token to end a session needs, and only to the old URL: the old token
      * never reaches the new URL, nor the new token the old. A call that looks the session up in
      * between stores one for the old URL, which the next lookup replaces; it ends with no
-     * credentials, since the server no longer points there.
+     * credentials, since the server no longer points there. A token or headers write that fails
+     * while the URL changes forgets the old value in that step (or keeps the old URL, when
+     * forgetting fails too), so the new URL is never sent the old credential.
      *
      * @return the merged record and a status sentence, null when everything worked.
      */

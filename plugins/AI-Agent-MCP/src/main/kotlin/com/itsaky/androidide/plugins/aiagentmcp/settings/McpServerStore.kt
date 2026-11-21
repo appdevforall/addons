@@ -170,6 +170,12 @@ object McpServerStore {
      * credentials ([readTogether]) finds the old URL with the old ones or the new URL with the new,
      * never one with the other. The listeners are told once, after.
      *
+     * When the URL changes and a token or headers write fails, the old value is still stored, and
+     * the new URL must not get it: it is forgotten in the same step. If forgetting it fails too,
+     * the URL is put back instead, so the old credential stays with the URL it was entered for;
+     * the returned record then carries the old URL. Either way the failure is reported in the
+     * result, and the user enters the credential again.
+     *
      * Keystore work, so call this off the main thread.
      *
      * @param server the candidate, carrying the id plus the edited name and URL.
@@ -184,12 +190,26 @@ object McpServerStore {
         headers: Map<String, String>?,
     ): SavedConnection {
         val saved = synchronized(credentialsLock) {
-            val merged = saveDetailsLocked(server)
-            SavedConnection(
-                server = merged,
-                tokenStored = token?.let { writeToken(server.id, it) } ?: true,
-                headersStored = headers?.let { writeHeaders(server.id, it) } ?: true,
-            )
+            val before = server(server.id)
+            var merged = saveDetailsLocked(server)
+            val tokenStored = token?.let { writeToken(server.id, it) } ?: true
+            val headersStored = headers?.let { writeHeaders(server.id, it) } ?: true
+            if (before != null && before.url != merged.url && !(tokenStored && headersStored)) {
+                // A write that failed left the old value stored, and the URL has moved: the new
+                // URL must not get what was entered for the old one. Forget it, still under the
+                // lock, so no request reads the pair between the writes.
+                var forgotten = true
+                if (!tokenStored) forgotten = writeToken(server.id, "") && forgotten
+                if (!headersStored) forgotten = writeHeaders(server.id, emptyMap()) && forgotten
+                if (!forgotten) {
+                    // Forgetting failed too, so the old credential is still stored: put the URL
+                    // back, which is the one it belongs to. The user's other edits are kept.
+                    merged = synchronized(lock) {
+                        merged.copy(url = before.url).also(::upsertLocked)
+                    }
+                }
+            }
+            SavedConnection(merged, tokenStored, headersStored)
         }
         fireChanged()
         return saved
