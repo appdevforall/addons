@@ -43,7 +43,10 @@ internal class AgentRunReporter(
         /** The model kept circling actions it had already taken. */
         suspend fun noProgress()
 
-        /** The run ended because the model repeated a step that had worked, and answered nothing. */
+        /**
+         * The run ended because the model repeated a step that had worked. Any reply it streamed
+         * on the way stays on screen, so this does not mean the Agent gave no answer.
+         */
         suspend fun repeatedStep()
     }
 
