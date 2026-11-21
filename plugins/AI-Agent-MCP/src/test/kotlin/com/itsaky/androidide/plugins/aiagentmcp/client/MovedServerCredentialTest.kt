@@ -69,7 +69,7 @@ class MovedServerCredentialTest {
     @Test
     fun `the old session's DELETE carries none of the credentials entered for the new URL`() {
         val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
-        McpConnections.session(saved).initialize()
+        McpConnections.withSession(saved) { it.initialize() }
         assertEquals("the old session did not carry the old token", "Bearer old-token", old.requests.first().authorization)
 
         moveToTheNewUrl(saved)
@@ -83,7 +83,7 @@ class MovedServerCredentialTest {
     @Test
     fun `a request of the old session after the move carries none of the new credentials`() {
         val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
-        val session = McpConnections.session(saved).also { it.initialize() }
+        val session = McpConnections.withSession(saved) { it.also { kept -> kept.initialize() } }
 
         moveToTheNewUrl(saved)
         session.listTools()

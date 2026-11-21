@@ -103,7 +103,7 @@ class RemovedEntryCleanupTest {
             assertTrue(AutomaticServers.refresh())
             val restored = AutomaticServers.servers().single()
             McpToolCatalog.connect(restored)
-            val session = McpConnections.session(restored)
+            val session = McpConnections.withSession(restored) { it }
 
             releaseRemoval.countDown()
             removal.join(10_000)
@@ -122,7 +122,7 @@ class RemovedEntryCleanupTest {
             assertSame(
                 "the removal ended the new endpoint's session",
                 session,
-                McpConnections.session(restored),
+                McpConnections.withSession(restored) { it },
             )
         } finally {
             releaseRemoval.countDown()

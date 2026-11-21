@@ -42,9 +42,11 @@ object McpConnections {
     private val sessions = ConcurrentHashMap<String, Pair<Key, McpSession>>()
 
     /**
-     * The session for [server], created if needed.
-     *
-     * Reads the token and the headers, so call this off the main thread.
+     * Runs [block] with [server]'s session, created if needed, and ends the session once [block] is
+     * done when it was not kept. Nothing else would end that one, so the server would keep the
+     * session its `initialize` assigned. Its DELETE reads the credentials as each of its requests
+     * did, under the same rule: only for the URL it was built for, while the server still has it,
+     * so a server that is gone gets none, as the requests did.
      *
      * A server no longer configured gets a session that is not kept: the caller is a call or a
      * listing that outlived the server's removal, and a session stored for it would outlive the
@@ -57,23 +59,8 @@ object McpConnections {
      * still has the credentials; the settings pane ends whatever a lookup stored between the two
      * once the server is gone.
      *
-     * A session that is not kept is the caller's to end; [withSession] does that, and is what a
-     * request should use.
-     *
-     * @param server the server to connect to.
-     * @return its session, not yet initialized.
-     */
-    fun session(server: McpServer): McpSession = lookUp(server).session
-
-    /**
-     * Runs [block] with [server]'s session, as [session] finds or builds it, and ends the session
-     * once [block] is done when it was not kept, for a server no longer configured. Nothing else
-     * would end that one, so the server would keep the session its `initialize` assigned. Its DELETE
-     * reads the credentials as each of its requests did, under the same rule: only for the URL it
-     * was built for, while the server still has it, so a server that is gone gets none, as the
-     * requests did.
-     *
-     * Blocking, like [block]: ending the session sends a DELETE.
+     * Reads the token and the headers, and is blocking, like [block]: ending the session sends a
+     * DELETE. Call it off the main thread.
      *
      * @param server the server to connect to.
      * @param block the calls to make; the session is not yet initialized.
@@ -95,7 +82,7 @@ object McpConnections {
      */
     private class Found(val session: McpSession, val kept: Boolean)
 
-    /** [session] itself, telling a session it kept from one it did not. */
+    /** Finds or builds [server]'s session for [withSession], telling one it kept from one it did not. */
     private fun lookUp(server: McpServer): Found {
         val key = keyFor(server)
 
@@ -182,11 +169,11 @@ object McpConnections {
      * caller that must take it out under a lock of its own and end it once that lock is let go,
      * since ending it sends a DELETE.
      *
-     * Taken under this object's lock, as [session] replaces a session under it. The credentials are
-     * read once that is let go, still under the caller's lock: for a server of the user's that is a
-     * Keystore read, never network. Safe to call under another lock: under this one, [session] only
-     * reads the configured servers, which takes no lock (`McpServers.all`), and it reads the
-     * credentials before it takes this one.
+     * Taken under this object's lock, as [withSession] replaces a session under it. The credentials
+     * are read once that is let go, still under the caller's lock: for a server of the user's that is
+     * a Keystore read, never network. Safe to call under another lock: under this one, [withSession]
+     * only checks the server is configured, which takes no lock (`McpServers.isConfigured`), and it
+     * reads the credentials before it takes this one.
      *
      * @return the session taken out, or null when [serverId] had none.
      */

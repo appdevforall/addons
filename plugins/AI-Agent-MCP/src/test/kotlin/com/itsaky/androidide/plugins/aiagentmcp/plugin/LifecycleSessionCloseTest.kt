@@ -108,7 +108,7 @@ class LifecycleSessionCloseTest {
         )
         plugin.activate()
         // A session with a server-side id, so ending it sends the DELETE the server holds.
-        McpConnections.session(saved).initialize()
+        McpConnections.withSession(saved) { it.initialize() }
 
         val deactivating = thread(name = "deactivating") { plugin.deactivate() }
         assertTrue("the deactivation never sent its DELETE", deleteArrived.await(10, TimeUnit.SECONDS))
@@ -142,7 +142,7 @@ class LifecycleSessionCloseTest {
             McpServerStore.newServer("Docs", "http://127.0.0.1:${server.address.port}/mcp")
         )
         plugin.activate()
-        McpConnections.session(saved).initialize()
+        McpConnections.withSession(saved) { it.initialize() }
         // A health row, so the teardown's clearing of the cache tells the health listeners.
         McpServerHealth.available(saved.id)
         val lock = plugin.lifecycleLock as java.lang.Object

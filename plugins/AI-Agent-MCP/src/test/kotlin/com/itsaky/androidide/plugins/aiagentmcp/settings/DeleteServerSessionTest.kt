@@ -62,11 +62,11 @@ class DeleteServerSessionTest {
         val saved = McpServerStore.saveDetails(
             McpServerStore.newServer("Docs", "http://127.0.0.1:${server.port}/mcp")
         )
-        McpConnections.session(saved).initialize()
+        McpConnections.withSession(saved) { it.initialize() }
         var lookedUp = false
         every { McpServerStore.remove(saved.id) } answers {
             // A call landing between the two steps: its lookup stores a session for the server.
-            McpConnections.session(saved)
+            McpConnections.withSession(saved) { }
             lookedUp = true
             callOriginal()
         }
@@ -92,10 +92,10 @@ class DeleteServerSessionTest {
             val saved = McpServerStore.saveDetails(
                 McpServerStore.newServer("Guarded", "http://127.0.0.1:${guarded.port}/mcp")
             )
-            McpConnections.session(saved).initialize()
+            McpConnections.withSession(saved) { it.initialize() }
             every { McpServerStore.remove(saved.id) } answers {
                 // A call landing between the two steps: its session has a server-side id too.
-                McpConnections.session(saved).initialize()
+                McpConnections.withSession(saved) { it.initialize() }
                 callOriginal().also { removed = true }
             }
 
@@ -129,7 +129,7 @@ class DeleteServerSessionTest {
             )
             every { McpServerStore.remove(saved.id) } answers {
                 // A call landing between the two steps, the server's first session.
-                McpConnections.session(saved).initialize()
+                McpConnections.withSession(saved) { it.initialize() }
                 callOriginal().also { removed = true }
             }
 

@@ -34,13 +34,13 @@ class ReplacedEndpointCredentialTest {
         var stored = listOf(AutomaticEndpoint(app, old.port, "old-token"))
         AutomaticServers.install { stored }
 
-        val session = McpConnections.session(AutomaticServers.servers().single())
+        val session = McpConnections.withSession(AutomaticServers.servers().single()) { it }
         session.listTools()
         assertTrue("the session opened against the old endpoint", old.requests.any { it.httpMethod == "POST" })
 
         stored = listOf(AutomaticEndpoint(app, replacement.port, "new-token"))
         assertTrue(AutomaticServers.refresh())
-        McpConnections.session(AutomaticServers.servers().single())   // replaces and closes the old one
+        McpConnections.withSession(AutomaticServers.servers().single()) { }   // replaces and closes the old one
 
         val delete = old.requests.single { it.httpMethod == "DELETE" }
         assertNotEquals("Bearer new-token", delete.authorization)
