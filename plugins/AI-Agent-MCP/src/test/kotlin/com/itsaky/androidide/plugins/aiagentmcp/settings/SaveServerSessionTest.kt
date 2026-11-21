@@ -123,6 +123,37 @@ class SaveServerSessionTest {
     }
 
     @Test
+    fun `a request between the token write and the headers write gets the old pair or the new, never a mix`() {
+        val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
+        val saver = Thread.currentThread()
+        var lookup: Thread? = null
+        var found: Thread.State? = null
+        every { McpServerStore.writeHeaders(saved.id, any()) } answers {
+            // The URL and the token are written, the headers not yet: a request for the server as
+            // it now stands.
+            val current = McpServerStore.server(saved.id)!!
+            lookup = thread(name = "lookup") {
+                runCatching { McpConnections.withSession(current) { it.initialize() } }
+            }
+            found = awaitFinishedOrBlockedBy(lookup!!, saver)
+            headers = secondArg()
+            true
+        }
+
+        McpSettingsViewModel { null }.saveNow(saved.copy(url = url(moved)), "new-token", mapOf("X-New" to "1"))
+        lookup!!.join(10_000)
+
+        assertTrue("the request never reached the new URL", moved.requests.isNotEmpty())
+        moved.requests.forEach { request ->
+            assertEquals(
+                "a request read between the token write and the headers write (found $found) sent the new URL",
+                "Bearer new-token" to setOf("x-new"),
+                request.authorization to request.headerNames.filterTo(mutableSetOf()) { it.startsWith("x-") },
+            )
+        }
+    }
+
+    @Test
     fun `clearing the credentials ends the session with the ones it had`() {
         val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
         McpConnections.withSession(saved) { it.initialize() }
