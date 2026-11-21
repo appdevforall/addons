@@ -190,9 +190,24 @@ object McpConnections {
     fun detachRemoved(serverId: String, endpoint: AutomaticEndpoint): Released? =
         release(serverId) { url -> automaticCredentials(endpoint, url) }
 
-    /** Ends every session, for the plugin shutting down. */
+    /**
+     * Ends every session, for the plugin shutting down. Every one taken out is ended, even when
+     * reading one's credentials threw an Error; that Error is thrown once they have all been ended.
+     */
     fun closeAll() {
-        endAll(detachAll())
+        val released = ArrayList<Released>()
+        var failure: Error? = null
+        try {
+            detachAll(released)
+        } catch (e: Error) {
+            failure = e
+        }
+        try {
+            endAll(released)
+        } catch (e: Error) {
+            failure?.addSuppressed(e) ?: run { failure = e }
+        }
+        failure?.let { throw it }
     }
 
     /**
@@ -217,11 +232,29 @@ object McpConnections {
      * the map under a lock of its own and ends the sessions once that lock is let go, since each
      * close sends a DELETE and can wait for a handshake in flight.
      *
-     * @return the sessions taken out, each with its credentials.
+     * Every session that leaves the map is added to [into] as it leaves, so a caller that ends
+     * [into] in a `finally` loses none. An Error from reading one session's credentials, which
+     * [runCatchingRecoverable] lets through, does not stop the others: that session goes into
+     * [into] with no credentials, so it is ended with none, the rest are taken out, and the first
+     * Error is thrown after the last, the others added to it as suppressed.
+     *
+     * @param into receives the sessions taken out, each with its credentials.
+     * @return [into].
      */
-    fun detachAll(): List<Released> {
+    fun detachAll(into: MutableList<Released> = ArrayList()): List<Released> {
         val taken = synchronized(this) { sessions.toMap().also { sessions.clear() } }
-        return taken.map { (id, entry) -> released(entry, id) { url -> credentialsFor(id, url) } }
+        var first: Error? = null
+        for ((id, entry) in taken) {
+            try {
+                into += released(entry, id) { url -> credentialsFor(id, url) }
+            } catch (e: Error) {
+                // Explicit empty credentials: a close with none given would read them again, and throw.
+                into += Released(entry.second, entry.first.url, McpCredentials("", emptyMap()))
+                first?.addSuppressed(e) ?: run { first = e }
+            }
+        }
+        first?.let { throw it }
+        return into
     }
 
     /** Takes [serverId]'s session out; see [detach]. */

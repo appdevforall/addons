@@ -589,7 +589,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         toolSource = null
         // Before the entries are cleared below: each session's credentials are read as it is taken
         // out, and a SQLite debugger entry's token leaves with its entry.
-        released += McpConnections.detachAll()
+        McpConnections.detachAll(released)
         McpToolCatalog.clear()
         AutomaticServers.install(null)
     }
