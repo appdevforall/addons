@@ -52,7 +52,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
     /**
      * The tool source registered with AI Core: built by the first [activate], kept by a second, and
-     * closed and cleared by [teardown].
+     * closed and cleared by [teardown]. Read and written only under [lifecycleLock].
      */
     private var toolSource: McpToolSource? = null
 
@@ -60,12 +60,21 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     @Volatile private var registered = false
 
     /**
-     * Serialises every swap of [scope].
+     * Serialises the lifecycle transitions: [activate], [deactivate] and [dispose], [teardown] which
+     * they share, and the registration AI Core's activation triggers. Each runs whole before the next
+     * starts, since the host may drive one from one thread and the next from another.
      *
-     * Cancelling the old scope and installing a new one is one transition, not two: without this,
-     * two lifecycle calls landing together can each cancel the scope the other has already replaced,
-     * leaving a live refresh behind after [deactivate] or orphaning an activation's scope uncancelled.
-     * `@Volatile` alone would publish each write but still let the pair interleave.
+     * Without it, a teardown could fall inside an activation: between its read of [toolSource] and
+     * its write, putting back a source the teardown had just closed, or after the registration had
+     * started and before [registered] was set, so the teardown unregistered nothing and closed the
+     * source AI Core was being handed. AI Core then held a closed source, whose every call fails
+     * with a RejectedExecutionException. Every swap of [scope] takes it too: cancelling the old
+     * scope and installing a new one is one transition, not two.
+     *
+     * Nothing taken under it waits for this plugin's own work: the host's listener and service
+     * registries do not call back, and the coroutines it cancels never take it. A transition can
+     * still wait for the network, since [teardown] ends every session with a DELETE; a lifecycle
+     * call arriving meanwhile waits with it.
      */
     private val lifecycleLock = Any()
 
@@ -158,7 +167,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      */
     private val aiCoreLifecycle = object : PluginLifecycleListener {
         override fun onPluginActivated(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registerToolSource()
+            // Under the lifecycle lock, so a deactivation arriving meanwhile undoes this
+            // registration rather than closing the source while AI Core is handed it.
+            if (pluginId == AI_CORE_PLUGIN_ID) synchronized(lifecycleLock) { registerToolSource() }
         }
 
         override fun onPluginDeactivated(pluginId: String) {
@@ -227,7 +238,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         return true
     }
 
-    override fun activate(): Boolean = try {
+    override fun activate(): Boolean = synchronized(lifecycleLock) { activateLocked() }
+
+    /** [activate] itself, under [lifecycleLock]. */
+    private fun activateLocked(): Boolean = try {
         // Cancelled and replaced as one step: a host that activates twice would otherwise orphan
         // the running scope, and the launch below has to use this activation's scope, not whatever
         // a concurrent lifecycle call has since installed.
@@ -289,17 +303,21 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         return false
     }
 
-    override fun deactivate(): Boolean = try {
-        teardown()
-        true
-    } catch (e: Exception) {
-        context.logger.error("McpPlugin: deactivation failed", e)
-        false
+    override fun deactivate(): Boolean = synchronized(lifecycleLock) {
+        try {
+            teardown()
+            true
+        } catch (e: Exception) {
+            context.logger.error("McpPlugin: deactivation failed", e)
+            false
+        }
     }
 
     override fun dispose() {
-        teardown()
-        pluginContext = null
+        synchronized(lifecycleLock) {
+            teardown()
+            pluginContext = null
+        }
         context.logger.info("McpPlugin: disposed")
     }
 
@@ -307,9 +325,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * Stops what [activate] started: the lifecycle and change listeners, the tool source's
      * registration, the scope with its work, and the connections. The one teardown path, shared by
      * [deactivate], [dispose] and a failed [activate], so the three cannot drift apart. Safe to run
-     * on an activation that got only part of the way, and on none at all.
+     * on an activation that got only part of the way, and on none at all. Each caller holds
+     * [lifecycleLock]; taken here too, so a new caller cannot forget it.
      */
-    private fun teardown() {
+    private fun teardown() = synchronized(lifecycleLock) {
         // Guarded: a host whose plugin-api differs answers with a LinkageError, and one escaping
         // here would skip every step below, leaving the scope and its probe running.
         runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
