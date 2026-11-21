@@ -198,6 +198,10 @@ Two dependencies were deliberately not taken:
   read, which the pane cannot draw; rows it did draw replace the stored set,
   so none left in the pane forgets them. To send the new URL no token, use
   **Clear stored credential**.
+  Also accepted: the credentials lock is one lock for every server, held across
+  the Keystore writes of a save and the two Keystore decrypts of the settings
+  dialog's load, so a slow Keystore stalls the credential reads of other servers
+  for that long.
 - Redirects are never followed automatically. A 3xx is repeated only when it
   resolves to the same origin, so the bearer token and the user's own headers
   cannot be replayed to another host in one hop.

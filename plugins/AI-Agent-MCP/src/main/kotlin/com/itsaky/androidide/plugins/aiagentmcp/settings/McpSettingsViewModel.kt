@@ -106,6 +106,10 @@ class McpSettingsViewModel(
      * The token, the headers and whether each is stored are read in one [McpServerStore.readTogether],
      * the lock a save writes them under: read one at a time, a save landing between them showed a
      * token from after the save beside headers from before it.
+     *
+     * Accepted limit: that is the store's one global credentials lock, held across the Keystore
+     * decrypts of this load. A save of any server waits for a load, and a request's credential read
+     * waits for it too. Both are two decrypts long, the same window the saves already hold.
      */
     internal fun loadFormNow(id: String): FormState = McpServerStore.readTogether {
         val token = McpServerStore.token(id)
