@@ -13,12 +13,10 @@ name: Watch addons catalog
 #   variable ADDONS_CATALOG_URL  https://addons.appdevforall.org/v2/catalog.json
 
 on:
-  # GitHub cron is UTC with no daylight saving, so both entries fire and the
-  # gate below keeps the one that is 03:17 in New York today. Off the top of
-  # the hour, which GitHub says is when scheduled runs are delayed or dropped.
+  # 03:17 EST, 04:17 EDT: cron is UTC and nobody minds the hour's drift. Off
+  # the top of the hour, which GitHub says is when runs are delayed or dropped.
   schedule:
-    - cron: '17 7 * * *'  # 03:17 EDT
-    - cron: '17 8 * * *'  # 03:17 EST
+    - cron: '17 8 * * *'
   workflow_dispatch:
 
 permissions:
@@ -31,24 +29,7 @@ env:
   STATE_BRANCH: catalog-watcher-state
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      run: ${{ steps.gate.outputs.run }}
-    steps:
-      - id: gate
-        env:
-          SCHEDULE: ${{ github.event.schedule }}
-        run: |
-          zone="$(TZ=America/New_York date +%Z)"
-          case "$zone:$SCHEDULE" in
-            *:|EDT:'17 7 * * *'|EST:'17 8 * * *') echo run=true >> "$GITHUB_OUTPUT" ;;
-            *) echo "New York is on $zone today; the other schedule entry runs." ;;
-          esac
-
   watch:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

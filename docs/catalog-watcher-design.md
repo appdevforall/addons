@@ -49,7 +49,7 @@ All other fields are ignored.
 
 ### Schedule
 
-Runs once a day at 3:17 AM US Eastern. GitHub cron is UTC with no daylight saving, so the workflow schedules both 07:17 and 08:17 UTC and runs only the entry that is 3:17 AM in New York that day (`github.event.schedule` says which fired). The 17 minutes keep it off the top of the hour, when GitHub says scheduled runs are most often delayed or dropped.
+Runs once a day at 08:17 UTC: 3:17 AM US Eastern in winter, 4:17 AM in summer. GitHub cron has no daylight saving, and the hour's drift doesn't matter. The 17 minutes keep it off the top of the hour, when GitHub says scheduled runs are most often delayed or dropped.
 
 ### Daily run
 
