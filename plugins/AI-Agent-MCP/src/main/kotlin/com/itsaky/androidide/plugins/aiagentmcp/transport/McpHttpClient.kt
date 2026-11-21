@@ -169,7 +169,8 @@ open class McpHttpClient(
      * @param sessionId the session to continue, or null before one exists.
      * @param protocolVersion the negotiated revision, or null before `initialize` has answered.
      * @param onConnected receives each request's connection, redirect hops included, before it is
-     *   connected, so a caller can disconnect it to cancel.
+     *   connected, so a caller can disconnect it to cancel. What it throws ends the request unsent,
+     *   and is recorded as [beforeSend]'s is: a cancel it catches, as cancelled.
      * @param beforeSend runs once that connection is connected, before anything is written to it,
      *   and again once the body is written, before the answer is asked for; what it throws ends
      *   the request unsent. A `disconnect()` before the connection exists does nothing, so a cancel
@@ -211,35 +212,38 @@ open class McpHttpClient(
                 doOutput = true
             }
             val trace = McpExchangeTrace("POST", target, headers, payload, bytes.size, redactor)
-            onConnected(conn)
             // Only a socket that cannot be reused is disconnected: `disconnect()` evicts it from
             // the pool, so doing it on the success path made every call — initialize, each
             // tools/list page, each tools/call — pay a fresh TCP and TLS handshake.
             var reusable = false
             var failure: Throwable? = null
-            // Set when beforeSend ends the request: nothing went out, and its record must not say so.
+            // Set when onConnected or beforeSend ends the request: nothing went out, and its record
+            // must not say so.
             var cancelled = false
-            fun checkBeforeSend() {
+            fun unsentIfThrows(step: () -> Unit) {
                 try {
-                    beforeSend()
+                    step()
                 } catch (e: Exception) {
-                    // A cancel, which beforeSend throws as an InterruptedIOException. An Error is
-                    // not one: the process is failing, and its record must not read "cancelled".
+                    // A cancel, which both throw as an InterruptedIOException. An Error is not one:
+                    // the process is failing, and its record must not read "cancelled".
                     cancelled = true
                     throw e
                 }
             }
             val redirect = try {
+                // Inside the try, so a cancel caught here, as the call's handle publishes the
+                // connection, leaves its record in the connection log like one caught below.
+                unsentIfThrows { onConnected(conn) }
                 // Connected here rather than by the first write, so beforeSend runs in between: a
                 // cancel whose disconnect came before the connection existed dropped nothing, and the
                 // write would connect and send the request regardless.
                 conn.connect()
-                checkBeforeSend()
+                unsentIfThrows(beforeSend)
                 conn.outputStream.use { it.write(bytes) }
                 // Again: the write only filled a buffer, and the request goes out at the first read
                 // of the answer, just below. A cancel that landed meanwhile disconnected a connection
                 // the JDK connects again at that read, sending the request after all.
-                checkBeforeSend()
+                unsentIfThrows(beforeSend)
                 trace.answered(conn)
                 val next = conn.redirectTargetFrom(target)
                 if (next == null) {

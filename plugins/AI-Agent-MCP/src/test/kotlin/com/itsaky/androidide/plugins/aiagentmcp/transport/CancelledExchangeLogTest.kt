@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentmcp.transport
 
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpCallHandle
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpTranscript
 import com.sun.net.httpserver.HttpServer
 import java.io.InterruptedIOException
@@ -21,6 +22,9 @@ import org.junit.Test
  * The record was built the same way whether the request had gone out or not, so the log showed
  * the request's headers and body marked as sent, then "no response". It now says the request was
  * cancelled before it was sent, and shows none of it as sent.
+ *
+ * A cancel the call's handle catches as the request publishes its connection, before the checks
+ * below it, is recorded the same way; it left no record at all, so the log did not show the request.
  *
  * Only a cancel is recorded so. The check caught every Throwable to mark the record, so an
  * OutOfMemoryError while checking was logged as a cancel; an Error now propagates unmarked.
@@ -73,6 +77,28 @@ class CancelledExchangeLogTest {
             "the transcript shows the cancelled request as sent:\n$transcript",
             transcript.lines().any { it.startsWith(">") },
         )
+        assertTrue("the transcript does not say it was cancelled:\n$transcript", "* <cancelled>" in transcript)
+    }
+
+    @Test
+    fun `a request cancelled as its connection is published is logged as cancelled`() {
+        val exchanges = CopyOnWriteArrayList<McpExchange>()
+        val handle = McpCallHandle().apply { cancel() }
+
+        val cancel = assertThrows(InterruptedIOException::class.java) {
+            McpHttpClient().post(
+                url = "http://127.0.0.1:${server.address.port}/mcp",
+                token = "",
+                body = JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "tools/call"),
+                onConnected = { handle.attach(it) },
+                exchangeListener = { exchange, _ -> exchanges += exchange },
+            )
+        }
+        val transcript = McpTranscript.render(exchanges.toList(), cancel, labels) { it }
+
+        assertEquals("the cancelled request reached the server", 0, bodies.get())
+        assertEquals("the cancelled request left no record in the connection log", 1, exchanges.size)
+        assertTrue("the record does not say the request was cancelled", exchanges.single().cancelled)
         assertTrue("the transcript does not say it was cancelled:\n$transcript", "* <cancelled>" in transcript)
     }
 
