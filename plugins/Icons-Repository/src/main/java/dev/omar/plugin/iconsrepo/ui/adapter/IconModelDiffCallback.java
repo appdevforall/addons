@@ -2,7 +2,7 @@ package dev.omar.plugin.iconsrepo.ui.adapter;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
-import dev.omar.plugin.iconsrepo.models.IconModel;
+import dev.omar.plugin.iconsrepo.data.models.IconModel;
 
 public class IconModelDiffCallback extends DiffUtil.ItemCallback<IconModel> {
 

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icons Repository guide</title>
+<style>
+    body {
+        background: #ffffff;
+        color: #000000;
+        font-family: sans-serif;
+        line-height: 1.5;
+        margin: 0 auto;
+        max-width: 760px;
+        padding: 16px;
+    }
+    h1, h2, p, li, td, th { color: #000000; }
+    code {
+        background: #f2f2f2;
+        color: #000000;
+        padding: 0 3px;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #999999; padding: 6px; text-align: left; vertical-align: top; }
+</style>
+</head>
+<body>
+
+<h1>Icons Repository guide</h1>
+<p>
+    Icons Repository adds Material icons to your project as vector drawables, from inside
+    Code on the Go. The whole catalog is bundled with the plugin, so it works offline.
+</p>
+
+<h2 id="open">Opening the catalog</h2>
+<p>
+    Tap <b>Icons Repository</b> in the side menu. The catalog opens as an editor tab with a
+    grid of icons. The first time it opens, the icons take a moment to load.
+</p>
+
+<h2 id="search">Searching icons</h2>
+<p>
+    Type in the search field to filter the grid by icon name, for example <code>arrow</code>,
+    <code>home</code> or <code>settings</code>. Tap the clear button at the end of the field to
+    show every icon again.
+</p>
+
+<h2 id="import">Importing an icon</h2>
+<p>Tap an icon to open the import dialog. The preview at the top shows the icon with the chosen tint.</p>
+<table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr id="name">
+        <td>Icon name</td>
+        <td>
+            The drawable's resource name and file name. Use lowercase letters, digits and
+            single underscores, starting with a letter and not ending with an underscore, for
+            example <code>ic_arrow_back</code>. Java keywords such as <code>class</code> are
+            not allowed. The name starts filled in from the icon's name.
+        </td>
+    </tr>
+    <tr id="module">
+        <td>Target module</td>
+        <td>
+            Which module receives the icon. <b>All modules</b> writes a copy into every Android
+            module the plugin finds in the project. Pick one module to write it only there.
+        </td>
+    </tr>
+    <tr id="color">
+        <td>Color</td>
+        <td>
+            The tint. <b>None</b> leaves the icon untinted, so it draws in black. A theme color
+            such as <code>colorPrimary</code> is written as <code>?attr/colorPrimary</code>,
+            so the icon follows your app's theme. <b>Custom</b> shows a field for a hex value in
+            <code>#RRGGBB</code> or <code>#AARRGGBB</code> form.
+        </td>
+    </tr>
+</table>
+<p>
+    Tap <b>Import</b> to write the icon. If the name or color is not valid, the field shows
+    an error and nothing is written. <b>Cancel</b> closes the dialog without changing
+    anything.
+</p>
+
+<h2 id="result">What gets written</h2>
+<p>
+    Each import writes one file, <code>res/drawable/&lt;name&gt;.xml</code>, in the main source
+    set of each target module. It is a 24dp vector drawable, and you use it like any other
+    drawable, for example <code>@drawable/ic_arrow_back</code> in a layout or
+    <code>R.drawable.ic_arrow_back</code> in code.
+</p>
+<p>
+    <b>An existing file with the same name is replaced without asking.</b> Pick a new name if
+    you want to keep the old drawable.
+</p>
+
+<h2 id="help">Getting help</h2>
+<p>
+    Long-press the search icons, an icon in the grid, or any field or button in the import
+    dialog to see a short explanation of it.
+</p>
+
+</body>
+</html>
