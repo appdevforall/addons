@@ -2,7 +2,6 @@ package com.itsaky.androidide.plugins.aiagentmcp.debugger
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
-import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
@@ -165,7 +164,9 @@ object AutomaticServers {
      * out in the same step, under this object's lock: by ID they would also be the resources of an
      * entry a later read restores, so cleaning up after the lock was let go could take the health
      * and session of the app's new endpoint. Only the session taken out is closed, after the lock
-     * is let go, since closing it sends a DELETE; the health listeners are told then too.
+     * is let go, since closing it sends a DELETE; the health listeners are told then too. The DELETE
+     * carries the token the entry had, taken from the entry as it is removed: once it has left the
+     * list no token can be read for it, and the app's server refuses a DELETE without one.
      *
      * A read that fails with an Exception or a LinkageError leaves the entries as they were; any
      * other Error, an OutOfMemoryError above all, propagates to the caller. So does one from a
@@ -214,7 +215,7 @@ object AutomaticServers {
             return false
         }
         val moved = mutableListOf<String>()
-        val detached = mutableListOf<McpSession>()
+        val detached = mutableListOf<McpConnections.Released>()
         var healthForgotten = false
         val changed = synchronized(this) {
             if (source !== read || !keepGoing() || ticket < storedRead) return false
@@ -236,12 +237,12 @@ object AutomaticServers {
             // so the health and session taken out are this entry's, never its successor's.
             // McpConnections takes its own lock inside this one and never calls in here under it.
             for (id in old.keys - next.keys) {
-                McpConnections.detach(id)?.let { detached += it }
+                McpConnections.detachRemoved(id, old.getValue(id).endpoint)?.let { detached += it }
                 if (McpServerHealth.detach(id)) healthForgotten = true
             }
             old.mapValues { it.value.endpoint } != next.mapValues { it.value.endpoint }
         }
-        for (session in detached) runCatchingRecoverable { session.close() }
+        for (session in detached) session.close()
         if (healthForgotten) McpServerHealth.notifyChanged()
         for (id in moved) {
             // A refused credential is not final for this entry: the new one has not been tried.

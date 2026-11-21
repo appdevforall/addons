@@ -13,6 +13,7 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -74,5 +75,39 @@ class DeleteServerSessionTest {
 
         assertTrue("the removal never ran", lookedUp)
         assertNull("a session stored during the deletion outlived the server", McpConnections.detach(saved.id))
+    }
+
+    /**
+     * The second DELETE, for the session a call stored meanwhile, goes out after the server's token
+     * was deleted with it; it carries the token read for the first one instead.
+     */
+    @Test
+    fun `the second DELETE of a deleted server carries the credentials read for the first`() {
+        val guarded = FakeMcpServer("ut", listOf(tool("search", true)), sessionId = "session-2")
+        try {
+            var removed = false
+            every { McpServerStore.token(any()) } answers {
+                if (removed) KeystoreSecretStore.Stored.Absent else KeystoreSecretStore.Stored.Value("ut")
+            }
+            val saved = McpServerStore.saveDetails(
+                McpServerStore.newServer("Guarded", "http://127.0.0.1:${guarded.port}/mcp")
+            )
+            McpConnections.session(saved).initialize()
+            every { McpServerStore.remove(saved.id) } answers {
+                // A call landing between the two steps: its session has a server-side id too.
+                McpConnections.session(saved).initialize()
+                callOriginal().also { removed = true }
+            }
+
+            McpSettingsViewModel { null }.deleteNow(saved.id)
+
+            assertEquals(
+                "the DELETEs ending the deleted server's two sessions",
+                listOf("Bearer ut", "Bearer ut"),
+                guarded.requests.filter { it.httpMethod == "DELETE" }.map { it.authorization },
+            )
+        } finally {
+            guarded.stop()
+        }
     }
 }

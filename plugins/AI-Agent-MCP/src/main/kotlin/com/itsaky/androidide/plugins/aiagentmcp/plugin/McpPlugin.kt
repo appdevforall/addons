@@ -6,7 +6,6 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
-import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
@@ -83,9 +82,11 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
     /**
      * Sessions [teardown] took out under [lifecycleLock], for the lifecycle call that ran it to end
-     * once it has let go ([closeReleasedSessions]). Guarded by [lifecycleLock].
+     * once it has let go ([closeReleasedSessions]), each with the credentials read as it was taken
+     * out: [teardown] clears the SQLite debugger entries after, and an entry's token goes with it.
+     * Guarded by [lifecycleLock].
      */
-    private val releasedSessions = mutableListOf<McpSession>()
+    private val releasedSessions = mutableListOf<McpConnections.Released>()
 
     /**
      * Background work: listing tools is network work and never belongs on the main thread.
@@ -345,7 +346,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      */
     private fun closeReleasedSessions() {
         val closing = synchronized(lifecycleLock) { releasedSessions.toList().also { releasedSessions.clear() } }
-        for (session in closing) runCatchingRecoverable { session.close() }
+        for (session in closing) session.close()
     }
 
     /**
@@ -562,6 +563,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     private fun releaseConnections() {
         toolSource?.close()
         toolSource = null
+        // Before the entries are cleared below: each session's credentials are read as it is taken
+        // out, and a SQLite debugger entry's token leaves with its entry.
         releasedSessions += McpConnections.detachAll()
         McpToolCatalog.clear()
         AutomaticServers.install(null)

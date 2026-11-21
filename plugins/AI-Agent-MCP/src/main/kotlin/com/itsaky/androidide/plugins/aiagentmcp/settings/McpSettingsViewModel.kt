@@ -229,14 +229,15 @@ class McpSettingsViewModel(
      * the removal deletes. A call or a listing that looked the session up between the two stored
      * a new one, which would outlive the server; it is ended again once the server is gone, when
      * no lookup stores one any more (McpConnections.session keeps none for a server no longer
-     * configured). That second DELETE goes without credentials, best effort.
+     * configured). That second DELETE carries the credentials read for the first, best effort;
+     * none when there was no first session to read them for.
      */
     internal fun deleteNow(id: String) {
-        McpConnections.invalidate(id)
+        val ended = McpConnections.detach(id)?.also { it.close() }
         // Removed before the tools are forgotten, so a probe finishing in between sees it gone and
         // records nothing.
         McpServerStore.remove(id)
-        McpConnections.invalidate(id)
+        McpConnections.detach(id)?.close(ended?.credentials)
         McpToolCatalog.forget(id)
     }
 

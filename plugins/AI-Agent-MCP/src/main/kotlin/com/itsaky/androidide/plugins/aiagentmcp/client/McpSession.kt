@@ -218,11 +218,23 @@ class McpSession(
      * The DELETE is best effort; its credentials come from the host's Keystore, so a LinkageError
      * is survived as well as an Exception, and any other Error propagates.
      */
+    fun close() = close(credentials)
+
+    /**
+     * As [close], with credentials read earlier: for a session taken out of use while they could
+     * still be read, and ended once they may have gone with the server, as when a SQLite debugger
+     * entry is removed or the plugin deactivates. Read at the DELETE, they would be empty, and the
+     * server would refuse it and keep the session open.
+     *
+     * @param saved what the DELETE carries.
+     */
+    fun close(saved: McpCredentials) = close { saved }
+
     @Synchronized
-    fun close() {
+    private fun close(read: () -> McpCredentials) {
         sessionId?.let { id ->
             runCatchingRecoverable {
-                val current = credentials()
+                val current = read()
                 http.deleteSession(endpoint, current.token, id, current.headers)
             }
         }
