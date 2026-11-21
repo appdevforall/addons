@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -71,5 +72,85 @@ class McpLogFormatTest {
         assertThrows(OutOfMemoryError::class.java) {
             McpLogFormat.json("{\"a\":1}") { throw OutOfMemoryError("indenting") }
         }
+    }
+
+    @Test
+    fun givenTenThousandNestedBrackets_whenFormatted_thenItIsNotJsonAndNothingThrows() {
+        assertNull(McpLogFormat.json("[".repeat(10_000)))
+    }
+
+    /**
+     * Android's org.json recurses once per level with no limit of its own and catches nothing, so
+     * such a body overflows the stack there, and the StackOverflowError propagates. The org.json
+     * these tests run on turns an overflow while parsing into a JSONException, so the real parser
+     * cannot show it here; a parser that recurses the same way, on a thread with a small stack,
+     * stands in for Android's.
+     */
+    @Test
+    fun givenTenThousandNestedBrackets_whenFormatted_thenNoParserRecursesThroughThem() {
+        val deep = "[".repeat(10_000)
+        var result: String? = "never ran"
+        var thrown: Throwable? = null
+        val parsing = Thread(null, {
+            try {
+                result = McpLogFormat.json(deep, ::recursiveIndent)
+            } catch (t: Throwable) {
+                thrown = t
+            }
+        }, "small-stack", SMALL_STACK_BYTES)
+        parsing.start()
+        parsing.join(10_000)
+
+        assertNull("formatting the body threw $thrown", thrown)
+        assertNull(result)
+    }
+
+    @Test
+    fun givenNestingAtTheLimit_whenFormatted_thenItIsIndented() {
+        val depth = McpLogFormat.MAX_JSON_DEPTH
+        assertNotNull(McpLogFormat.json("[".repeat(depth) + "]".repeat(depth)))
+    }
+
+    @Test
+    fun givenNestingOneLevelPastTheLimit_whenFormatted_thenItIsShownAsItCame() {
+        val depth = McpLogFormat.MAX_JSON_DEPTH + 1
+        val body = "{\"a\":" + "[".repeat(depth - 1) + "]".repeat(depth - 1) + "}"
+
+        assertNull(McpLogFormat.json(body))
+        assertEquals(body, McpLogFormat.pretty(body))
+    }
+
+    @Test
+    fun givenBracketsInsideStrings_whenFormatted_thenTheyDoNotCount() {
+        val brackets = "[".repeat(500)
+        // An escaped quote at the start of "b" and an escaped backslash at its end: neither ends it.
+        val body = """{"a":"$brackets","b":"\"$brackets\\","c":['$brackets']}"""
+
+        assertNotNull("brackets inside strings were counted", McpLogFormat.json(body))
+    }
+
+    @Test
+    fun givenADoubleQuoteInsideASingleQuotedString_whenScanned_thenTheBracketsAfterItCount() {
+        // org.json reads '"' as a one-character string, then recurses into the brackets after it.
+        assertTrue(McpLogFormat.nestsDeeperThan("['\"',${"[".repeat(200)}", 100))
+    }
+
+    @Test
+    fun givenAQuoteWhereNoValueStarts_whenScanned_thenTheBracketsAfterItCount() {
+        // Android's org.json skips the comment, so no string starts at its quote.
+        assertTrue(McpLogFormat.nestsDeeperThan("[/*\"*/${"[".repeat(200)}", 100))
+    }
+
+    /** Descends once per opening bracket at the start of [text], as a recursive-descent parser does. */
+    private fun recursiveIndent(text: String): String? {
+        fun descend(index: Int): Int =
+            if (index < text.length && (text[index] == '[' || text[index] == '{')) descend(index + 1) + 1 else 0
+        descend(0)
+        return text
+    }
+
+    private companion object {
+        /** Far less than 10,000 frames need, whatever the JIT makes of them. */
+        const val SMALL_STACK_BYTES = 128L * 1024
     }
 }

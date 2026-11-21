@@ -187,6 +187,10 @@ Two dependencies were deliberately not taken:
   is kept only in part, cut at a fixed length; when the cut falls inside a
   credential, what was kept of it is masked too, so the log never shows the
   start of one.
+- The connection log indents a JSON body only when it nests arrays and objects
+  at most 100 levels deep, brackets inside strings not counted. A deeper one is
+  shown as it came: parsing recurses once per level, and a server's body of
+  nothing but `[` would run Code on the Go out of stack.
 - A `202 Accepted` body is read and thrown away, for at most 1 MiB of characters
   and 10 seconds; one that runs past either is abandoned and its socket
   disconnected, not reused. The worst case is the 10 seconds plus one read
