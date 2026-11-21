@@ -11,6 +11,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -39,6 +40,22 @@ object McpServerStore {
     private const val FIELD_ENABLED_TOOLS = "enabledTools"
 
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
+
+    /**
+     * The server list as last read or written, with the preferences it belongs to.
+     *
+     * The check that a server is still configured (`McpServers.isConfigured`) runs under the health,
+     * catalog and session locks, and a SQLite debugger entry's refresh waits on two of them while it
+     * holds its own. Read from the preferences, that check parsed every server's JSON under them;
+     * answered from here, it reads nothing and parses nothing.
+     *
+     * Every write puts the list it wrote here. A read puts what it read only by compare-and-set
+     * against what it saw first, so a read that raced a write never puts the older list back. Kept
+     * with the preferences it came from: a plugin initialized again reads its own afresh.
+     */
+    private class Snapshot(val prefs: SharedPreferences, val servers: List<McpServer>)
+
+    private val snapshot = AtomicReference<Snapshot?>(null)
 
     /**
      * Serialises every read-modify-write of the server list.
@@ -91,17 +108,27 @@ object McpServerStore {
      * @return the servers; empty before any is configured, or when the stored blob is unreadable.
      */
     fun servers(): List<McpServer> {
-        val raw = prefs()?.getString(KEY_SERVERS, null) ?: return emptyList()
+        val prefs = prefs() ?: return emptyList()
+        val seen = snapshot.get()
+        if (seen != null && seen.prefs === prefs) return seen.servers
+        val read = parse(prefs.getString(KEY_SERVERS, null))
+        snapshot.compareAndSet(seen, Snapshot(prefs, read))
+        return read
+    }
+
+    /** The stored list in [raw], empty when there is none or it is unreadable. */
+    private fun parse(raw: String?): List<McpServer> {
+        if (raw == null) return emptyList()
         return try {
-            val array = JSONArray(raw)
-            (0 until array.length()).mapNotNull { index ->
-                array.optJSONObject(index)?.let(::toServer)
-            }
+            fromJson(JSONArray(raw))
         } catch (e: Exception) {
             Log.e(TAG, "Stored server list is unreadable; treating it as empty", e)
             emptyList()
         }
     }
+
+    private fun fromJson(array: JSONArray): List<McpServer> =
+        (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let(::toServer) }
 
     /**
      * Stores the two fields the add/edit dialog owns, leaving every other field as stored.
@@ -397,7 +424,10 @@ object McpServerStore {
     private fun writeLocked(servers: List<McpServer>) {
         val array = JSONArray()
         servers.forEach { array.put(toJson(it)) }
-        prefs()?.edit()?.putString(KEY_SERVERS, array.toString())?.apply()
+        val prefs = prefs() ?: return
+        prefs.edit().putString(KEY_SERVERS, array.toString()).apply()
+        // As a read would give it back, a blank name already filled in from the URL.
+        snapshot.set(Snapshot(prefs, fromJson(array)))
     }
 
     private fun toJson(server: McpServer): JSONObject = JSONObject().apply {
