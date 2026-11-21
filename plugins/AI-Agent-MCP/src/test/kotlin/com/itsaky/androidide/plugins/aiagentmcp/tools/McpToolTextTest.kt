@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.tools
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -58,5 +59,65 @@ class McpToolTextTest {
         val taken = (setOf("git_search") + (2..20).map { "git_search_$it" }).toSet()
 
         assertNull(McpToolText.disambiguate("git_search", taken))
+    }
+
+    @Test
+    fun givenAppIds_whenPrefixed_thenEachAppGetsItsOwnShortStablePrefix() {
+        val ids = listOf("com.example.notes", "com.example.shop", "org.other.Notes")
+        val prefixes = McpToolText.appPrefixes(ids)
+        assertEquals("db_shop", prefixes.getValue("com.example.shop"))
+        // The two notes apps share a segment: both fall back to segment plus digest.
+        val a = prefixes.getValue("com.example.notes")
+        val b = prefixes.getValue("org.other.Notes")
+        assertEquals(2, setOf(a, b).size)
+        assertTrue(a.startsWith("notes_") && a.length <= 10)
+        assertEquals(prefixes, McpToolText.appPrefixes(ids.reversed()))
+    }
+
+    @Test
+    fun givenAFallbackEqualToAnotherAppsPlainPrefix_whenPrefixed_thenThePlainPrefixKeepsIt() {
+        // com.a.db and com.d.db share db_db; com.a.db's digest form is db_ec81, com.c.ec81's plain one.
+        val ids = listOf("com.a.db", "com.d.db", "com.c.ec81")
+        val prefixes = McpToolText.appPrefixes(ids)
+
+        assertEquals("db_ec81", prefixes.getValue("com.c.ec81"))
+        assertEquals("db_f048", prefixes.getValue("com.d.db"))
+        assertEquals("d_ec8102c6", prefixes.getValue("com.a.db"))
+        assertDistinct(prefixes)
+        assertEquals(prefixes, McpToolText.appPrefixes(ids.reversed()))
+    }
+
+    @Test
+    fun givenTwoAppsWhoseShortDigestsAgree_whenPrefixed_thenTheLongDigestTellsThemApart() {
+        // Both are db_notes, and both are notes_5599 by the four-digit digest.
+        val ids = listOf("com.a177.notes", "com.a282.notes", "com.example.shop")
+        val prefixes = McpToolText.appPrefixes(ids)
+
+        assertEquals("db_shop", prefixes.getValue("com.example.shop"))
+        assertEquals("n_55990d5b", prefixes.getValue("com.a177.notes"))
+        assertEquals("n_5599fbc8", prefixes.getValue("com.a282.notes"))
+        assertDistinct(prefixes)
+        assertEquals(prefixes, McpToolText.appPrefixes(ids.reversed()))
+    }
+
+    @Test
+    fun givenTwoAppsWhoseLongDigestsAgree_whenPrefixed_thenTheyAreNumberedInIdOrder() {
+        // Both are notes_459b and n_459bb758: the first four bytes of their digests agree.
+        val ids = listOf("com.pa09e.notes", "com.p182b6.notes")
+        val prefixes = McpToolText.appPrefixes(ids)
+
+        assertEquals("db_1", prefixes.getValue("com.p182b6.notes"))
+        assertEquals("db_2", prefixes.getValue("com.pa09e.notes"))
+        assertEquals(prefixes, McpToolText.appPrefixes(ids.reversed()))
+    }
+
+    private fun assertDistinct(prefixes: Map<String, String>) {
+        assertEquals("two apps share a prefix: $prefixes", prefixes.size, prefixes.values.toSet().size)
+        assertTrue("a prefix is too long: $prefixes", prefixes.values.all { it.length <= 10 })
+    }
+
+    @Test
+    fun givenAnAppIdWithNothingUsable_whenPrefixed_thenItStillGetsAName() {
+        assertEquals("db_app", McpToolText.appPrefixes(listOf("com.example.***")).getValue("com.example.***"))
     }
 }

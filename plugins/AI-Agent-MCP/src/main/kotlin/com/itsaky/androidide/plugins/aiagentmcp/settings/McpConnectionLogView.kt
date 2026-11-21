@@ -59,12 +59,17 @@ class McpConnectionLogView(
         val context = card.context
         card.findViewById<TextView>(R.id.mcpLogMethod).text = exchange.method
         card.findViewById<TextView>(R.id.mcpLogUrl).text = exchange.url
-        status(card.findViewById(R.id.mcpLogStatus), exchange.status)
+        status(card.findViewById(R.id.mcpLogStatus), exchange)
 
         val sections = card.findViewById<LinearLayout>(R.id.mcpLogSections)
-        sections.addView(text(context, context.getString(R.string.mcp_log_request), Role.SECTION))
-        addHeaders(sections, exchange.requestHeaders)
-        addBody(sections, exchange.requestBody)
+        if (exchange.cancelled) {
+            // Never sent, so no request is shown as if it had been.
+            sections.addView(text(context, labels.cancelled, Role.NOTE))
+        } else {
+            sections.addView(text(context, context.getString(R.string.mcp_log_request), Role.SECTION))
+            addHeaders(sections, exchange.requestHeaders)
+            addBody(sections, exchange.requestBody)
+        }
         if (exchange.status != null) {
             sections.addView(text(context, context.getString(R.string.mcp_log_response), Role.SECTION))
             addHeaders(sections, exchange.responseHeaders)
@@ -74,15 +79,23 @@ class McpConnectionLogView(
         return card
     }
 
-    private fun status(badge: TextView, status: String?) {
+    private fun status(badge: TextView, exchange: McpExchange) {
         val context = badge.context
-        val (container, content) = when (McpLogFormat.tone(status)) {
-            McpLogFormat.Tone.SUCCESS -> R.color.plugin_success_container to R.color.plugin_success
-            McpLogFormat.Tone.REDIRECT ->
-                R.color.plugin_secondary_container to R.color.plugin_on_secondary_container
-            McpLogFormat.Tone.ERROR -> R.color.plugin_error_container to R.color.plugin_on_error_container
+        val status = exchange.status
+        val (container, content) = when {
+            // A cancel is the caller's doing, not the server failing.
+            exchange.cancelled -> R.color.plugin_secondary_container to R.color.plugin_on_secondary_container
+            else -> when (McpLogFormat.tone(status)) {
+                McpLogFormat.Tone.SUCCESS -> R.color.plugin_success_container to R.color.plugin_success
+                McpLogFormat.Tone.REDIRECT ->
+                    R.color.plugin_secondary_container to R.color.plugin_on_secondary_container
+                McpLogFormat.Tone.ERROR -> R.color.plugin_error_container to R.color.plugin_on_error_container
+            }
         }
-        badge.text = status?.let(McpLogFormat::badge) ?: context.getString(R.string.mcp_log_no_response)
+        badge.text = when {
+            exchange.cancelled -> context.getString(R.string.mcp_log_cancelled)
+            else -> status?.let(McpLogFormat::badge) ?: context.getString(R.string.mcp_log_no_response)
+        }
         badge.backgroundTintList = ColorStateList.valueOf(color(context, container))
         badge.setTextColor(color(context, content))
     }

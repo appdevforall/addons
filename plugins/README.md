@@ -148,7 +148,11 @@ A plugin is an Android *application* module (despite installing as a library) wi
 
 Available permission strings (declared comma-separated in `plugin.permissions`):
 `filesystem.read`, `filesystem.write`, `network.access`, `system.commands`, `ide.settings`,
-`project.structure`.
+`project.structure`, `native.code`, `ide.environment.write`, `debugger.endpoints`. An IDE rejects
+a manifest that names a permission it does not know (`PluginSecurityManager.validatePlugin`, before
+the loader's warn-and-drop of unknown keys is reached), so a plugin declaring `debugger.endpoints`
+needs `plugin.min_ide_version` of 26.48 or later, the first release that knows it (26.47
+shipped without it; recheck 26.48 against the real release number before merging).
 
 ---
 

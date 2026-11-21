@@ -65,12 +65,18 @@ object JsonRpc {
      * A batch — which the spec allows and some servers send even for a single request — is reduced
      * to its first non-notification member, since this client only ever has one call in flight.
      *
+     * A document nested deeper than [JsonDepth.MAX] is refused before any parser sees it: parsing
+     * recurses once per level, and on Android a server's reply nested thousands deep would end in
+     * a StackOverflowError that nothing here may catch.
+     *
      * @param payload one JSON-RPC document, object or array.
      * @return the reply, or null when the payload is not a reply at all (a server-initiated
      *   request or notification, which this client does not answer).
+     * @throws TooDeepException when [payload] nests deeper than [JsonDepth.MAX].
      */
     fun parseReply(payload: String): Reply? {
         val trimmed = payload.trim()
+        if (JsonDepth.exceeds(trimmed)) throw TooDeepException()
         val json = when {
             trimmed.startsWith("{") -> JSONObject(trimmed)
             trimmed.startsWith("[") -> org.json.JSONArray(trimmed).let { array ->
@@ -115,4 +121,8 @@ object JsonRpc {
 
         return Reply(id = id, result = json.optJSONObject("result") ?: JSONObject())
     }
+
+    /** A reply [parseReply] refused unparsed, for nesting deeper than [JsonDepth.MAX]. */
+    class TooDeepException :
+        IllegalArgumentException("nests arrays and objects more than ${JsonDepth.MAX} levels deep")
 }

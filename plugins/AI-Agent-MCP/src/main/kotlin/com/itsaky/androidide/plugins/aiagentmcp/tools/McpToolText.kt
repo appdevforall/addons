@@ -26,12 +26,78 @@ object McpToolText {
      * @param toolName the tool's own name.
      * @return the exposed name, or null when nothing usable survives sanitising.
      */
-    fun exposedName(serverName: String, toolName: String): String? {
+    fun exposedName(serverName: String, toolName: String): String? =
+        exposedNameWithPrefix(identifier(serverName).take(MAX_PREFIX_LENGTH).trim('_'), toolName)
+
+    /**
+     * As [exposedName], for a prefix that is already decided (see [appPrefixes]).
+     * @param prefix a sanitised prefix of at most [MAX_PREFIX_LENGTH] characters.
+     */
+    fun exposedNameWithPrefix(prefix: String, toolName: String): String? {
         val tool = identifier(toolName).take(MAX_NAME_LENGTH).trim('_')
         if (tool.isEmpty()) return null
-        val prefix = identifier(serverName).take(MAX_PREFIX_LENGTH).trim('_')
         return if (prefix.isEmpty()) tool else "${prefix}_$tool"
     }
+
+    /**
+     * The name prefix of each SQLite debugger entry, told apart by app.
+     *
+     * The server label cannot do it: every entry is labelled "SQLite debugger (...)", and the
+     * first [MAX_PREFIX_LENGTH] characters of that are the same for all of them. Each app takes the
+     * first of these forms that is its own:
+     * 1. `db_` and the first seven characters of the application ID's last segment (`db_notes`);
+     * 2. the first five characters of the segment and four hex digits of a digest of the full
+     *    application ID (`notes_3fa1`), when another app would share form 1 (`com.a.notes` and
+     *    `com.b.notes`);
+     * 3. the segment's first character and eight hex digits of that digest (`n_3fa1c2d4`);
+     * 4. `db_` and a number, counted in application-ID order (`db_1`).
+     *
+     * A form is an app's own when no other app still choosing would take the same prefix and no
+     * app has already settled on it; every app settles on form 1 before any takes form 2, and so
+     * on. So the prefixes are distinct, and no app's later form takes another's earlier one, as
+     * `com.a.db`'s form 2, `db_ec81`, would take the form 1 of `com.c.ec81`. Each depends only on
+     * the set of application IDs, never on the order they were read in, so two listings of the same
+     * apps give every app the same name. Each fits [MAX_PREFIX_LENGTH].
+     *
+     * @param applicationIds the application ID of every entry.
+     * @return the prefix by application ID.
+     */
+    fun appPrefixes(applicationIds: Collection<String>): Map<String, String> {
+        val prefixes = mutableMapOf<String, String>()
+        // Sorted, so the numbering of form 4 follows the IDs rather than the order they came in.
+        var choosing = applicationIds.toSortedSet().toList()
+        for (form in appPrefixForms) {
+            val wanted = choosing.associateWith { form(it) }
+            val wanting = wanted.values.groupingBy { it }.eachCount()
+            val settled = prefixes.values.toSet()
+            for ((id, prefix) in wanted) {
+                if (wanting.getValue(prefix) == 1 && prefix !in settled) prefixes[id] = prefix
+            }
+            choosing = choosing.filter { it !in prefixes }
+        }
+        // Form 4: only apps whose digests agree in 32 bits get here.
+        var number = 1
+        for (id in choosing) {
+            while ("db_$number" in prefixes.values) number++
+            prefixes[id] = "db_$number"
+        }
+        return prefixes
+    }
+
+    /** Forms 1 to 3 of [appPrefixes], each a function of one application ID alone. */
+    private val appPrefixForms: List<(String) -> String> = listOf(
+        { id -> "db_" + segment(id).take(MAX_PREFIX_LENGTH - 3).trim('_') },
+        { id -> segment(id).take(5).trim('_') + "_" + digest(id, 2) },
+        { id -> segment(id).take(1) + "_" + digest(id, 4) },
+    )
+
+    private fun segment(applicationId: String): String =
+        identifier(applicationId.substringAfterLast('.')).ifEmpty { "app" }
+
+    /** The first [bytes] bytes of the SHA-256 of [text], in hex. */
+    private fun digest(text: String, bytes: Int): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+            .take(bytes).joinToString("") { "%02x".format(it) }
 
     /**
      * A free variant of [name], numbered when two tools ended up sharing one exposed name.

@@ -1,21 +1,24 @@
 package com.itsaky.androidide.plugins.aiagentmcp.tools
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpCallHandle
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
-import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
-import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.services.CapabilityStatus
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
+import java.io.InterruptedIOException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "$LOG_PREFIX.McpToolSource"
 
@@ -25,29 +28,59 @@ private const val TAG = "$LOG_PREFIX.McpToolSource"
  * Only tools the user switched on are offered: one popular GitHub server advertises around ninety,
  * which would exhaust a phone-sized context window on its own, so the toggle defaults to off and
  * this class never widens it.
+ *
+ * @param executor where remote calls run; see [newExecutor]. A seam, so a test can wait for a
+ *   call's worker to finish rather than poll for something it might still send.
+ * @param beforeWork runs on the worker thread with the call's id, before the worker does anything
+ *   else. A seam, so a test can land a cancel at the one point after the worker has started.
+ *
+ * A call is owned from the moment [invoke] accepts it, not from the moment its worker starts, so a
+ * [cancel] always finds it. The ownership rule, for every entry:
+ * - [calls]: [invoke] adds the entry before it schedules the worker. Exactly one party then removes
+ *   it, whichever wins [Call.claimed]: the worker, in [runTool]'s `finally`, or [invoke]'s
+ *   completion callback when the call finished without the worker (cancelled before it ran), or
+ *   [invoke] itself when scheduling threw. The loser does nothing, and a worker that loses sends
+ *   nothing.
+ * - [inFlight]: [invoke] adds it once the future exists; the future's completion removes it.
+ *
+ * A cancel reaches a call through its [Call.handle] alone: the flag the worker reads, and the
+ * connection the call's current request is using. Not through its session, which every call to
+ * that server, the health probe's listing and a SQLite debugger entry's relisting share; see
+ * [McpCallHandle] for the handshake that keeps a cancelled call from sending anything.
  */
-class McpToolSource :
-    ToolSourceRegistry.StatusReportingToolSource,
+class McpToolSource internal constructor(
+    private val executor: ExecutorService,
+    private val beforeWork: (String) -> Unit = {},
+) : ToolSourceRegistry.StatusReportingToolSource,
     ToolSourceRegistry.GroupedToolSource {
 
-    /** Calls in flight, so a stopped agent run can drop the socket instead of waiting it out. */
+    constructor() : this(newExecutor())
+
+    /** Each accepted call's future, so a cancel completes it at once rather than when its worker ends. */
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
 
     /**
-     * The session each in-flight call is using.
-     *
-     * Per call rather than "every session there is": two tools can be in flight against different
-     * servers at once, and cancelling both would report the survivor to the model as a transport
-     * failure for a call nobody cancelled.
+     * Every accepted call that has not finished, so [cancel] knows a call exists whatever its worker
+     * has reached. See the class KDoc for who removes an entry.
      */
-    private val liveSessions = ConcurrentHashMap<String, McpSession>()
+    private val calls = ConcurrentHashMap<String, Call>()
 
     /**
-     * Remote calls run here rather than on the common pool: an MCP call blocks on a socket for as
-     * long as the read timeout, and the common pool is sized for CPU work.
+     * One accepted call.
+     *
+     * [handle] is what a cancel reaches: its flag, which the worker reads before it looks up a
+     * session (so a cancel between the two attempts of the endpoint retry, or before the worker's
+     * first line, sends nothing), and the connection of the call's current request, which each
+     * request publishes and then checks the flag against before it sends anything. It lives on the
+     * call, so it goes with the call and a late cancel cannot leave a stray flag behind, nor reach
+     * another call's or a listing's connection.
+     *
+     * [claimed] is the cleanup ownership: the first party to set it, the worker as it starts or the
+     * completion callback as it finds the call finished without one, is the only one to clean up.
      */
-    private val executor: ExecutorService = Executors.newCachedThreadPool { runnable ->
-        Thread(runnable, "mcp-tool-call").apply { isDaemon = true }
+    private class Call {
+        val handle = McpCallHandle()
+        val claimed = AtomicBoolean(false)
     }
 
     override fun getProviderId(): String = McpPlugin.PLUGIN_ID
@@ -57,8 +90,9 @@ class McpToolSource :
     override fun listTools(): List<ToolSourceRegistry.ToolSpec> = exposedTools().map { exposed ->
         Spec(
             name = exposed.name,
-            description = exposed.tool.description,
+            description = exposed.description,
             parametersSchema = exposed.tool.inputSchema,
+            preApproved = exposed.server.automatic && exposed.tool.readOnlyHint,
         )
     }
 
@@ -68,7 +102,7 @@ class McpToolSource :
      */
     override fun getToolGroups(): List<ToolSourceRegistry.ToolGroup> {
         val namesByServer = exposedTools().groupBy({ it.server.id }, { it.name })
-        return McpServerStore.servers().filter { it.enabled }.map { server ->
+        return McpServers.all().filter { it.enabled }.map { server ->
             Group(
                 id = server.id,
                 displayName = server.name,
@@ -93,7 +127,7 @@ class McpToolSource :
         enabledHealth().firstOrNull { it?.state == McpServerHealth.State.DEGRADED }?.message
 
     private fun enabledHealth(): List<McpServerHealth.Health?> =
-        McpServerStore.servers().filter { it.enabled }.map { McpServerHealth.of(it.id) }
+        McpServers.all().filter { it.enabled }.map { McpServerHealth.of(it.id) }
 
     override fun invoke(
         invocation: ToolSourceRegistry.ToolInvocation,
@@ -103,32 +137,53 @@ class McpToolSource :
                 Outcome(false, "", string(R.string.mcp_error_tool_gone, invocation.toolName))
             )
 
-        val future = CompletableFuture.supplyAsync(
-            { runTool(invocation.callId, target.first, target.second, invocation.arguments) },
-            executor,
-        )
-        inFlight[invocation.callId] = future
-        return future.whenComplete { _, _ -> inFlight.remove(invocation.callId) }
+        val callId = invocation.callId
+        // Before the worker is scheduled, so a cancel landing at any point after this finds the call.
+        val call = Call()
+        calls[callId] = call
+        val future = try {
+            CompletableFuture.supplyAsync(
+                {
+                    beforeWork(callId)
+                    runTool(callId, call, target.first, target.second, invocation.arguments)
+                },
+                executor,
+            )
+        } catch (e: Throwable) {
+            // Scheduling failed (a rejected task, a shut-down executor): no worker will ever run.
+            calls.remove(callId, call)
+            throw e
+        }
+        inFlight[callId] = future
+        return future.whenComplete { _, _ ->
+            inFlight.remove(callId)
+            // Finished without the worker (cancelled before it ran): nobody else will clean up.
+            if (call.claimed.compareAndSet(false, true)) calls.remove(callId, call)
+        }
     }
 
+    /** How many accepted calls have not finished; for a test to prove nothing is left behind. */
+    internal fun pendingCalls(): Int = calls.size
+
     override fun cancel(callId: String) {
+        // Sets the flag and drops the call's connection: the worker is blocked on a socket read,
+        // where an interrupt does nothing, so dropping the connection is what actually ends it.
+        // Only this call's, so another call or a listing against the same server keeps its socket.
+        calls[callId]?.handle?.cancel()
         inFlight.remove(callId)?.cancel(true)
-        // The worker is blocked on a socket read, where an interrupt does nothing; dropping the
-        // connection is what actually ends it. Only this call's, so a concurrent call against
-        // another server keeps its socket.
-        liveSessions.remove(callId)?.let { runCatching { it.cancel() } }
     }
 
     /** Ends the executor, for the plugin shutting down. */
     fun close() {
         executor.shutdownNow()
         inFlight.clear()
-        liveSessions.clear()
+        calls.clear()
     }
 
     /**
      * Runs one remote tool.
-     * @param callId the agent's id for this call, so [cancel] can reach the session it is using.
+     * @param callId the agent's id for this call, named in the failure a cancel leaves.
+     * @param call the call's entry, registered by [invoke] before this was scheduled.
      * @param server the server that owns it.
      * @param tool the tool, as the server described it.
      * @param arguments the agent's arguments.
@@ -136,25 +191,48 @@ class McpToolSource :
      */
     private fun runTool(
         callId: String,
+        call: Call,
         server: McpServer,
         tool: McpTool,
         arguments: Map<String, Any?>,
-    ): ToolSourceRegistry.ToolOutcome = try {
-        val session = McpConnections.session(server)
-        liveSessions[callId] = session
-        val result = try {
-            session.callTool(tool.name, arguments)
-        } finally {
-            liveSessions.remove(callId)
+    ): ToolSourceRegistry.ToolOutcome {
+        // Lost: the call finished (cancelled) before this worker began, and the completion callback
+        // has cleaned up. The result is discarded, so send nothing.
+        if (!call.claimed.compareAndSet(false, true)) {
+            return Outcome(false, "", string(R.string.mcp_error_cancelled, server.name))
         }
-        // A reply of any kind, a tool's own failure included, means the server is answering.
-        McpServerHealth.available(server.id)
-        Outcome(result.success, result.text, result.errorMessage)
-    } catch (e: Throwable) {
-        Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
-        McpToolCatalog.recordFailure(server, e)
-        val context = McpPlugin.getContext()?.androidContext
-        Outcome(false, "", McpErrorFormatter.format(context, server.name, e))
+        return try {
+            val result = McpToolCatalog.retry.call(server) { target ->
+                // Cancelled between two attempts (or before the first): nothing is looked up or sent.
+                // Signalled as an interrupted read, which is how a dropped connection already
+                // reports a cancel.
+                if (call.handle.isCancelled) {
+                    throw InterruptedIOException("Tool call $callId was cancelled")
+                }
+                // A cancel landing from here on, during the session lookup or while a request reads
+                // its credentials, is caught by the handle: each request publishes its connection
+                // there and reads the flag again before it sends anything.
+                // The session is ended after the call when it was not kept: a server removed
+                // meanwhile would otherwise keep the session this call's handshake opened.
+                McpConnections.withSession(target) { it.callTool(tool.name, arguments, call.handle) }
+            }
+            // A reply of any kind, a tool's own failure included, means the server is answering;
+            // unless it was removed while the call ran, when recording it would bring back its row.
+            // Checked with the write, under the lock the removal takes, so it cannot land between.
+            McpServerHealth.available(server.id, McpServers::isConfigured)
+            Outcome(result.success, result.text, result.errorMessage)
+        } catch (e: Throwable) {
+            // Throwable, unlike the other host-facing catches in this plugin: this runs inside
+            // CompletableFuture.supplyAsync, which catches every Throwable itself, so narrowing this
+            // would not bring an OutOfMemoryError to the IDE's handler. It would only hand AI Core an
+            // exceptionally completed future in place of the failure outcome it expects.
+            Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
+            McpToolCatalog.recordFailure(server, e)
+            val context = McpPlugin.getContext()?.androidContext
+            Outcome(false, "", McpErrorFormatter.format(context, server, e))
+        } finally {
+            calls.remove(callId, call)
+        }
     }
 
     /**
@@ -169,10 +247,11 @@ class McpToolSource :
 
     /**
      * Every enabled tool of every enabled server, paired with its server.
+     * @param servers one snapshot of the server list, so the caller's other reads agree with it.
      * @return the pairs, in configured order.
      */
-    private fun enabledTools(): List<Pair<McpServer, McpTool>> =
-        McpServerStore.servers()
+    private fun enabledTools(servers: List<McpServer>): List<Pair<McpServer, McpTool>> =
+        servers
             .filter { it.enabled }
             .flatMap { server ->
                 McpToolCatalog.tools(server.id)
@@ -200,8 +279,23 @@ class McpToolSource :
         val exposed = mutableListOf<Exposed>()
         val taken = mutableSetOf<String>()
 
-        for ((server, tool) in enabledTools()) {
-            val base = McpToolText.exposedName(server.name, tool.name)
+        // Read once: an app listed between two reads would have tools here but no prefix below.
+        val servers = McpServers.all()
+
+        // From every automatic entry, not only those offering tools, so a prefix does not change
+        // when another app's tools are switched off or its tool list is still empty.
+        val appPrefixes = McpToolText.appPrefixes(
+            servers.filter { it.automatic }.map { AutomaticServers.applicationIdOf(it.id) },
+        )
+        for ((server, tool) in enabledTools(servers)) {
+            val base = if (server.automatic) {
+                McpToolText.exposedNameWithPrefix(
+                    appPrefixes.getValue(AutomaticServers.applicationIdOf(server.id)),
+                    tool.name,
+                )
+            } else {
+                McpToolText.exposedName(server.name, tool.name)
+            }
             if (base == null) {
                 Log.w(TAG, "Dropping a tool from '${server.name}': its name has nothing usable")
                 continue
@@ -215,7 +309,7 @@ class McpToolSource :
                 Log.i(TAG, "'${tool.name}' on '${server.name}' shares a name; offering it as '$name'")
             }
             taken += name
-            exposed += Exposed(server, tool, name)
+            exposed += Exposed(server, tool, name, describe(server, tool))
         }
         return exposed
     }
@@ -226,26 +320,47 @@ class McpToolSource :
      * @property tool the tool, as the server described it.
      * @property name the name the agent and the model see.
      */
-    private class Exposed(val server: McpServer, val tool: McpTool, val name: String)
+    private class Exposed(
+        val server: McpServer,
+        val tool: McpTool,
+        val name: String,
+        val description: String,
+    )
+
+    /**
+     * The description the model and the approval dialog see. A SQLite debugger tool starts with
+     * its application ID: every entry's tools say the same thing otherwise, and the model could
+     * not tell which app's database one reads. A hand-added server's text is passed through.
+     */
+    private fun describe(server: McpServer, tool: McpTool): String {
+        if (!server.automatic) return tool.description
+        val app = "${AutomaticServers.applicationIdOf(server.id)} (SQLite debugger)"
+        return if (tool.description.isBlank()) app else "$app: ${tool.description}"
+    }
 
     /**
      * One tool, as the host contract describes it.
      *
-     * Every remote tool asks for approval and declares itself non-read-only: this plugin cannot
+     * Every remote tool declares that it requires approval and is not read-only: this plugin cannot
      * know what a server's tool does, and guessing on the permissive side is the one guess that
-     * cannot be undone. The contract is a Java interface, so its accessors are implemented as
+     * cannot be undone. The one exception is [preApproved]: a readOnlyHint tool of the automatic
+     * debugger entry, whose server Code on the Go itself installed, declares no approval needed.
+     * That is a declaration only: AI-Core currently overrides `requiresApproval` to true for every
+     * contributed tool (`ContributedToolHandler`), so the Agent still asks on each call. Honouring
+     * the declaration is tracked in ADFA-7147. The contract is a Java interface, so its accessors are implemented as
      * functions: Kotlin synthesises properties for *reading* a Java getter, never for overriding one.
      */
     private class Spec(
         private val name: String,
         private val description: String,
         private val parametersSchema: Map<String, Any>,
+        private val preApproved: Boolean = false,
     ) : ToolSourceRegistry.ToolSpec {
         override fun getName(): String = name
         override fun getDescription(): String = description
         override fun getParametersSchema(): Map<String, Any> = parametersSchema
-        override fun requiresApproval(): Boolean = true
-        override fun isReadOnly(): Boolean = false
+        override fun requiresApproval(): Boolean = !preApproved
+        override fun isReadOnly(): Boolean = preApproved
     }
 
     /**
@@ -283,5 +398,13 @@ class McpToolSource :
     private companion object {
         /** Shown wherever tool provenance is surfaced. */
         const val DISPLAY_NAME = "MCP servers"
+
+        /**
+         * Remote calls run here rather than on the common pool: an MCP call blocks on a socket for
+         * as long as the read timeout, and the common pool is sized for CPU work.
+         */
+        fun newExecutor(): ExecutorService = Executors.newCachedThreadPool { runnable ->
+            Thread(runnable, "mcp-tool-call").apply { isDaemon = true }
+        }
     }
 }

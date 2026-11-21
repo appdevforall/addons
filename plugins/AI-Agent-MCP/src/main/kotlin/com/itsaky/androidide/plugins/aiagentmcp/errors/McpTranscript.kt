@@ -21,6 +21,9 @@ object McpTranscript {
 
         /** The transcript of a failure that never reached the network. */
         val nothingSent: String
+
+        /** The note on a request given up before it was sent; see [McpExchange.cancelled]. */
+        val cancelled: String
     }
 
     /**
@@ -77,13 +80,19 @@ object McpTranscript {
         exchanges.lastOrNull()?.failure == null && error !is McpHttpException
 
     private fun render(exchange: McpExchange, labels: Labels): String = buildList {
-        add("> ${exchange.method} ${exchange.url}")
-        addAll(headers(">", exchange.requestHeaders, labels))
-        addAll(body(">", exchange.requestBody, labels))
-        exchange.status?.let { status ->
-            add("< $status")
-            addAll(headers("<", exchange.responseHeaders, labels))
-            exchange.responseBody?.let { addAll(body("<", it, labels)) }
+        if (exchange.cancelled) {
+            // Nothing of it went over the wire, so no line of it is marked as sent.
+            add("* ${exchange.method} ${exchange.url}")
+            add("* ${labels.cancelled}")
+        } else {
+            add("> ${exchange.method} ${exchange.url}")
+            addAll(headers(">", exchange.requestHeaders, labels))
+            addAll(body(">", exchange.requestBody, labels))
+            exchange.status?.let { status ->
+                add("< $status")
+                addAll(headers("<", exchange.responseHeaders, labels))
+                exchange.responseBody?.let { addAll(body("<", it, labels)) }
+            }
         }
         exchange.failure?.let { add("* $it") }
     }.joinToString("\n")

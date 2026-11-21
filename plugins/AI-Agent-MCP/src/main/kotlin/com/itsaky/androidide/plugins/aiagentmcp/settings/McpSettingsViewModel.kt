@@ -217,14 +217,31 @@ class McpSettingsViewModel(
      */
     fun delete(id: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                McpConnections.invalidate(id)
-                // Removed first, so a probe finishing in between sees it gone and records nothing.
-                McpServerStore.remove(id)
-                McpToolCatalog.forget(id)
-            }
+            withContext(Dispatchers.IO) { deleteNow(id) }
             reload()
         }
+    }
+
+    /**
+     * [delete]'s blocking part, off the main thread.
+     *
+     * The session is ended before the server is removed, so its DELETE still has the credentials
+     * the removal deletes. A call or a listing that looked the session up between the two stored
+     * a new one, which would outlive the server; it is ended again once the server is gone, when
+     * no lookup stores one any more (McpConnections.session keeps none for a server no longer
+     * configured). That second DELETE carries the credentials read before the server was removed,
+     * whether or not there was a first session, best effort; only to a session built for the URL
+     * they were read for, so none to a session for a URL the server has left.
+     */
+    internal fun deleteNow(id: String) {
+        // Read while the server is still stored: removing it deletes them.
+        val saved = McpConnections.saveCredentials(id)
+        McpConnections.detach(id)?.close()
+        // Removed before the tools are forgotten, so a probe finishing in between sees it gone and
+        // records nothing.
+        McpServerStore.remove(id)
+        McpConnections.detach(id)?.close(saved)
+        McpToolCatalog.forget(id)
     }
 
     /**
@@ -287,7 +304,7 @@ class McpSettingsViewModel(
                     val context = getContext()?.androidContext
                     // The cached tools: a failed reconnect must not blank out the switches.
                     ConnectResult(
-                        message = McpErrorFormatter.format(context, server.name, e),
+                        message = McpErrorFormatter.format(context, server, e),
                         log = McpTranscript.log(
                             exchanges.snapshot(), e, McpTranscriptStrings(context), exchanges::redact,
                         ),

@@ -52,7 +52,8 @@
   <p>It is deliberately a plugin of its own rather than part of AI Core. AI Core
   declares the filesystem, shell and project permissions its own tools need and
   <b>no network access</b>; this plugin is the mirror image, declaring
-  <b>network.access and nothing else</b>. That split is what lets you run the
+  <b>network.access</b>, plus <b>debugger.endpoints</b> to read the SQLite debugger
+  endpoints Code on the Go stores, <b>and nothing else</b>. That split is what lets you run the
   Agent without granting it the network, or add remote tools without widening
   what the Agent itself may touch.</p>
 
@@ -92,10 +93,13 @@
     <tr><td><code>McpToolSource</code></td><td>The tool source AI Core sees.
       Publishes the enabled tools of the enabled servers, runs a call on its own
       thread pool, and drops that call's own connection when an Agent run is
-      stopped, leaving any concurrent call against another server alone.</td></tr>
+      stopped. Any other call, and the health check's listing, is left alone,
+      whether it is against the same server or another.</td></tr>
     <tr><td><code>McpToolCatalog</code></td><td>What each server last advertised,
       held in memory. The Agent reads its tool list on a UI-adjacent path, so that
-      list is answered from memory and never blocks on the network.</td></tr>
+      list is answered from memory and never blocks on the network. A SQLite
+      debugger entry's list is kept beside its endpoint, so a listing of an
+      endpoint a relaunch replaced cannot overwrite the new one's.</td></tr>
     <tr><td><code>McpSession</code></td><td>One protocol conversation per server:
       <code>initialize</code>, <code>tools/list</code>, <code>tools/call</code>,
       session lifetime, and one clean re-handshake when a server drops a
@@ -119,7 +123,8 @@
   which is a Kotlin Multiplatform library with no stated Android target, ships no
   HTTP engine, and required a Kotlin version these plugins do not standardise
   on.</p>
-  <p>The plugin declares <b>network.access</b> and nothing else. It holds no
+  <p>The plugin declares <b>network.access</b> and <b>debugger.endpoints</b>, which
+  only reads the SQLite debugger endpoints Code on the Go stores, and nothing else. It holds no
   filesystem, shell or project permission, so it cannot read your project;
   project content reaches a server only if the model puts it in a tool argument
   and you approve that call.</p>
@@ -141,7 +146,9 @@
   </ol>
   <div class="note">
     New tools always arrive switched <b>off</b>, including on the connection
-    that discovers them. Nothing a server adds later becomes visible to the model
+    that discovers them. The one exception is four read-only tools (list databases, get schema,
+    query and get events) of the SQLite debugger entry that Code on the Go
+    supplies for your own debug app. Nothing a server adds later becomes visible to the model
     without your say-so.
   </div>
 
@@ -184,6 +191,12 @@
       <i>Stored</i> rather than the value, so typing replaces it.</td></tr>
     <tr><td>Tools missing from the Agent</td><td>Check the server is enabled, at
       least one tool is switched on, and AI Core is installed and active.</td></tr>
+    <tr><td>"The app … did not answer"</td><td>The SQLite debugger entry's app
+      gave no answer. Android may pause an app in the background: bring the app
+      to the front and try again.</td></tr>
+    <tr><td>"The app … is not running with the SQLite debugger"</td><td>The app
+      has stopped, or it was rebuilt without the SQLite debugger. Open the app
+      again from Code on the Go.</td></tr>
   </table>
 </body>
 </html>

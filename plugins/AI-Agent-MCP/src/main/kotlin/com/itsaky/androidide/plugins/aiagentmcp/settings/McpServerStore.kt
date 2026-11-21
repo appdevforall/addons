@@ -49,15 +49,22 @@ object McpServerStore {
      */
     private val lock = Any()
 
-    /** Registers [listener], called after any change to the servers or their toggles. */
+    /**
+     * Registers [listener], called after any change to the servers or their toggles. Adding one
+     * already registered does nothing, so a host that activates the plugin twice still gets one
+     * call per change, and one [removeChangeListener] takes it out.
+     */
     fun addChangeListener(listener: () -> Unit) {
-        listeners.add(listener)
+        listeners.addIfAbsent(listener)
     }
 
     /** Removes a listener added by [addChangeListener]. */
     fun removeChangeListener(listener: () -> Unit) {
         listeners.remove(listener)
     }
+
+    /** How many change listeners are registered; a test seam for a listener registered twice. */
+    internal val changeListenerCount: Int get() = listeners.size
 
     /**
      * Every configured server, in the order they were added.
@@ -338,11 +345,18 @@ object McpServerStore {
     private fun prefs(): SharedPreferences? =
         McpPlugin.getContext()?.getPluginSharedPreferences(PREFERENCE_FILE)
 
+    /**
+     * Tells every listener, one failing listener costing only itself. A listener may call the
+     * host, so a LinkageError is survived as well as an Exception; anything else, an
+     * OutOfMemoryError above all, propagates to whoever made the change.
+     */
     private fun fireChanged() {
         for (listener in listeners) {
             try {
                 listener()
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
+                Log.e(TAG, "A settings change listener threw", e)
+            } catch (e: LinkageError) {
                 Log.e(TAG, "A settings change listener threw", e)
             }
         }

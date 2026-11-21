@@ -1,10 +1,15 @@
 package com.itsaky.androidide.plugins.aiagentmcp.plugin
 
+import android.util.Log
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLifecycleListener
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
+import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpSettingsFragment
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpServerHealth
@@ -15,8 +20,10 @@ import com.itsaky.androidide.plugins.extensions.PluginSettingsEntry
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.SettingsExtension
+import com.itsaky.androidide.plugins.services.DebuggerEndpointService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,28 +36,49 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+private const val TAG = "$LOG_PREFIX.McpPlugin"
+
 /**
  * Connects the Agent to Model Context Protocol servers.
  *
  * Deliberately a plugin of its own rather than part of AI Core: everything here is network work,
- * so it declares `network.access` and nothing else, while AI Core declares the filesystem, shell
- * and project permissions its own tools need and no network at all.
+ * so it declares `network.access`, plus `debugger.endpoints` to read the SQLite debugger endpoints
+ * Code on the Go stores, and nothing else, while AI Core declares the filesystem, shell and project
+ * permissions its own tools need and no network at all.
  */
 class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
+
+    /**
+     * The tool source registered with AI Core: built by the first [activate], kept by a second, and
+     * closed and cleared by [teardown]. Read and written only under [lifecycleLock].
+     */
     private var toolSource: McpToolSource? = null
 
     /** True once [toolSource] is registered with AI Core, so re-registration is idempotent. */
     @Volatile private var registered = false
 
     /**
-     * Serialises every swap of [scope].
+     * Serialises the lifecycle transitions: [activate], [deactivate] and [dispose], [teardown] which
+     * they share, and the registration AI Core's activation triggers. Each runs whole before the next
+     * starts, since the host may drive one from one thread and the next from another.
      *
-     * Cancelling the old scope and installing a new one is one transition, not two: without this,
-     * two lifecycle calls landing together can each cancel the scope the other has already replaced,
-     * leaving a live refresh behind after [deactivate] or orphaning an activation's scope uncancelled.
-     * `@Volatile` alone would publish each write but still let the pair interleave.
+     * Without it, a teardown could fall inside an activation: between its read of [toolSource] and
+     * its write, putting back a source the teardown had just closed, or after the registration had
+     * started and before [registered] was set, so the teardown unregistered nothing and closed the
+     * source AI Core was being handed. AI Core then held a closed source, whose every call fails
+     * with a RejectedExecutionException. Every swap of [scope] takes it too: cancelling the old
+     * scope and installing a new one is one transition, not two.
+     *
+     * Nothing taken under it waits for this plugin's own work or for the network: the host's
+     * listener and service registries do not call back, the coroutines it cancels never take it,
+     * and [teardown] only takes the sessions out, returning them. The lifecycle call that ran it
+     * ends them once it has let go ([endSessions]): a session's `close()` sends a DELETE and can
+     * first wait, up to about 70 s, for a handshake in flight to let go of the session, and a
+     * lifecycle call or AI Core's registration arriving meanwhile must not wait behind it. Each
+     * call ends only the sessions its own teardown took out, so one arriving meanwhile neither
+     * ends another's nor waits for them.
      */
     private val lifecycleLock = Any()
 
@@ -115,6 +143,21 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_HEADER_REMOVE = "mcp_header_remove"
         const val TOOLTIP_TAG_BACK = "mcp_back"
 
+        /**
+         * Logs a failure that escaped a coroutine of [newScope]. Platform logging, not
+         * `context.logger`: a handler that itself threw would hand both failures to the IDE's
+         * uncaught-exception handler, and a scope exists before [initialize] sets the context.
+         *
+         * A [VirtualMachineError] (OutOfMemoryError, StackOverflowError) or a [ThreadDeath] is
+         * rethrown instead: it is the process failing, not this plugin's work, and the IDE's
+         * handler has to see it. The coroutine machinery hands a failure its handler rethrows,
+         * unwrapped, to the thread's uncaught-exception handler.
+         */
+        private val BACKSTOP = CoroutineExceptionHandler { _, e ->
+            if (e is VirtualMachineError || e is ThreadDeath) throw e
+            Log.e(TAG, "Background work failed; it stops here and Code on the Go carries on", e)
+        }
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -128,7 +171,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      */
     private val aiCoreLifecycle = object : PluginLifecycleListener {
         override fun onPluginActivated(pluginId: String) {
-            if (pluginId == AI_CORE_PLUGIN_ID) registerToolSource()
+            // Under the lifecycle lock, so a deactivation arriving meanwhile undoes this
+            // registration rather than closing the source while AI Core is handed it.
+            if (pluginId == AI_CORE_PLUGIN_ID) synchronized(lifecycleLock) { registerToolSource() }
         }
 
         override fun onPluginDeactivated(pluginId: String) {
@@ -141,9 +186,22 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         }
     }
 
-    /** Tells the agent to re-read the tool list whenever a server or a toggle changes. */
+    /**
+     * Tells the agent to re-read the tool list whenever a server or a toggle changes.
+     *
+     * Guarded against a [LinkageError] as well as an [Exception], like [healthChanged]: it runs on
+     * this plugin's own coroutines, and the registry is AI Core's, built against a plugin-api of
+     * its own. A LinkageError from it would otherwise end the coroutine in the IDE's
+     * uncaught-exception handler. Nothing broader: an OutOfMemoryError has to reach that handler.
+     */
     private val settingsChanged: () -> Unit = {
-        resolveToolSourceRegistry()?.notifyToolsChanged(PLUGIN_ID)
+        try {
+            resolveToolSourceRegistry()?.notifyToolsChanged(PLUGIN_ID)
+        } catch (e: Exception) {
+            context.logger.warn("McpPlugin: could not tell the agent the tools changed: $e")
+        } catch (e: LinkageError) {
+            context.logger.warn("McpPlugin: could not tell the agent the tools changed: $e")
+        }
     }
 
     /**
@@ -153,9 +211,27 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     private val healthChanged: () -> Unit = {
         try {
             if (registered) resolveToolSourceRegistry()?.notifyToolSourceStatusChanged(PLUGIN_ID)
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
+            context.logger.debug("McpPlugin: could not report a health change: ${e.message}")
+        } catch (e: LinkageError) {
             // An AI Core built before contract 2 has no such method; its tags cannot show health.
             context.logger.debug("McpPlugin: could not report a health change: ${e.message}")
+        }
+    }
+
+    /**
+     * Lists an automatic entry's tools as soon as its endpoint appears or changes, so a relaunched
+     * app's next call does not wait for the probe's cadence. Registered by [activate] beside the
+     * change listeners, and removed with them. The activation's own install of the endpoints tells
+     * it nothing (see [AutomaticServers.install]): the `refreshAll` that follows lists those entries.
+     */
+    private val relistAutomatic: (String) -> Unit = { id ->
+        scope.launch {
+            val server = McpServers.all().firstOrNull { it.id == id && it.enabled }
+            if (server != null) {
+                runCatchingRecoverable { McpToolCatalog.connect(server) }
+                if (isActive) settingsChanged()
+            }
         }
     }
 
@@ -166,16 +242,41 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         return true
     }
 
-    override fun activate(): Boolean = try {
+    override fun activate(): Boolean {
+        val (activated, released) = synchronized(lifecycleLock) { activateLocked() }
+        // A failed activation tears down what it started, sessions included.
+        endSessions(released)
+        return activated
+    }
+
+    /**
+     * [activate] itself, under [lifecycleLock].
+     * @return whether it worked, and the sessions a failed one's teardown took out, to end.
+     */
+    private fun activateLocked(): Pair<Boolean, List<McpConnections.Released>> = try {
         // Cancelled and replaced as one step: a host that activates twice would otherwise orphan
         // the running scope, and the launch below has to use this activation's scope, not whatever
         // a concurrent lifecycle call has since installed.
         val active = swapScope(newScope())
         activationJob = active.coroutineContext[Job]
-        toolSource = McpToolSource()
+        // Kept by a second activate: it is the one registered with AI Core, whose registry
+        // unregisters by identity, and [registered] is already true, so a replacement would never be
+        // registered while this one stayed registered and was never closed. [teardown] closes it and
+        // clears the field, so the activation after a deactivate builds a fresh one.
+        toolSource = toolSource ?: McpToolSource()
+        // Here, not on the coroutine below: a lifecycle call registers and removes every listener,
+        // so a late coroutine of an activation that has ended cannot add one, or remove the next
+        // activation's. The add methods ignore a listener already registered, so a host that
+        // activates twice still registers each once.
         McpServerStore.addChangeListener(settingsChanged)
+        AutomaticServers.addChangeListener(settingsChanged)
+        AutomaticServers.addEndpointListener(relistAutomatic)
         McpServerHealth.addChangeListener(healthChanged)
-        context.addPluginLifecycleListener(aiCoreLifecycle)
+        // Guarded like the removal in teardown: a host whose plugin-api differs answers with a
+        // LinkageError. That costs only the re-registration when AI Core activates later; with AI
+        // Core already active, the registration below still works.
+        runCatchingRecoverable { context.addPluginLifecycleListener(aiCoreLifecycle) }
+            .onFailure { e -> context.logger.warn("McpPlugin: could not add the lifecycle listener", e) }
 
         if (!registerToolSource()) {
             context.logger.info("McpPlugin: AI Core is not active yet; will register when it is")
@@ -184,40 +285,93 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         // Tool lists are answered from cache, so the cache has to be filled before the user opens
         // the Agent — otherwise the first cold-start session sees no MCP tools at all.
         active.launch {
+            // Off the main thread: the host reads its database. Before refreshAll, so the entry is
+            // connected like any other.
+            startDebuggerEntry { isActive }
             val refreshed = McpToolCatalog.refreshAll { isActive }
             if (refreshed > 0 && isActive) settingsChanged()
-            probeHealth { isActive }
+            probeHealth({ isActive })
         }
-        true
+        true to emptyList()
     } catch (e: Exception) {
-        context.logger.error("McpPlugin: activation failed", e)
-        false
+        false to activationFailed(e)
+    } catch (e: LinkageError) {
+        // A host call outside the guards above, from a host whose plugin-api differs.
+        false to activationFailed(e)
     }
 
-    override fun deactivate(): Boolean = try {
-        context.removePluginLifecycleListener(aiCoreLifecycle)
+    /**
+     * Undoes a failed [activate] and logs why.
+     *
+     * The host need not call [deactivate] after an activation that failed, so nothing else would
+     * stop the scope it had started or remove the listeners it had registered by then.
+     *
+     * @param e what ended the activation.
+     * @return the sessions the teardown took out, for [activate] to end.
+     */
+    private fun activationFailed(e: Throwable): List<McpConnections.Released> {
+        val released = teardown()
+        runCatchingRecoverable { context.logger.error("McpPlugin: activation failed", e) }
+        return released
+    }
+
+    override fun deactivate(): Boolean {
+        var released = emptyList<McpConnections.Released>()
+        val deactivated = synchronized(lifecycleLock) {
+            try {
+                released = teardown()
+                true
+            } catch (e: Exception) {
+                context.logger.error("McpPlugin: deactivation failed", e)
+                false
+            }
+        }
+        endSessions(released)
+        return deactivated
+    }
+
+    override fun dispose() {
+        val released = synchronized(lifecycleLock) { teardown() }
+        // Before the context goes: a session's DELETE reads its credentials through it.
+        endSessions(released)
+        pluginContext = null
+        context.logger.info("McpPlugin: disposed")
+    }
+
+    /**
+     * Ends [released], each with a DELETE, best effort: the sessions the calling lifecycle call's
+     * own [teardown] took out, never another's. Called once that call has let go of
+     * [lifecycleLock], never under it; see there.
+     */
+    private fun endSessions(released: List<McpConnections.Released>) {
+        for (session in released) session.close()
+    }
+
+    /**
+     * Stops what [activate] started: the lifecycle and change listeners, the tool source's
+     * registration, the scope with its work, and the connections. The one teardown path, shared by
+     * [deactivate], [dispose] and a failed [activate], so the three cannot drift apart. Safe to run
+     * on an activation that got only part of the way, and on none at all. Each caller holds
+     * [lifecycleLock]; taken here too, so a new caller cannot forget it. The sessions are only taken
+     * out here; the lifecycle call ends them after it has let go ([endSessions]).
+     *
+     * @return the sessions taken out, each with the credentials read as it was taken out, for the
+     *   caller alone to end.
+     */
+    private fun teardown(): List<McpConnections.Released> = synchronized(lifecycleLock) {
+        // Guarded: a host whose plugin-api differs answers with a LinkageError, and one escaping
+        // here would skip every step below, leaving the scope and its probe running.
+        runCatchingRecoverable { context.removePluginLifecycleListener(aiCoreLifecycle) }
+            .onFailure { e -> context.logger.warn("McpPlugin: could not remove the lifecycle listener", e) }
         McpServerStore.removeChangeListener(settingsChanged)
+        AutomaticServers.removeChangeListener(settingsChanged)
+        AutomaticServers.removeEndpointListener(relistAutomatic)
         McpServerHealth.removeChangeListener(healthChanged)
         unregisterToolSource()
         // Before the connections are closed: an in-flight refresh would otherwise repopulate the
         // catalogue and the session map straight after they were cleared.
         stopScope()
         releaseConnections()
-        true
-    } catch (e: Exception) {
-        context.logger.error("McpPlugin: deactivation failed", e)
-        false
-    }
-
-    override fun dispose() {
-        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
-        McpServerStore.removeChangeListener(settingsChanged)
-        McpServerHealth.removeChangeListener(healthChanged)
-        unregisterToolSource()
-        stopScope()
-        releaseConnections()
-        pluginContext = null
-        context.logger.info("McpPlugin: disposed")
     }
 
     /**
@@ -230,14 +384,20 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      * Servers are asked in parallel, so one that hangs until its timeout delays no other's tag.
      *
      * @param keepGoing false once this activation is over; checked before each probe, since a probe
-     *   blocks on a socket with no suspension point, like [McpToolCatalog.refreshAll].
+     *   blocks on a socket with no suspension point, like [McpToolCatalog.refreshAll]. Checked again
+     *   after the delay and, inside [AutomaticServers.refresh], after its blocking read: deactivation
+     *   clears the automatic entries, and a refresh that outlived it would restore them.
+     * @param intervalMs the wait between cycles; a seam for tests.
      */
-    private suspend fun probeHealth(keepGoing: () -> Boolean) {
+    internal suspend fun probeHealth(keepGoing: () -> Boolean, intervalMs: Long = PROBE_INTERVAL_MS) {
         var cycle = 0
         while (keepGoing()) {
-            delay(PROBE_INTERVAL_MS)
+            delay(intervalMs)
+            if (!keepGoing()) return
             cycle++
-            val due = McpServerStore.servers().filter { server ->
+            // A change already told the agent: refresh fires the change listener added on activation.
+            AutomaticServers.refresh(keepGoing)
+            val due = McpServers.all().filter { server ->
                 val health = McpServerHealth.of(server.id)
                 server.enabled && health?.refused != true && (cycle % HEALTHY_PROBE_EVERY == 0 ||
                     health?.state != McpServerHealth.State.AVAILABLE)
@@ -248,7 +408,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                         if (!keepGoing()) return@async false
                         val before = McpToolCatalog.tools(server.id)
                         // Recorded by connect itself; a failure here is what the tag already shows.
-                        runCatching { McpToolCatalog.connect(server) }
+                        runCatchingRecoverable { McpToolCatalog.connect(server) }
                         McpToolCatalog.tools(server.id) != before
                     }
                 }.awaitAll().any { it }
@@ -258,8 +418,51 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         }
     }
 
-    /** A fresh scope for this activation; the previous one is cancelled, never reused. */
-    private fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * Installs the host's endpoints, unless the activation ends first.
+     *
+     * The host's database read blocks and cancellation cannot interrupt it, so [keepGoing] is
+     * consulted before it and, inside [AutomaticServers.install], after it. No listener is added
+     * or removed here: [activate] registers [relistAutomatic] and [deactivate] removes it, so this
+     * call, which can outlive its activation, cannot touch the listener a later activation relies on.
+     *
+     * @param keepGoing false once this activation is over.
+     */
+    internal fun startDebuggerEntry(keepGoing: () -> Boolean) {
+        if (!keepGoing()) return
+        installDebuggerEndpoints(keepGoing)
+    }
+
+    /**
+     * Points [AutomaticServers] at the host's debugger endpoints.
+     *
+     * `plugin.min_ide_version` keeps this plugin off an IDE that lacks the service: such an IDE
+     * rejects the unknown `debugger.endpoints` permission when it validates the manifest. The catch
+     * is defence only, for a host that registers no service anyway. A call that later throws (no
+     * permission, unreadable database, a LinkageError from a host whose plugin-api differs) leaves
+     * the entries as they were: [AutomaticServers.refresh] catches it.
+     */
+    private fun installDebuggerEndpoints(keepGoing: () -> Boolean) {
+        val service = runCatchingRecoverable {
+            context.services.get(DebuggerEndpointService::class.java)
+        }.getOrNull()
+        if (service == null) {
+            context.logger.info("McpPlugin: this IDE has no debugger endpoint service")
+            return
+        }
+        AutomaticServers.install(AutomaticServers.fromHost { service.endpoints }, keepGoing)
+    }
+
+    /**
+     * A fresh scope for this activation; the previous one is cancelled, never reused.
+     *
+     * [BACKSTOP] logs what escapes a coroutine here. Each host call is guarded where it is made, so
+     * a failure costs only that call; this catches the one nobody foresaw, which would otherwise
+     * reach the IDE's uncaught-exception handler and crash Code on the Go, whose process this
+     * plugin runs in. A VirtualMachineError or a ThreadDeath it passes on to that handler. Internal
+     * as a seam, so a test can watch where such a failure ends up.
+     */
+    internal fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO + BACKSTOP)
 
     /**
      * Installs [next] as the current scope and cancels whichever scope it displaced.
@@ -310,9 +513,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /**
      * Registers this plugin's tools with AI Core, if the registry is reachable.
      *
-     * Guarded against [Throwable] rather than [Exception]: on an IDE older than the release that
-     * ships the contract the class is simply absent, and a [NoClassDefFoundError] here would fail
-     * the whole plugin rather than the one thing it cannot do.
+     * Guarded against a [LinkageError] as well as an [Exception]: on an IDE older than the release
+     * that ships the contract the class is simply absent, and a [NoClassDefFoundError] here would
+     * fail the whole plugin rather than the one thing it cannot do. Nothing broader: an
+     * OutOfMemoryError has to reach the IDE's uncaught-exception handler.
      *
      * @return true when registered (now or already), false when AI Core is absent.
      */
@@ -326,44 +530,60 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             registered = true
             context.logger.info("McpPlugin: registered the MCP tool source with AI Core")
             true
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
+            context.logger.error("McpPlugin: could not register the MCP tool source", e)
+            false
+        } catch (e: LinkageError) {
             context.logger.error("McpPlugin: could not register the MCP tool source", e)
             false
         }
     }
 
-    /** Withdraws the tools, so a disabled plugin stops appearing in the agent's tool list. */
+    /**
+     * Withdraws the tools, so a disabled plugin stops appearing in the agent's tool list.
+     *
+     * Guarded like [registerToolSource]: an Exception or a LinkageError is logged, anything else
+     * propagates.
+     */
     private fun unregisterToolSource() {
         if (!registered) return
         val source = toolSource
-        try {
+        runCatchingRecoverable {
             if (source != null) {
                 resolveToolSourceRegistry()?.unregisterToolSource(source)
                 context.logger.info("McpPlugin: unregistered the MCP tool source")
             }
-        } catch (e: Throwable) {
-            context.logger.warn("McpPlugin: could not unregister the MCP tool source", e)
-        }
+        }.onFailure { e -> context.logger.warn("McpPlugin: could not unregister the MCP tool source", e) }
         registered = false
     }
 
-    /** Closes every session and forgets the cached tool lists. */
-    private fun releaseConnections() {
+    /**
+     * Closes the tool source, takes every session out, and forgets the cached tool lists. Under
+     * [lifecycleLock], with [teardown].
+     *
+     * @return the sessions taken out, for the lifecycle call to end ([endSessions]).
+     */
+    private fun releaseConnections(): List<McpConnections.Released> {
         toolSource?.close()
         toolSource = null
-        McpConnections.closeAll()
+        // Before the entries are cleared below: each session's credentials are read as it is taken
+        // out, and a SQLite debugger entry's token leaves with its entry.
+        val released = McpConnections.detachAll()
         McpToolCatalog.clear()
+        AutomaticServers.install(null)
+        return released
     }
 
     /**
      * Resolves AI Core's tool registry, preferring the process-global registry and falling back to
      * the provider-scoped lookup so a registry cleared by another plugin is not fatal.
-     * @return the registry, or null when AI Core is absent or too old to carry the contract.
+     * @return the registry, or null when AI Core is absent or too old to carry the contract, or
+     *   the lookup failed with an Exception or a LinkageError. Any other Error propagates.
      */
-    private fun resolveToolSourceRegistry(): ToolSourceRegistry? = try {
+    private fun resolveToolSourceRegistry(): ToolSourceRegistry? = runCatchingRecoverable {
         SharedServices.get(ToolSourceRegistry::class.java)
             ?: context.getPluginService(AI_CORE_PLUGIN_ID, ToolSourceRegistry::class.java)
-    } catch (e: Throwable) {
+    }.getOrElse { e ->
         context.logger.warn("McpPlugin: could not resolve the tool registry: ${e.message}")
         null
     }
@@ -404,8 +624,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 MCP (Model Context Protocol) servers give the Agent extra tools, such as
                 access to an issue tracker or a documentation site.<br><br>To use this
                 add-on, you must also install AI Core. Then go to <b>Preferences → MCP
-                servers</b> and add a server. Each tool stays off until you turn it on, and
-                the Agent asks for your approval every time it uses one.
+                servers</b> and add a server. Each tool stays off until you turn it
+                on.<br><br>The one exception is the SQLite debugger entry that CoGo adds
+                for an app you build with the SQLite debugger: four of its read-only tools
+                start on (list databases, get schema, query, and get events). This version
+                doesn't list that entry on the MCP servers screen.<br><br>The Agent asks for
+                your approval every time it uses a tool, including those four.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(

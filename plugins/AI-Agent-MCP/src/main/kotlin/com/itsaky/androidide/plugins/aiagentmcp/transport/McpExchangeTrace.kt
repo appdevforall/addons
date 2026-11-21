@@ -8,6 +8,7 @@ import java.net.HttpURLConnection
  *
  * @param headers the headers as set on the connection, credentials included.
  * @param contentLength the body's size in bytes, as the stack sends it.
+ * @param redactor the request's own, built from the credentials it carries.
  */
 internal class McpExchangeTrace(
     private val method: String,
@@ -15,8 +16,16 @@ internal class McpExchangeTrace(
     private val headers: List<Pair<String, String>>,
     private val payload: String,
     private val contentLength: Int,
-    private val redactor: McpRedactor,
+    redactor: McpRedactor,
 ) {
+
+    /**
+     * What everything passes through: the request's redactor until [answered], and from there one
+     * that also masks the session id the answer assigned. A reply to `initialize` assigns one the
+     * request could not carry, and its body may repeat it.
+     */
+    var redactor: McpRedactor = redactor
+        private set
 
     private var status: String? = null
     private var responseHeaders: List<McpExchange.Header> = emptyList()
@@ -25,6 +34,9 @@ internal class McpExchangeTrace(
     /** Records the status line and headers, which is where the server is first heard from. */
     fun answered(conn: HttpURLConnection) {
         val code = conn.responseCode
+        // Before anything of the answer is kept: its other headers and its body may echo the id.
+        conn.getHeaderField(McpHttpClient.HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
+            ?.let { redactor = redactor.with(it) }
         val fields = conn.headerFields.orEmpty().entries
         status = fields.firstOrNull { it.key == null }?.value?.firstOrNull()
             ?: "HTTP $code ${conn.responseMessage.orEmpty()}".trim()
@@ -40,10 +52,24 @@ internal class McpExchangeTrace(
     }
 
     /**
+     * As [received], for a body kept only in part: [dropped] more characters came after [body]
+     * and were read and thrown away; the record counts them with what its own cap leaves out.
+     *
+     * When anything was dropped, [body] was cut at a fixed length and may end partway through a
+     * credential, which [McpRedactor.scrub] would leave showing; [McpRedactor.scrubCut] masks it.
+     */
+    fun received(body: String, dropped: Long) {
+        val scrubbed = if (dropped > 0) redactor.scrubCut(body) else redactor.scrub(body)
+        val kept = McpExchange.Body.capped(scrubbed)
+        responseBody = kept.copy(omitted = (kept.omitted + dropped).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+    }
+
+    /**
      * The finished record.
      * @param failure what ended the request early, or null when it ran to the end.
+     * @param cancelled whether the request was given up before it went out; see [McpExchange.cancelled].
      */
-    fun toExchange(failure: Throwable?): McpExchange = McpExchange(
+    fun toExchange(failure: Throwable?, cancelled: Boolean = false): McpExchange = McpExchange(
         method = method,
         url = redactor.url(url),
         requestHeaders = headers.map { (name, value) -> redactor.requestHeader(name, value) } +
@@ -54,5 +80,6 @@ internal class McpExchangeTrace(
         responseBody = responseBody,
         // The status line and body already say what an HTTP error was.
         failure = failure?.takeUnless { it is McpHttpException }?.let { redactor.message(it.describe()) },
+        cancelled = cancelled,
     )
 }

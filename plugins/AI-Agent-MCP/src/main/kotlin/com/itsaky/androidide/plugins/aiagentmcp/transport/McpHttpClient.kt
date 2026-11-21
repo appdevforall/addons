@@ -1,9 +1,11 @@
 package com.itsaky.androidide.plugins.aiagentmcp.transport
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aiagentmcp.errors.runCatchingRecoverable
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONObject
@@ -24,10 +26,12 @@ private const val TAG = "$LOG_PREFIX.McpHttpClient"
  *
  * @param connectTimeoutMs how long to wait for the connection itself.
  * @param readTimeoutMs how long a call may take to answer.
+ * @param drainDeadlineMs how long reading a 202 body may take in all; see [drain].
  */
 open class McpHttpClient(
     private val connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,
     private val readTimeoutMs: Int = READ_TIMEOUT_MS,
+    private val drainDeadlineMs: Long = DRAIN_DEADLINE_MS,
 ) {
 
     companion object {
@@ -46,7 +50,107 @@ open class McpHttpClient(
 
         /** Same-origin redirects followed before giving up, so a redirect loop cannot spin. */
         private const val MAX_REDIRECTS = 5
+
+        /**
+         * Characters of a drained body kept for the connection log: twice what the log shows, so
+         * a credential the redactor has to find is whole even where the log's own cut falls. The
+         * drain's own cut, at this length, can fall inside one; the trace masks what was kept of
+         * it with [McpRedactor.scrubCut], so the log never shows the start of a credential.
+         */
+        internal const val DRAINED_CHARS_KEPT = 2 * McpExchange.Body.MAX_CHARS
+
+        /**
+         * Characters of a 202 body read and thrown away, past the ones kept, before the drain gives
+         * up on it: about 1 MiB of ASCII. Far more than any server sends by mistake, and little
+         * enough that a body which never ends costs a moment rather than the call.
+         */
+        internal const val DRAIN_BUDGET_CHARS = 1L shl 20
+
+        /**
+         * How long the drain of a 202 body may take in all, whatever the read timeout: far longer
+         * than a server needs to send a body it should not have sent, short enough that one which
+         * dribbles it cannot hold `initialize` for long.
+         */
+        internal const val DRAIN_DEADLINE_MS = 10_000L
+
+        /**
+         * Reads a body to its end through a fixed buffer, keeping only its first [keep] characters.
+         *
+         * For a 202, which should carry no body: one left unread keeps the socket out of the pool,
+         * and a server that sends a huge one must not cost Code on the Go, whose process this
+         * plugin runs in, its memory. Nor its time: a body that runs on past [budget] dropped
+         * characters is abandoned as a failure. A server streaming one forever would otherwise hold
+         * the read, and with it `initialize`, which is synchronized, and every health check behind
+         * it. A read that fails with an Exception or a LinkageError is returned as a failure too.
+         * The caller survives either by not reusing the socket; any other Error, an OutOfMemoryError
+         * above all, propagates.
+         *
+         * The budget bounds how much is read; [deadlineMs] bounds how long it takes. The clock is
+         * checked between reads, so a server that sends a byte just under every read timeout, which
+         * never trips that timeout, is abandoned at the deadline like one past the budget. The worst
+         * case is [deadlineMs] plus one read timeout: a read already blocked when the deadline
+         * passes ends only at its own timeout.
+         *
+         * Only a 202 is bounded this way. A JSON reply and an error body are read whole, with
+         * `readText()`: each is the document the caller needs.
+         *
+         * What is kept is cut at [keep] characters wherever that falls, inside a credential the
+         * server echoed too; [McpExchangeTrace.received] masks the end of a cut body for that.
+         *
+         * @param keep how many characters to keep.
+         * @param budget how many characters past [keep] may be read and dropped before the body is
+         *   abandoned.
+         * @param deadlineMs how long the whole drain may take before the body is abandoned.
+         * @param nowMs the clock, in milliseconds from any fixed point; injectable so a test needs
+         *   no real waiting.
+         * @param open opens the body; called inside the guard, since opening it can fail too.
+         * @return what was kept and how much was dropped, or the failure: a recoverable read
+         *   failure, or a [DrainBudgetException] for a body that ran past [budget] or [deadlineMs].
+         */
+        internal fun drain(
+            keep: Int = DRAINED_CHARS_KEPT,
+            budget: Long = DRAIN_BUDGET_CHARS,
+            deadlineMs: Long = DRAIN_DEADLINE_MS,
+            nowMs: () -> Long = { System.nanoTime() / 1_000_000 },
+            open: () -> InputStream,
+        ): Result<Drained> =
+            runCatchingRecoverable {
+                val started = nowMs()
+                open().reader(Charsets.UTF_8).use { reader ->
+                    val kept = StringBuilder()
+                    val buffer = CharArray(8 * 1024)
+                    var dropped = 0L
+                    while (true) {
+                        val read = reader.read(buffer)
+                        if (read < 0) break
+                        val room = (keep - kept.length).coerceIn(0, read)
+                        kept.append(buffer, 0, room)
+                        dropped += read - room
+                        if (dropped > budget) {
+                            throw DrainBudgetException(
+                                "A 202 body ran past ${kept.length + budget} characters; abandoned it"
+                            )
+                        }
+                        if (nowMs() - started > deadlineMs) {
+                            throw DrainBudgetException(
+                                "A 202 body took more than $deadlineMs ms to read; abandoned it"
+                            )
+                        }
+                    }
+                    Drained(kept.toString(), dropped)
+                }
+            }
     }
+
+    /**
+     * What [drain] read.
+     * @property text the body's first characters.
+     * @property dropped how many characters came after [text] and were read and thrown away.
+     */
+    internal class Drained(val text: String, val dropped: Long)
+
+    /** A 202 body that ran past [DRAIN_BUDGET_CHARS] or [DRAIN_DEADLINE_MS]; its socket is disconnected, not reused. */
+    internal class DrainBudgetException(message: String) : IOException(message)
 
     /**
      * One answer to a POST.
@@ -64,8 +168,17 @@ open class McpHttpClient(
      * @param body the JSON-RPC envelope to send.
      * @param sessionId the session to continue, or null before one exists.
      * @param protocolVersion the negotiated revision, or null before `initialize` has answered.
-     * @param onConnected receives the live connection, so a caller can disconnect it to cancel.
+     * @param onConnected receives each request's connection, redirect hops included, before it is
+     *   connected, so a caller can disconnect it to cancel.
+     * @param beforeSend runs once that connection is connected, before anything is written to it,
+     *   and again once the body is written, before the answer is asked for; what it throws ends
+     *   the request unsent. A `disconnect()` before the connection exists does nothing, so a cancel
+     *   landing just after [onConnected] is caught here or not at all. Without a streaming mode the
+     *   write only fills a buffer and the request goes out when the answer is first read, so the
+     *   second run catches a cancel that landed during the write. A request it ends is recorded
+     *   as cancelled, never as sent ([McpExchange.cancelled]).
      * @param exchangeListener receives each request made and what came back, redirects included.
+     *   An Exception or a LinkageError it throws is dropped; any other Error propagates.
      * @return the reply document and any session id the server sent.
      * @throws McpHttpException on a non-2xx answer, carrying the server's error body.
      */
@@ -77,6 +190,7 @@ open class McpHttpClient(
         protocolVersion: String? = null,
         extraHeaders: Map<String, String> = emptyMap(),
         onConnected: (HttpURLConnection) -> Unit = {},
+        beforeSend: () -> Unit = {},
         exchangeListener: McpExchangeListener = McpExchangeListener.NONE,
     ): Response {
         val payload = body.toString()
@@ -102,8 +216,25 @@ open class McpHttpClient(
             // tools/list page, each tools/call — pay a fresh TCP and TLS handshake.
             var reusable = false
             var failure: Throwable? = null
+            // Set when beforeSend ends the request: nothing went out, and its record must not say so.
+            var cancelled = false
+            fun checkBeforeSend() = try {
+                beforeSend()
+            } catch (e: Throwable) {
+                cancelled = true
+                throw e
+            }
             val redirect = try {
+                // Connected here rather than by the first write, so beforeSend runs in between: a
+                // cancel whose disconnect came before the connection existed dropped nothing, and the
+                // write would connect and send the request regardless.
+                conn.connect()
+                checkBeforeSend()
                 conn.outputStream.use { it.write(bytes) }
+                // Again: the write only filled a buffer, and the request goes out at the first read
+                // of the answer, just below. A cancel that landed meanwhile disconnected a connection
+                // the JDK connects again at that read, sending the request after all.
+                checkBeforeSend()
                 trace.answered(conn)
                 val next = conn.redirectTargetFrom(target)
                 if (next == null) {
@@ -115,8 +246,11 @@ open class McpHttpClient(
                     // than ignored, since a body left unread keeps the socket out of the pool.
                     if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
                         // A half-read body is neither pooled nor closed, so only a whole drain counts.
-                        val drained = runCatching { conn.inputStream.use { it.readBytes() } }
-                        drained.getOrNull()?.let { trace.received(String(it, Charsets.UTF_8)) }
+                        val drained = drain(deadlineMs = drainDeadlineMs) { conn.inputStream }
+                        drained.getOrNull()?.let { trace.received(it.text, it.dropped) }
+                        drained.exceptionOrNull()?.let { e ->
+                            Log.w(TAG, "Not reusing the connection after its 202 body: ${e.message}")
+                        }
                         reusable = drained.isSuccess
                         return Response(null, assignedSession)
                     }
@@ -141,7 +275,13 @@ open class McpHttpClient(
                 throw e
             } finally {
                 if (!reusable) conn.disconnect()
-                runCatching { exchangeListener.onExchange(trace.toExchange(failure), redactor) }
+                // The connection log is a convenience: a listener failing with an Exception or a
+                // LinkageError costs only its record. Any other Error, an OutOfMemoryError above
+                // all, is the process failing and propagates.
+                // The trace's redactor, which masks a session id this answer assigned as well.
+                runCatchingRecoverable {
+                    exchangeListener.onExchange(trace.toExchange(failure, cancelled), trace.redactor)
+                }
             }
 
             if (++hops > MAX_REDIRECTS) {

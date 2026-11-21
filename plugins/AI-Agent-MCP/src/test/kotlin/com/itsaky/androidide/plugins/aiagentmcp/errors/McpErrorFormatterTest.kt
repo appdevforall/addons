@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCleartextException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCredential
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
@@ -123,7 +124,8 @@ class McpErrorFormatterTest {
 
     @Test
     fun givenNoPluginContext_whenFormatted_thenTheUserStillGetsASentence() {
-        val message = McpErrorFormatter.format(null, "Docs", IOException("socket closed"))
+        val server = McpServer(id = "docs", name = "Docs", url = "https://docs.example/mcp")
+        val message = McpErrorFormatter.format(null, server, IOException("socket closed"))
 
         assertTrue(message.contains("Docs"))
         assertTrue(message.contains("socket closed"))
