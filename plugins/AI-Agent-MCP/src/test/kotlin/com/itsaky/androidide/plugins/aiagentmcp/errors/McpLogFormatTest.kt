@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentmcp.errors
 
+import com.itsaky.androidide.plugins.aiagentmcp.transport.JsonDepth
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -107,13 +108,13 @@ class McpLogFormatTest {
 
     @Test
     fun givenNestingAtTheLimit_whenFormatted_thenItIsIndented() {
-        val depth = McpLogFormat.MAX_JSON_DEPTH
+        val depth = JsonDepth.MAX
         assertNotNull(McpLogFormat.json("[".repeat(depth) + "]".repeat(depth)))
     }
 
     @Test
     fun givenNestingOneLevelPastTheLimit_whenFormatted_thenItIsShownAsItCame() {
-        val depth = McpLogFormat.MAX_JSON_DEPTH + 1
+        val depth = JsonDepth.MAX + 1
         val body = "{\"a\":" + "[".repeat(depth - 1) + "]".repeat(depth - 1) + "}"
 
         assertNull(McpLogFormat.json(body))
@@ -127,18 +128,6 @@ class McpLogFormatTest {
         val body = """{"a":"$brackets","b":"\"$brackets\\","c":['$brackets']}"""
 
         assertNotNull("brackets inside strings were counted", McpLogFormat.json(body))
-    }
-
-    @Test
-    fun givenADoubleQuoteInsideASingleQuotedString_whenScanned_thenTheBracketsAfterItCount() {
-        // org.json reads '"' as a one-character string, then recurses into the brackets after it.
-        assertTrue(McpLogFormat.nestsDeeperThan("['\"',${"[".repeat(200)}", 100))
-    }
-
-    @Test
-    fun givenAQuoteWhereNoValueStarts_whenScanned_thenTheBracketsAfterItCount() {
-        // Android's org.json skips the comment, so no string starts at its quote.
-        assertTrue(McpLogFormat.nestsDeeperThan("[/*\"*/${"[".repeat(200)}", 100))
     }
 
     /** Descends once per opening bracket at the start of [text], as a recursive-descent parser does. */
