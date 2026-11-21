@@ -75,6 +75,7 @@ object AgentPromptConfigParser : PromptConfigParser<AgentPromptConfig> {
                         afterFailure = text("after_failure"),
                         unfinished = text("unfinished"),
                         unappliedWrite = text("unapplied_write"),
+                        repeatedAfterSuccess = text("repeated_after_success"),
                         requiredTool = text("required_tool"),
                     )
                 },

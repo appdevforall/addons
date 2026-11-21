@@ -42,6 +42,9 @@ internal class AgentRunReporter(
 
         /** The model kept circling actions it had already taken. */
         suspend fun noProgress()
+
+        /** The run ended because the model repeated a step that had worked, and answered nothing. */
+        suspend fun repeatedStep()
     }
 
     override suspend fun onTurnStarted(turn: Int, maxTurns: Int) {
@@ -79,6 +82,11 @@ internal class AgentRunReporter(
 
     override suspend fun onRepeatAfterSuccess(turn: Int) {
         AgentTrace.stage("LOOP", "turn=$turn assumed-complete=repeat-after-success")
+        notices.repeatedStep()
+    }
+
+    override suspend fun onRepeatAfterSuccessRetry(turn: Int) {
+        AgentTrace.stage("LOOP", "turn=$turn asked-to-answer=repeat-after-success")
     }
 
     // No notice: AgentReplyRenderer already puts this same advice in the turn's own bubble.

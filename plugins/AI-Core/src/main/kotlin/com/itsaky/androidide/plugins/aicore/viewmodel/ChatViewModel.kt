@@ -227,6 +227,7 @@ class ChatViewModel(
         formatToolResults = toolResultsPrompt,
         terminalTool = RESPOND_TOOL,
         unfinishedTurn = toolResultsPrompt::unfinished,
+        repeatedAfterSuccessTurn = toolResultsPrompt::repeatedAfterSuccess,
         requiredToolTurn = toolResultsPrompt::requiredTool,
         unappliedWriteTurn = toolResultsPrompt::unappliedWrite,
     )
@@ -2065,6 +2066,9 @@ class ChatViewModel(
 
         override suspend fun noProgress() =
             addSystemMessage(str(R.string.agent_no_progress), MessageStatus.SENT)
+
+        override suspend fun repeatedStep() =
+            addSystemMessage(str(R.string.agent_repeated_step), MessageStatus.SENT)
     }
 
     /** Whether the user message [messageId] is shown unfolded. Main only. */
