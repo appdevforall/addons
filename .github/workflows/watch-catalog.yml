@@ -55,12 +55,18 @@ jobs:
       - name: Check out the snapshot branch
         run: |
           set -euo pipefail
-          if git fetch --depth=1 origin "$STATE_BRANCH"; then
-            git worktree add -B "$STATE_BRANCH" state FETCH_HEAD
-          else
-            echo "No $STATE_BRANCH yet; this run saves the baseline."
-            git worktree add --orphan -b "$STATE_BRANCH" state
-          fi
+          # Only "absent" (exit 2) means a first run. Any other failure must
+          # fail the run, or a network blip would silently reset the baseline.
+          status=0
+          git ls-remote --exit-code --heads origin "$STATE_BRANCH" > /dev/null || status=$?
+          case "$status" in
+            0) git fetch --depth=1 origin "$STATE_BRANCH"
+               git worktree add -B "$STATE_BRANCH" state FETCH_HEAD ;;
+            2) echo "No $STATE_BRANCH yet; this run saves the baseline."
+               git worktree add --orphan -b "$STATE_BRANCH" state ;;
+            *) echo "::error::Could not look up $STATE_BRANCH (git exit $status)."
+               exit 1 ;;
+          esac
 
       - uses: astral-sh/setup-uv@v5
 
