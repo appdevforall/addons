@@ -83,4 +83,18 @@ class JsonDepthTest {
         // Android's org.json skips the comment, so no string starts at its quote.
         assertEquals(Refusal.NotStrict('/'), JsonDepth.refusal("[/*\"*/${"[".repeat(200)}", 100))
     }
+
+    @Test
+    fun `a single quote is named in words and every other character is shown in quotes`() {
+        assertEquals(
+            "a single quote",
+            Refusal.NotStrict('\'').reason.substringAfter("string (found ").removeSuffix(")"),
+        )
+        listOf('/', ';', '=', '#', '"').forEach { c ->
+            assertEquals(
+                "'$c'",
+                Refusal.NotStrict(c).reason.substringAfter("string (found ").removeSuffix(")"),
+            )
+        }
+    }
 }

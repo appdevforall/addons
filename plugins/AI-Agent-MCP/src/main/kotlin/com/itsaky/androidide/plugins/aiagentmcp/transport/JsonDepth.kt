@@ -29,13 +29,19 @@ internal object JsonDepth {
             override val reason: String get() = "nests arrays and objects more than $limit levels deep"
         }
 
-        /** [found] outside a string, where strict JSON never has it. */
+        /**
+         * [found] outside a string, where strict JSON never has it. A single quote is named in
+         * words, since three in a row read as noise; every other character is shown in quotes.
+         */
         data class NotStrict(val found: Char) : Refusal {
             override val reason: String
                 get() = "is not strict JSON: a comment, single quote, ';', '=' or stray '\"' outside " +
-                    "a string (found '$found')"
+                    "a string (found ${describe(found)})"
         }
     }
+
+    /** [c] as a reason shows it: in single quotes, or in words for a single quote itself. */
+    private fun describe(c: Char): String = if (c == '\'') "a single quote" else "'$c'"
 
     /**
      * Why [text] may not be parsed: it opens more than [limit] arrays or objects one inside
