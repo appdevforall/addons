@@ -27,6 +27,7 @@ class ReadOnlyHintParsingTest {
                 protocolVersion: String?,
                 extraHeaders: Map<String, String>,
                 onConnected: (HttpURLConnection) -> Unit,
+                beforeSend: () -> Unit,
                 exchangeListener: McpExchangeListener,
             ): Response {
                 val result = when (body.optString("method")) {

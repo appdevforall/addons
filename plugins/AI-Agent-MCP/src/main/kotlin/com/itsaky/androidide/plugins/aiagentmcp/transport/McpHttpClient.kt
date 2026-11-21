@@ -168,7 +168,11 @@ open class McpHttpClient(
      * @param body the JSON-RPC envelope to send.
      * @param sessionId the session to continue, or null before one exists.
      * @param protocolVersion the negotiated revision, or null before `initialize` has answered.
-     * @param onConnected receives the live connection, so a caller can disconnect it to cancel.
+     * @param onConnected receives each request's connection, redirect hops included, before it is
+     *   connected, so a caller can disconnect it to cancel.
+     * @param beforeSend runs once that connection is connected and before anything is written to
+     *   it; what it throws ends the request unsent. A `disconnect()` before the connection exists
+     *   does nothing, so a cancel landing just after [onConnected] is caught here or not at all.
      * @param exchangeListener receives each request made and what came back, redirects included.
      *   An Exception or a LinkageError it throws is dropped; any other Error propagates.
      * @return the reply document and any session id the server sent.
@@ -182,6 +186,7 @@ open class McpHttpClient(
         protocolVersion: String? = null,
         extraHeaders: Map<String, String> = emptyMap(),
         onConnected: (HttpURLConnection) -> Unit = {},
+        beforeSend: () -> Unit = {},
         exchangeListener: McpExchangeListener = McpExchangeListener.NONE,
     ): Response {
         val payload = body.toString()
@@ -208,6 +213,11 @@ open class McpHttpClient(
             var reusable = false
             var failure: Throwable? = null
             val redirect = try {
+                // Connected here rather than by the first write, so beforeSend runs in between: a
+                // cancel whose disconnect came before the connection existed dropped nothing, and the
+                // write would connect and send the request regardless.
+                conn.connect()
+                beforeSend()
                 conn.outputStream.use { it.write(bytes) }
                 trace.answered(conn)
                 val next = conn.redirectTargetFrom(target)

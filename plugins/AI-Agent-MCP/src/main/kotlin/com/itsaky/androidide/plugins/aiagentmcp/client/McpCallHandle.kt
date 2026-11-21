@@ -21,9 +21,17 @@ private const val TAG = "$LOG_PREFIX.McpCallHandle"
  * The handshake, the same one the tool worker uses with its flag: a request publishes its
  * connection and then reads the flag ([attach]); [cancel] sets the flag and then takes the
  * connection. Both sides are volatile, so however the two interleave, one sees the other: either
- * the request finds the flag before it sends anything, or the cancel finds the connection and
- * drops it. A cancel that lands before the request has a connection at all, while it reads its
- * credentials from the Keystore for instance, is caught by the first.
+ * the request finds the flag, or the cancel finds the connection. A cancel that lands before the
+ * request has a connection at all, while it reads its credentials from the Keystore for instance,
+ * is caught by the first.
+ *
+ * Finding the connection is not enough on its own: [attach] runs before the connection is
+ * connected, and a `disconnect()` then does nothing (Android's and the JDK's both return early with
+ * no connection to drop), so the first write would connect and send the request anyway. The
+ * request reads the flag a second time once its connection is up, before it writes anything
+ * ([throwIfCancelled]); a cancel between the two reads is caught there. One after the second read
+ * disconnects a connection that is up: Android then fails the write rather than sending it. (The
+ * JDK, which only the tests run on, reconnects instead.)
  */
 class McpCallHandle {
 
@@ -51,7 +59,7 @@ class McpCallHandle {
     /**
      * Publishes [conn] as the connection this call's current request uses, then reads the flag.
      *
-     * Called before anything is written to [conn], so a cancelled call sends nothing.
+     * Called before [conn] is connected; [throwIfCancelled] reads the flag again once it is.
      *
      * @param conn the request's connection, opened but not yet connected.
      * @throws InterruptedIOException when the call was cancelled, which is how a dropped connection
@@ -63,6 +71,17 @@ class McpCallHandle {
             connection.compareAndSet(conn, null)
             throw InterruptedIOException("The tool call was cancelled before its request was sent")
         }
+    }
+
+    /**
+     * Reads the flag again, once the request's connection is connected and before anything is
+     * written to it: a cancel that landed after [attach] read the flag disconnected a connection
+     * that was not connected yet, which does nothing.
+     *
+     * @throws InterruptedIOException when the call was cancelled.
+     */
+    internal fun throwIfCancelled() {
+        if (cancelled) throw InterruptedIOException("The tool call was cancelled before its request was sent")
     }
 
     /**

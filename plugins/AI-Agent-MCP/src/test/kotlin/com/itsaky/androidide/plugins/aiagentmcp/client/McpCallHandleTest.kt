@@ -4,6 +4,7 @@ import java.io.InterruptedIOException
 import java.net.HttpURLConnection
 import java.net.URL
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -48,6 +49,26 @@ class McpCallHandleTest {
 
         assertEquals(1, conn.disconnects)
         assertTrue(handle.isCancelled)
+    }
+
+    @Test
+    fun `a cancel after the request attached is caught before it sends anything`() {
+        val handle = McpCallHandle()
+        handle.attach(FakeConnection())
+
+        handle.cancel()
+
+        assertThrows(InterruptedIOException::class.java) { handle.throwIfCancelled() }
+    }
+
+    @Test
+    fun `a request not cancelled goes ahead`() {
+        val handle = McpCallHandle()
+        handle.attach(FakeConnection())
+
+        handle.throwIfCancelled()
+
+        assertFalse(handle.isCancelled)
     }
 
     @Test

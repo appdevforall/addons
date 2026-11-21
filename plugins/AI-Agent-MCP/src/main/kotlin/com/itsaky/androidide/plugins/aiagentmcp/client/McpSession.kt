@@ -311,7 +311,8 @@ class McpSession(
      *
      * @param handle the calling tool call's: its connection is published there before anything is
      *   sent, and the request is refused if the call was cancelled meanwhile, while the credentials
-     *   were read for instance. Null for a listing, which no call's cancel reaches.
+     *   were read for instance, or after that, before the connection was connected. Null for a
+     *   listing, which no call's cancel reaches.
      */
     private fun send(envelope: JSONObject, handle: McpCallHandle? = null): McpHttpClient.Response {
         // Read here rather than held on the session, so the plaintext lives for one request.
@@ -327,6 +328,7 @@ class McpSession(
                 protocolVersion = negotiatedVersion,
                 extraHeaders = current.headers,
                 onConnected = { conn -> handle?.attach(conn) },
+                beforeSend = { handle?.throwIfCancelled() },
                 exchangeListener = recorder.get() ?: McpExchangeListener.NONE,
             )
         } finally {
