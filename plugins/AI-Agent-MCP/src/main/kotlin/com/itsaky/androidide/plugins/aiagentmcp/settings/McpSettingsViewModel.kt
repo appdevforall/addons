@@ -188,6 +188,9 @@ class McpSettingsViewModel(
      * while the URL changes forgets the old value in that step (or keeps the old URL, when
      * forgetting fails too), so the new URL is never sent the old credential.
      *
+     * The session is ended even when the save throws: it is out of the map by then, so nothing else
+     * would end it. The exception then propagates, and the health row is left as it was.
+     *
      * @return the merged record and a status sentence, null when everything worked.
      */
     internal fun saveNow(
@@ -196,8 +199,13 @@ class McpSettingsViewModel(
         headers: Map<String, String>?,
     ): Pair<McpServer, String?> {
         val released = McpConnections.detach(server.id)
-        val saved = McpServerStore.saveConnection(server, token?.trim(), headers)
-        released?.close()
+        val saved = try {
+            McpServerStore.saveConnection(server, token?.trim(), headers)
+        } finally {
+            // Also when the save throws: the session is out of the map, so nothing else would end
+            // it, and it would stay open on the server.
+            released?.close()
+        }
         McpServerHealth.credentialChanged(server.id)
         val failure = when {
             !saved.tokenStored -> string(R.string.mcp_token_save_failed)
@@ -227,14 +235,19 @@ class McpSettingsViewModel(
     /**
      * [clearCredential]'s blocking part, off the main thread. The session was keyed by the
      * credential it no longer has, so it is ended, in [saveNow]'s order: taken out with the
-     * credentials it had, so its DELETE carries them, ended once they are cleared.
+     * credentials it had, so its DELETE carries them, ended once they are cleared, or once clearing
+     * throws.
      *
      * @return true when nothing is stored any more.
      */
     internal fun clearCredentialNow(id: String): Boolean {
         val released = McpConnections.detach(id)
-        val cleared = McpServerStore.clearCredentials(id)
-        released?.close()
+        val cleared = try {
+            McpServerStore.clearCredentials(id)
+        } finally {
+            // Also when clearing throws, as in [saveNow]: the session is already out of the map.
+            released?.close()
+        }
         McpServerHealth.credentialChanged(id)
         return cleared
     }

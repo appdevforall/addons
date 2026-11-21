@@ -135,5 +135,35 @@ class SaveServerSessionTest {
         assertTrue("the session's DELETE did not carry its headers", "x-old" in delete.headerNames)
     }
 
+    @Test
+    fun `a save that throws still ends the detached session with the old credentials`() {
+        val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
+        McpConnections.withSession(saved) { it.initialize() }
+        every { McpServerStore.saveConnection(any(), any(), any()) } throws IllegalStateException("disk full")
+
+        val thrown = runCatching {
+            McpSettingsViewModel { null }.saveNow(saved.copy(url = url(moved)), "new-token", mapOf("X-New" to "1"))
+        }.exceptionOrNull()
+
+        assertTrue("the save's failure was swallowed", thrown is IllegalStateException)
+        val delete = old.requests.singleOrNull { it.httpMethod == "DELETE" }
+        assertTrue("the detached session was left open on the server", delete != null)
+        assertEquals("the DELETE did not carry the old token", "Bearer old-token", delete!!.authorization)
+    }
+
+    @Test
+    fun `clearing that throws still ends the detached session with the old credentials`() {
+        val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
+        McpConnections.withSession(saved) { it.initialize() }
+        every { McpServerStore.clearCredentials(any()) } throws IllegalStateException("disk full")
+
+        val thrown = runCatching { McpSettingsViewModel { null }.clearCredentialNow(saved.id) }.exceptionOrNull()
+
+        assertTrue("the clear's failure was swallowed", thrown is IllegalStateException)
+        val delete = old.requests.singleOrNull { it.httpMethod == "DELETE" }
+        assertTrue("the detached session was left open on the server", delete != null)
+        assertEquals("the DELETE did not carry the old token", "Bearer old-token", delete!!.authorization)
+    }
+
     private fun url(server: FakeMcpServer) = "http://127.0.0.1:${server.port}/mcp"
 }
