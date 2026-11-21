@@ -67,8 +67,9 @@ internal class McpExchangeTrace(
     /**
      * The finished record.
      * @param failure what ended the request early, or null when it ran to the end.
+     * @param cancelled whether the request was given up before it went out; see [McpExchange.cancelled].
      */
-    fun toExchange(failure: Throwable?): McpExchange = McpExchange(
+    fun toExchange(failure: Throwable?, cancelled: Boolean = false): McpExchange = McpExchange(
         method = method,
         url = redactor.url(url),
         requestHeaders = headers.map { (name, value) -> redactor.requestHeader(name, value) } +
@@ -79,5 +80,6 @@ internal class McpExchangeTrace(
         responseBody = responseBody,
         // The status line and body already say what an HTTP error was.
         failure = failure?.takeUnless { it is McpHttpException }?.let { redactor.message(it.describe()) },
+        cancelled = cancelled,
     )
 }

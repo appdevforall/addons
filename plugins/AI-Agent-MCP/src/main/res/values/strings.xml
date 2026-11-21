@@ -103,7 +103,9 @@
     <string name="mcp_log_headers">Headers</string>
     <string name="mcp_log_body">Body</string>
     <string name="mcp_log_no_response">No response</string>
+    <string name="mcp_log_cancelled">Cancelled</string>
     <string name="mcp_transcript_nothing_sent">Nothing was sent: the request failed before it reached the server.</string>
+    <string name="mcp_transcript_cancelled">Cancelled before it was sent: nothing of it reached the server.</string>
 
     <!-- Extra request headers -->
     <string name="mcp_headers_header">Extra headers</string>

@@ -16,6 +16,8 @@ class McpTranscriptStrings(private val context: Context?) : McpTranscript.Labels
 
     override val nothingSent: String get() = string(R.string.mcp_transcript_nothing_sent)
 
+    override val cancelled: String get() = string(R.string.mcp_transcript_cancelled)
+
     private fun string(resId: Int, vararg args: Any): String =
         context?.getString(resId, *args).orEmpty()
 }

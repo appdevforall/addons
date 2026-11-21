@@ -175,7 +175,8 @@ open class McpHttpClient(
      *   the request unsent. A `disconnect()` before the connection exists does nothing, so a cancel
      *   landing just after [onConnected] is caught here or not at all. Without a streaming mode the
      *   write only fills a buffer and the request goes out when the answer is first read, so the
-     *   second run catches a cancel that landed during the write.
+     *   second run catches a cancel that landed during the write. A request it ends is recorded
+     *   as cancelled, never as sent ([McpExchange.cancelled]).
      * @param exchangeListener receives each request made and what came back, redirects included.
      *   An Exception or a LinkageError it throws is dropped; any other Error propagates.
      * @return the reply document and any session id the server sent.
@@ -215,17 +216,25 @@ open class McpHttpClient(
             // tools/list page, each tools/call — pay a fresh TCP and TLS handshake.
             var reusable = false
             var failure: Throwable? = null
+            // Set when beforeSend ends the request: nothing went out, and its record must not say so.
+            var cancelled = false
+            fun checkBeforeSend() = try {
+                beforeSend()
+            } catch (e: Throwable) {
+                cancelled = true
+                throw e
+            }
             val redirect = try {
                 // Connected here rather than by the first write, so beforeSend runs in between: a
                 // cancel whose disconnect came before the connection existed dropped nothing, and the
                 // write would connect and send the request regardless.
                 conn.connect()
-                beforeSend()
+                checkBeforeSend()
                 conn.outputStream.use { it.write(bytes) }
                 // Again: the write only filled a buffer, and the request goes out at the first read
                 // of the answer, just below. A cancel that landed meanwhile disconnected a connection
                 // the JDK connects again at that read, sending the request after all.
-                beforeSend()
+                checkBeforeSend()
                 trace.answered(conn)
                 val next = conn.redirectTargetFrom(target)
                 if (next == null) {
@@ -270,7 +279,9 @@ open class McpHttpClient(
                 // LinkageError costs only its record. Any other Error, an OutOfMemoryError above
                 // all, is the process failing and propagates.
                 // The trace's redactor, which masks a session id this answer assigned as well.
-                runCatchingRecoverable { exchangeListener.onExchange(trace.toExchange(failure), trace.redactor) }
+                runCatchingRecoverable {
+                    exchangeListener.onExchange(trace.toExchange(failure, cancelled), trace.redactor)
+                }
             }
 
             if (++hops > MAX_REDIRECTS) {
