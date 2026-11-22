@@ -40,6 +40,14 @@ class ConcurrentLifecycleTest {
     /** What the registry holds now. */
     private val registered = CopyOnWriteArrayList<ToolSourceRegistry.ToolSource>()
 
+    /** Every source ever registered and every one unregistered, in order, so a test can tell
+     * that the registration happened and that the deactivation undid that very source. */
+    private val registrations = CopyOnWriteArrayList<ToolSourceRegistry.ToolSource>()
+    private val unregistrations = CopyOnWriteArrayList<ToolSourceRegistry.ToolSource>()
+
+    /** What the worker threads threw, which a thread would otherwise only print. */
+    private val failures = CopyOnWriteArrayList<Throwable>()
+
     private val registering = CountDownLatch(1)
     private val releaseRegistration = CountDownLatch(1)
 
@@ -52,10 +60,12 @@ class ConcurrentLifecycleTest {
         override fun registerToolSource(source: ToolSourceRegistry.ToolSource) {
             registering.countDown()
             assertTrue("the test never released the registration", releaseRegistration.await(10, TimeUnit.SECONDS))
+            registrations += source
             registered += source
         }
 
         override fun unregisterToolSource(source: ToolSourceRegistry.ToolSource) {
+            unregistrations += source
             registered.removeAll { it === source }
         }
     }
@@ -84,9 +94,9 @@ class ConcurrentLifecycleTest {
     fun `a deactivate that arrives while activate registers the tool source leaves none registered`() {
         SharedServices.register(ToolSourceRegistry::class.java, registry)
 
-        val activating = thread(name = "activating") { plugin.activate() }
+        val activating = worker("activating") { plugin.activate() }
         assertTrue("activate never registered the tool source", registering.await(10, TimeUnit.SECONDS))
-        val deactivating = thread(name = "deactivating") { plugin.deactivate() }
+        val deactivating = worker("deactivating") { plugin.deactivate() }
         awaitFinishedOrBlockedBy(deactivating, activating)
         releaseRegistration.countDown()
         activating.join(10_000)
@@ -95,6 +105,10 @@ class ConcurrentLifecycleTest {
         assertFalse("activate never finished", activating.isAlive)
         assertFalse("deactivate never finished", deactivating.isAlive)
         assertEquals("a tool source is still registered after the deactivate", 0, registered.size)
+        assertEquals("a worker failed: $failures", emptyList<Throwable>(), failures.toList())
+        assertEquals("the tool source was not registered exactly once", 1, registrations.size)
+        assertEquals("the deactivation did not unregister the registered source", 1, unregistrations.size)
+        assertTrue("the unregistered source is not the registered one", unregistrations.single() === registrations.single())
     }
 
     @Test
@@ -104,11 +118,11 @@ class ConcurrentLifecycleTest {
         assertEquals(0, registered.size)
         SharedServices.register(ToolSourceRegistry::class.java, registry)
 
-        val registeringThread = thread(name = "ai-core-activated") {
+        val registeringThread = worker("ai-core-activated") {
             lifecycleListener.captured.onPluginActivated(AI_CORE_PLUGIN_ID)
         }
         assertTrue("the listener never registered the tool source", registering.await(10, TimeUnit.SECONDS))
-        val deactivating = thread(name = "deactivating") { plugin.deactivate() }
+        val deactivating = worker("deactivating") { plugin.deactivate() }
         awaitFinishedOrBlockedBy(deactivating, registeringThread)
         releaseRegistration.countDown()
         registeringThread.join(10_000)
@@ -117,6 +131,19 @@ class ConcurrentLifecycleTest {
         assertFalse("the registration never finished", registeringThread.isAlive)
         assertFalse("deactivate never finished", deactivating.isAlive)
         assertEquals("a tool source is still registered after the deactivate", 0, registered.size)
+        assertEquals("a worker failed: $failures", emptyList<Throwable>(), failures.toList())
+        assertEquals("the tool source was not registered exactly once", 1, registrations.size)
+        assertEquals("the deactivation did not unregister the registered source", 1, unregistrations.size)
+        assertTrue("the unregistered source is not the registered one", unregistrations.single() === registrations.single())
+    }
+
+    /** A thread running [block] that records what it throws in [failures]. */
+    private fun worker(name: String, block: () -> Unit): Thread = thread(name = name) {
+        try {
+            block()
+        } catch (e: Throwable) {
+            failures += e
+        }
     }
 
     private companion object {
