@@ -5,12 +5,58 @@ import org.appdevforall.composepreview.domain.model.ParsedPreviewSource
 import org.slf4j.LoggerFactory
 import kotlin.math.roundToInt
 
+internal fun blankComments(source: String): String {
+    val out = StringBuilder(source)
+    var i = 0
+    fun blank(from: Int, end: Int) {
+        for (k in from until end) if (out[k] != '\n') out[k] = ' '
+    }
+    while (i < source.length) {
+        when {
+            source.startsWith("//", i) -> {
+                val end = source.indexOf('\n', i).let { if (it < 0) source.length else it }
+                blank(i, end)
+                i = end
+            }
+            source.startsWith("/*", i) -> {
+                var depth = 1
+                var j = i + 2
+                while (j < source.length && depth > 0) {
+                    when {
+                        source.startsWith("/*", j) -> { depth++; j += 2 }
+                        source.startsWith("*/", j) -> { depth--; j += 2 }
+                        else -> j++
+                    }
+                }
+                blank(i, j)
+                i = j
+            }
+            source.startsWith("\"\"\"", i) -> {
+                val end = source.indexOf("\"\"\"", i + 3)
+                i = if (end < 0) source.length else end + 3
+            }
+            source[i] == '"' || source[i] == '\'' -> {
+                val quote = source[i]
+                i++
+                while (i < source.length && source[i] != quote && source[i] != '\n') {
+                    if (source[i] == '\\') i++
+                    i++
+                }
+                i++
+            }
+            else -> i++
+        }
+    }
+    return out.toString()
+}
+
 class PreviewSourceParser {
 
     fun parse(source: String): ParsedPreviewSource? {
-        val packageName = extractPackageName(source) ?: return null
-        val className = extractClassName(source)
-        val previewConfigs = detectAllPreviewFunctions(source, packageName)
+        val code = blankComments(source)
+        val packageName = extractPackageName(code) ?: return null
+        val className = extractClassName(code)
+        val previewConfigs = detectAllPreviewFunctions(code, packageName)
         return ParsedPreviewSource(packageName, className, previewConfigs)
     }
 

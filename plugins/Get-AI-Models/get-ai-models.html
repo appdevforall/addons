@@ -68,7 +68,7 @@ choices cannot be judged separately: a 4-bit build of a larger model and an 8-bi
 one are genuinely different products. Each entry carries a name, quantization, parameter count,
 exact on-disk byte size, a strengths-and-weaknesses paragraph, the direct <code>.gguf</code> URL, a
 SHA-256, a minimum-RAM figure, and the publisher.</p>
-<p>What ships in version 1.0.0:</p>
+<p>What the catalog ships:</p>
 <table>
     <tr>
         <th>Model</th><th>Quant</th><th>Params</th><th>On disk</th><th>Context</th>
@@ -127,6 +127,33 @@ SHA-256, a minimum-RAM figure, and the publisher.</p>
         <td>8k</td>
         <td>apache-2.0</td>
         <td>mradermacher</td>
+    </tr>
+    <tr>
+        <td>OLMo 2 1B Instruct</td>
+        <td><code>Q4_K_M</code></td>
+        <td>1.5B</td>
+        <td>0.87 GB</td>
+        <td>4k</td>
+        <td>apache-2.0</td>
+        <td>Ai2</td>
+    </tr>
+    <tr>
+        <td>Granite 4.0 1B</td>
+        <td><code>Q4_K_M</code></td>
+        <td>1.6B</td>
+        <td>0.95 GB</td>
+        <td>128k</td>
+        <td>apache-2.0</td>
+        <td>IBM Granite</td>
+    </tr>
+    <tr>
+        <td>SmolLM2 1.7B Instruct</td>
+        <td><code>Q4_K_M</code></td>
+        <td>1.7B</td>
+        <td>0.98 GB</td>
+        <td>8k</td>
+        <td>apache-2.0</td>
+        <td>Hugging Face TB</td>
     </tr>
     <tr>
         <td>Qwen2.5-Coder 1.5B Instruct</td>

@@ -27,6 +27,8 @@
     <!-- What a screen reader says for that label. -->
     <string name="desc_message_version">Version %1$d of %2$d</string>
     <string name="desc_chat_sidebar">Chats, settings and a new chat</string>
+    <string name="desc_enter_full_screen">Show the chat full screen</string>
+    <string name="desc_exit_full_screen">Back to the editor</string>
 
     <!-- Sidebar actions -->
     <string name="menu_settings">Settings</string>
@@ -143,10 +145,13 @@
     <string name="approval_approve_once">Approve Once</string>
     <string name="approval_approve_session">Approve for Session</string>
     <string name="approval_deny">Deny</string>
-    <string name="approval_header">🔒 Tool Approval Required</string>
-    <string name="approval_confirm_title">⚠️ Confirm: %s</string>
+    <!-- Short, so the stock title (one line, two at most) never cuts it off; the tool's full name opens the message instead. -->
+    <string name="approval_confirm_title">Allow this tool?</string>
+    <string name="approval_tool">Tool: %1$s</string>
     <string name="approval_source">From %1$s</string>
     <string name="approval_provider_name">The source calls this tool “%1$s”</string>
+    <!-- Shown when "Always Allow" is offered for another plugin's tool: it rests on that plugin's own claim. -->
+    <string name="approval_read_only_claim">The plugin that supplied this tool says it only reads. Code on the Go cannot check that.</string>
     <string name="approval_run_now">✓ Run Now</string>
     <string name="approval_always_allow">✓ Always Allow</string>
     <string name="approval_proposed_change">Proposed change:</string>
@@ -186,6 +191,7 @@
     <string name="pref_agent_title">Agent</string>
     <string name="pref_agent_summary">AI backend, model and API key</string>
     <string name="msg_settings_unavailable">Couldn\'t open Agent settings. Open them from Preferences → Configuration → Agent.</string>
+    <string name="msg_full_screen_unavailable">Couldn\'t open the chat full screen.</string>
     <!-- Matches the MCP plugin's own Preferences row, which opens the same screen -->
     <string name="pref_mcp_title">MCP servers</string>
     <string name="msg_plugin_settings_unavailable">Couldn\'t open %1$s. Open it from Preferences → Configuration → %1$s.</string>
