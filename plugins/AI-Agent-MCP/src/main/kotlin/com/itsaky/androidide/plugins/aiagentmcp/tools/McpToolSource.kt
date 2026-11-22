@@ -352,9 +352,10 @@ class McpToolSource internal constructor(
      * know what a server's tool does, and guessing on the permissive side is the one guess that
      * cannot be undone. The one exception is [preApproved]: a readOnlyHint tool of the automatic
      * debugger entry, whose server Code on the Go itself installed, declares no approval needed.
-     * That is a declaration only: AI-Core currently overrides `requiresApproval` to true for every
-     * contributed tool (`ContributedToolHandler`), so the Agent still asks on each call. Honouring
-     * the declaration is tracked in ADFA-7147. The contract is a Java interface, so its accessors are implemented as
+     * AI-Core overrides `requiresApproval` to true for every contributed tool
+     * (`ContributedToolHandler`), so the Agent still asks. For a read-only tool, AI-Core 3.6.0 or
+     * later offers "Always Allow" for the rest of the chat (ADFA-7147); an older AI-Core asks on each
+     * call. The contract is a Java interface, so its accessors are implemented as
      * functions: Kotlin synthesises properties for *reading* a Java getter, never for overriding one.
      */
     private class Spec(

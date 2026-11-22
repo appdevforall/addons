@@ -91,10 +91,16 @@
 
   <h2>Approval</h2>
   <p>Every remote tool asks for your approval before it runs, showing the
-  arguments it would send, and there is no "always allow" for them. That includes
-  the four SQLite debugger tools that start switched on. The Agent's
-  own file tools are confined to the open project; a remote tool is confined by
-  nothing this device controls, so the dialog is the only gate — read it.</p>
+  arguments it would send. The exception is a read-only tool of the SQLite
+  debugger, such as the four that start switched on: its dialog offers
+  "Always Allow", which covers that tool for the rest of the chat. The grant is
+  for that tool and that app only, it ends when you start or open another chat,
+  and it ignores the arguments, so the Agent can then call the tool with any
+  arguments. It rests on the plugin's own claim that the tool only reads, which
+  Code on the Go cannot check. This needs AI Core 3.6.0 or later; an older AI
+  Core asks on every call. The Agent's own file tools are confined to the open
+  project; a remote tool is confined by nothing this device controls, so the
+  dialog is the only gate — read it.</p>
 
   <h2>What is sent</h2>
   <ul>

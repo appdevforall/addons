@@ -6,9 +6,10 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
  * Which tools of an automatic SQLite debugger entry start switched on, and which this plugin declares
  * read-only.
  *
- * Declaring a tool read-only does not skip the approval dialog today: AI-Core overrides
- * `requiresApproval` to true for every contributed tool (`ContributedToolHandler`), so the Agent still
- * asks on each call until automatic approval exists (ADFA-7147).
+ * Declaring a tool read-only does not skip the approval dialog: AI-Core overrides `requiresApproval`
+ * to true for every contributed tool (`ContributedToolHandler`). It does let AI-Core 3.6.0 or later
+ * offer "Always Allow" for that tool, for the rest of the chat (ADFA-7147). Each app's tool is its own
+ * grant, and the grant ignores the arguments. On an older AI-Core the Agent asks on each call.
  *
  * Only that entry may use this: the hint is the server's own claim, and the SQLite debugger endpoint
  * is the one server whose code the IDE itself installed. A server the user adds by hand is never asked.
@@ -44,7 +45,7 @@ object ReadOnlyTrust {
      * Reads the hint from one `tools/list` entry's `annotations`.
      *
      * Exactly boolean true counts. The string "true", 1, false, null and a missing key do not: an
-     * approval skipped on a loose reading (once AI-Core honours the declaration) cannot be taken back.
+     * "Always Allow" offered on a loose reading cannot be taken back for the rest of the chat.
      *
      * @param hint the value under `readOnlyHint`, or null when absent.
      */

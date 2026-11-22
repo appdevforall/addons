@@ -71,8 +71,10 @@
     <li><b>Per-tool switches, off by default</b> — you choose which of a server's
       tools the Agent may see. One popular GitHub server advertises around ninety
       tools, enough to fill a phone-sized context window on its own.</li>
-    <li><b>Approval on every call</b> — a remote tool always asks, showing the
-      arguments it would send, and can never be granted "always allow".</li>
+    <li><b>Approval on every call</b> — a remote tool asks each time, showing the
+      arguments it would send. The one exception is a read-only tool of the
+      SQLite debugger: you may choose "Always Allow" for it, for the rest of
+      that chat (needs AI Core 3.6.0 or later).</li>
     <li><b>Encrypted tokens</b> — bearer tokens are encrypted with an Android
       Keystore key and sent only to the server they belong to: never over
       cleartext <code>http://</code> except to a server on the device itself, and
@@ -142,7 +144,8 @@
     <li>Tap <b>Connect</b>. The server is saved, contacted, and the tools it
       offers are listed right there.</li>
     <li>Switch on the tools you want, and save. Ask the Agent for something those
-      tools cover; it will request your approval before each call.</li>
+      tools cover; it will request your approval before each call (a read-only SQLite
+      debugger tool can be allowed for the rest of the chat).</li>
   </ol>
   <div class="note">
     New tools always arrive switched <b>off</b>, including on the connection
@@ -163,8 +166,9 @@
     <li><b>Context stays affordable</b> — per-tool switches, off by default, keep
       a ninety-tool server from crowding out the conversation on a phone.</li>
     <li><b>Nothing runs unattended</b> — every remote call is approved
-      individually, with its arguments visible, and no "always allow" exists for
-      contributed tools.</li>
+      individually, with its arguments visible. The only exception is a
+      read-only SQLite debugger tool that you choose to allow for the rest of one
+      chat.</li>
     <li><b>Extensible without code</b> — supporting a new service means adding its
       URL in settings; neither this plugin nor AI Core changes.</li>
   </ul>

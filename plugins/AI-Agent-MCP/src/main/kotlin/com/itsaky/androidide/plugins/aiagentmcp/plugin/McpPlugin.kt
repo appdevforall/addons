@@ -649,7 +649,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 for an app you build with the SQLite debugger: four of its read-only tools
                 start on (list databases, get schema, query, and get events). This version
                 doesn't list that entry on the MCP servers screen.<br><br>The Agent asks for
-                your approval every time it uses a tool, including those four.
+                your approval every time it uses a tool. For those four, you can choose
+                Always Allow, which lasts for the rest of the chat (needs AI Core 3.6.0 or
+                later).
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(

@@ -45,9 +45,11 @@ Configuration → MCP servers**:
    field never shows what is stored and an empty field keeps it, so this is the
    only way back to a server that needs no credential.
 
-Every remote tool asks for approval on every call, and there is no "always
-allow" for contributed tools — they run outside the Agent's own path
-containment, so the dialog is the only gate.
+Every remote tool asks for approval on every call, with one exception: a tool
+of the automatic SQLite debugger entry that declares itself read-only may be
+given "Always Allow" for the rest of the chat (details under "The SQLite
+debugger entry"). Remote tools run outside the Agent's own path containment, so
+the dialog is the only gate.
 
 ### The SQLite debugger entry
 
@@ -105,9 +107,20 @@ Servers you add yourself keep the name prefix taken from their label.
   at most 12 contributed tools per message (4 for a small on-device model), in
   order, and drops the rest; every app has its own entry. Switching the others
   on will come with showing this entry in the settings screen (phase 2).
-- The Agent still asks for approval on every call: AI-Core makes every
-  contributed tool ask (it ignores the tool's own `requiresApproval`). Approving
-  read-only calls automatically is tracked in ADFA-7147.
+- Approval. This plugin declares each of that entry's tools read-only when the
+  server sends `readOnlyHint: true` for it (`McpToolSource.Spec.isReadOnly`).
+  AI-Core 3.6.0 or later then offers "Always Allow" in the approval dialog for
+  those tools (ADFA-7147). One tap covers that tool for the rest of the chat,
+  and the Agent asks again in a new chat. Each tool is its own grant, and so is
+  each app: AI-Core keys a grant by this plugin, the tool's name and a digest of
+  its description and schema, and the description names the app. The grant
+  ignores the arguments, so after one tap the Agent can call that tool with any
+  arguments. It rests on the plugin's own read-only claim, which Code on the Go
+  cannot check. AI-Core still asks on every call for the tools that are not
+  read-only, for every tool of a server you add yourself, and, on an AI-Core
+  older than 3.6.0, for every tool: this plugin does not check AI-Core's
+  version. AI-Core ignores the tool's own `requiresApproval` and always asks at
+  least once.
 
 ## Transport
 
