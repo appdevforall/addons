@@ -57,6 +57,18 @@
               android:textSize="@dimen/chat_title_text_size"
               android:textStyle="bold" />
 
+          <!-- Opens this chat over the whole screen; there, ChatFragment turns it into the way back. -->
+          <ImageButton
+              android:id="@+id/btn_chat_full_screen"
+              android:layout_width="@dimen/chat_composer_button_size"
+              android:layout_height="@dimen/chat_composer_button_size"
+              android:background="?android:attr/selectableItemBackgroundBorderless"
+              android:contentDescription="@string/desc_enter_full_screen"
+              android:padding="@dimen/chat_composer_icon_padding"
+              android:scaleType="fitCenter"
+              android:src="@drawable/ic_open_in_full"
+              android:tint="@color/plugin_on_surface" />
+
           <!-- Takes the spot the overflow menu used to hold; everything that was in that menu is
                in the sidebar this opens. -->
           <ImageButton

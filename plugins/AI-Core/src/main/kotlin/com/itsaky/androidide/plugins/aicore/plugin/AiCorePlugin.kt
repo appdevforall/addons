@@ -57,6 +57,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_CHAT_SEND = "agent_chat_send"
         /** The toolbar button that opens the sidebar; it took the overflow menu's place and tag. */
         const val TOOLTIP_TAG_CHAT_MENU = "agent_chat_menu"
+        /** The toolbar button that opens the chat full screen, and closes it again there. */
+        const val TOOLTIP_TAG_CHAT_FULL_SCREEN = "agent_chat_full_screen"
         const val TOOLTIP_TAG_CHAT_SESSIONS = "agent_chat_sessions"
         /** The Export entry in a chat row's options menu. */
         const val TOOLTIP_TAG_CHAT_EXPORT = "agent_chat_export"
@@ -403,6 +405,22 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 </ul>
                 <p>The button on the left of the panel's top row closes it again,
                 as does tapping the dimmed chat beside it or pressing <b>Back</b>.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_FULL_SCREEN,
+            summary = "Shows this chat over the whole screen, or returns to the editor from there.",
+            detail = """
+                <p>In the bottom sheet, opens the same chat on a screen of its own,
+                so the conversation gets the height the editor, its toolbar and the
+                tabs take up. It is the same conversation: a reply still being
+                written carries on, and anything you send there is in the chat when
+                you come back.</p>
+                <p>On that screen the same button, or <b>Back</b>, returns you to the
+                editor.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
