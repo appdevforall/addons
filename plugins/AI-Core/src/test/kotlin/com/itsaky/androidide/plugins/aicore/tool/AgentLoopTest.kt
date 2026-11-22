@@ -1005,6 +1005,7 @@ class AgentLoopTest {
         writtenFilesOf: ((ToolCall) -> Set<String>)? = null,
         changeOf: (ToolCall) -> Any = { it },
         resolvedFileOf: (ToolCall) -> String? = { it.args["path"]?.toString() },
+        requiredTool: String? = null,
     ): Triple<AgentLoop.Result, MutableList<ChatMessage>, List<String>> {
         val model = ScriptedModel(replies)
         val used = mutableMapOf<String, Int>()
@@ -1023,6 +1024,7 @@ class AgentLoopTest {
                 }
             },
             pathsOf = pathsOf,
+            requiredTool = requiredTool,
             changesPaths = { it.name == "edit_file" || it.name == "run_shell_command" },
             writesFiles = { it.name == "edit_file" },
             writtenFilesOf = writtenFilesOf ?: pathsOf,
@@ -1033,6 +1035,7 @@ class AgentLoopTest {
                 override suspend fun onChangeNotMade(turn: Int) { events += "not-made" }
                 override suspend fun onUnfinishedReply(turn: Int) { events += "unfinished" }
                 override suspend fun onRepeatAfterSuccess(turn: Int) { events += "assumed-complete" }
+                override suspend fun onRepeatAfterSuccessRetry(turn: Int) { events += "repeat-retry" }
                 override suspend fun onMaxIterationsReached(turns: Int) { events += "max" }
                 override suspend fun onUnparsedReply(turn: Int, reason: ToolCallExtractor.UnparsedReply) {
                     events += "unparsed"
@@ -1557,7 +1560,168 @@ class AgentLoopTest {
         assertEquals(listOf("unparsed", "not-made"), events)
     }
 
+    /** [finishingLoop], also giving a run that repeats a successful batch one turn to answer. */
+    private fun repeatAwareLoop() = AgentLoop(
+        formatToolResults = ToolResultsPrompt({ shippedConfig }, "respond"),
+        terminalTool = "respond",
+        unfinishedTurn = { UNFINISHED },
+        repeatedAfterSuccessTurn = { REPEATED },
+        requiredToolTurn = { tool -> "$REQUIRED $tool" },
+    )
+
+    @Test
+    fun givenAReadRepeatedAfterSuccess_whenTheLoopRuns_thenItIsToldToAnswerWithoutRerunningAndTheAnswerIsFinal() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(toolCall("read_file", "a"), toolCall("read_file", "a"), respond),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(3, result.turns)
+        assertEquals(listOf("repeat-retry", "final"), events)
+        assertEquals(REPEATED, history.last { it.role == Role.USER }.content)
+        // One result block only: the repeated batch was not run again.
+        assertEquals(1, history.count { it.role == Role.USER && it.content.contains("[read_file]") })
+    }
+
+    @Test
+    fun givenAReadRepeatedAfterSuccess_whenTheNextTurnAnswersInProse_thenThatProseEndsTheRun() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(toolCall("read_file", "a"), toolCall("read_file", "a"), "Two databases."),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(3, result.turns)
+        assertEquals(listOf("repeat-retry"), events)
+        assertEquals("Two databases.", history.last().content)
+    }
+
+    @Test
+    fun givenARepeatedReadSentWithRespond_whenTheLoopRuns_thenTheRespondIsTheAnswerAndTheRepeatIsNotRun() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(toolCall("read_file", "a"), toolCall("read_file", "a") + respond),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertEquals(2, result.turns)
+        // The answer ends the run: no repeat turn is sent, and no "repeated" notice is raised.
+        assertEquals(listOf("final"), events)
+        assertEquals(0, history.count { it.content == REPEATED })
+        assertEquals(1, history.count { it.role == Role.USER && it.content.contains("[read_file]") })
+    }
+
+    @Test
+    fun givenAReadRepeatedTwice_whenTheLoopRuns_thenItEndsAfterTheExtraTurnWithTheRepeatEvent() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("read_file", "a"), toolCall("read_file", "a"), toolCall("read_file", "a")),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(3, result.turns)
+        assertEquals(listOf("repeat-retry", "assumed-complete"), events)
+    }
+
+    @Test
+    fun givenAWriteRepeatedAfterSuccess_whenTheModelRepeatsAgain_thenItEndsAfterOneExtraTurnRatherThanLooping() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(edit("a", "x"), edit("a", "x"), edit("a", "x"), edit("a", "x")),
+            mapOf("edit_file" to listOf(appliedEdit)),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(3, result.turns)
+        assertEquals(listOf("repeat-retry", "assumed-complete"), events)
+    }
+
+    @Test
+    fun givenNoRepeatTurn_whenAReadIsRepeatedAfterSuccess_thenItEndsAtOnceWithTheRepeatEvent() = runTest {
+        val (result, _, events) = runWriting(
+            listOf(toolCall("read_file", "a"), toolCall("read_file", "a")),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = finishingLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(2, result.turns)
+        assertEquals(listOf("assumed-complete"), events)
+    }
+
+    @Test
+    fun givenARequiredToolPending_whenARepeatIsSentWithRespond_thenTheRunIsRedirectedToTheToolInsteadOfFinishing() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(
+                toolCall("read_file", "a"),
+                toolCall("read_file", "a") + respond,
+                toolCall("web_search"),
+                respond,
+            ),
+            mapOf("read_file" to listOf(ToolResult.success("lines")), "web_search" to listOf(ToolResult.success("hits"))),
+            loop = repeatAwareLoop(),
+            requiredTool = "web_search",
+        )
+
+        assertTrue(result.completed)
+        assertEquals(4, result.turns)
+        assertEquals(1, history.count { it.content == "$REQUIRED web_search" })
+        assertEquals(1, history.count { it.role == Role.USER && it.content.contains("[web_search]") })
+        // Only the final respond ends the run; the repeat's respond did not.
+        assertEquals(listOf("final"), events)
+    }
+
+    @Test
+    fun givenARepeatAnsweredByADifferentSuccessfulCall_whenItIsRepeatedAgain_thenItGetsTheExtraTurnAgain() = runTest {
+        val (result, history, events) = runWriting(
+            listOf(
+                toolCall("read_file", "a"), toolCall("read_file", "a"),
+                toolCall("read_file", "b"), toolCall("read_file", "b"),
+                respond,
+            ),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertTrue(result.completed)
+        assertEquals(5, result.turns)
+        assertEquals(listOf("repeat-retry", "repeat-retry", "final"), events)
+        assertEquals(2, history.count { it.content == REPEATED })
+    }
+
+    @Test
+    fun givenAModelAlternatingBetweenTwoRepeatedCalls_whenTheExtraTurnIsRearmed_thenTheRunStillEndsAsCycling() = runTest {
+        val a = toolCall("read_file", "a")
+        val b = toolCall("read_file", "b")
+        val (result, _, events) = runWriting(
+            listOf(a, a, b, b, a, a, b, b, a, a, b, b),
+            mapOf("read_file" to listOf(ToolResult.success("lines"))),
+            loop = repeatAwareLoop(),
+        )
+
+        assertEquals(AgentLoop.StopReason.CYCLING, result.reason)
+        assertTrue(result.turns < 12)
+        assertEquals(listOf("repeat-retry", "repeat-retry"), events.filter { it == "repeat-retry" })
+    }
+
+    @Test
+    fun theShippedRepeatTurnNamesTheTerminalToolAndRendersCleanly() {
+        val text = ToolResultsPrompt.renderRepeatedAfterSuccess(shippedConfig, "respond")
+        assertTrue(text, text.contains("\"respond\""))
+        assertTrue(text, text.contains("already succeeded"))
+        assertTrue(text, text.contains("were not run again"))
+        assertTrue(text, text.contains("make a different call, not the same one again"))
+        assertFalse(text, text.contains("Do not call that tool again"))
+    }
+
     private companion object {
+        const val REPEATED = "you repeated it, answer now"
         const val UNFINISHED = "finish or carry on"
         const val UNAPPLIED = "the change was not made"
         const val REQUIRED = "call first:"
