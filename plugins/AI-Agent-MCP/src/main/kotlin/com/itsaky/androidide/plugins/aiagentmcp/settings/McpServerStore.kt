@@ -207,8 +207,12 @@ object McpServerStore {
                 if (!forgotten) {
                     // Forgetting failed too, so the old credential is still stored: put the URL
                     // back, which is the one it belongs to. The user's other edits are kept.
+                    // Re-read the record: a toggle made during the Keystore writes lives only
+                    // there, and restoring the older snapshot would undo it.
                     merged = synchronized(lock) {
-                        merged.copy(url = before.url).also(::upsertLocked)
+                        val current = servers().firstOrNull { it.id == server.id }
+                        if (current == null) merged
+                        else current.copy(url = before.url).also(::upsertLocked)
                     }
                 }
             }

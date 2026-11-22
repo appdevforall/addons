@@ -40,6 +40,7 @@ class FailedCredentialWriteTest {
     @Volatile private var token = "old-token"
     @Volatile private var headers = mapOf("X-Old" to "1")
     @Volatile private var forgetFails = false
+    @Volatile private var duringTokenWrite: (() -> Unit)? = null
 
     private lateinit var plugin: McpPlugin
 
@@ -57,6 +58,7 @@ class FailedCredentialWriteTest {
         // The Keystore refuses to store a value; a blank, which removes, lands unless told not to.
         every { McpServerStore.writeToken(any(), any()) } answers {
             val value = secondArg<String>()
+            if (value.isNotEmpty()) duringTokenWrite?.invoke()
             if (value.isNotEmpty() || forgetFails) false else { token = ""; true }
         }
         every { McpServerStore.writeHeaders(any(), any()) } answers {
@@ -115,6 +117,26 @@ class FailedCredentialWriteTest {
         assertEquals("the URL moved with the old credential still stored", url(old), record.url)
         McpConnections.withSession(McpServerStore.server(saved.id)!!) { it.initialize() }
         assertEquals("the new URL was contacted", emptyList<FakeMcpServer.Seen>(), moved.requests.toList())
+    }
+
+    @Test
+    fun `restoring the URL keeps a tool switched off while the Keystore was writing`() {
+        val saved = McpServerStore.saveDetails(McpServerStore.newServer("Docs", url(old)))
+        McpServerStore.setToolEnabled(saved.id, "search", true)
+        duringTokenWrite = { McpServerStore.setToolEnabled(saved.id, "search", false) }
+        forgetFails = true
+
+        val (record, failure) = McpSettingsViewModel { null }
+            .saveNow(McpServerStore.server(saved.id)!!.copy(url = url(moved)), "new-token", null)
+
+        assertNotNull("the pane was not told the save failed", failure)
+        assertEquals("the URL was not put back", url(old), record.url)
+        assertEquals(url(old), McpServerStore.server(saved.id)!!.url)
+        assertFalse(
+            "the rollback undid the toggle made meanwhile",
+            "search" in McpServerStore.server(saved.id)!!.enabledTools,
+        )
+        assertFalse("search" in record.enabledTools)
     }
 
     private fun firstRequestToTheNewUrl(id: String): FakeMcpServer.Seen {
