@@ -173,9 +173,15 @@ class McpToolSource internal constructor(
         inFlight.remove(callId)?.cancel(true)
     }
 
-    /** Ends the executor, for the plugin shutting down. */
+    /**
+     * Ends the executor and every call it accepted, for the plugin shutting down: no new work is
+     * taken, each running call's connection is dropped so its blocked read ends, and each future,
+     * a queued call's included, completes (cancelled) so nobody waits on one that will never run.
+     */
     fun close() {
         executor.shutdownNow()
+        for (call in calls.values) call.handle.cancel()
+        for (future in inFlight.values) future.cancel(true)
         inFlight.clear()
         calls.clear()
     }
