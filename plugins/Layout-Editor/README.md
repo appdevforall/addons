@@ -35,7 +35,7 @@ layout-editor/
 ├── layout-editor-documentation.html   # full reference for this plugin
 ├── src/main/
 │   ├── AndroidManifest.xml            # plugin id, main class, icons, permissions
-│   ├── assets/                        # icons, tooltips.json, widgetclasses.json, palette/, attributes/, editor/
+│   ├── assets/                        # icons, widgetclasses.json, palette/, attributes/, editor/
 │   ├── kotlin|java/.../layouteditor/
 │   │   ├── LayoutEditorPlugin.kt      # entry point: toolbar action, enable rule, tooltips, build-status
 │   │   ├── LayoutEditorFragment.kt    # full-screen editor: canvas, palette, component tree, drawer

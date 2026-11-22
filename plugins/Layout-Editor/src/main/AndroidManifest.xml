@@ -27,7 +27,7 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="1.0.0" />
+            android:value="26.48" />
 
         <meta-data
             android:name="plugin.permissions"

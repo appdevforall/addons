@@ -44,7 +44,7 @@ class AppliedAttributesAdapter(
         holder.binding.root.apply {
             setOnClickListener { onClick(position) }
             setOnLongClickListener {
-                LayoutEditorDocs.show(it, attributeName.substringAfterLast(":"))
+                LayoutEditorDocs.showAttribute(it, attributeName)
                 true
             }
         }
