@@ -340,7 +340,7 @@ class ChatViewModelCompactionTest {
         val turns = sentHistories.size
         viewModel.retryLastRun()
         awaitCondition { sentHistories.size == turns + 1 && viewModel.agentState.value !is AgentState.Processing }
-        awaitCondition { viewModel.canChangePrompts.value || viewModel.agentState.value is AgentState.Error }
+        awaitRunUnwound(viewModel)
     }
 
     /** Sends [text] and waits for its run to finish. */
@@ -348,7 +348,18 @@ class ChatViewModelCompactionTest {
         val turns = sentHistories.size
         awaitCondition { viewModel.sendMessage(text) }
         awaitCondition { sentHistories.size == turns + 1 && viewModel.agentState.value !is AgentState.Processing }
-        awaitCondition { viewModel.canChangePrompts.value || viewModel.agentState.value is AgentState.Error }
+        awaitRunUnwound(viewModel)
+    }
+
+    /**
+     * Waits until the run has unwound. A failed run sets [AgentState.Error] first, then adds its
+     * error message, and clears its in-flight flag last, in a `finally`; only then does
+     * [ChatViewModel.canChangePrompts] turn true ([AgentState.Error] doesn't count as running).
+     * Stopping at the error state instead let the next step read before the message existed, or
+     * call [ChatViewModel.retryLastRun] while the run was still in flight, which ignores it.
+     */
+    private fun awaitRunUnwound(viewModel: ChatViewModel) {
+        awaitCondition { viewModel.canChangePrompts.value }
     }
 
     /**
