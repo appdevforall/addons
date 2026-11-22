@@ -92,7 +92,11 @@ object McpServerHealth {
 
     /** Lets the probe ask a server that refused its credential again, once the user changed it. */
     fun credentialChanged(serverId: String) {
-        byServer.computeIfPresent(serverId) { _, health -> health.copy(refused = false) }
+        // Under the lock a refused write takes, so it cannot land after this and leave the server
+        // refused until the next edit. No listener runs here.
+        synchronized(lock) {
+            byServer.computeIfPresent(serverId) { _, health -> health.copy(refused = false) }
+        }
     }
 
     /** Forgets a server that was removed. */
