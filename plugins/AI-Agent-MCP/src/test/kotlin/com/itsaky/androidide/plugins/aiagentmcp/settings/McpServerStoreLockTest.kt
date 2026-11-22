@@ -32,6 +32,8 @@ class McpServerStoreLockTest {
         const val READ_DELAY_MS = 2L
 
         const val JOIN_TIMEOUT_SECONDS = 30L
+
+        const val URL = "https://example.test/mcp"
     }
 
     private val prefs = FakeSharedPreferences()
@@ -48,7 +50,7 @@ class McpServerStoreLockTest {
         plugin = McpPlugin()
         plugin.initialize(context)
         serverId = McpServerStore.saveDetails(
-            McpServerStore.newServer("Docs", "https://example.test/mcp")
+            McpServerStore.newServer("Docs", URL)
         ).id
     }
 
@@ -60,7 +62,7 @@ class McpServerStoreLockTest {
     @Test
     fun givenConcurrentToolToggles_whenTheyInterleave_thenNoWriteIsLost() {
         val tools = (1..WRITERS).map { "tool_$it" }
-        McpServerStore.setKnownTools(serverId, tools)
+        McpServerStore.setKnownTools(serverId, URL, tools)
         prefs.readDelayMillis = READ_DELAY_MS
 
         runTogether(tools) { McpServerStore.setToolEnabled(serverId, it, true) }
@@ -71,7 +73,7 @@ class McpServerStoreLockTest {
     @Test
     fun givenAToggleAndAWholeServerSwitchAtOnce_whenTheyInterleave_thenNeitherIsLost() {
         val tools = (1..WRITERS).map { "tool_$it" }
-        McpServerStore.setKnownTools(serverId, tools)
+        McpServerStore.setKnownTools(serverId, URL, tools)
         prefs.readDelayMillis = READ_DELAY_MS
 
         runTogether(tools + "disable") { work ->
@@ -85,6 +87,26 @@ class McpServerStoreLockTest {
         val stored = McpServerStore.server(serverId)
         assertEquals(tools.toSet(), stored?.enabledTools)
         assertFalse("the whole-server switch must survive the toggles", stored?.enabled ?: true)
+    }
+
+    @Test
+    fun givenAListingFromTheOldUrl_whenTheUrlChangedMeanwhile_thenItChangesNothing() {
+        McpServerStore.setKnownTools(serverId, URL, listOf("x"))
+        McpServerStore.setToolEnabled(serverId, "x", true)
+        val moved = "https://moved.example.test/mcp"
+        McpServerStore.saveDetails(McpServerStore.server(serverId)!!.copy(url = moved))
+
+        McpServerStore.setKnownTools(serverId, URL, listOf("y"))
+
+        val stale = McpServerStore.server(serverId)!!
+        assertEquals("the old endpoint's list was applied", listOf("x"), stale.knownTools)
+        assertEquals("the enabled tool was dropped", setOf("x"), stale.enabledTools)
+
+        McpServerStore.setKnownTools(serverId, moved, listOf("y"))
+
+        val applied = McpServerStore.server(serverId)!!
+        assertEquals(listOf("y"), applied.knownTools)
+        assertEquals(emptySet<String>(), applied.enabledTools)
     }
 
     /**

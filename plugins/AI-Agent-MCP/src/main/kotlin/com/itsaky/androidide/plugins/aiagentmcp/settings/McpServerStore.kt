@@ -409,12 +409,16 @@ object McpServerStore {
 
     /**
      * Records the tools a server advertised, dropping toggles for tools it no longer has.
+     * Does nothing when the server's URL is no longer the one the listing used: that list belongs
+     * to the old endpoint, and applying it would drop the toggles of tools the new one may have.
      * @param id the server.
+     * @param listedUrl the URL the tools were listed from.
      * @param toolNames the tools it just listed.
      */
-    fun setKnownTools(id: String, toolNames: List<String>) {
+    fun setKnownTools(id: String, listedUrl: String, toolNames: List<String>) {
         synchronized(lock) {
             val server = servers().firstOrNull { it.id == id } ?: return
+            if (server.url != listedUrl) return
             val updated = server.copy(
                 knownTools = toolNames,
                 enabledTools = server.enabledTools.filterTo(mutableSetOf()) { it in toolNames },

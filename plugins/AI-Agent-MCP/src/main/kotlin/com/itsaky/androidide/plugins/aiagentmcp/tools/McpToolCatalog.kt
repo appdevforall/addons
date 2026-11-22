@@ -162,7 +162,7 @@ object McpToolCatalog {
                 Log.i(TAG, "Dropping a tool list from '${server.name}', removed or moved while it listed")
                 return Listing(serverName, tools)
             }
-            McpServerStore.setKnownTools(server.id, tools.map { it.name })
+            McpServerStore.setKnownTools(server.id, server.url, tools.map { it.name })
         }
         Log.i(TAG, "Server '${server.name}' listed ${tools.size} tool(s)")
         return Listing(serverName, tools)
