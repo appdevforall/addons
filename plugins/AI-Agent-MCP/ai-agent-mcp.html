@@ -178,6 +178,14 @@
       not used.</li>
     <li>The tool list is answered from memory, so a server that was unreachable at
       startup needs a <b>Connect</b> before its tools appear.</li>
+    <li>A <b>Save</b> or <b>Clear</b> that changes only the credentials can leave
+      one session open on a third-party server that needs the old token to end
+      it. The session expires on the server.</li>
+    <li>A SQLite debugger entry's health follows the entry, not the port. After the
+      app moves to a new port, a result from the old one can show for up to one
+      20-second probe cycle.</li>
+    <li>Two requests that both get a 404 for the same expired session can start an
+      extra handshake and leave one session to expire. Tracked in ADFA-7250.</li>
   </ul>
 
   <h2>Troubleshooting</h2>

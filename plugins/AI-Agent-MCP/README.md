@@ -147,6 +147,19 @@ Two dependencies were deliberately not taken:
 - `errors/` — HTTP and JSON-RPC failures reduced to one translated sentence
 - `security/SecureTokenStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 
+## Known limits
+
+Three rare session races, accepted for now:
+
+- A Save or Clear that changes only the credentials can leave one session on a
+  third-party server that needs the old token to end it; the session expires on
+  the server.
+- A SQLite debugger entry's health follows the entry, not the port, so after the
+  app moves to a new port a result from the old one can show for up to one
+  20-second probe cycle.
+- Two requests that both get a 404 for the same expired session can start an
+  extra handshake and leave one session to expire; tracked in ADFA-7250.
+
 ## Security notes
 
 - Tool names and descriptions from a server are **untrusted remote text**. Names
