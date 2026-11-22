@@ -38,8 +38,12 @@ internal class McpExchangeTrace(
         conn.getHeaderField(McpHttpClient.HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
             ?.let { redactor = redactor.with(it) }
         val fields = conn.headerFields.orEmpty().entries
-        status = fields.firstOrNull { it.key == null }?.value?.firstOrNull()
-            ?: "HTTP $code ${conn.responseMessage.orEmpty()}".trim()
+        // Scrubbed like the headers and the body: a status line's reason phrase is the server's
+        // free text, and may repeat the session id it assigned or a credential it was sent.
+        status = redactor.scrub(
+            fields.firstOrNull { it.key == null }?.value?.firstOrNull()
+                ?: "HTTP $code ${conn.responseMessage.orEmpty()}".trim()
+        )
         responseHeaders = fields
             // `X-Android-*` is the platform's own bookkeeping, not something the server sent.
             .filter { (name, _) -> name != null && !name.startsWith("X-Android-", ignoreCase = true) }
