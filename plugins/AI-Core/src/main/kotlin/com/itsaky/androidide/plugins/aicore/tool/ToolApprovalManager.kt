@@ -66,6 +66,34 @@ class ToolApprovalManager(
     private val sessionApprovedTools: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /**
+     * Guards every write to [sessionApprovedTools] and to [grantable], so a grant cannot slip in
+     * between a prune and the new key set. A plain monitor: never held while suspended, and never
+     * taken inside [requestLock].
+     */
+    private val grantLock = Any()
+
+    /**
+     * The keys a session grant may be recorded under right now, as last given to
+     * [retainSessionApprovals]; null until that is first called, which means no restriction.
+     * A run keeps the tool snapshot it started with, so its handler can still say "read-only"
+     * after the tool list changed; this set is what knows the list is newer.
+     */
+    private var grantable: Set<String>? = null
+
+    /**
+     * Whether "Always Allow" may be offered and recorded for this call: the handler may be
+     * session-approved and, once a tool list has been seen, its [grantKey] is still in it.
+     * @param toolName the tool being approved.
+     * @param handler its handler, possibly from an older tool snapshot.
+     * @return true when a session grant may be recorded for it.
+     */
+    private fun canGrant(toolName: String, handler: ToolHandler): Boolean =
+        synchronized(grantLock) {
+            !isNeverSessionApproved(toolName, handler) &&
+                grantable?.contains(grantKey(toolName, handler)) != false
+        }
+
+    /**
      * Serialises the request-and-wait section of [ensureApproved]. There is one [pendingApproval]
      * slot and one dialog, so a second concurrent request would overwrite the first and strand its
      * caller until the timeout — and this class offers an API that looks safe to call anywhere.
@@ -111,7 +139,7 @@ class ToolApprovalManager(
                 return ApprovalResponse(approved = true)
             }
 
-            val allowsSession = !isNeverSessionApproved(toolName, handler)
+            val allowsSession = canGrant(toolName, handler)
             val request = ApprovalRequest(
                 toolName = toolName,
                 displayName = handler.displayName,
@@ -159,11 +187,14 @@ class ToolApprovalManager(
             ApprovalResponse(approved = true)
         }
         ApprovalResult.APPROVED_FOR_SESSION -> {
-            if (isNeverSessionApproved(toolName, handler)) {
-                Log.d(TAG, "Approval granted (once; $toolName is never session-approved)")
-            } else {
+            // Checked and written under one lock, so a prune cannot land between the two.
+            val granted = synchronized(grantLock) {
+                canGrant(toolName, handler).also { if (it) sessionApprovedTools.add(grantKey(toolName, handler)) }
+            }
+            if (granted) {
                 Log.d(TAG, "Approval granted (session) for $toolName")
-                sessionApprovedTools.add(grantKey(toolName, handler))
+            } else {
+                Log.d(TAG, "Approval granted (once; $toolName is not in the current grantable set)")
             }
             ApprovalResponse(approved = true)
         }
@@ -236,11 +267,17 @@ class ToolApprovalManager(
      * Drops every session grant whose key is not in [validKeys]. `ChatViewModel` calls it when the
      * tool list changes, so a run that started earlier cannot keep using a grant for a tool whose
      * definition has since changed or been dropped, and an old definition's grant does not come
-     * back when the tool returns to it (A, then B, then A again).
+     * back when the tool returns to it (A, then B, then A again). It also records [validKeys] as
+     * the only keys a later "Always Allow" may add, so an approval still open during the change
+     * counts once instead of restoring a pruned grant.
      * @param validKeys the keys from [grantableKeys] for the new tool set.
      */
     fun retainSessionApprovals(validKeys: Set<String>) {
-        if (sessionApprovedTools.retainAll(validKeys)) {
+        val pruned = synchronized(grantLock) {
+            grantable = validKeys.toSet()
+            sessionApprovedTools.retainAll(validKeys)
+        }
+        if (pruned) {
             Log.d(TAG, "Session approvals pruned to the current tool set")
         }
     }
@@ -251,7 +288,7 @@ class ToolApprovalManager(
      * the plugin.
      */
     fun clearSessionApprovals() {
-        sessionApprovedTools.clear()
+        synchronized(grantLock) { sessionApprovedTools.clear() }
         Log.d(TAG, "Session approvals cleared")
     }
 }

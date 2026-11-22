@@ -73,6 +73,28 @@ class ToolApprovalManagerTest {
         }
     }
 
+    /**
+     * Like [answer], but runs [beforeAnswer] once the dialog is on screen and before the answer is
+     * submitted: the tool list changing while the user still has the dialog open.
+     */
+    private fun answerAfter(
+        manager: ToolApprovalManager,
+        handler: ToolHandler,
+        result: ApprovalResult,
+        beforeAnswer: () -> Unit,
+    ): ApprovalResponse = runBlocking {
+        val pending = async(Dispatchers.Default) {
+            manager.ensureApproved(handler.toolName, handler, emptyMap())
+        }
+        withTimeout(5_000) {
+            while (!manager.hasPendingApproval()) delay(5)
+            lastRequest = manager.currentApprovalRequest.value
+            beforeAnswer()
+            manager.submitApproval(result)
+            pending.await()
+        }
+    }
+
     /** A real contributed handler, registered under the tool's own name. */
     private fun contributed(providerId: String, name: String, readOnly: Boolean) =
         ContributedToolHandler(
@@ -468,5 +490,86 @@ class ToolApprovalManagerTest {
 
         assertFalse(response.approved)
         assertTrue(response.denialMessage?.contains("denied") == true)
+    }
+
+    @Test
+    fun givenAPendingApproval_whenTheToolIsDroppedAndTheUserChoosesAlwaysAllow_thenNoGrantIsRecorded() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val query = contributed(provider, "query", readOnly = true)
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(query)))
+
+        val first = answerAfter(manager, query, ApprovalResult.APPROVED_FOR_SESSION) {
+            manager.retainSessionApprovals(manager.grantableKeys(emptyList()))
+        }
+
+        assertTrue("the answered call still runs once", first.approved)
+        assertFalse(
+            "the dropped tool must ask again",
+            answer(manager, query, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenAPendingApproval_whenTheToolChangesAndReturnsAfterAlwaysAllow_thenTheUserIsAskedAgain() {
+        // A is pending, the list moves to B, the user answers, then the list returns to A.
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val reads = contributed(provider, "query", readOnly = true)
+        val writes = contributed(provider, "query", readOnly = false)
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(reads)))
+
+        val first = answerAfter(manager, reads, ApprovalResult.APPROVED_FOR_SESSION) {
+            manager.retainSessionApprovals(manager.grantableKeys(listOf(writes)))
+        }
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(reads)))
+
+        assertTrue(first.approved)
+        assertFalse(
+            "A, B, A must not bring back a grant answered while B was current",
+            answer(manager, reads, ApprovalResult.DENIED).approved,
+        )
+    }
+
+    @Test
+    fun givenAToolDroppedFromTheList_whenAStaleHandlerRequestsApproval_thenTheDialogDoesNotOfferAlwaysAllow() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val stale = contributed(provider, "query", readOnly = true)
+        manager.retainSessionApprovals(manager.grantableKeys(emptyList()))
+
+        answer(manager, stale, ApprovalResult.DENIED)
+
+        assertFalse(lastRequest?.allowsSessionApproval == true)
+        assertFalse(lastRequest?.readOnlyOnProvidersWord == true)
+    }
+
+    @Test
+    fun givenAPendingApproval_whenTheToolIsStillListed_thenAlwaysAllowRecordsTheGrant() = runBlocking {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val query = contributed(provider, "query", readOnly = true)
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(query)))
+
+        answerAfter(manager, query, ApprovalResult.APPROVED_FOR_SESSION) {
+            manager.retainSessionApprovals(manager.grantableKeys(listOf(query)))
+        }
+
+        assertTrue(lastRequest?.allowsSessionApproval == true)
+        assertTrue(withTimeout(5_000) { manager.ensureApproved("query", query, emptyMap()) }.approved)
+        assertFalse(manager.hasPendingApproval())
+    }
+
+    @Test
+    fun givenASessionGrantAndAToolList_whenSessionApprovalsAreCleared_thenTheUserIsAskedAgain() {
+        val manager = ToolApprovalManager({ shippedConfig })
+        val provider = "com.itsaky.androidide.plugins.aiagentmcp"
+        val query = contributed(provider, "query", readOnly = true)
+        manager.retainSessionApprovals(manager.grantableKeys(listOf(query)))
+        assertTrue(answer(manager, query, ApprovalResult.APPROVED_FOR_SESSION).approved)
+
+        manager.clearSessionApprovals()
+
+        assertFalse(answer(manager, query, ApprovalResult.DENIED).approved)
     }
 }
