@@ -46,9 +46,12 @@ class LifecycleSessionCloseTest {
     private val deleteArrived = CountDownLatch(1)
     private val releaseDelete = CountDownLatch(1)
 
+    /** Kept so [tearDown] can end it; an idle pool thread otherwise lives on for up to 60 s. */
+    private val handlers = Executors.newCachedThreadPool()
+
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         // Its own threads, so the held DELETE does not hold the next activation's listing.
-        executor = Executors.newCachedThreadPool()
+        executor = handlers
         createContext("/mcp") { exchange ->
             if (exchange.requestMethod == "DELETE") {
                 deleteArrived.countDown()
@@ -98,7 +101,9 @@ class LifecycleSessionCloseTest {
         McpConnections.closeAll()
         McpToolCatalog.clear()
         server.stop(0)
+        handlers.shutdownNow()
         unmockkObject(McpServerStore)
+        assertTrue("the HTTP handler threads outlived the test", handlers.awaitTermination(10, TimeUnit.SECONDS))
     }
 
     @Test
