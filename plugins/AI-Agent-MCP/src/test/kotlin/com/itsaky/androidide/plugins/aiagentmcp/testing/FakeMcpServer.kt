@@ -25,8 +25,15 @@ class FakeMcpServer(
     /**
      * One request as the server saw it.
      * @property headerNames the names of every header it carried, in lower case.
+     * @property customHeaders the first value of each `X-*` header it carried, by lower-case name,
+     *   so a test can tell the value a header was sent with, not only that it was sent.
      */
-    data class Seen(val httpMethod: String, val authorization: String?, val headerNames: Set<String> = emptySet())
+    data class Seen(
+        val httpMethod: String,
+        val authorization: String?,
+        val headerNames: Set<String> = emptySet(),
+        val customHeaders: Map<String, String> = emptyMap(),
+    )
 
     val requests = java.util.concurrent.CopyOnWriteArrayList<Seen>()
 
@@ -36,6 +43,9 @@ class FakeMcpServer(
                 exchange.requestMethod,
                 exchange.requestHeaders.getFirst("Authorization"),
                 exchange.requestHeaders.keys.mapTo(mutableSetOf()) { it.lowercase() },
+                exchange.requestHeaders.entries
+                    .filter { (name, _) -> name.startsWith("x-", ignoreCase = true) }
+                    .associate { (name, values) -> name.lowercase() to values.first() },
             )
             if (exchange.requestMethod == "DELETE") {
                 exchange.sendResponseHeaders(200, -1)

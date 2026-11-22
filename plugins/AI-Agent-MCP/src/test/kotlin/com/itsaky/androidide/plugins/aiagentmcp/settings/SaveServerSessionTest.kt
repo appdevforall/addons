@@ -82,13 +82,13 @@ class SaveServerSessionTest {
 
         val delete = old.requests.single { it.httpMethod == "DELETE" }
         assertEquals("the old session's DELETE did not carry the old token", "Bearer old-token", delete.authorization)
-        assertTrue("the old session's DELETE did not carry the old headers", "x-old" in delete.headerNames)
+        assertEquals("the old session's DELETE did not carry the old header's value", "1", delete.customHeaders["x-old"])
         assertFalse("the old URL was sent the new headers", "x-new" in delete.headerNames)
 
         McpConnections.withSession(McpServerStore.server(saved.id)!!) { it.initialize() }
         val first = moved.requests.first()
         assertEquals("the new URL's first request did not carry the new token", "Bearer new-token", first.authorization)
-        assertTrue("the new URL's first request did not carry the new headers", "x-new" in first.headerNames)
+        assertEquals("the new URL's first request did not carry the new header's value", "1", first.customHeaders["x-new"])
         assertFalse("the new URL was sent the old headers", "x-old" in first.headerNames)
     }
 
@@ -116,8 +116,8 @@ class SaveServerSessionTest {
         moved.requests.forEach { request ->
             assertEquals(
                 "a request read between the URL write and the token write (found $found) sent the new URL",
-                "Bearer new-token" to setOf("x-new"),
-                request.authorization to request.headerNames.filterTo(mutableSetOf()) { it.startsWith("x-") },
+                "Bearer new-token" to mapOf("x-new" to "1"),
+                request.authorization to request.customHeaders,
             )
         }
     }
@@ -147,8 +147,8 @@ class SaveServerSessionTest {
         moved.requests.forEach { request ->
             assertEquals(
                 "a request read between the token write and the headers write (found $found) sent the new URL",
-                "Bearer new-token" to setOf("x-new"),
-                request.authorization to request.headerNames.filterTo(mutableSetOf()) { it.startsWith("x-") },
+                "Bearer new-token" to mapOf("x-new" to "1"),
+                request.authorization to request.customHeaders,
             )
         }
     }
@@ -163,7 +163,7 @@ class SaveServerSessionTest {
         assertTrue(cleared)
         val delete = old.requests.single { it.httpMethod == "DELETE" }
         assertEquals("the session's DELETE did not carry its token", "Bearer old-token", delete.authorization)
-        assertTrue("the session's DELETE did not carry its headers", "x-old" in delete.headerNames)
+        assertEquals("the session's DELETE did not carry its header's value", "1", delete.customHeaders["x-old"])
     }
 
     @Test
