@@ -157,10 +157,13 @@ class LifecycleSessionCloseTest {
             }
         }
         McpServerHealth.addChangeListener(hold)
+        // Outside the try, so the finally can reach them when an assertion fails part way.
+        var deactivating: Thread? = null
+        var activating: Thread? = null
         try {
-            val deactivating = thread(name = "deactivating") { plugin.deactivate() }
+            deactivating = thread(name = "deactivating") { plugin.deactivate() }
             assertTrue("the deactivation's teardown never took its sessions out", held.await(10, TimeUnit.SECONDS))
-            val activating = thread(name = "activating") { plugin.activate() }
+            activating = thread(name = "activating") { plugin.activate() }
             // Whichever comes first: the activate ending, or a DELETE sent while the deactivation is held.
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
             while (activating.isAlive && deleteArrived.count > 0 && System.nanoTime() < deadline) activating.join(10)
@@ -181,6 +184,16 @@ class LifecycleSessionCloseTest {
             assertFalse("deactivate never finished", deactivating.isAlive)
         } finally {
             McpServerHealth.removeChangeListener(hold)
+            // Whatever failed above, the deactivating thread may still be waiting on the lock for
+            // `resume`, and it is not a daemon: left there, the failed assertion would hang the run
+            // instead of reporting it.
+            synchronized(lock) {
+                resume = true
+                lock.notifyAll()
+            }
+            releaseDelete.countDown()
+            deactivating?.join(10_000)
+            activating?.join(10_000)
         }
     }
 }
