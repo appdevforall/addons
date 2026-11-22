@@ -51,17 +51,21 @@ Metadata came from the Hugging Face API, not from model cards or memory:
   `sha256` comes from — no multi-gigabyte download was needed to obtain it.
 - `GET /{base}/resolve/main/config.json` — `max_position_embeddings` (gate 7)
 - `GET /{base}/resolve/main/tokenizer_config.json` (or `chat_template.jinja`) — gate 5
-- `HEAD` on each pinned `resolve/{sha}/{file}` URL — confirmed HTTP 200 with `Content-Length`
-  equal to the catalogued `sizeBytes` and `X-Linked-Etag` equal to the catalogued `sha256`.
+- `HEAD` on each pinned `resolve/{sha}/{file}` URL — confirmed the HTTP 302 to the CDN carries
+  `X-Linked-Size` equal to the catalogued `sizeBytes` and `X-Linked-Etag` equal to the catalogued
+  `sha256`. (`Content-Length` on that 302 is the redirect body, not the file.)
 
-All 12 entries passed that final HEAD cross-check, re-run after the most recent edit.
+All 10 entries passed that final HEAD cross-check, re-run on 2026-11-18 after the most recent edit.
 
 ## Catalog entries (maintainer-selected)
 
-**This catalog is a maintainer override, not a gate-derived list.** The first six models below were
-named explicitly by the ticket owner, replacing the eleven gate-passing entries that shipped
-earlier; the seventh was requested later in ADFA-6321. Three of the six break at least one hard gate; those gates are therefore **no longer enforced** in
-`CatalogLoader` (licence, 16k context) nor asserted in `CatalogLoaderTest`.
+**This catalog is a maintainer override, not a gate-derived list.** It has ten entries. The first
+six in the table below were named explicitly by the ticket owner, replacing the eleven gate-passing
+entries that shipped earlier; `qwen2-5-coder-1-5b-instruct-q4_k_m` was requested later in
+ADFA-6321, and the last three in ADFA-7213. Six of the ten break at least one hard gate — four of
+the owner's first six, plus SmolLM2 1.7B and OLMo 2 1B — as the *Gate waived* column shows. The
+licence and 16k-context gates are therefore **no longer enforced** in `CatalogLoader` nor asserted
+in `CatalogLoaderTest`.
 
 | Entry id | Base model | GGUF uploader | Ctx | Licence | Gate waived |
 |---|---|---|---|---|---|
@@ -72,13 +76,36 @@ earlier; the seventh was requested later in ADFA-6321. Three of the six break at
 | `smollm2-360m-instruct-q8_0` | `HuggingFaceTB/SmolLM2-360M-Instruct` | Hugging Face TB | 8192 | apache-2.0 | **7** (8192 context) |
 | `h2o-danube3-500m-base-q4_k_m` | `h2oai/h2o-danube3-500m-base` | mradermacher | 8192 | apache-2.0 | **1** (base model), **7** (8192 context) |
 | `qwen2-5-coder-1-5b-instruct-q4_k_m` | `Qwen/Qwen2.5-Coder-1.5B-Instruct` | Qwen (Alibaba Cloud) | 32768 | apache-2.0 | none |
+| `olmo-2-0425-1b-instruct-q4_k_m` | `allenai/OLMo-2-0425-1B-Instruct` | Ai2 (allenai) | 4096 | apache-2.0 (base only) | **2** (GGUF repo declares no licence), **7** (4096 context) |
+| `granite-4.0-1b-q4_k_m` | `ibm-granite/granite-4.0-1b` | IBM Granite | 131072 | apache-2.0 | none |
+| `smollm2-1.7b-instruct-q4_k_m` | `HuggingFaceTB/SmolLM2-1.7B-Instruct` | Hugging Face TB | 8192 | apache-2.0 | **7** (8192 context) |
 
 `qwen2-5-coder-1-5b-instruct-q4_k_m` was added by ADFA-6321: it is the only code-trained model in
 the catalog. Its gates 1, 2, 5, 6 and 7 were re-checked against the API on 2026-10-02, and
 `minRamBytes` is 4 GiB because it is the largest file here (1.04 GiB), one step above the 3 GiB of
 the ~0.8 GB entries.
 
-Gates 3 and 4 remain unproven for all seven, as before. Gate 5 (chat template) does not apply to the
+The last three were added by ADFA-7213 to give fully open, non-Qwen choices: SmolLM2 1.7B Instruct
+as the recommended model, OLMo 2 1B and a small Granite for the grant's model tests. Gates 1, 2, 5, 6
+and 7 were checked against the API on 2026-11-18. Notes:
+
+- **SmolLM2 1.7B Instruct** was listed below as rejected on gate 7; the owner now asks for it, so it
+  joins the 360M on the same context waiver. Official Q4_K_M GGUF.
+- **OLMo 2 1B Instruct** uses Ai2's own GGUF repository, whose `cardData` carries only `base_model`,
+  no `license`. Gate 2 is waived for it on the strength of the base repo's Apache-2.0 — the same
+  shape that keeps `bartowski/microsoft_Phi-4-mini-instruct-GGUF` rejected, accepted here because
+  the uploader is the model's author. Published parameter count is 1.48B, so the row says 1.5B rather than the name's "1B".
+- **Granite 4.0 1B** is the dense variant: `config.json` says `granitemoehybrid`, but every one of the
+  40 `layer_types` is `attention` and the GGUF architecture is `granite`. The hybrid-Mamba
+  `granite-4.0-h-1b` (0.90 GB) was passed over because llama.cpp's `granitehybrid` support is newer.
+  Its chat template is in `chat_template.jinja`, not `tokenizer_config.json`, and is embedded in the
+  GGUF. Published parameter count is 1.63B, so the row says 1.6B rather than the name's "1B". It is
+  the only one of the three that clears every statically checkable gate.
+
+All three take `minRamBytes` 4 GiB, as Qwen2.5-Coder does: they are the same ~1 GB, ~1.5B-parameter
+class.
+
+Gates 3 and 4 remain unproven for all ten, as before. Gate 5 (chat template) does not apply to the
 two base models - they have none, which is part of why they are not usable as assistants. Gate 6
 holds for every entry: single file, sha256 pinned to a commit revision, HEAD-verified.
 
@@ -106,7 +133,6 @@ Each row's evidence was read from the same API, not from recollection.
 | `Qwen/Qwen2.5-3B-Instruct` | 2 | `license: other`, `license_name: qwen-research` — unlike its Apache-2.0 1.5B and 7B siblings. |
 | `tiiuae/Falcon3-3B-Instruct` | 2 | `license: other`, `license_name: falcon-llm-license`; carries an acceptable-use policy. |
 | `bartowski/microsoft_Phi-4-mini-instruct-GGUF` | 2 | The base model is MIT, but the re-upload repository declares no licence at all. Gate 2 requires the licence on **both**, so it is out until the re-upload states one. |
-| `HuggingFaceTB/SmolLM2-1.7B-Instruct` | 7 | `max_position_embeddings: 8192`. |
 | `allenai/OLMo-2-1124-7B-Instruct` | 7 | `max_position_embeddings: 4096`. |
 | `openai/gpt-oss-20b` | — | Apache-2.0, ungated, 131072 context: it clears every statically checkable gate. Held back on size — roughly 12 GB at MXFP4 is not usable on the phones this plugin targets — pending the deferred runtime-budget gate. Not a licence rejection. |
 | `google/gemma-3-270m` | 2, plus unavailable | `license: gemma`, `gated: manual`. **Requested by the owner but not addable:** the repo ships no GGUF, and the only GGUF conversions are of the `-it` variant, which is a different model. Substituting it was not authorised. |
@@ -119,8 +145,9 @@ Each row's evidence was read from the same API, not from recollection.
    want from `/api/models/{repo}/tree/{sha}?recursive=true`.
 3. Build the URL as `https://huggingface.co/{repo}/resolve/{sha}/{file}` — a commit sha, never
    `main`, or a re-upload would break the pinned checksum.
-4. `HEAD` that URL and confirm `Content-Length` matches `size` and `X-Linked-Etag` matches
-   `lfs.oid`.
+4. `HEAD` that URL (without following the redirect) and confirm `X-Linked-Size` matches `size`
+   and `X-Linked-Etag` matches `lfs.oid`. `Content-Length` on that 302 is the redirect body, not
+   the file.
 5. Write the strengths-and-weaknesses paragraph for **that quantization**, not for the model family,
    and say what it is bad at.
 6. Add the row here, then run `../gradlew test` — `CatalogLoaderTest` re-validates the whole asset.

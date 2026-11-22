@@ -8,6 +8,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Paths
 
 /**
  * A model file held open for the native loader.
@@ -40,7 +42,8 @@ class OpenModelFile(
     /**
      * Whether [nativePath] can be opened *by name*, which is all the native loader ever does with
      * it. That open re-resolves to the real inode against this app's own credentials rather than
-     * the SAF grant, so removable storage can refuse it where the descriptor was not. ADFA-5253.
+     * the SAF grant, so removable storage — and, with FUSE passthrough, shared storage — can refuse
+     * it where the descriptor was not. ADFA-5253, ADFA-7214.
      */
     fun isReopenable(): Boolean = try {
         openStream()?.use { true } ?: false
@@ -151,6 +154,19 @@ internal fun probeFilePath(path: String, onError: (Throwable) -> Unit): SourceRe
 }
 
 /**
+ * The shared-storage path for a descriptor's link target on the emulated volume, or null for
+ * anything else (removable storage, app-private files). Inside the app's mount namespace a
+ * lower-filesystem descriptor already links to `/storage/emulated/<user>/<path>` — measured on
+ * API 36 — while the same descriptor seen from outside the sandbox links to
+ * `/data/media/<user>/<path>`; both name the one file. ADFA-7214.
+ */
+internal fun sharedStoragePathFor(linkTarget: String): String? =
+    EMULATED_VOLUME_PATH.matchEntire(linkTarget)?.destructured
+        ?.let { (user, path) -> "/storage/emulated/$user/$path" }
+
+private val EMULATED_VOLUME_PATH = Regex("""(?:/storage/emulated|/data/media)/(\d+)/(.+)""")
+
+/**
  * Opens the user's selected model for the native loader, in place and without copying it.
  * An interface so the backend's load path can be exercised without a device.
  */
@@ -189,10 +205,17 @@ interface NativeModelSource {
  * [NativeModelSource] over the document provider and the filesystem.
  *
  * @param context supplies the resolver holding the picker's persisted read grant
+ * @param sharedStoragePathOf maps a descriptor's procfs path to the same file's shared-storage
+ *   path, or null; a parameter so tests can stand in for `/proc` and `/storage`
  * @param onError reports a failed open, so a bare "model unavailable" can still be explained
  */
 class ContentNativeModelSource(
     private val context: Context,
+    private val sharedStoragePathOf: (String) -> String? = { procfsPath ->
+        runCatching { Files.readSymbolicLink(Paths.get(procfsPath)).toString() }
+            .getOrNull()
+            ?.let(::sharedStoragePathFor)
+    },
     private val onError: (String, Throwable) -> Unit = { _, _ -> },
 ) : NativeModelSource {
 
@@ -204,10 +227,27 @@ class ContentNativeModelSource(
      * Takes the document's descriptor and hands the native loader its procfs path. `"r"` is the
      * only mode asked for, which is all the persisted grant covers. The descriptor need not be a
      * file — a pipe is reported through [OpenModelFile.isSeekable] for the caller to refuse.
+     *
+     * Without FUSE passthrough (Android 11+, any device that does not opt in), MediaProvider
+     * answers for a shared-storage file with a descriptor on the lower filesystem — whether the
+     * document came from the external-storage provider or as a Downloads `msf:` id. Its procfs
+     * path then links to `/data/media/<user>/…`, a MediaProvider-owned inode this app cannot open
+     * by name. The same file's `/storage/emulated/<user>/…` path can — the IDE holds all-files
+     * access — so that is handed over instead, when it opens and is the same size. The descriptor
+     * is then closed: while MediaProvider holds the file open on the lower filesystem it serves
+     * FUSE opens as direct I/O, and llama.cpp's `mmap` of the path fails with ENODEV. ADFA-7214.
      */
     private fun openDocument(uriString: String): OpenModelFile? = try {
-        context.contentResolver.openFileDescriptor(Uri.parse(uriString), "r")
-            ?.let { OpenModelFile("$FD_DIR${it.fd}", it.statSize, it) }
+        context.contentResolver.openFileDescriptor(Uri.parse(uriString), "r")?.let { descriptor ->
+            val procfs = OpenModelFile("$FD_DIR${descriptor.fd}", descriptor.statSize, descriptor)
+            if (procfs.isReopenable()) return@let procfs
+            sharedStoragePathOf(procfs.nativePath)
+                ?.takeIf { File(it).length() == descriptor.statSize }
+                ?.let { OpenModelFile(it, descriptor.statSize, null) }
+                ?.takeIf { it.isReopenable() }
+                ?.also { procfs.close() }
+                ?: procfs
+        }
     } catch (e: Exception) {
         onError("could not open the selected model $uriString", e)
         null
