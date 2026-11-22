@@ -176,8 +176,10 @@ class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildSt
             tag = LayoutEditorDocs.TAG_HELP,
             summary = "<b>Help</b><br>Open the Layout Editor documentation.",
             detail = "Everything in the editor is documented — long-press any control, palette item, or " +
-                "attribute for its tooltip. Tap <i>Learn more</i> for the IDE's plugin documentation.",
-            buttons = docButtons(),
+                "attribute for its tooltip. Tap <i>Learn more</i> for the Layout Editor guide.",
+            buttons = listOf(
+                PluginTooltipButton(description = "Learn more", uri = "i/layout-editor.html", order = 0, directPath = true),
+            ),
         ),
         PluginTooltipEntry(
             tag = LayoutEditorDocs.TAG_VIEW_TYPE,
