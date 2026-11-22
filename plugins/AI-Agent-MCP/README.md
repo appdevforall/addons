@@ -205,6 +205,11 @@ Three rare session races, accepted for now:
   change, so the new URL never gets them; the pane reports the failure and the
   credential has to be entered again. If forgetting them fails too, the URL
   stays as it was.
+  Accepted as rare: when the URL is put back, a token or headers that the
+  Keystore did store for the new URL in that save stay stored, and requests to
+  the old URL carry them. That case needs two refused Keystore writes and one
+  accepted write in the same save; the pane reports the failure, and **Clear
+  stored credential** removes them.
   Limit, on purpose: a blank token field means "keep the stored token", so
   changing only the URL and leaving the token blank sends the stored token to
   the new URL. Headers behave the same only when the stored ones could not be
