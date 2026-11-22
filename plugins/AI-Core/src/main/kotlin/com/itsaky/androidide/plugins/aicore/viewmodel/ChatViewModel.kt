@@ -217,8 +217,8 @@ class ChatViewModel(
     private val currentBackendId: String
         get() = _backendStatus.value.id
 
-    // Tool execution infrastructure
-    private val approvalManager = ToolApprovalManager(sharedPromptConfig) { handler ->
+    // Tool execution infrastructure. Internal so a test can hold a grant across a chat change.
+    internal val approvalManager = ToolApprovalManager(sharedPromptConfig) { handler ->
         ToolDescriptions.describe(sharedPromptConfig.config(), RESPOND_TOOL, handler)
     }
     /** One cap for the loop's cut and the handlers that fit under it; see [ToolOutputBudget]. */
@@ -558,6 +558,10 @@ class ChatViewModel(
      */
     private fun rebuildAgentTools() {
         agentTools = buildAgentTools()
+        // A grant belongs to one definition of a tool; one that changed or went away loses it.
+        approvalManager.retainSessionApprovals(
+            approvalManager.grantableKeys(agentTools.router.getAllHandlers()),
+        )
         android.util.Log.i(
             TAG,
             "Tool set rebuilt: ${agentTools.router.getAllHandlers().size} tools, " +
@@ -2176,6 +2180,8 @@ class ChatViewModel(
         }
         // The title described the conversation just cleared; the next first reply writes a new one.
         resetGeneratedTitle()
+        // A cleared chat starts over like a new one, so what was allowed in it is asked again.
+        approvalManager.clearSessionApprovals()
         forgetRetryPoint()
         setState(AgentState.Idle)
         // Written now rather than debounced: a clear is deliberate and must survive a force-stop.
@@ -2255,6 +2261,9 @@ class ChatViewModel(
      */
     private fun adoptSession(session: ChatSession) {
         _currentSessionId.value = session.id
+        // "Always Allow" lasts for one chat, as its tooltip says. This ViewModel lives as long as
+        // the plugin, across every chat and project, so its approval manager cannot end it alone.
+        approvalManager.clearSessionApprovals()
         showTranscript(session.messages, session.compaction)
         // Also dropped here: the readiness edge may have fired while another chat was current.
         if (_backendStatus.value.isAvailable) clearBackendSetupNotices()
