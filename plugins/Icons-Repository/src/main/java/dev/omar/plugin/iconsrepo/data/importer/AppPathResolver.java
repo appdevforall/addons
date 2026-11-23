@@ -65,7 +65,9 @@ public class AppPathResolver implements ImportPathResolver {
             }
         }
 
-        if (targetDirectories.isEmpty()) {
+        // Fall back to app/ only for All modules. An explicit target that no longer resolves must
+        // fail, not write into a different module.
+        if (targetDirectories.isEmpty() && isAllModules) {
             File fallback = new File(project.getRootDir(), "app/src/main/res/drawable");
             if (!fallback.exists() && fallback.getParentFile() != null && fallback.getParentFile().canWrite()) {
                 fallback.mkdirs();
@@ -90,17 +92,30 @@ public class AppPathResolver implements ImportPathResolver {
         if (module.getSourceSets() != null) {
             for (SourceSet source : module.getSourceSets()) {
                 if ("main".equalsIgnoreCase(source.getName())) {
+                    // A resource directory can have any name (e.g. other/res1), so take the
+                    // configured one: the first that exists outside build/, else the first given.
+                    File first = null;
                     if (source.getResourceDirs() != null) {
                         for (File resDir : source.getResourceDirs()) {
-                            if (resDir != null && ("res".equalsIgnoreCase(resDir.getName()) || resDir.getPath().endsWith("res"))) {
+                            if (resDir == null) continue;
+                            if (first == null) first = resDir;
+                            if (resDir.isDirectory() && !isUnderBuildDir(module, resDir)) {
                                 return new File(resDir, "drawable");
                             }
                         }
+                    }
+                    if (first != null) {
+                        return new File(first, "drawable");
                     }
                 }
             }
         }
         File mainResDir = new File(module.getProjectDir(), "src/main/res");
         return new File(mainResDir, "drawable");
+    }
+
+    private static boolean isUnderBuildDir(@NonNull IModule module, @NonNull File dir) {
+        File buildDir = new File(module.getProjectDir(), "build");
+        return dir.toPath().normalize().startsWith(buildDir.toPath().normalize());
     }
 }

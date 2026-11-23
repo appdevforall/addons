@@ -80,17 +80,15 @@ public final class IconsRepositoryHelp {
                         "<p>Use lowercase letters, digits and single underscores, starting"
                                 + " with a letter, for example <code>ic_arrow_back</code>. The"
                                 + " icon is saved as <code>res/drawable/&lt;name&gt;.xml</code>."
-                                + " A module that already has a file with that name is skipped,"
-                                + " and the dialog says which.</p>",
+                                + " A module that already has a drawable with that name, in any"
+                                + " format, is skipped, and the dialog says which.</p>",
                         "Naming the drawable",
                         "index.html"),
                 entry(
                         TAG_MODULE,
                         "Which module's res/drawable folder receives the icon.",
                         "<p>The dialog starts on <code>:app</code>. <b>All modules</b> writes a"
-                                + " copy into every module the plugin finds: any folder with a"
-                                + " build file and <code>src/main</code>, which can include"
-                                + " modules that are not Android ones.</p>",
+                                + " copy into every Android module the plugin finds.</p>",
                         "Choosing a module",
                         "index.html"),
                 entry(

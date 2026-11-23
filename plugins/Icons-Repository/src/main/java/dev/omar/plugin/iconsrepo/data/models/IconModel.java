@@ -46,7 +46,8 @@ public class IconModel {
     public int hashCode() {
         int result = 17;
         result = 31 * result + (iconName != null ? iconName.hashCode() : 0);
-        result = 31 * result + (svgIcon != null ? svgIcon.hashCode() : 0);
+        // The same fields as equals(); the parsed svgIcon is a cache and must not change the hash.
+        result = 31 * result + Arrays.hashCode(data);
         return result;
     }
 

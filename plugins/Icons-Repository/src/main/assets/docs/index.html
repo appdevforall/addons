@@ -62,9 +62,8 @@
         <td>Target module</td>
         <td>
             Which module receives the icon. The dialog starts on <code>:app</code>.
-            <b>All modules</b> writes a copy into every module the plugin finds: any folder with a
-            build file and <code>src/main</code>, which can include modules that are not Android
-            ones.
+            <b>All modules</b> writes a copy into every Android module the plugin finds: a folder
+            with a build file, <code>src/main</code>, and an Android manifest or Android plugin.
         </td>
     </tr>
     <tr id="color">
@@ -91,8 +90,9 @@
     <code>R.drawable.ic_arrow_back</code> in code.
 </p>
 <p>
-    <b>An existing file is never replaced.</b> A module that already has a drawable with that
-    name is skipped, and the dialog lists the skipped files. Pick a new name to import it there.
+    <b>An existing drawable is never replaced.</b> A module whose <code>res/drawable</code>
+    already has a drawable with that name, in any format (for example <code>ic_home.png</code>),
+    is skipped, and the dialog lists the skipped files. Pick a new name to import it there.
 </p>
 
 <h2 id="help">Getting help</h2>

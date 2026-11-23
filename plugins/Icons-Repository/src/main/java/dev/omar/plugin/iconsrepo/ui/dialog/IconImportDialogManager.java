@@ -122,14 +122,15 @@ public class IconImportDialogManager {
             String name = module.getName();
             String formattedName = name.startsWith(":") ? name : ":" + name;
             displayNames.add(formattedName);
-            moduleTargetNames.add(name);
+            // The prefixed path, so a module named "all" can't be read as the All modules target.
+            moduleTargetNames.add(formattedName);
         }
 
         binding.txtListModules.setAdapter(
                 new ArrayAdapter<>(context, android.R.layout.simple_list_item_1, displayNames));
 
-        // Default to one module, :app if there is one. All modules (position 0) is opt-in: discovery
-        // counts any folder with a build file and src/main, so it can include non-Android modules.
+        // Default to one module, :app if there is one; All modules (position 0) is opt-in, so an
+        // import never spreads across modules unless asked.
         binding.txtListModules.setSelection(defaultModulePosition(availableModules));
     }
 

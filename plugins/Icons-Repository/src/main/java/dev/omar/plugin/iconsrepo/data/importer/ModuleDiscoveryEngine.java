@@ -119,21 +119,12 @@ public class ModuleDiscoveryEngine {
         return trimmed.startsWith(":") ? trimmed : ":" + trimmed;
     }
 
+    /**
+     * Whole Gradle paths only: matching on the last segment would make {@code :feature:icons} also
+     * select {@code :other:icons}.
+     */
     public static boolean matchesModuleName(@NonNull IModule module, @NonNull String target) {
-        String modNorm = normalizeModuleName(module.getName());
-        String targetNorm = normalizeModuleName(target);
-
-        if (modNorm.equalsIgnoreCase(targetNorm)) {
-            return true;
-        }
-
-        int lastColonMod = modNorm.lastIndexOf(':');
-        String leafMod = lastColonMod >= 0 ? modNorm.substring(lastColonMod + 1) : modNorm;
-
-        int lastColonTarget = targetNorm.lastIndexOf(':');
-        String leafTarget = lastColonTarget >= 0 ? targetNorm.substring(lastColonTarget + 1) : targetNorm;
-
-        return leafMod.equalsIgnoreCase(leafTarget);
+        return normalizeModuleName(module.getName()).equalsIgnoreCase(normalizeModuleName(target));
     }
 
     private static Map<String, File> parseSettingsGradle(File rootDir) {
@@ -211,7 +202,33 @@ public class ModuleDiscoveryEngine {
         File buildGradleKts = new File(dir, "build.gradle.kts");
         File srcMain = new File(dir, "src/main");
 
-        return (buildGradle.exists() || buildGradleKts.exists()) && srcMain.exists();
+        if (!(buildGradle.exists() || buildGradleKts.exists()) || !srcMain.exists()) {
+            return false;
+        }
+        // A build file and src/main alone also match buildSrc and JVM-only modules, so also
+        // require a manifest or an Android plugin in the build file.
+        return new File(srcMain, "AndroidManifest.xml").exists()
+                || appliesAndroidPlugin(buildGradle)
+                || appliesAndroidPlugin(buildGradleKts);
+    }
+
+    private static boolean appliesAndroidPlugin(File buildFile) {
+        if (!buildFile.isFile()) {
+            return false;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(buildFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // com.android.application / com.android.library, or a catalog alias such as
+                // libs.plugins.android.application.
+                if (line.contains("com.android.") || line.contains("plugins.android.")) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+            // Unreadable build file: not evidence of an Android module.
+        }
+        return false;
     }
 
     public static IModule createSyntheticModule(@NonNull String moduleName, @NonNull File moduleDir) {

@@ -40,7 +40,8 @@ public class SvgToVectorImporter implements IconImporter {
             }
 
             String rawXml = buildVectorXml(params, pathData);
-            String fileName = sanitizeFileName(params.source.getName()) + ".xml";
+            String resourceName = sanitizeFileName(params.source.getName());
+            String fileName = resourceName + ".xml";
 
             List<File> destDirs = params.dest.getDrawableDirectories(params.currentProject);
             if (destDirs.isEmpty()) {
@@ -53,8 +54,9 @@ public class SvgToVectorImporter implements IconImporter {
             int importedCount = 0;
             for (File destDir : destDirs) {
                 File outputFile = new File(destDir, fileName);
-                if (outputFile.exists()) {
-                    skipped.add(displayPath(params, outputFile));
+                File existing = findResource(destDir, resourceName);
+                if (existing != null) {
+                    skipped.add(displayPath(params, existing));
                     continue;
                 }
                 Path parentPath = Objects.requireNonNull(outputFile.getParentFile()).toPath();
@@ -131,6 +133,23 @@ public class SvgToVectorImporter implements IconImporter {
         serializer.flush();
 
         return writer.toString();
+    }
+
+    /**
+     * A drawable with this resource name in any format (ic_home.png, ic_home.9.png, ic_home.xml),
+     * since Android resource names exclude the extension and two would collide.
+     */
+    private File findResource(File dir, String resourceName) {
+        File[] files = dir.listFiles();
+        if (files == null) return null;
+        for (File f : files) {
+            String n = f.getName();
+            int dot = n.indexOf('.');
+            if ((dot < 0 ? n : n.substring(0, dot)).equals(resourceName)) {
+                return f;
+            }
+        }
+        return null;
     }
 
     private String displayPath(ImportParams params, File file) {
