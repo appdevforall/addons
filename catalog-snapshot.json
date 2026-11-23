@@ -8,8 +8,8 @@
       },
       "description": "Connects the AI Core Agent to Anthropic's Claude API with your own API key, billed to your Claude Console account. The Agent's tools are declared to Claude directly, so it reads and edits your project through structured calls. Prompts and any file contents the Agent sends go to Anthropic.",
       "download": {
-        "sha256": "2d864e79bca8b1a706e18be6e39c5155b22e6f21f994c3c88c525b2cf08ec9c5",
-        "size": 10229142,
+        "sha256": "611411bf145be1b298853fbd07ef6f50f3dd7ca1f824ebd625023c07dc7b8402",
+        "size": 10229138,
         "url": "https://addons.appdevforall.org/dl/ai-agent-claude.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-claude-night.png",
@@ -43,7 +43,7 @@
       },
       "description": "Connects the AI Core Agent and the other AI addons to Google's Gemini API with your own API key. Prompts and any file contents the Agent sends go to Google.",
       "download": {
-        "sha256": "805165cfe582d65dbd6ad05c8fb37418322dddb3b21762b13eb3b943c79a9481",
+        "sha256": "cfdeff519bd07af3820534c10cea7939db5e53dc5d0568a0b0fa363440135402",
         "size": 10158981,
         "url": "https://addons.appdevforall.org/dl/ai-agent-gemini.cgp"
       },
@@ -78,8 +78,8 @@
       },
       "description": "Runs GGUF models on the device with llama.cpp and serves them to the AI Core Agent and the other AI addons. It asks for no network permission, so your prompts and code never leave the device.",
       "download": {
-        "sha256": "ea7422d341b6d1c54942d7ebb2eeace41e5840cd9922ec01e763d50439b755ba",
-        "size": 17474809,
+        "sha256": "958c6cd45ec8ac593684f481a911389437fa1edebaac655d5e056082c5d52518",
+        "size": 17474805,
         "url": "https://addons.appdevforall.org/dl/ai-agent-local.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-local-night.png",
@@ -114,8 +114,8 @@
       },
       "description": "Connects to MCP servers you configure and adds the tools they offer to the AI Core Agent, next to its own. Each tool starts switched off until you enable it. When the Agent calls a tool, the arguments it chose, which can include your code, are sent to the MCP server that offers that tool. This addon adds tools, not a model, so you still need an AI backend.",
       "download": {
-        "sha256": "c8a36aa3a2cb40715416ce94a1b9e02003e88e034d5ceb754091256b583eb43d",
-        "size": 10221516,
+        "sha256": "ef134e20c3e01c69fe13948e7844633a576cbd3775ae087d5762dd06bc12eb86",
+        "size": 10221512,
         "url": "https://addons.appdevforall.org/dl/ai-agent-mcp.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-mcp-night.png",
@@ -149,8 +149,8 @@
       },
       "description": "Connects the AI Core Agent and the other AI addons to any server that speaks the OpenAI chat completions API: OpenAI itself, OpenRouter, or a local Ollama, LM Studio or llama-server. Set the server URL and, where needed, an API key. Prompts and any file contents the Agent sends go to that server.",
       "download": {
-        "sha256": "0ba612ec7879bdafff958a3a7ef928a178d9cb6af0f93900a3b1b72f7629702e",
-        "size": 10298869,
+        "sha256": "2c3b2d2df8c9a19509582f41aeced3ce711bb2a75f5695574b763a999feb7971",
+        "size": 10298865,
         "url": "https://addons.appdevforall.org/dl/ai-agent-openai.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-agent-openai-night.png",
@@ -184,8 +184,8 @@
       },
       "description": "Adds grey ghost text to the editor that completes the line you are writing. It runs no model itself: AI Core sends the code before the cursor to the AI backend you select, which runs on the device or sends it to that backend's cloud service.",
       "download": {
-        "sha256": "0bec6515823cef1ecfc7365719534e11488fddc0f058c3852cb838da30f2752f",
-        "size": 9785924,
+        "sha256": "6f0191240d331e440fd4a0f8c2ec0a37386546aa3438aee7ebe9158db8ed6fed",
+        "size": 9785916,
         "url": "https://addons.appdevforall.org/dl/ai-code-suggestions.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-code-suggestions-night.png",
@@ -219,8 +219,8 @@
       },
       "description": "Adds an Agent chat tab that can read, search and edit the open project, asking for your approval before it changes anything. It also routes requests from other AI addons, such as Code Suggestions, Speech to Text and Vector Search, to a model. AI Core runs no model itself: install at least one backend, such as AI Agent Local, Gemini, OpenAI or Claude. Prompts and any file contents the Agent sends go to the backend you select: they stay on the device with AI Agent Local, and go to that provider's service with a cloud backend.",
       "download": {
-        "sha256": "7e6e70eebb5b4e50d4edafe0b0db44a0da45e3360d5a338892cb6402279c7f49",
-        "size": 11661980,
+        "sha256": "c125c8ad75f797b6ab787b9389f69707a5832ca48d71bf0e069fe9627e3f460c",
+        "size": 11679220,
         "url": "https://addons.appdevforall.org/dl/ai-core.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-core-night.png",
@@ -232,8 +232,8 @@
       "pageUrl": "https://addons.appdevforall.org/p/ai-core.html",
       "slug": "ai-core",
       "sourceTarball": {
-        "sha256": "0fa6a6eba2bf788f2ed67950505cfa9370719478450e74a0239bc41375fbe4ff",
-        "size": 995722,
+        "sha256": "5e7b709772c7e34ac41d185be56108b576eb11d0becf8a6862b9b763021d7064",
+        "size": 999273,
         "url": "https://addons.appdevforall.org/src/ai-core-src.tar.gz"
       },
       "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/AI-Core",
@@ -255,8 +255,8 @@
       },
       "description": "An offline \"Introduction to AI\" course from Learn AI Anywhere: 26 lesson videos plus interactive activities, the NeuroPocket app, and teacher resources. Everything runs fully offline inside Code on the Go — no internet required.",
       "download": {
-        "sha256": "b897f51d40fe602008171d5ba34619e0f3e7abe8214a2e309c0e72488cb2ba50",
-        "size": 123751936,
+        "sha256": "bacc4067886d142e7fdf91c151181edf0042f9aaf1a88546802e0642d8bd8658",
+        "size": 123751932,
         "url": "https://addons.appdevforall.org/dl/ai-literacy-course.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ai-literacy-course-night.png",
@@ -291,7 +291,7 @@
       },
       "description": "Opens an APK and shows what is inside it: the manifest, the resources, the DEX classes, and the signing information. You do not need a desktop tool to look into a build.",
       "download": {
-        "sha256": "a111f2d282afc01002b85e65aa1290cd4c093827be71b2cc47494c24ab8510f7",
+        "sha256": "051f49b83807aa4f2173f084bff7f136968e6dda8998cacdb58b001ee3808957",
         "size": 4544755,
         "url": "https://addons.appdevforall.org/dl/apk-analyzer.cgp"
       },
@@ -326,7 +326,7 @@
       },
       "description": "Adds a shelf of reference books to the Code on the Go help system. The books are stored on the device, so they work with no network.",
       "download": {
-        "sha256": "83733e119b74a1acb43e437fbeac1b692648da16fcfe8f977c6bbe9231e03c38",
+        "sha256": "b847f19df097f6d833ec84cd1ed7753eeb7aa85eab98ea52292cc46c5c40f37c",
         "size": 21029620,
         "url": "https://addons.appdevforall.org/dl/bookshelf.cgp"
       },
@@ -361,7 +361,7 @@
       },
       "description": "A wrench rocks on the editor toolbar while Gradle works, then a tick or a cross shows whether the build passed. When nothing is building the icon is greyed out.",
       "download": {
-        "sha256": "d20eb89f64b6766f59029760b9b3443ca632a14a33f720d2961df83559d66b54",
+        "sha256": "920bb2bf4c4682165591f413e891a5fa5873e6cd5c0293cbd42012100ccd5ca3",
         "size": 693507,
         "url": "https://addons.appdevforall.org/dl/build-animation.cgp"
       },
@@ -396,7 +396,7 @@
       },
       "description": "Records how long you work on each project and turns those records into an invoice. Useful when you write code for clients from the device.",
       "download": {
-        "sha256": "b5f88984f1b3ad8680912a26e3b79208fb9e504c538051f868202e8a25398e60",
+        "sha256": "1886c733a389e3e98e73914ad8e1a2e3912b31602c1a3c022a6038ae0ca28a33",
         "size": 5663666,
         "url": "https://addons.appdevforall.org/dl/client-time-tracker.cgp"
       },
@@ -431,7 +431,7 @@
       },
       "description": "Two people edit the same file at the same time, over WiFi, with live cursors. There is no server and nothing leaves the local network.",
       "download": {
-        "sha256": "f3900d69271a3fa0f775916832a343a02df3df7462a4e10d409652cf379f45e2",
+        "sha256": "a826ba641d043b8407b8b509a9c0ceebc39503a8edcd9c08128106926d4fb2f1",
         "size": 6736644,
         "url": "https://addons.appdevforall.org/dl/code-together.cgp"
       },
@@ -466,7 +466,7 @@
       },
       "description": "Installs a Custom Keyboard template on the New Project screen. It creates a working Android keyboard: the input method service, a key view with long-press alternatives, shift and symbols pages, and a setup screen that walks the user through turning it on. Each language is a JSON file you edit, with no code changes, so a keyboard for a language Android does not cover is a matter of writing its layout. It ships with English and Hindi layouts, and every key can type several code points, which scripts such as Devanagari need for conjuncts.",
       "download": {
-        "sha256": "2459c442d590d357c8ab7ac261a930f8971b16f141f8bcc583b9ac290a52e7fb",
+        "sha256": "08c84784f40eb6c1ea21b46d87d3b4a3f514b02da45eb1cf6c0d6e98c6c2088e",
         "size": 216614,
         "url": "https://addons.appdevforall.org/dl/custom-keyboard.cgt"
       },
@@ -498,7 +498,7 @@
       },
       "description": "Keeps a personal library of code fragments. Save a block once, then insert it into any file from the editor.",
       "download": {
-        "sha256": "42fac3351fa7ea177282d3f431c16c1f3e00c0be384af24ca9807dbbbdd61521",
+        "sha256": "762bf82258c2198d9f27dc4fce930cd7e6ff25fd1e86664cb04a3a102ff6d2f3",
         "size": 4592859,
         "url": "https://addons.appdevforall.org/dl/favorite-snippets.cgp"
       },
@@ -533,7 +533,7 @@
       },
       "description": "Installs Flutter project templates so you can start a Flutter app from the New Project screen instead of building the structure by hand. Five starters, one for each state-management approach: plain setState, BLoC, Provider, GetX and Riverpod. Contributed to Code on the Go by RJ Ali, from an original idea by Raju Kumar.",
       "download": {
-        "sha256": "10ca2925f5ba3de3edde05e0cb606e4036aa81daf7e77ec0294af77bb67e7470",
+        "sha256": "0d8eee7a92977f2390eb40e446ae125c58225f132f9f6e1568aaa462dea14610",
         "size": 117662,
         "url": "https://addons.appdevforall.org/dl/flutter-starter-kit.cgt"
       },
@@ -563,7 +563,7 @@
       },
       "description": "Installs three small Android game projects built with jMonkeyEngine, so you can start from a complete, playable game instead of an empty activity. Demo is a 3D Earth you spin by touch with an orbiting rocket, written in Java. Block Game is a falling-block puzzle and Bubble Wand is a first-person bubble shooter, both written in Kotlin. Each project builds and runs on the device.",
       "download": {
-        "sha256": "a9b73748f21cc77d8e7c9c60e90072c147ae07100057327b285cfa0b499101f2",
+        "sha256": "0d04ad0040effb31a61fd69126d0bb84b02cbc46a251730575f54eefba68da27",
         "size": 22070537,
         "url": "https://addons.appdevforall.org/dl/fun-and-games-jme.cgt"
       },
@@ -595,7 +595,7 @@
       },
       "description": "Installs three small Android game projects built with libGDX, so you can start from a complete, playable game instead of an empty activity. Demo is a 3D Earth you spin by touch with an orbiting rocket, written in Java. Block Game is a falling-block puzzle and Bubble Wand is a first-person bubble shooter, both written in Kotlin. Each project builds and runs on the device. These are libGDX ports of the Fun and Games JME templates.",
       "download": {
-        "sha256": "79dccb9e8e092de50b74551703f13bc397f7ad67a2f0250a08893927dd9a6060",
+        "sha256": "d80a28186823ce8868d18e3a5dd608660165ae218b43e84cb6583e80a3142721",
         "size": 10161502,
         "url": "https://addons.appdevforall.org/dl/fun-and-games-libgdx.cgt"
       },
@@ -627,7 +627,7 @@
       },
       "description": "Lists a curated set of small GGUF language models and downloads the one you choose. The AI addons then run that model on the device.",
       "download": {
-        "sha256": "81fe045e4c0772a94f9fb1883bce411586939fa434d0819be00db62321c07693",
+        "sha256": "1a6674250df517909d903e9c3fdda0f3ebd5a7be057e998d42b92e9524f3b781",
         "size": 4854760,
         "url": "https://addons.appdevforall.org/dl/get-ai-models.cgp"
       },
@@ -662,7 +662,7 @@
       },
       "description": "Browses a library of vector drawable icons and writes the one you pick straight into the project resources. Contributed to Code on the Go by Omar Haidar.",
       "download": {
-        "sha256": "4ff15a3fa23a6d1bd3646df33a90a21792907dcb62e3e17971132e07ce54fdc3",
+        "sha256": "39818c6501b939282d17887d9ae2eec06ccda584d0c210766cbee7268e6d0bd9",
         "size": 8163791,
         "url": "https://addons.appdevforall.org/dl/icons-repository.cgp"
       },
@@ -697,7 +697,7 @@
       },
       "description": "Compiles a folder of Java and Kotlin files on the device and runs the main class you choose, with the arguments you give it. Output appears in Build Output. Adds a Java/Kotlin Program template.",
       "download": {
-        "sha256": "c35ba29d8adfb056f29204a93fec95140dda6e9097d3e1a2b98602c940e29c16",
+        "sha256": "5b4b9210bb58c42e3ef0348da86c9e73c3e8989bd2ca947824a7ee611379179b",
         "size": 1090221,
         "url": "https://addons.appdevforall.org/dl/jvm-tools.cgp"
       },
@@ -732,8 +732,8 @@
       },
       "description": "Draws a Jetpack Compose @Preview function without building and running the whole app, so you see a layout change quickly.",
       "download": {
-        "sha256": "c0ab5955691ed06043ea453bafc863339b697b0d04595a29a4c35e943899716b",
-        "size": 30194323,
+        "sha256": "c254f0b4dc09820a72966c15ad702114c90c822ad446937030d4344842278a75",
+        "size": 30201687,
         "url": "https://addons.appdevforall.org/dl/jetpack-compose-preview.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/jetpack-compose-preview-night.png",
@@ -745,8 +745,8 @@
       "pageUrl": "https://addons.appdevforall.org/p/jetpack-compose-preview.html",
       "slug": "jetpack-compose-preview",
       "sourceTarball": {
-        "sha256": "c17a4e070b14556e70c5c5744d3691b719d9c1315a0a5318a1b24cab78d7e46d",
-        "size": 21634118,
+        "sha256": "5aa033b1f8e3cbb259b35754378560d8579261c95bbfce1a46dca6213a176f66",
+        "size": 21636218,
         "url": "https://addons.appdevforall.org/src/jetpack-compose-preview-src.tar.gz"
       },
       "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Jetpack-Compose-Preview",
@@ -767,8 +767,8 @@
       },
       "description": "Generates an Android release keystore and stores it safely, so you can sign a release build without a desktop machine.",
       "download": {
-        "sha256": "f1fc5aa4454f5e3accb6ac640d25d6ae6ab5c0f6d16ac3992871659b04fa72b7",
-        "size": 7945185,
+        "sha256": "27261b09bfae53e3a96a5c664b688d20152a3a5fbf13f696cfc5c15e12805478",
+        "size": 7945181,
         "url": "https://addons.appdevforall.org/dl/keystore-generator.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/keystore-generator-night.png",
@@ -802,7 +802,7 @@
       },
       "description": "A visual editor for Android XML layouts. Drag a view onto the canvas and the editor writes the XML for you.",
       "download": {
-        "sha256": "e1352ca1a6d73b2afbec0f1f7a222179a5fcaea88e31603387e0aba7253b063f",
+        "sha256": "8e9af76addf581db0f55b27cdbbb234ea1294fbf1d2e92b58990c3dcba013b41",
         "size": 9141770,
         "url": "https://addons.appdevforall.org/dl/layout-editor.cgp"
       },
@@ -837,7 +837,7 @@
       },
       "description": "Renders the Markdown or HTML file you are editing beside the source, and updates the preview as you type.",
       "download": {
-        "sha256": "43f6946eff7548601bafd1d4bd63412f2b6b12891137e183c1011f38c923605e",
+        "sha256": "06c2e199aa2300c799f2c1188e43bc442c2dd19c3407ab3e3e56327f939a6811",
         "size": 4575829,
         "url": "https://addons.appdevforall.org/dl/markdown-previewer.cgp"
       },
@@ -872,8 +872,8 @@
       },
       "description": "Downloads and installs the Android NDK and CMake on the device, then adds a native activity template so you can start a C++ project.",
       "download": {
-        "sha256": "d881af65c5e867b842137bc269198cec9198b0bc907849b82c6d613e6a295a5c",
-        "size": 202752594,
+        "sha256": "07e6e6811c35709d64ef024275535b2b5a6ef04ac29ccd01f66f0edcad9f87ec",
+        "size": 202752590,
         "url": "https://addons.appdevforall.org/dl/ndk-installer.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/ndk-installer-night.png",
@@ -907,7 +907,7 @@
       },
       "description": "Installs two small native Android projects on the New Project screen. Each has one button that writes a series of lines to the Android log from native code, which Code on the Go shows in its App Logs window: one line at each priority, formatted values, a failed system call, and a line from a second thread. The C project uses C11 and the liblog calls directly; the C++ project uses C++17 with a type-safe stream logger and an RAII timer. Both need the NDK-Installer plugin, which provides the NDK and CMake.",
       "download": {
-        "sha256": "a278e2e0b2939038cb731f7b870fadb0bed41fa15201e495aff5527f9358d696",
+        "sha256": "030eb728d8daa036fae296429da8e70e9c98c87b1e2e100277f72dbe20b3d61e",
         "size": 352927,
         "url": "https://addons.appdevforall.org/dl/native-logging-demos.cgt"
       },
@@ -939,8 +939,8 @@
       },
       "description": "Takes the project you have open and writes it out as a Code on the Go template, so you can start new projects from it.",
       "download": {
-        "sha256": "bd750aaae46462108968a93fef6ae848bcae51e8394b9ee0b8bce4c40ac7b1e5",
-        "size": 4642305,
+        "sha256": "8338b48986b26b6bd46c03f1a59526cfa7444440e0ea5790762d63a2c9f2a45f",
+        "size": 4642301,
         "url": "https://addons.appdevforall.org/dl/project-to-template.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/project-to-template-night.png",
@@ -974,8 +974,8 @@
       },
       "description": "Installs Python and Flask starter projects and gives them a run experience inside the editor.",
       "download": {
-        "sha256": "d18cf60a63b10d6fade0663f31b959aedbe272874716608c0e00ed89343a6582",
-        "size": 16113093,
+        "sha256": "acf4c0ca62e4d52bed50c2002ee20976ab1c7833efee7b50d7bcef6f7cf41b13",
+        "size": 16113089,
         "url": "https://addons.appdevforall.org/dl/python-tools.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/python-tools-night.png",
@@ -1009,7 +1009,7 @@
       },
       "description": "Gives each level of parentheses, brackets, and braces its own colour, so you can see which opening bracket matches which closing one.",
       "download": {
-        "sha256": "7414a4ff7540039e5ce23a63f93e70b8d24d5ca68e3d634d3e6b2f5fb78b2dad",
+        "sha256": "d32fdae294eb83ca5bbbf5b51180591eccc51e371d9513453b8df8e8d26c0152",
         "size": 663188,
         "url": "https://addons.appdevforall.org/dl/rainbow-brackets.cgp"
       },
@@ -1044,8 +1044,8 @@
       },
       "description": "Fetches a comic from xkcd and shows it in the bottom sheet. A small break without leaving the editor.",
       "download": {
-        "sha256": "ae029122dab2af9b1b9f8fa443416cf0d75a95ffd5e2e90fc5fbac4a2c39b86e",
-        "size": 5042985,
+        "sha256": "46f6c681bcaddf4affa38a0ad2665e103bf05e0efe75d68823d4ba12ca8a86d0",
+        "size": 5042981,
         "url": "https://addons.appdevforall.org/dl/random-xkcd.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/random-xkcd-night.png",
@@ -1078,8 +1078,8 @@
       },
       "description": "Turns the apps you build into a small web store that people on the same Wi-Fi network or hotspot open in their phone's browser, with no internet and no accounts. The companion Share Your Apps Server serves the store, and a store can be copied to another phone by QR code, typed code or sound.",
       "download": {
-        "sha256": "a7e86411a36e8fc579da9ed96c64a4d0f4788ff598012c1944719678395b73f6",
-        "size": 561012,
+        "sha256": "549f3f5396f271eb0dc897b361bed40c8b31ed9719cc9a80a9beaae4c959f57a",
+        "size": 561156,
         "url": "https://addons.appdevforall.org/dl/share-your-apps.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/share-your-apps-night.png",
@@ -1114,8 +1114,8 @@
       },
       "description": "Takes a photograph of a hand-drawn sketch, or a screenshot of an interface, and produces Android XML layout code from it.",
       "download": {
-        "sha256": "90d66172bcc4dc4f21a837be0186c90615956a46d0b617db34866a0790b59c94",
-        "size": 91965217,
+        "sha256": "815c8c8a6d515f766f6ab5768ca6e49958b9d71194448d1c3dabe55cce57f913",
+        "size": 91965213,
         "url": "https://addons.appdevforall.org/dl/sketch-to-ui.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/sketch-to-ui-night.png",
@@ -1149,7 +1149,7 @@
       },
       "description": "Adds a microphone button to the editor toolbar. Speak, and the words are written at the cursor. With the AI Core addon installed, speech becomes code.",
       "download": {
-        "sha256": "79918aedc150f376e500b19e705a93ab048b086b67a4b05fd30477cf64552cfe",
+        "sha256": "d9314f8990316945c93642367617795cd412a596144471e80ad292aeae19b927",
         "size": 9975005,
         "url": "https://addons.appdevforall.org/dl/speech-to-text.cgp"
       },
@@ -1184,8 +1184,8 @@
       },
       "description": "Ranks search results by how close their meaning is to the words you typed, so you find related code that a plain text search would miss. Needs AI Core and an agent plugin whose backend produces embeddings.",
       "download": {
-        "sha256": "e397824068d96aaaf39c03e55a4d6fc463f095e33516248de119d696cd924c1c",
-        "size": 10062324,
+        "sha256": "8d9685485abf10e0d971d05ad9e572b6f785ce2358661a0c8b4c8945a35e8d9a",
+        "size": 10062320,
         "url": "https://addons.appdevforall.org/dl/vector-search.cgp"
       },
       "iconDarkUrl": "https://addons.appdevforall.org/p/vector-search-night.png",
@@ -1219,7 +1219,7 @@
       },
       "description": "Plays a short sound for each build result, so you know whether the build passed without watching the screen.",
       "download": {
-        "sha256": "42b0de0fe7a858d6dc1dae94bfa750005ddc4993218030858739abbab7ec9ea3",
+        "sha256": "d6dee686d70e4db16d386b8a066c768be2602d30b5d9cf8c92f6be90b86f09c3",
         "size": 10131067,
         "url": "https://addons.appdevforall.org/dl/voice-alerts.cgp"
       },
@@ -1247,6 +1247,6 @@
       "version": "1.0.0"
     }
   ],
-  "generated": "2026-11-19T07:29:49Z",
+  "generated": "2026-11-22T18:58:19Z",
   "schemaVersion": 2
 }
