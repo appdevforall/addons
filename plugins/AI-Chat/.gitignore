@@ -6,3 +6,4 @@ local.properties
 src/main/assets/web/
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
