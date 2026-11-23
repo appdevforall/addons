@@ -76,23 +76,41 @@ class ExecProbePlugin : IPlugin, UIExtension {
     override fun getFabActions(): List<FabAction> = emptyList()
     override fun getHiddenToolbarActionIds(): Set<String> = emptySet()
 
+    /**
+     * One toolbar button for the whole spike. CoGo turns every main-menu item into its own toolbar
+     * button with the same default icon and ignores [MenuItem.subItems], so five items showed as five
+     * identical cubes. The button opens a list instead.
+     */
     override fun getMainMenuItems(): List<MenuItem> = listOf(
         MenuItem(
-            id = "run_exec_probe",
-            title = "Run worker exec probe (ADFA-7281)",
-            action = { Thread({ show(runAndRecord()) }, "exec-probe").start() },
-        ),
-        MenuItem(
-            id = "pick_fd_probe_model",
-            title = "Pick model for fd probe (SAF)",
-            action = { pickModel() },
-        ),
-        MenuItem(
-            id = "run_fd_probe",
-            title = "Run fd probe (ADFA-7281 spike 2)",
-            action = { Thread({ show(runFdProbeAndRecord()) }, "fd-probe").start() },
+            id = "adfa_7281_probes",
+            title = "ADFA-7281 worker probes",
+            action = { showActions() },
         ),
     )
+
+    private val actions: List<Pair<String, () -> Unit>> by lazy {
+        listOf(
+            "Run worker exec probe (spike 1)" to { Thread({ show(runAndRecord()) }, "exec-probe").start() },
+            "Pick model for fd probe (SAF)" to { pickModel() },
+            "Run fd probe (spike 2)" to { Thread({ show(runFdProbeAndRecord()) }, "fd-probe").start() },
+            "Run llama bench: worker vs in-process (spike 3)" to
+                { Thread({ show(runBenchAndRecord(inProcess = true)) }, "llama-bench").start() },
+            "Run llama bench: worker only (spike 3)" to
+                { Thread({ show(runBenchAndRecord(inProcess = false)) }, "llama-bench").start() },
+        )
+    }
+
+    private fun showActions() {
+        val activity = context.services.get(IdeUIService::class.java)?.getCurrentActivity() ?: return
+        activity.runOnUiThread {
+            AlertDialog.Builder(activity)
+                .setTitle("ADFA-7281 worker probes")
+                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+                .setNegativeButton("Close", null)
+                .show()
+        }
+    }
 
     private val prefs get() = context.getPluginSharedPreferences("fd_probe")
 
@@ -118,6 +136,18 @@ class ExecProbePlugin : IPlugin, UIExtension {
             }
             launcher.launch(arrayOf("*/*"))
         }
+    }
+
+    private fun runBenchAndRecord(inProcess: Boolean): String {
+        val model = File("/storage/emulated/0/Download/$BENCH_MODEL")
+        val report = try {
+            if (!model.isFile) "FAIL  $model not found" else BenchProbe(context).run(model, inProcess)
+        } catch (t: Throwable) {
+            "BENCH CRASHED: ${t.javaClass.name}: ${t.message}\n${Log.getStackTraceString(t)}"
+        }
+        report.lines().forEach { Log.i(TAG, "bench: $it") }
+        runCatching { File(context.getPluginFilesDir(), "bench-report.txt").writeText(report) }
+        return report
     }
 
     private fun runFdProbeAndRecord(): String {
@@ -172,6 +202,7 @@ class ExecProbePlugin : IPlugin, UIExtension {
     companion object {
         const val TAG = "CogoExecProbe"
         private const val KEY_URIS = "uris"
+        private const val BENCH_MODEL = "Qwen2.5-0.5B.Q4_K_M.gguf"
     }
 }
 

@@ -143,3 +143,69 @@ CoGo C-d-1020-1725. The editor then failed to inflate (a black screen), and CoGo
 guard counted a plugin crash. Overriding every `UIExtension` method fixed it. The phone's
 build is older than the jar, so a plugin built against a newer jar can likely fail this
 way on any older CoGo still inside its `min_ide_version` range. Not investigated further.
+
+## Spike 3: what the worker costs
+
+Question: compared with running llama.cpp in-process, as AI-Agent-Local does today, what does
+the worker cost to start, to load a model, to generate, and to stream tokens back?
+
+**Setup.** `bench_core.cpp` runs unchanged in both places: over JNI in the IDE process
+(`libcogo_bench_jni.so`) and in the worker (`libcogo_bench_worker.so`, launched with the model fd
+as in spike 2). Both link the **production llama.cpp libraries copied from AI-Agent-Local's AAR**
+(`libllama.so`, `libggml*.so`, the CPU variants, `libomp.so`) and use the headers of the pinned
+submodule commit `c9058a7`. Settings: Qwen2.5 0.5B Q4_K_M from Get-AI-Models' catalog (SHA-256
+checked), `n_ctx` 1024, a 52-token prompt, 128 tokens greedy, 6 threads (AI-Agent-Local's
+`min(8, cores - 2)`), flash attention AUTO. Modes:
+
+- `worker+stream`: spawn the worker, send the model fd, stream every token back over the socket
+- `worker`: the same, with no per-token traffic
+- `in-process`: the same core over JNI, with one callback per token
+
+The mode order rotates each round, because the phone heats up and throttles during a run.
+
+### Results (Galaxy Z Fold5, API 37), final run: 5 rounds, start temps 66–90 °C
+
+| Mode | Load | Gen tok/s, median (range) | First token, wall | Wall, median |
+|---|---|---|---|---|
+| worker+stream | 382 ms | 27.4 (18.9–31.9) | 1489 ms | 6365 ms |
+| worker | 389 ms | 29.4 (23.4–33.8) | – | 6071 ms |
+| in-process | 352 ms | **32.7** (28.5–36.1) | 1066 ms | 5097 ms |
+
+Across all four runs (39 timed runs):
+
+- **Output is identical.** Every run, worker and in-process, produced the same text
+  (hash `8ed64ba59e09bf10`).
+- **Model load is the same:** about 260–390 ms in both. `spawn → hello` adds 11–33 ms.
+- **The model leaves the IDE's memory.** The worker peaked at 446 MB RSS, all outside the IDE.
+  Generating in-process took the IDE from about 480 MB to **about 930 MB**. For an IDE that also
+  runs Gradle and language servers, that is the strongest argument for the worker.
+- **Streaming tokens back costs almost nothing.** Delivery latency, from the native timestamp to
+  the plugin, has a median of 0.2–0.3 ms (p95 under 1 ms) for the worker, against 0.02 ms over
+  JNI. At about 30 ms per token, that is under 1 % of the time per token.
+- **But generation and prompt processing are about 10–15 % slower in the worker.**
+  In the final, rotated run, in-process was fastest in 4 of 5 rounds. `worker` and
+  `worker+stream` are equally slow, so it is not the IPC. Ruled out:
+  - CPU variant: both load `libggml-cpu-android_armv8.6_1.so` and the same `libomp.so`.
+  - cgroups: the worker sits in the same `top-app` cpu/cpuset/cpuacct groups and the same v2
+    node (`/apps/uid_<uid>/pid_<ide pid>`) as the IDE.
+  - Scheduling: policy 0, prio 120 (nice 0) and uclamp 0/1024 for both sides' llama threads.
+  - Affinity: masks lose one core while llama runs (`0-4,6-7`, `0-5,7`, …, a different core
+    each time) **in both processes**. libomp narrows the calling thread too: the plugin's own
+    thread went from `0-7` to `0-5,7` after an in-process run. A worker that resets its mask
+    to every CPU is narrowed again. A red herring, not the cause.
+  - Inherited OpenMP environment: the worker inherits `KMP_BLOCKTIME=200` and libomp's
+    registration variable from the IDE. That is harmless, and the in-process path has the same.
+
+  Still open: why the same threads run slower in a child process. A Perfetto or simpleperf
+  trace of core residency and frequency for both paths would answer it. Possibly vendor
+  per-app performance boosts that cover the app's own pid but not its children.
+- **Thermal noise is large.** The same mode ranged 19–37 tok/s depending on temperature. Single
+  runs are meaningless on this phone, so compare medians of rotated rounds.
+
+### What it means for the design
+
+- Keep the worker **resident** while a model is loaded (ModelResidencyEngine already decides
+  residency). The extra spawn cost is about 25 ms plus library loading, paid once per load.
+- The streaming protocol is fine as designed; no batching needed.
+- The 10–15 % compute gap is the one real cost found. It is a trade against keeping about 450 MB
+  out of the IDE and surviving native aborts. Find its cause before flipping the default to `worker`.
