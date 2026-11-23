@@ -20,7 +20,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <sys/auxv.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -114,11 +118,12 @@ static int stdin_eof(void) {
     return 0;
 }
 
-static int sock(const char *name) {
+// Connects to the abstract unix socket NAME. Returns the fd, or -1 with err filled in.
+static int connect_abstract(const char *name, char *err, size_t errlen) {
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) {
-        printf("{\"mode\":\"socket\",\"error\":\"socket: %s\"}\n", strerror(errno));
-        return 3;
+        snprintf(err, errlen, "socket: %s", strerror(errno));
+        return -1;
     }
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof addr);
@@ -128,8 +133,20 @@ static int sock(const char *name) {
     memcpy(addr.sun_path + 1, name, len);  // sun_path[0] == 0: abstract namespace
     socklen_t alen = (socklen_t) (offsetof(struct sockaddr_un, sun_path) + 1 + len);
     if (connect(fd, (struct sockaddr *) &addr, alen) < 0) {
-        printf("{\"mode\":\"socket\",\"error\":\"connect: %s\"}\n", strerror(errno));
+        snprintf(err, errlen, "connect: %s", strerror(errno));
         close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static int sock(const char *name) {
+    char err[128];
+    int fd = connect_abstract(name, err, sizeof err);
+    if (fd < 0) {
+        printf("{\"mode\":\"socket\",\"error\":");
+        json_str(err);
+        printf("}\n");
         return 3;
     }
     char hello[64];
@@ -154,6 +171,122 @@ static int sock(const char *name) {
     return 0;
 }
 
+static double now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1e3 + ts.tv_nsec / 1e6;
+}
+
+// Maps fd read-only, checks the GGUF header and touches every page, as llama.cpp's
+// mmap loader does when it reads the tensors. Appends a JSON object to stdout.
+static void map_and_touch(int fd, off_t size) {
+    double t0 = now_ms();
+    void *p = mmap(NULL, (size_t) size, PROT_READ, MAP_SHARED, fd, 0);
+    if (p == MAP_FAILED) {
+        printf("{\"ok\":false,\"error\":\"mmap: %s\"}", strerror(errno));
+        return;
+    }
+    const unsigned char *b = p;
+    int magic = size >= 24 && memcmp(b, "GGUF", 4) == 0;
+    uint32_t version = 0;
+    uint64_t tensors = 0, kvs = 0;
+    if (magic) {
+        memcpy(&version, b + 4, 4);
+        memcpy(&tensors, b + 8, 8);
+        memcpy(&kvs, b + 16, 8);
+    }
+    long page = sysconf(_SC_PAGESIZE);
+    volatile unsigned long sum = 0;
+    for (off_t off = 0; off < size; off += page) sum += b[off];
+    double ms = now_ms() - t0;
+    munmap(p, (size_t) size);
+    printf("{\"ok\":true,\"gguf\":%s,\"version\":%" PRIu32 ",\"tensors\":%" PRIu64
+           ",\"kvs\":%" PRIu64 ",\"touch_ms\":%.1f,\"mb_per_s\":%.0f}",
+           magic ? "true" : "false", version, tensors, kvs, ms,
+           ms > 0 ? (size / 1048576.0) / (ms / 1000.0) : 0.0);
+}
+
+// Opens path read-only, then maps and touches it. Appends a JSON object to stdout.
+static void open_and_map(const char *path) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        printf("{\"ok\":false,\"error\":\"open: %s\"}", strerror(errno));
+        return;
+    }
+    struct stat st;
+    fstat(fd, &st);
+    map_and_touch(fd, st.st_size);
+    close(fd);
+}
+
+static int recv_fd(const char *name, const char *plain_path) {
+    char err[128];
+    int s = connect_abstract(name, err, sizeof err);
+    if (s < 0) {
+        printf("{\"mode\":\"recv-fd\",\"error\":");
+        json_str(err);
+        printf("}\n");
+        return 3;
+    }
+    // The parent sends "pfd=<its own fd number>\n" with the fd attached as SCM_RIGHTS.
+    char data[64] = {0};
+    struct iovec iov = {data, sizeof data - 1};
+    union {
+        char buf[CMSG_SPACE(sizeof(int))];
+        struct cmsghdr align;
+    } cbuf;
+    struct msghdr m;
+    memset(&m, 0, sizeof m);
+    m.msg_iov = &iov;
+    m.msg_iovlen = 1;
+    m.msg_control = cbuf.buf;
+    m.msg_controllen = sizeof cbuf.buf;
+    ssize_t n = recvmsg(s, &m, MSG_CMSG_CLOEXEC);
+    int mfd = -1;
+    for (struct cmsghdr *c = CMSG_FIRSTHDR(&m); c; c = CMSG_NXTHDR(&m, c)) {
+        if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS) memcpy(&mfd, CMSG_DATA(c), sizeof(int));
+    }
+    if (n <= 0 || mfd < 0) {
+        printf("{\"mode\":\"recv-fd\",\"error\":\"no fd received (n=%zd, errno %s)\"}\n", n, strerror(errno));
+        close(s);
+        return 3;
+    }
+    int pfd = -1;
+    sscanf(data, "pfd=%d", &pfd);
+
+    struct stat st;
+    fstat(mfd, &st);
+    char target[512];
+    char self_path[64];
+    snprintf(self_path, sizeof self_path, "/proc/self/fd/%d", mfd);
+    ssize_t tl = readlink(self_path, target, sizeof target - 1);
+    target[tl < 0 ? 0 : tl] = 0;
+
+    printf("{\"mode\":\"recv-fd\",\"size\":%lld,\"regular\":%s,\"target\":",
+           (long long) st.st_size, S_ISREG(st.st_mode) ? "true" : "false");
+    json_str(target);
+    printf(",\"received_fd\":");
+    map_and_touch(mfd, st.st_size);
+    printf(",\"proc_self_fd\":");
+    open_and_map(self_path);
+    printf(",\"proc_parent_fd\":");
+    if (pfd >= 0) {
+        char ppath[64];
+        snprintf(ppath, sizeof ppath, "/proc/%d/fd/%d", getppid(), pfd);
+        open_and_map(ppath);
+    } else {
+        printf("null");
+    }
+    printf(",\"plain_path\":");
+    if (plain_path) open_and_map(plain_path); else printf("null");
+    printf("}\n");
+
+    write(s, "done\n", 5);
+    close(mfd);
+    close(s);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc >= 2) {
         if (!strcmp(argv[1], "--identify")) return identify();
@@ -161,7 +294,8 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[1], "--abort")) return do_abort();
         if (!strcmp(argv[1], "--stdin-eof")) return stdin_eof();
         if (!strcmp(argv[1], "--socket") && argc >= 3) return sock(argv[2]);
+        if (!strcmp(argv[1], "--recv-fd") && argc >= 3) return recv_fd(argv[2], argc >= 4 ? argv[3] : NULL);
     }
-    fprintf(stderr, "usage: %s --identify|--env|--abort|--stdin-eof|--socket NAME\n", argv[0]);
+    fprintf(stderr, "usage: %s --identify|--env|--abort|--stdin-eof|--socket NAME|--recv-fd NAME [PATH]\n", argv[0]);
     return 2;
 }

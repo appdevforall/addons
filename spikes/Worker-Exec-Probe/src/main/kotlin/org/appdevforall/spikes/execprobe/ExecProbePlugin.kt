@@ -4,6 +4,10 @@ import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContracts
 import android.graphics.Typeface
 import android.net.LocalServerSocket
 import android.net.LocalSocket
@@ -15,7 +19,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.extensions.ContextMenuContext
+import com.itsaky.androidide.plugins.extensions.FabAction
 import com.itsaky.androidide.plugins.extensions.MenuItem
+import com.itsaky.androidide.plugins.extensions.NavigationItem
+import com.itsaky.androidide.plugins.extensions.TabItem
+import com.itsaky.androidide.plugins.extensions.ToolbarAction
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeUIService
 import dalvik.system.BaseDexClassLoader
@@ -46,7 +55,10 @@ class ExecProbePlugin : IPlugin, UIExtension {
     }
 
     override fun activate(): Boolean {
-        Thread({ runAndRecord() }, "exec-probe").start()
+        Thread({
+            runAndRecord()
+            runFdProbeAndRecord()
+        }, "exec-probe").start()
         return true
     }
 
@@ -54,13 +66,73 @@ class ExecProbePlugin : IPlugin, UIExtension {
 
     override fun dispose() {}
 
+    // Every UIExtension method is overridden, none left to the interface defaults: built against
+    // the current libs/plugin-api.jar, relying on a default threw AbstractMethodError for
+    // getEditorTabs() on CoGo C-d-1020-1725 and stopped the editor from starting.
+    override fun getContextMenuItems(context: ContextMenuContext): List<MenuItem> = emptyList()
+    override fun getEditorTabs(): List<TabItem> = emptyList()
+    override fun getSideMenuItems(): List<NavigationItem> = emptyList()
+    override fun getToolbarActions(): List<ToolbarAction> = emptyList()
+    override fun getFabActions(): List<FabAction> = emptyList()
+    override fun getHiddenToolbarActionIds(): Set<String> = emptySet()
+
     override fun getMainMenuItems(): List<MenuItem> = listOf(
         MenuItem(
             id = "run_exec_probe",
             title = "Run worker exec probe (ADFA-7281)",
             action = { Thread({ show(runAndRecord()) }, "exec-probe").start() },
         ),
+        MenuItem(
+            id = "pick_fd_probe_model",
+            title = "Pick model for fd probe (SAF)",
+            action = { pickModel() },
+        ),
+        MenuItem(
+            id = "run_fd_probe",
+            title = "Run fd probe (ADFA-7281 spike 2)",
+            action = { Thread({ show(runFdProbeAndRecord()) }, "fd-probe").start() },
+        ),
     )
+
+    private val prefs get() = context.getPluginSharedPreferences("fd_probe")
+
+    /** Opens the system picker, as AI-Agent-Local does, and keeps a persistable read grant. */
+    private fun pickModel() {
+        val activity = context.services.get(IdeUIService::class.java)?.getCurrentActivity() ?: return
+        val registry = (activity as? ActivityResultRegistryOwner)?.activityResultRegistry ?: run {
+            Log.w(TAG, "current activity has no ActivityResultRegistry")
+            return
+        }
+        activity.runOnUiThread {
+            var launcher: androidx.activity.result.ActivityResultLauncher<Array<String>>? = null
+            launcher = registry.register("fd-probe-pick-" + System.nanoTime(), ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                launcher?.unregister()
+                if (uri == null) return@register
+                runCatching {
+                    activity.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }.onFailure { Log.w(TAG, "takePersistableUriPermission failed", it) }
+                val saved = prefs.getStringSet(KEY_URIS, emptySet()).orEmpty() + uri.toString()
+                prefs.edit().putStringSet(KEY_URIS, saved).apply()
+                Log.i(TAG, "picked $uri")
+                Thread({ show(runFdProbeAndRecord()) }, "fd-probe").start()
+            }
+            launcher.launch(arrayOf("*/*"))
+        }
+    }
+
+    private fun runFdProbeAndRecord(): String {
+        val uris = prefs.getStringSet(KEY_URIS, emptySet()).orEmpty().map(Uri::parse)
+        val plain = File("/storage/emulated/0/Download").listFiles { f -> f.name.endsWith(".gguf", true) }
+            ?.sortedBy { it.name }.orEmpty()
+        val report = try {
+            FdProbe(context).run(uris, plain)
+        } catch (t: Throwable) {
+            "FD PROBE CRASHED: ${t.javaClass.name}: ${t.message}\n${Log.getStackTraceString(t)}"
+        }
+        report.lines().forEach { Log.i(TAG, "fd: $it") }
+        runCatching { File(context.getPluginFilesDir(), "fd-probe-report.txt").writeText(report) }
+        return report
+    }
 
     private fun runAndRecord(): String {
         val report = try {
@@ -86,7 +158,7 @@ class ExecProbePlugin : IPlugin, UIExtension {
                 setPadding(32, 24, 32, 24)
             }
             AlertDialog.Builder(activity)
-                .setTitle("Worker exec probe")
+                .setTitle("Worker probe")
                 .setView(ScrollView(activity).apply { addView(text) })
                 .setPositiveButton("Copy") { _, _ ->
                     val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -99,6 +171,7 @@ class ExecProbePlugin : IPlugin, UIExtension {
 
     companion object {
         const val TAG = "CogoExecProbe"
+        private const val KEY_URIS = "uris"
     }
 }
 

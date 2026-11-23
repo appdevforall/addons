@@ -1,4 +1,4 @@
-# Worker Exec Probe (ADFA-7281, spike 1)
+# Worker Exec Probe (ADFA-7281, spikes 1 and 2)
 
 Throwaway plugin answering one question for AI-Agent-Local v2: **can a plugin start,
 talk to and supervise a native executable it ships as `lib<name>.so`, from inside
@@ -88,4 +88,58 @@ Run on 2026-11-23. What it established for the worker design:
   llama.cpp CPU flags.
 
 Not covered here: a long-running child surviving CoGo being force-stopped (an
-ADFA-7281 acceptance criterion), and an older device. Spike 2 (fd passing) is next.
+ADFA-7281 acceptance criterion), and an older device.
+
+## Spike 2: handing the model file to the worker
+
+Question: AI-Agent-Local opens the model through SAF and loads `/proc/self/fd/N`
+(ADFA-5253). Inside a child process that path names the child's own fd table, so
+the worker needs the fd itself. Can it be passed, and can the worker load from it?
+
+`FdProbe` opens each source read-only and sends the fd to `--recv-fd` over an
+abstract unix socket with **SCM_RIGHTS** (`LocalSocket.setFileDescriptorsForSend`).
+It **closes its own copy right after sending**. The child then:
+
+1. `mmap`s the received fd, checks the GGUF header and touches every page, as
+   llama.cpp's mmap loader does;
+2. reopens it as `/proc/self/fd/N`, the path it would hand `llama_model_load_from_file`;
+3. tries the parent's `/proc/<ppid>/fd/<n>`;
+4. opens the plain `/storage/emulated/0/Download/<name>` path, for comparison.
+
+Sources: two SAF documents picked with the menu item **Pick model for fd probe (SAF)**
+(persistable read grant, as AI-Agent-Local takes), and every `*.gguf` in Download
+opened by path. Test files: `stories260K.gguf` (a real 1.2 MB GGUF, 48 tensors, 19 KVs)
+and `zz-synthetic-2g.gguf` (a GGUF header plus 2 GiB of zeros, made with `dd`).
+
+### Results (Galaxy Z Fold5, API 37, CoGo C-d-1020-1725), all pass
+
+| Source | URI / fd target | Received fd mmap | `/proc/self/fd/N` in child |
+|---|---|---|---|
+| SAF, ExternalStorageProvider | `content://com.android.externalstorage.documents/document/primary%3ADownload%2Fstories260K.gguf` → `/mnt/user/0/emulated/0/Download/…` | PASS, GGUF v3 parsed | PASS |
+| SAF, DownloadsProvider | `content://com.android.providers.downloads.documents/document/raw%3A%2Fstorage%2F…zz-synthetic-2g.gguf` → `/mnt/user/0/emulated/0/Download/…` | PASS, 2 GiB paged | PASS |
+| Path, `ParcelFileDescriptor.open` | `/storage/emulated/0/Download/…` (both files) | PASS | PASS |
+
+- **SCM_RIGHTS works, and the child's copy is independent:** the plugin closed its fd
+  before the child mapped anything.
+- **`/proc/self/fd/N` reopens by path inside the worker**, for SAF fds from both
+  providers. So the worker can keep llama.cpp's path-based loader: it receives the fd
+  and passes `/proc/self/fd/<received>`, exactly what the plugin does in-process today.
+- **The persisted SAF grants survive a cold restart:** on activation the saved URIs
+  reopened and passed again.
+- **Paging speed:** the 2 GiB file paged through in about 1.6 s cold (≈1.3 GB/s, first
+  run by path) and 140–175 ms warm. The file is all zeros, so treat these as upper bounds,
+  not model-load times.
+- `/proc/<ppid>/fd/<n>` from the child: **inconclusive**. The plugin had already closed
+  that fd, so the results (`ENOENT`, `ENXIO`, `EACCES` when the number was reused)
+  say nothing about access. It isn't needed: the design passes the fd.
+- The plain path also worked, because CoGo holds all-files access. That is not true for
+  every source (removable storage, cloud providers), which is why the design passes fds.
+
+### Side finding: plugin-api default methods (setup issue, not the spike)
+
+Built against the current `libs/plugin-api.jar`, a plugin that leaves `UIExtension`
+methods to the interface defaults threw `AbstractMethodError` for `getEditorTabs()` on
+CoGo C-d-1020-1725. The editor then failed to inflate (a black screen), and CoGo's crash
+guard counted a plugin crash. Overriding every `UIExtension` method fixed it. The phone's
+build is older than the jar, so a plugin built against a newer jar can likely fail this
+way on any older CoGo still inside its `min_ide_version` range. Not investigated further.
