@@ -209,3 +209,43 @@ Across all four runs (39 timed runs):
 - The streaming protocol is fine as designed; no batching needed.
 - The 10–15 % compute gap is the one real cost found. It is a trade against keeping about 450 MB
   out of the IDE and surviving native aborts. Find its cause before flipping the default to `worker`.
+
+## Spike 4: why the worker computes 10–15 % slower
+
+**Trace.** An `atrace` (sched + freq) capture across a full rotated run, parsed with a small
+script (not committed; the Perfetto binaries were not available here), counted **1,149,048**
+switch-ins for the worker's threads against **74,911** for the in-process llama threads,
+about 7× more per run. The worker's threads are taken off the CPU far more often.
+
+**Counters.** `bench_core` now records each thread's voluntary and involuntary context switches
+during generation (`/proc/self/task/*/status`). Every run, in both paths, had 0 voluntary
+switches. The difference is all **involuntary**, which is what a `sched_yield` counts as.
+That points at libomp's spin loop, which yields when it believes it is oversubscribed. A guess
+not yet checked: libomp counts available CPUs from the narrowed mask the worker starts with.
+
+Run of 4 rotated rounds (Galaxy Z Fold5, API 37, start temps 58–79 °C). Every worker run has
+a 90 s SIGKILL deadline:
+
+| Mode | Involuntary switches per run | Gen tok/s, median (range) |
+|---|---|---|
+| in-process | 455–857 | **33.0** (30.5–34.7) |
+| worker | 1,717–67,638 | 28.9 (22.8–36.0) |
+| worker `OMP_WAIT_POLICY=active` | 19–20,880 (mostly < 5,000) | 31.1 (25.5–36.5) |
+| worker `KMP_USE_YIELD=0` | 590–1,518 | 26.6 (23.8–33.6), **hung once** |
+
+- Stopping libomp from yielding cuts the gap from about 13 % to about 6 %. Thermal noise
+  makes the remainder uncertain.
+- **`KMP_USE_YIELD=0` hung one run** inside context creation, right after `graph_reserve`.
+  The deadline SIGKILLed it at 90 s and the run continued. Don't use it.
+- `OMP_WAIT_POLICY=active` spins idle threads instead of sleeping them. A resident worker
+  waiting between requests would burn CPU and battery, so it isn't a production fix either.
+- **Recommended next step:** build the worker's ggml with `GGML_OPENMP=OFF`, so ggml's own
+  thread pool runs and libomp's oversubscription logic is out of the picture. Then repeat
+  this comparison.
+
+**Supervision findings for the real design:**
+- A worker can wedge with no output and no exit. Here it was libomp, in an earlier session
+  something unknown (65 CPU-minutes before it was noticed). A per-request deadline that
+  SIGKILLs by pid is required, not optional.
+- After a run ends, a worker that hasn't exited within 5 s is SIGKILLed and recorded. No run
+  needed it.

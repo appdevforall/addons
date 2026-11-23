@@ -146,6 +146,7 @@ class ExecProbePlugin : IPlugin, UIExtension {
             "BENCH CRASHED: ${t.javaClass.name}: ${t.message}\n${Log.getStackTraceString(t)}"
         }
         report.lines().forEach { Log.i(TAG, "bench: $it") }
+        Log.i(TAG, "bench: REPORT DONE")
         runCatching { File(context.getPluginFilesDir(), "bench-report.txt").writeText(report) }
         return report
     }

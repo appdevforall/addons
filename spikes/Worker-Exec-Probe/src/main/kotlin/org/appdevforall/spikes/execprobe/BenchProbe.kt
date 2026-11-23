@@ -2,6 +2,9 @@ package org.appdevforall.spikes.execprobe
 
 import android.net.LocalServerSocket
 import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
+import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import dalvik.system.BaseDexClassLoader
 import java.io.BufferedInputStream
@@ -77,8 +80,9 @@ internal class BenchProbe(private val ctx: PluginContext) {
         // The phone throttles as it heats up, so a fixed order would favour whichever mode runs
         // first in each round. Rotate the order every round instead.
         val modes = mutableListOf<() -> Run>(
-            { runWorker(worker, nativeDir, model, stream = true) },
             { runWorker(worker, nativeDir, model, stream = false) },
+            { runWorker(worker, nativeDir, model, stream = false, env = mapOf("OMP_WAIT_POLICY" to "active")) },
+            { runWorker(worker, nativeDir, model, stream = false, env = mapOf("KMP_USE_YIELD" to "0")) },
         )
         if (inProcess) modes += { runInProcess(model) }
         repeat(ROUNDS) { round ->
@@ -98,27 +102,30 @@ internal class BenchProbe(private val ctx: PluginContext) {
                 continue
             }
             line(
-                "%-14s load %6s ms  ctx %5s ms  prompt %3s tok %6s ms  first %6s ms  gen %3s tok %6s tok/s  wall %7.1f ms%s".format(
+                "%-32s load %6s ms  ctx %5s ms  prompt %3s tok %6s ms  first %6s ms  gen %3s tok %6s tok/s  wall %7.1f ms%s".format(
                     r.mode, s["load_ms"], s["ctx_ms"], s["prompt_tokens"], s["prompt_ms"], s["first_token_ms"],
                     s["gen_tokens"], s["tok_per_s"], r.wallMs,
                     (r.spawnToHelloMs?.let { "  spawn->hello %.1f ms".format(it) } ?: "") +
                         (r.firstTokenWallMs?.let { "  first token (wall) %.1f ms".format(it) } ?: "") +
-                        (r.startTempC?.let { "  start %.1f C".format(it) } ?: ""),
+                        (r.startTempC?.let { "  start %.1f C".format(it) } ?: "") +
+                        "  csw vol ${s["gen_vcsw"]} invol ${s["gen_nvcsw"]}" + (s["exit_hang"]?.let { "  EXIT HANG: $it" } ?: ""),
                 ),
             )
         }
         line("")
-        for (mode in listOf("worker+stream", "worker", "in-process")) {
+        for (mode in runs.map { it.mode }.distinct()) {
             val rs = runs.filter { it.mode == mode }
             val tps = rs.mapNotNull { it.stats["tok_per_s"]?.toDoubleOrNull() }.sorted()
             val load = rs.mapNotNull { it.stats["load_ms"]?.toDoubleOrNull() }.sorted()
             val wall = rs.map { it.wallMs }.sorted()
             if (rs.isEmpty()) continue
             val first = rs.mapNotNull { it.firstTokenWallMs }.sorted()
+            val vcsw = rs.mapNotNull { it.stats["gen_vcsw"]?.toLongOrNull() }.sorted()
             line(
-                "%-14s median of %d: load %.1f ms, gen %.2f tok/s (range %.1f-%.1f), wall %.1f ms%s".format(
+                "%-32s median of %d: load %.1f ms, gen %.2f tok/s (range %.1f-%.1f), wall %.1f ms%s".format(
                     mode, rs.size, load.median(), tps.median(), tps.first(), tps.last(), wall.median(),
-                    if (first.isEmpty()) "" else ", first token (wall) %.1f ms".format(first.median()),
+                    (if (first.isEmpty()) "" else ", first token (wall) %.1f ms".format(first.median())) +
+                        (if (vcsw.isEmpty()) "" else ", voluntary switches during gen %d".format(vcsw[vcsw.size / 2])),
                 ),
             )
         }
@@ -141,8 +148,12 @@ internal class BenchProbe(private val ctx: PluginContext) {
         return out.toString()
     }
 
-    private fun runWorker(worker: File, nativeDir: File, model: File, stream: Boolean, resetAffinity: Boolean = false): Run {
-        val mode = if (resetAffinity) "worker+reset" else if (stream) "worker+stream" else "worker"
+    private fun runWorker(
+        worker: File, nativeDir: File, model: File, stream: Boolean,
+        resetAffinity: Boolean = false, env: Map<String, String> = emptyMap(),
+    ): Run {
+        val mode = (if (resetAffinity) "worker+reset" else if (stream) "worker+stream" else "worker") +
+            env.entries.joinToString("") { " ${it.key}=${it.value}" }
         val spawnerMask = threadMask()
         var inheritedMask: String? = null
         val name = "cogo-bench-" + UUID.randomUUID()
@@ -152,8 +163,24 @@ internal class BenchProbe(private val ctx: PluginContext) {
         val pb = ProcessBuilder(worker.absolutePath, "--bench", name)
         pb.environment()["LD_LIBRARY_PATH"] = nativeDir.absolutePath
         if (resetAffinity) pb.environment()["COGO_RESET_AFFINITY"] = "1"
+        pb.environment().putAll(env)
         pb.redirectErrorStream(true)
+        Log.i(ExecProbePlugin.TAG, "bench: run start: $mode")
         val proc = pb.start()
+        // Hard deadline. A worker that stops answering (a wedged ggml, a spinning OpenMP team) is
+        // SIGKILLed by the pid from its hello: Process.destroyForcibly() only sends SIGTERM on Android.
+        // Killing it closes the socket, which ends the read loop below.
+        val workerPidRef = java.util.concurrent.atomic.AtomicInteger(-1)
+        val finished = java.util.concurrent.CountDownLatch(1)
+        var timedOut = false
+        Thread {
+            if (!finished.await(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                timedOut = true
+                Log.w(ExecProbePlugin.TAG, "bench: run TIMEOUT after $RUN_TIMEOUT_MS ms: $mode (pid ${workerPidRef.get()})")
+                workerPidRef.get().let { if (it > 0) runCatching { Os.kill(it, OsConstants.SIGKILL) } else proc.destroyForcibly() }
+                runCatching { server.close() }
+            }
+        }.apply { isDaemon = true; start() }
         // llama.cpp logs to stderr, merged into stdout here; drain it so the pipe never fills.
         val log = StringBuffer()
         val drain = Thread {
@@ -175,6 +202,7 @@ internal class BenchProbe(private val ctx: PluginContext) {
                 val hello = readLine(input)
                 spawnToHello = (System.nanoTime() - t0) / 1e6
                 check(hello?.startsWith("H ") == true) { "bad hello '$hello'" }
+                workerPidRef.set(hello!!.split(' ')[1].toInt())
                 inheritedMask = readLine(input)?.removePrefix("A ")
 
                 val prompt = PROMPT.toByteArray()
@@ -206,12 +234,26 @@ internal class BenchProbe(private val ctx: PluginContext) {
             runCatching { pfd.close() }
         }
         val wall = (System.nanoTime() - t0) / 1e6
-        if (!proc.waitFor(30, TimeUnit.SECONDS)) proc.destroyForcibly()
+        // The worker has nothing left to do once it has sent its stats. One that does not exit
+        // promptly is itself a finding (an OpenMP team that keeps spinning at exit, say).
+        var exitHangMs: Double? = null
+        if (!proc.waitFor(EXIT_GRACE_MS, TimeUnit.MILLISECONDS)) {
+            val t1 = System.nanoTime()
+            workerPidRef.get().let { if (it > 0) runCatching { Os.kill(it, OsConstants.SIGKILL) } }
+            proc.destroyForcibly()
+            proc.waitFor(5, TimeUnit.SECONDS)
+            exitHangMs = EXIT_GRACE_MS + (System.nanoTime() - t1) / 1e6
+        }
+        finished.countDown()
         drain.join(1000)
+        if (timedOut) stats = mapOf("error" to "TIMEOUT after $RUN_TIMEOUT_MS ms, SIGKILLed; log tail: ${log.takeLast(400)}")
+        else if (exitHangMs != null && stats["ok"] == "true") stats = stats + ("exit_hang" to "did not exit within $EXIT_GRACE_MS ms of its stats; SIGKILLed")
+        Log.i(ExecProbePlugin.TAG, "bench: run end: $mode ${if (timedOut) "TIMEOUT" else stats["tok_per_s"] + " tok/s"}${stats["exit_hang"]?.let { ", $it" } ?: ""}")
         return Run(mode, stats, wall, firstTokenWall, spawnToHello, lat, null, spawnerMask, inheritedMask)
     }
 
     private fun runInProcess(model: File): Run {
+        Log.i(ExecProbePlugin.TAG, "bench: run start: in-process")
         BenchJni.ensureLoaded()
         val lat = ArrayList<Double>(N_PREDICT)
         var rssDuring: Long? = null
@@ -276,7 +318,9 @@ internal class BenchProbe(private val ctx: PluginContext) {
     private fun List<Double>.median(): Double = if (isEmpty()) Double.NaN else this[size / 2]
 
     companion object {
-        const val ROUNDS = 5
+        const val ROUNDS = 4
+        const val RUN_TIMEOUT_MS = 90_000L
+        const val EXIT_GRACE_MS = 5_000L
         const val N_CTX = 1024
         const val N_PREDICT = 128
         const val PROMPT =

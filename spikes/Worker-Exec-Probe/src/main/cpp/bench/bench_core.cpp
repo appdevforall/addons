@@ -7,6 +7,7 @@
 #include <mutex>
 #include <vector>
 
+#include <dirent.h>
 #include <sched.h>
 #include <unistd.h>
 #include <cerrno>
@@ -84,6 +85,37 @@ static long vm_hwm_kb() {
     return kb;
 }
 
+// Context switches summed over this process's threads named `comm` (all threads when null):
+// voluntary (the thread blocked or slept) and involuntary (it was preempted).
+static void ctx_switches(const char *comm, long *vol, long *invol) {
+    *vol = *invol = 0;
+    DIR *d = opendir("/proc/self/task");
+    if (!d) return;
+    while (dirent *e = readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        char path[96], name[64] = {0};
+        if (comm) {
+            snprintf(path, sizeof path, "/proc/self/task/%s/comm", e->d_name);
+            FILE *f = fopen(path, "re");
+            if (!f) continue;
+            if (fgets(name, sizeof name, f)) name[strcspn(name, "\n")] = 0;
+            fclose(f);
+            if (strcmp(name, comm) != 0) continue;
+        }
+        snprintf(path, sizeof path, "/proc/self/task/%s/status", e->d_name);
+        FILE *f = fopen(path, "re");
+        if (!f) continue;
+        char line[128];
+        long v;
+        while (fgets(line, sizeof line, f)) {
+            if (sscanf(line, "voluntary_ctxt_switches: %ld", &v) == 1) *vol += v;
+            else if (sscanf(line, "nonvoluntary_ctxt_switches: %ld", &v) == 1) *invol += v;
+        }
+        fclose(f);
+    }
+    closedir(d);
+}
+
 // FNV-1a of the generated text: equal hashes mean both paths produced the same output.
 static uint64_t fnv1a(const std::string &s) {
     uint64_t h = 1469598103934665603ULL;
@@ -151,6 +183,18 @@ std::string bench_run(const BenchParams &p, TokenSink sink, void *user) {
     std::string text;
     double first_token_ms = -1, sink_ms = 0;
     int n_gen = 0;
+    // In the IDE the llama threads share the process with everything else, so count only
+    // threads named like the bench thread (ggml's OpenMP threads inherit its name).
+    char self_comm[64] = {0};
+    {
+        FILE *f = fopen("/proc/thread-self/comm", "re");
+        if (f) {
+            if (fgets(self_comm, sizeof self_comm, f)) self_comm[strcspn(self_comm, "\n")] = 0;
+            fclose(f);
+        }
+    }
+    long vol0, invol0;
+    ctx_switches(self_comm[0] ? self_comm : nullptr, &vol0, &invol0);
     const int64_t t_gen = bench_now_ns();
     char piece[256];
     for (; n_gen < p.n_predict; n_gen++) {
@@ -168,6 +212,8 @@ std::string bench_run(const BenchParams &p, TokenSink sink, void *user) {
         if (llama_decode(ctx, llama_batch_get_one(&tok, 1)) != 0) break;
     }
     const double gen_ms = ms_since(t_gen);
+    long vol1, invol1;
+    ctx_switches(self_comm[0] ? self_comm : nullptr, &vol1, &invol1);
     const long hwm = vm_hwm_kb();
 
     llama_sampler_free(smpl);
@@ -179,10 +225,10 @@ std::string bench_run(const BenchParams &p, TokenSink sink, void *user) {
              "{\"ok\":true,\"variant\":\"%s\",\"threads\":%d,\"load_ms\":%.1f,\"ctx_ms\":%.1f,"
              "\"prompt_tokens\":%d,\"prompt_ms\":%.1f,\"first_token_ms\":%.1f,\"gen_tokens\":%d,"
              "\"gen_ms\":%.1f,\"tok_per_s\":%.2f,\"sink_ms\":%.2f,\"total_ms\":%.1f,"
-             "\"vm_hwm_kb\":%ld,\"text_hash\":\"%016llx\",\"affinity\":\"%s\",\"affinity_after\":\"%s\"}",
+             "\"vm_hwm_kb\":%ld,\"text_hash\":\"%016llx\",\"affinity\":\"%s\",\"affinity_after\":\"%s\",\"gen_vcsw\":%ld,\"gen_nvcsw\":%ld}",
              variant.c_str(), n_threads, load_ms, ctx_ms, (int) toks.size(), prompt_ms,
              first_token_ms, n_gen, gen_ms, n_gen > 0 ? n_gen / (gen_ms / 1000.0) : 0.0, sink_ms,
              ms_since(t_start), hwm, (unsigned long long) fnv1a(text), affinity.c_str(),
-             bench_affinity().c_str());
+             bench_affinity().c_str(), vol1 - vol0, invol1 - invol0);
     return buf;
 }

@@ -21,8 +21,8 @@ android {
         applicationId = "org.appdevforall.spikes.execprobe"
         minSdk = 28
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.3.3"
+        versionCode = 10
+        versionName = "0.4.1"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
