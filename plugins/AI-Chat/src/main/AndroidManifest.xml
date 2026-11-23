@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="AI Chat"
+        android:theme="@style/Theme.AppCompat.DayNight">
+
+        <meta-data android:name="plugin.id" android:value="org.appdevforall.aichat" />
+        <meta-data android:name="plugin.name" android:value="AI Chat" />
+        <meta-data android:name="plugin.version" android:value="${pluginVersion}" />
+        <meta-data android:name="plugin.vcs_revision" android:value="${pluginVcsRevision}" />
+        <meta-data android:name="plugin.build_timestamp" android:value="${pluginBuildTimestamp}" />
+        <meta-data
+            android:name="plugin.description"
+            android:value="A chat tab for your AI backend, with a front end adapted from Jan's web UI. Needs AI Core and an AI backend." />
+        <meta-data android:name="plugin.author" android:value="App Dev for All" />
+
+        <!-- 26.42: the same floor as AI Core, which this plugin cannot work without. It also covers
+             LlmInferenceService.getPreferredBackendId and the status/model-reporting backends. -->
+        <meta-data android:name="plugin.min_ide_version" android:value="26.42" />
+        <meta-data android:name="plugin.max_ide_version" android:value="26.99" />
+
+        <!-- No permissions. The chat makes no network requests of its own (AI Core's backend
+             does, if it is a cloud one), and its chats are stored in its own plugin files dir. -->
+
+        <meta-data android:name="plugin.main_class" android:value="org.appdevforall.aichat.AiChatPlugin" />
+        <meta-data android:name="plugin.icon_day" android:value="assets/icon_day.png" />
+        <meta-data android:name="plugin.icon_night" android:value="assets/icon_night.png" />
+    </application>
+
+</manifest>
