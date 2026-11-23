@@ -61,8 +61,10 @@
     <tr id="module">
         <td>Target module</td>
         <td>
-            Which module receives the icon. <b>All modules</b> writes a copy into every Android
-            module the plugin finds in the project. Pick one module to write it only there.
+            Which module receives the icon. The dialog starts on <code>:app</code>.
+            <b>All modules</b> writes a copy into every module the plugin finds: any folder with a
+            build file and <code>src/main</code>, which can include modules that are not Android
+            ones.
         </td>
     </tr>
     <tr id="color">
@@ -89,14 +91,14 @@
     <code>R.drawable.ic_arrow_back</code> in code.
 </p>
 <p>
-    <b>An existing file with the same name is replaced without asking.</b> Pick a new name if
-    you want to keep the old drawable.
+    <b>An existing file is never replaced.</b> A module that already has a drawable with that
+    name is skipped, and the dialog lists the skipped files. Pick a new name to import it there.
 </p>
 
 <h2 id="help">Getting help</h2>
 <p>
-    Long-press the search icons, an icon in the grid, or any field or button in the import
-    dialog to see a short explanation of it.
+    Long-press the search icons, an icon in the grid, a button or list in the import dialog, or a
+    field's icon, to see a short explanation of it. Long-pressing the text of a field selects it.
 </p>
 
 </body>

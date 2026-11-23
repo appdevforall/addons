@@ -1,5 +1,6 @@
 package dev.omar.plugin.iconsrepo.help;
 
+import android.util.Log;
 import android.view.View;
 
 import androidx.annotation.NonNull;
@@ -20,6 +21,8 @@ import java.util.List;
 
 /** Tooltip entries (Tier 1 and 2), the Tier 3 page, and long-press wiring for every UI element. */
 public final class IconsRepositoryHelp {
+    private static final String LOG_TAG = "IconsRepositoryHelp";
+
 
     /** The host resolves plugin tooltips under exactly "plugin_" + plugin.id. */
     public static final String CATEGORY = "plugin_" + Main.PLUGIN_ID;
@@ -77,15 +80,17 @@ public final class IconsRepositoryHelp {
                         "<p>Use lowercase letters, digits and single underscores, starting"
                                 + " with a letter, for example <code>ic_arrow_back</code>. The"
                                 + " icon is saved as <code>res/drawable/&lt;name&gt;.xml</code>."
-                                + " A file with the same name is replaced.</p>",
+                                + " A module that already has a file with that name is skipped,"
+                                + " and the dialog says which.</p>",
                         "Naming the drawable",
                         "index.html"),
                 entry(
                         TAG_MODULE,
                         "Which module's res/drawable folder receives the icon.",
-                        "<p><b>All modules</b> writes a copy into every Android module the"
-                                + " plugin finds. Pick a single module to write it only"
-                                + " there.</p>",
+                        "<p>The dialog starts on <code>:app</code>. <b>All modules</b> writes a"
+                                + " copy into every module the plugin finds: any folder with a"
+                                + " build file and <code>src/main</code>, which can include"
+                                + " modules that are not Android ones.</p>",
                         "Choosing a module",
                         "index.html"),
                 entry(
@@ -151,8 +156,9 @@ public final class IconsRepositoryHelp {
         try {
             ServiceRegistry registry = PluginFragmentHelper.getServiceRegistry(Main.PLUGIN_ID);
             return registry != null ? registry.get(IdeTooltipService.class) : null;
-        } catch (Exception ignored) {
-            // Help is optional; without the service a long-press simply does nothing.
+        } catch (Exception e) {
+            // Help is optional, so a missing service only disables long-press help; log why.
+            Log.w(LOG_TAG, "Tooltip service unavailable", e);
             return null;
         }
     }

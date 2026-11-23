@@ -13,6 +13,7 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -46,9 +47,16 @@ public class SvgToVectorImporter implements IconImporter {
                 return ImportIconResult.error("No target drawable directory found");
             }
 
+            // Never replace a drawable the project already has: a module that has one with this
+            // name is skipped, and the user is told which.
+            List<String> skipped = new ArrayList<>();
             int importedCount = 0;
             for (File destDir : destDirs) {
                 File outputFile = new File(destDir, fileName);
+                if (outputFile.exists()) {
+                    skipped.add(displayPath(params, outputFile));
+                    continue;
+                }
                 Path parentPath = Objects.requireNonNull(outputFile.getParentFile()).toPath();
                 Files.createDirectories(parentPath);
                 Files.write(outputFile.toPath(), rawXml.getBytes(StandardCharsets.UTF_8));
@@ -56,7 +64,10 @@ public class SvgToVectorImporter implements IconImporter {
             }
 
             if (importedCount == 0) {
-                return ImportIconResult.error("Failed to import icon to target directories");
+                return ImportIconResult.error("Already exists, nothing imported: " + String.join(", ", skipped));
+            }
+            if (!skipped.isEmpty()) {
+                return ImportIconResult.success("Imported. Skipped, already exists: " + String.join(", ", skipped));
             }
 
             return ImportIconResult.success();
@@ -120,6 +131,18 @@ public class SvgToVectorImporter implements IconImporter {
         serializer.flush();
 
         return writer.toString();
+    }
+
+    private String displayPath(ImportParams params, File file) {
+        File root = params.currentProject != null ? params.currentProject.getRootDir() : null;
+        if (root != null) {
+            try {
+                return root.toPath().relativize(file.toPath()).toString();
+            } catch (IllegalArgumentException ignored) {
+                // Not under the project root; fall through to the absolute path.
+            }
+        }
+        return file.getPath();
     }
 
     private String sanitizeFileName(String name) {

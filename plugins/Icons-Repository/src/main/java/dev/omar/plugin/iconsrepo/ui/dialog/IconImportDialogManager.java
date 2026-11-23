@@ -27,6 +27,7 @@ import dev.omar.plugin.iconsrepo.R;
 import dev.omar.plugin.iconsrepo.help.IconsRepositoryHelp;
 import dev.omar.plugin.iconsrepo.data.importer.AppPathResolver;
 import dev.omar.plugin.iconsrepo.data.importer.ImportIconResult;
+import dev.omar.plugin.iconsrepo.data.importer.ModuleDiscoveryEngine;
 import dev.omar.plugin.iconsrepo.data.models.IconModel;
 import dev.omar.plugin.iconsrepo.data.validation.HexColorRule;
 import dev.omar.plugin.iconsrepo.data.validation.IconNameRule;
@@ -88,12 +89,14 @@ public class IconImportDialogManager {
         IconsRepositoryHelp.wire(binding.iconPreview, IconsRepositoryHelp.TAG_IMPORT);
         binding.inputNameLayout.setStartIconDrawable(R.drawable.ic_category);
         binding.inputNameLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
+        binding.inputNameLayout.setEndIconDrawable(R.drawable.ic_clear);
         IconsRepositoryHelp.wireFieldIcons(binding.inputNameLayout, IconsRepositoryHelp.TAG_NAME);
         IconsRepositoryHelp.wire(binding.moduleSelectionLayout, IconsRepositoryHelp.TAG_MODULE);
         IconsRepositoryHelp.wire(binding.txtListModules, IconsRepositoryHelp.TAG_MODULE);
         IconsRepositoryHelp.wire(binding.txtListColors, IconsRepositoryHelp.TAG_COLOR);
         binding.inputColorLayout.setStartIconDrawable(R.drawable.ic_category);
         binding.inputColorLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
+        binding.inputColorLayout.setEndIconDrawable(R.drawable.ic_clear);
         IconsRepositoryHelp.wireFieldIcons(binding.inputColorLayout, IconsRepositoryHelp.TAG_COLOR);
         IconsRepositoryHelp.wire(dialog.getButton(AlertDialog.BUTTON_POSITIVE), IconsRepositoryHelp.TAG_IMPORT);
         IconsRepositoryHelp.wire(dialog.getButton(AlertDialog.BUTTON_NEGATIVE), IconsRepositoryHelp.TAG_IMPORT);
@@ -125,8 +128,18 @@ public class IconImportDialogManager {
         binding.txtListModules.setAdapter(
                 new ArrayAdapter<>(context, android.R.layout.simple_list_item_1, displayNames));
 
-        // Default to "All modules" (position 0)
-        binding.txtListModules.setSelection(0);
+        // Default to one module, :app if there is one. All modules (position 0) is opt-in: discovery
+        // counts any folder with a build file and src/main, so it can include non-Android modules.
+        binding.txtListModules.setSelection(defaultModulePosition(availableModules));
+    }
+
+    private static int defaultModulePosition(@NonNull List<IModule> modules) {
+        for (int i = 0; i < modules.size(); i++) {
+            if (ModuleDiscoveryEngine.matchesModuleName(modules.get(i), "app")) {
+                return i + 1;
+            }
+        }
+        return modules.isEmpty() ? 0 : 1;
     }
 
     private void setupIconPreview(@NonNull DialogImportIconBinding binding, @NonNull IconModel model) {
@@ -234,6 +247,9 @@ public class IconImportDialogManager {
             if (!result.isSuccess()) {
                 Toast.makeText(context, "Error: " + result.message(), Toast.LENGTH_LONG).show();
                 return false;
+            }
+            if (result.message() != null) {
+                Toast.makeText(context, result.message(), Toast.LENGTH_LONG).show();
             }
             return true;
         } catch (Exception err) {
