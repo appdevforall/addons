@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:label="Worker Exec Probe"
+        android:theme="@style/Theme.AppCompat">
+
+        <meta-data android:name="plugin.id" android:value="org.appdevforall.spikes.execprobe" />
+        <meta-data android:name="plugin.name" android:value="Worker Exec Probe (spike)" />
+        <meta-data android:name="plugin.version" android:value="${pluginVersion}" />
+        <meta-data android:name="plugin.vcs_revision" android:value="${pluginVcsRevision}" />
+        <meta-data android:name="plugin.build_timestamp" android:value="${pluginBuildTimestamp}" />
+        <meta-data
+            android:name="plugin.description"
+            android:value="ADFA-7281 spike 1: checks that a plugin can start and supervise a native executable it ships. Throwaway, not for release." />
+        <meta-data android:name="plugin.author" android:value="App Dev for All" />
+        <meta-data android:name="plugin.min_ide_version" android:value="1.0.0" />
+
+        <!-- native.code: the probe ships under lib/arm64-v8a/. system.commands is left out ON
+             PURPOSE: the spike records whether starting a process works without it. -->
+        <meta-data android:name="plugin.permissions" android:value="native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.spikes.execprobe.ExecProbePlugin" />
+        <meta-data android:name="plugin.icon_day" android:value="assets/icon_day.png" />
+        <meta-data android:name="plugin.icon_night" android:value="assets/icon_night.png" />
+    </application>
+</manifest>
