@@ -34,6 +34,9 @@ class ToolResultsPrompt(
     /** The turn sent after a reply that tried to finish while a failed file change was not redone. */
     suspend fun unappliedWrite(): String = renderUnappliedWrite(config.config(), terminalTool)
 
+    /** The turn sent after a reply that re-issued the batch that had just succeeded. */
+    suspend fun repeatedAfterSuccess(): String = renderRepeatedAfterSuccess(config.config(), terminalTool)
+
     /** The turn sent after a reply that answered before calling [tool], which the run had to call first. */
     suspend fun requiredTool(tool: String): String = renderRequiredTool(config.config(), terminalTool, tool)
 
@@ -110,6 +113,19 @@ class ToolResultsPrompt(
             )
 
         /**
+         * Renders the turn that asks a run which repeated a successful batch to answer instead.
+         *
+         * @param config the loaded prompt config.
+         * @param terminalTool the name of the tool that ends a run by answering the user.
+         * @return the turn to add to the transcript.
+         */
+        fun renderRepeatedAfterSuccess(config: AgentPromptConfig, terminalTool: String): String =
+            PromptTemplateEngine.render(
+                config.agentLoop.repeatedAfterSuccess,
+                mapOf(PromptVariables.TERMINAL_TOOL to terminalTool),
+            )
+
+        /**
          * Renders the turn that asks a run which answered too early to call [tool] first.
          *
          * @param config the loaded prompt config.
@@ -134,6 +150,7 @@ class ToolResultsPrompt(
                 { render(config, CHECK_TERMINAL_TOOL, CHECK_CHAR_LIMIT, calls, results) }
             } + { renderUnfinished(config, CHECK_TERMINAL_TOOL) } +
                 { renderUnappliedWrite(config, CHECK_TERMINAL_TOOL) } +
+                { renderRepeatedAfterSuccess(config, CHECK_TERMINAL_TOOL) } +
                 { renderRequiredTool(config, CHECK_TERMINAL_TOOL, CHECK_REQUIRED_TOOL) }
             return renders.mapNotNull { check ->
                 try {

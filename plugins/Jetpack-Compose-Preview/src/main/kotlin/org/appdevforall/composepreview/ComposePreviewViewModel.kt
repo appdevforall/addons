@@ -236,8 +236,9 @@ class ComposePreviewViewModel(
             .onFailure { error ->
                 val diagnostics = if (error is CompilationException) error.diagnostics else emptyList()
                 LOG.error("compile: FAILED - {} ({} diagnostic(s))", error.message, diagnostics.size)
+                val message = error.message ?: "Compilation failed"
                 _previewState.value = PreviewState.Error(
-                    message = error.message ?: "Compilation failed",
+                    message = if (UNRESOLVED_REFERENCE in message) "$NOT_BUILT_HINT\n\n$message" else message,
                     diagnostics = diagnostics
                 )
             }
@@ -268,8 +269,10 @@ class ComposePreviewViewModel(
         _previewState.value = PreviewState.Building
     }
 
-    fun setBuildFailed() {
-        _previewState.value = PreviewState.Error("Build failed. Check build output for details.")
+    fun setBuildFailed(reason: String? = null) {
+        _previewState.value = PreviewState.Error(
+            if (reason == null) "Build failed. Check build output for details." else "Build did not start: $reason"
+        )
     }
 
     fun refreshAfterBuild(context: Context) {
@@ -336,5 +339,8 @@ class ComposePreviewViewModel(
     companion object {
         private val LOG = LoggerFactory.getLogger(ComposePreviewViewModel::class.java)
         private const val DEBOUNCE_MS = 500L
+        private const val UNRESOLVED_REFERENCE = "unresolved reference"
+        private const val NOT_BUILT_HINT =
+            "This file uses code the last build does not contain. Build the project, then open the preview again."
     }
 }

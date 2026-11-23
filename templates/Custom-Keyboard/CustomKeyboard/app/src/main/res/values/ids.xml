@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TalkBack actions for a key's long-press alternatives (KeyboardView). -->
+    <item name="key_alternative_1" type="id" />
+    <item name="key_alternative_2" type="id" />
+    <item name="key_alternative_3" type="id" />
+    <item name="key_alternative_4" type="id" />
+    <item name="key_alternative_5" type="id" />
+    <item name="key_alternative_6" type="id" />
+    <item name="key_alternative_7" type="id" />
+    <item name="key_alternative_8" type="id" />
+</resources>

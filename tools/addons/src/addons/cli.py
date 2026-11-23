@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from addons import catalog, check, discover, model, page, publish, tarball
+from addons import catalog, check, discover, model, page, publish, tarball, watch
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     tarball_parser = sub.add_parser("tarball")
     tarball_parser.add_argument("--out", type=Path, required=True)
     tarball_parser.add_argument("--only", nargs="*", default=None)
+
+    watch_parser = sub.add_parser("watch")
+    watch_parser.add_argument("--url", default=watch.URL)
+    watch_parser.add_argument("--snapshot", type=Path, required=True)
     args = parser.parse_args(argv)
 
     if args.command == "discover":
@@ -72,6 +76,9 @@ def main(argv: list[str] | None = None) -> int:
             out.write_text(json.dumps(document, indent=2) + "\n")
             print(f"wrote {out} (v{version}) with {len(document['addons'])} addons")
         return 0
+
+    if args.command == "watch":
+        return watch.main(args.url, args.snapshot)
 
     if args.command == "tarball":
         args.out.mkdir(parents=True, exist_ok=True)
