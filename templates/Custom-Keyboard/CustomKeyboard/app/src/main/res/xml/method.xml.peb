@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Declares this app as a keyboard. Settings shows a gear next to it that opens MainActivity. -->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="${{PACKAGE_NAME}}.MainActivity" />

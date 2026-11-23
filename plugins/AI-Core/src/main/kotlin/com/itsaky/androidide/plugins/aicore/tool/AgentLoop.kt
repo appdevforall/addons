@@ -13,6 +13,10 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Ro
  * @param formatToolResults words each batch's results as the next user turn.
  * @param unfinishedTurn words the turn sent when a run that has used tools ends a reply without
  *   [terminalTool]; null ends the run on that reply instead.
+ * @param repeatedAfterSuccessTurn words the turn sent when a run re-issues the batch it has just
+ *   run successfully, asking it to answer the user instead. Sent at most once until a different
+ *   batch succeeds, then again for a later repeat. Null sends none, so such a repeat ends the run
+ *   at once, through [Events.onRepeatAfterSuccess].
  * @param requiredToolTurn words the turn sent when a run told to call a tool first tries to finish
  *   without it; receives the tool's name. Null never asks.
  * @param unappliedWriteTurn words the turn sent when a run answers while a file change it attempted
@@ -29,6 +33,7 @@ class AgentLoop(
         ToolCallExtractor::diagnoseUnparsedReply,
     private val terminalTool: String? = null,
     private val unfinishedTurn: (suspend () -> String)? = null,
+    private val repeatedAfterSuccessTurn: (suspend () -> String)? = null,
     private val requiredToolTurn: (suspend (String) -> String)? = null,
     private val unappliedWriteTurn: (suspend () -> String)? = null,
 ) {
@@ -120,15 +125,23 @@ class AgentLoop(
         suspend fun onNoProgressCycle(turns: Int, staleLimit: Int) {}
 
         /**
-         * The model re-issued the batch it had just run successfully, which the loop reads as the
-         * work being finished rather than as a repeat to abort on.
+         * The model re-issued the batch it had just run successfully a second time in a run (or the
+         * loop has no turn to ask it to answer), so the run ends without the terminal tool.
          *
-         * The only completion that reaches the user with nothing said: it fires instead of
-         * [onFinalAnswer], because the model never called the terminal tool.
+         * Fires instead of [onFinalAnswer]; the model said nothing, so the reporter must tell the
+         * user why the run stopped.
          *
          * @param turn 1-based turn index.
          */
         suspend fun onRepeatAfterSuccess(turn: Int) {}
+
+        /**
+         * The model re-issued the batch it had just run successfully. The batch is not run again;
+         * the run is given one more turn, told its earlier result is above and to answer the user.
+         *
+         * @param turn 1-based turn index.
+         */
+        suspend fun onRepeatAfterSuccessRetry(turn: Int) {}
 
         /**
          * The model called the terminal tool to finish.
@@ -271,6 +284,7 @@ class AgentLoop(
         // Once a tool has run, only the terminal tool finishes the run; see [unfinishedTurn].
         var toolsRan = false
         var askedToFinish = false
+        var askedToAnswerAfterRepeat = false
         val unapplied = UnappliedWrites(progress)
         // Cleared once the tool runs or has been asked for, so a model that refuses it still stops.
         var requiredPending = requiredTool != null && requiredToolTurn != null
@@ -348,9 +362,30 @@ class AgentLoop(
                     return unapplied.stop(turn, StopReason.CYCLING, events)
                 }
                 ToolCallProgressGuard.Verdict.ASSUME_COMPLETE -> {
+                    // An answer sent with the repeat owes the required tool as much as a plain one.
+                    if (terminal != null && requiredPending) {
+                        requiredPending = false
+                        askForRequiredTool(turn, requiredTool!!, history, events)
+                        continue
+                    }
                     // A repeated look is not completion while the change the user asked for failed.
                     if (unapplied.warn(turn, history, events)) continue
                     if (unapplied.outstanding) return unapplied.stop(turn, StopReason.ABANDONED, events)
+                    // The turn that repeats also answered: that is the answer, so nothing is asked.
+                    if (terminal != null) {
+                        events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
+                        return Result(turn, StopReason.COMPLETED)
+                    }
+                    // A read-only question not yet answered looks the same as a finished write, so the
+                    // run gets one turn to answer before it is ended; the repeated batch is not run.
+                    if (!askedToAnswerAfterRepeat && repeatedAfterSuccessTurn != null) {
+                        askedToAnswerAfterRepeat = true
+                        // The answer may be prose, which then ends the run without another prompt.
+                        askedToFinish = true
+                        events.onRepeatAfterSuccessRetry(turn)
+                        history.add(ChatMessage(Role.USER, repeatedAfterSuccessTurn.invoke()))
+                        continue
+                    }
                     events.onRepeatAfterSuccess(turn)
                     return Result(turn, StopReason.COMPLETED)
                 }
@@ -365,6 +400,10 @@ class AgentLoop(
             if (realCalls.any { it.name == requiredTool }) requiredPending = false
             toolsRan = true
             askedToFinish = false
+            // The extra turn invited a different call: once one has worked, a later repeat has the
+            // run's progress behind it again and is asked too. Alternating between calls cannot make
+            // this loop for ever, as the progress guard ends a run that keeps reissuing known batches.
+            if (results.isNotEmpty() && results.all { it.success }) askedToAnswerAfterRepeat = false
             progress.recordResults(results)
             unapplied.record(realCalls.zip(results), writesFiles, changesPaths, writtenFilesOf, changeOf)
             events.onToolResults(turn, realCalls, results)

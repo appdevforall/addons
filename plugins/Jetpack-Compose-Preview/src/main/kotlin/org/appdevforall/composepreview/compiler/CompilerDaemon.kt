@@ -1,5 +1,6 @@
 package org.appdevforall.composepreview.compiler
 
+import android.content.Context
 import org.appdevforall.composepreview.Environment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class CompilerDaemon(
     private val classpathManager: ComposeClasspathManager,
@@ -32,6 +34,9 @@ class CompilerDaemon(
     private var idleTimeoutJob: Job? = null
     private val timeoutScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var isStartingUp = false
+
+    @Volatile
+    private var warmed = false
 
     private val wrapperDir = File(workDir, "daemon").apply { mkdirs() }
     private val wrapperClass = File(wrapperDir, "CompilerWrapper.class")
@@ -82,28 +87,28 @@ class CompilerDaemon(
         }
     }
 
+    suspend fun dex(classesDir: File, outputDir: File): DexResult =
+        dex(classesDir.walkTopDown().filter { it.extension == "class" }.toList(), outputDir)
+
     suspend fun dex(
-        classesDir: File,
-        outputDir: File
+        classFiles: List<File>,
+        outputDir: File,
+        extraClasspath: List<File> = emptyList()
     ): DexResult = mutex.withLock {
         withContext(Dispatchers.IO) {
             ensureDaemonRunning()
 
             outputDir.mkdirs()
 
-            val classFiles = classesDir.walkTopDown()
-                .filter { it.extension == "class" }
-                .toList()
-
             if (classFiles.isEmpty()) {
                 return@withContext DexResult(
                     success = false,
                     dexFile = null,
-                    errorOutput = "No .class files found in $classesDir"
+                    errorOutput = "No .class files to dex"
                 )
             }
 
-            val d8Args = buildD8Args(classFiles, outputDir)
+            val d8Args = buildD8Args(classFiles, outputDir, extraClasspath)
             val argsLine = "DEX\u0000" + d8Args.joinToString("\u0000") + "\n"
 
             try {
@@ -145,12 +150,16 @@ class CompilerDaemon(
         }
     }
 
-    private fun buildD8Args(classFiles: List<File>, outputDir: File): List<String> = buildList {
+    private fun buildD8Args(
+        classFiles: List<File>,
+        outputDir: File,
+        extraClasspath: List<File>
+    ): List<String> = buildList {
         add("--release")
         add("--min-api")
         add("21")
 
-        classpathManager.getRuntimeJars()
+        (classpathManager.getRuntimeJars() + extraClasspath.filter { it.isFile && it !in classFiles })
             .filter { it.exists() }
             .forEach { jar ->
                 add("--classpath")
@@ -294,6 +303,7 @@ class CompilerDaemon(
     }
 
     fun stopDaemon() {
+        warmed = false
         idleTimeoutJob?.cancel()
         idleTimeoutJob = null
 
@@ -336,6 +346,18 @@ class CompilerDaemon(
         timeoutScope.cancel()
     }
 
+    suspend fun warmUp(classpath: String, composePlugin: File) {
+        if (warmed && daemonProcess?.isAlive == true) return
+        val dir = File(workDir, "warmup").apply { mkdirs() }
+        val source = File(dir, "WarmUp.kt").apply { writeText(WARM_UP_SOURCE) }
+        val classesDir = File(dir, "classes")
+        val startedAt = System.currentTimeMillis()
+        val compiled = compile(listOf(source), classesDir, classpath, composePlugin)
+        val dexed = compiled.success && dex(classesDir, File(dir, "dex")).success
+        warmed = dexed
+        LOG.info("Compiler daemon warm-up took {} ms, success={}", System.currentTimeMillis() - startedAt, dexed)
+    }
+
     suspend fun startEagerly() = mutex.withLock {
         withContext(Dispatchers.IO) {
             if (daemonProcess?.isAlive == true) return@withContext
@@ -363,10 +385,23 @@ class CompilerDaemon(
     companion object {
         private val LOG = LoggerFactory.getLogger(CompilerDaemon::class.java)
 
-        private const val IDLE_TIMEOUT_MS = 120_000L
+        private const val IDLE_TIMEOUT_MS = 300_000L
         private const val SHUTDOWN_TIMEOUT_SECONDS = 5L
         private const val COMPILE_TIMEOUT_MS = 300_000L
-        private const val WRAPPER_VERSION = 2
+        private const val WRAPPER_VERSION = 3
+
+        private val WARM_UP_SOURCE = """
+            package warmup
+
+            import androidx.compose.foundation.layout.Column
+            import androidx.compose.material3.Text
+            import androidx.compose.runtime.Composable
+
+            @Composable
+            fun WarmUp() {
+                Column { Text("warm") }
+            }
+        """.trimIndent()
 
         private val WRAPPER_SOURCE = """
             import java.io.*;
@@ -378,6 +413,7 @@ class CompilerDaemon(
                 private static Method kotlinExecMethod;
                 private static Method d8ParseMethod;
                 private static Method d8RunMethod;
+                private static Object d8Origin;
                 private static Class<?> d8CommandClass;
 
                 public static void main(String[] args) throws Exception {
@@ -433,16 +469,55 @@ class CompilerDaemon(
                 private static void handleDex(String[] d8Args) throws Exception {
                     if (d8CommandClass == null) {
                         d8CommandClass = Class.forName("com.android.tools.r8.D8Command");
-                        d8ParseMethod = d8CommandClass.getMethod("parse", String[].class);
+                        Class<?> originClass = Class.forName("com.android.tools.r8.origin.Origin");
+                        d8Origin = originClass.getMethod("root").invoke(null);
+                        d8ParseMethod = d8CommandClass.getMethod("parse", String[].class, originClass);
                         Class<?> d8Class = Class.forName("com.android.tools.r8.D8");
                         d8RunMethod = d8Class.getMethod("run", d8CommandClass);
                     }
 
-                    Object cmd = d8ParseMethod.invoke(null, (Object) d8Args);
+                    Object builder = d8ParseMethod.invoke(null, d8Args, d8Origin);
+                    Object cmd = builder.getClass().getMethod("build").invoke(builder);
                     d8RunMethod.invoke(null, cmd);
                     System.out.println("DEX_SUCCESS");
                 }
             }
         """.trimIndent()
     }
+}
+
+object SharedCompilerDaemon {
+    private val LOG = LoggerFactory.getLogger(SharedCompilerDaemon::class.java)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val warmUpRequested = AtomicBoolean(false)
+    private var daemon: CompilerDaemon? = null
+
+    @Synchronized
+    fun get(classpathManager: ComposeClasspathManager, workDir: File): CompilerDaemon =
+        daemon ?: CompilerDaemon(classpathManager, workDir).also { daemon = it }
+
+    fun warmUpOnce(context: Context) {
+        if (!warmUpRequested.compareAndSet(false, true)) return
+        scope.launch {
+            try {
+                val classpathManager = ComposeClasspathManager(context)
+                if (!classpathManager.ensureComposeJarsExtracted()) return@launch
+                get(classpathManager, workDirFor(context)).warmUp(
+                    classpathManager.getCompilationClasspath(),
+                    classpathManager.getCompilerPlugin()
+                )
+            } catch (e: Exception) {
+                LOG.warn("Compiler daemon warm-up failed", e)
+            }
+        }
+    }
+
+    @Synchronized
+    fun shutdown() {
+        daemon?.shutdown()
+        daemon = null
+        warmUpRequested.set(false)
+    }
+
+    fun workDirFor(context: Context): File = File(context.cacheDir, "compose_preview_work").apply { mkdirs() }
 }

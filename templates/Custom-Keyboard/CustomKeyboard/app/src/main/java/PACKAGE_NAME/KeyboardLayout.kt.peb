@@ -1,0 +1,132 @@
+package ${{PACKAGE_NAME}}
+
+import android.content.Context
+import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Locale
+
+/** What a key does. Every type except CHARACTER is handled by [KeyboardService]. */
+enum class KeyType { CHARACTER, SHIFT, BACKSPACE, ENTER, SPACE, SYMBOLS, LETTERS, LANGUAGE }
+
+data class Key(
+    val type: KeyType,
+    val label: String,
+    // The text a CHARACTER key types. It may be several code points: a
+    // Devanagari conjunct such as "क्ष" is three.
+    val output: String = label,
+    // Alternatives offered on long-press.
+    val popup: List<String> = emptyList(),
+    // Relative width; an ordinary key is 1.
+    val width: Float = 1f,
+) {
+    fun uppercase(locale: Locale): Key =
+        if (type != KeyType.CHARACTER) this
+        else copy(
+            label = label.uppercase(locale),
+            output = output.uppercase(locale),
+            popup = popup.map { it.uppercase(locale) },
+        )
+}
+
+typealias Row = List<Key>
+
+/** One keyboard language, read from a JSON file in assets/layouts. See the README. */
+class KeyboardLayout(
+    val name: String,
+    // Shown on the language key of the layout before this one, e.g. "EN".
+    val shortName: String,
+    val locale: Locale,
+    // Shift automatically at the start of a sentence, where the app asks for it.
+    val autoCapitalize: Boolean,
+    private val layers: Map<String, List<Row>>,
+) {
+    fun layer(name: String): List<Row> = layers[name] ?: layers.getValue(MAIN)
+
+    fun hasLayer(name: String): Boolean = name in layers
+
+    // The keyboard keeps one height for all of a layout's layers, so it does not jump.
+    val heightInRows: Int = layers.values.maxOf { it.size }
+
+    companion object {
+        const val MAIN = "main"
+        const val SHIFT = "shift"
+        const val SYMBOLS = "symbols"
+
+        private const val TAG = "KeyboardLayout"
+        private const val DIR = "layouts"
+
+        /**
+         * Every layout in assets/layouts, in file-name order. A file that does not
+         * parse is skipped and the reason logged, so a typo in one layout does not
+         * take the whole keyboard down. Run a debug build and read App Logs.
+         */
+        fun loadAll(context: Context): List<KeyboardLayout> {
+            val files = context.assets.list(DIR).orEmpty().filter { it.endsWith(".json") }.sorted()
+            val layouts = files.mapNotNull { file ->
+                runCatching {
+                    context.assets.open("$DIR/$file").bufferedReader().use { parse(it.readText()) }
+                }.onFailure {
+                    Log.e(TAG, "Skipping $DIR/$file: ${it.message}")
+                }.getOrNull()
+            }
+            check(layouts.isNotEmpty()) { "No usable layout in assets/$DIR" }
+            return layouts
+        }
+
+        fun parse(json: String): KeyboardLayout {
+            val root = JSONObject(json)
+            val locale = Locale.forLanguageTag(root.getString("locale"))
+            val layersJson = root.getJSONObject("layers")
+            val layers = mutableMapOf<String, List<Row>>()
+            for (name in layersJson.keys()) {
+                layers[name] = parseRows(layersJson.getJSONArray(name))
+            }
+            require(MAIN in layers) { "no \"$MAIN\" layer" }
+            // A layout without a shift layer of its own gets its main layer in capitals.
+            if (SHIFT !in layers) {
+                layers[SHIFT] = layers.getValue(MAIN).map { row -> row.map { it.uppercase(locale) } }
+            }
+            return KeyboardLayout(
+                name = root.getString("name"),
+                shortName = root.getString("shortName"),
+                locale = locale,
+                autoCapitalize = root.optBoolean("autoCapitalize", false),
+                layers = layers,
+            )
+        }
+
+        private fun parseRows(rows: JSONArray): List<Row> =
+            (0 until rows.length()).map { r ->
+                val keys = rows.getJSONArray(r)
+                (0 until keys.length()).map { k -> parseKey(keys.get(k)) }
+            }
+
+        // A key is either a plain string, which types itself, or an object.
+        private fun parseKey(spec: Any): Key {
+            if (spec is String) return Key(KeyType.CHARACTER, spec)
+            val obj = spec as? JSONObject ?: throw IllegalArgumentException("bad key: $spec")
+            val type = KeyType.valueOf(obj.optString("type", "character").uppercase(Locale.ROOT))
+            val label = obj.optString("label", defaultLabel(type, obj))
+            val popup = obj.optJSONArray("popup")?.let { a -> (0 until a.length()).map { a.getString(it) } }
+            return Key(
+                type = type,
+                label = label,
+                output = obj.optString("output", label),
+                popup = popup.orEmpty(),
+                width = obj.optDouble("width", 1.0).toFloat(),
+            )
+        }
+
+        private fun defaultLabel(type: KeyType, obj: JSONObject): String = when (type) {
+            KeyType.CHARACTER -> obj.getString("output")
+            KeyType.SHIFT -> "⇧"
+            KeyType.BACKSPACE -> "⌫"
+            KeyType.ENTER -> "⏎"
+            KeyType.SYMBOLS -> "?123"
+            KeyType.LETTERS -> "ABC"
+            // The view draws the layout name on SPACE and the next layout's name on LANGUAGE.
+            KeyType.SPACE, KeyType.LANGUAGE -> ""
+        }
+    }
+}
