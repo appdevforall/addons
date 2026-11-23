@@ -15,14 +15,18 @@ android {
         applicationId = "com.itsaky.androidide.plugins.aicodesuggestions"
         minSdk = 33
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
         }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     compileOptions {
@@ -48,6 +52,10 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+
+    testImplementation(files("../../libs/plugin-api.jar"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.8")
 }
 
 tasks.matching {
