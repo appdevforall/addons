@@ -1,0 +1,15 @@
+{
+  "summary": "Builds a signed copy of Code on the Go with the add-ons you choose.",
+  "description": "Makes a copy of the Code on the Go installed on this device with the plugins and templates you pick bundled inside, and signs it with your own keystore, so you can hand out a version that arrives ready to use.",
+  "tags": [
+    "signing",
+    "release",
+    "distribution"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

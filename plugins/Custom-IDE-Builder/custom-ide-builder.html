@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom IDE Builder</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+  li { margin: 0.3rem 0; }
+</style>
+</head>
+<body>
+  <h1>Custom IDE Builder</h1>
+
+  <p><b>Custom IDE Builder</b> makes a copy of the Code on the Go installed on this device, with the
+  plugins and templates you choose bundled inside it, and signs the copy with your own key. Use it to
+  hand out a version of Code on the Go that arrives with the add-ons a class, a team or a community needs
+  already in place.</p>
+
+  <div class="note">
+    <p><b>Read this before you install a copy.</b> The copy is signed with your key, not ours, so Android
+    treats it as a different app. It installs only after Code on the Go has been uninstalled, and
+    uninstalling erases the projects stored in the app's data. Copy your projects out first.</p>
+  </div>
+
+  <h2>What you need</h2>
+  <ul>
+    <li>A keystore file in <b>PKCS12</b> (<code>.p12</code>) or <b>BKS</b> format, such as one made by
+      <b>Keystore Generator</b>. A Java KeyStore (<code>.jks</code>) file made by <code>keytool</code> must
+      be converted first, on a computer:
+      <code>keytool -importkeystore -srckeystore old.jks -srcstoretype JKS -destkeystore new.p12 -deststoretype PKCS12</code>.</li>
+    <li>The add-ons: <code>.cgp</code> plugin files and <code>.cgt</code> template files from this device, or
+      downloaded from the add-ons website.</li>
+    <li>A folder to save the finished APK in, and free space for about twice the size of Code on the Go.</li>
+  </ul>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>Open <b>Custom IDE Builder</b> from the main menu.</li>
+    <li><b>Add-ons.</b> Tap <b>Add from this device</b> to pick several files at once. Tap
+      <b>Add from the website</b> to choose from the add-ons that work with this version of Code on the Go.
+      Nothing is downloaded until you confirm; the downloads come from <code>addons.appdevforall.org</code>
+      and each one is checked against the size and SHA-256 the website publishes.</li>
+    <li><b>Signing key.</b> Choose the keystore file, type the store password and tap <b>Read keys</b>,
+      then pick the key. Leave the key password blank if it is the same as the store password.</li>
+    <li><b>Output folder.</b> Choose it once; it is remembered.</li>
+    <li>Tap <b>Build APK</b>. The file is saved as
+      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>.</li>
+  </ol>
+
+  <h2>Good to know</h2>
+  <ul>
+    <li><b>Use the same key every time.</b> A device that has a build signed with one key cannot update to
+      a build signed with another without being uninstalled first.</li>
+    <li><b>Passwords are never saved.</b> They are used for the build in front of you and cleared when
+      you leave the screen.</li>
+    <li><b>Each plugin must have its own plugin ID</b> and each template its own file name; the builder
+      says which add-ons clash. <code>core.cgt</code> is never bundled, because Code on the Go installs it
+      itself.</li>
+    <li><b>Nothing chosen</b> makes a copy that carries no add-ons.</li>
+    <li>The copy is built from the APK of this installation. It does not work if Code on the Go was
+      installed as split APKs; the screen says so.</li>
+    <li>The app is copied without being recompressed, so building takes about as long as copying the file,
+      plus the time to sign it.</li>
+  </ul>
+</body>
+</html>
