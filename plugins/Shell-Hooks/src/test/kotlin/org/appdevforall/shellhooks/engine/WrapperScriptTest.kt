@@ -72,9 +72,9 @@ class WrapperScriptTest(
         return out
     }
 
-    /** Alive and not a zombie, read from /proc. */
+    /** Alive and not a zombie, read from /proc; not when its entry is gone, even mid-read. */
     private fun isRunning(pid: Long): Boolean {
-        val stat = File("/proc/$pid/stat").takeIf { it.exists() }?.readText() ?: return false
+        val stat = runCatching { File("/proc/$pid/stat").readText() }.getOrNull() ?: return false
         return stat.substringAfterLast(')').trim().firstOrNull() != 'Z'
     }
 
