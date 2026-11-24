@@ -115,18 +115,32 @@ Four rules the store applies, each of which was a bug before it was a rule:
 Contributed tools run inside the contributing plugin, under *its* permissions, and
 outside the `PathGuard` containment that covers this plugin's own handlers — so the
 approval dialog names the source plugin, and `allowsSessionApproval` is false for
-every contributed tool: "Always Allow" is downgraded to a single approval.
+every contributed tool that may change something: "Always Allow" is downgraded to a
+single approval. A tool its provider declares read-only (`ToolSpec.isReadOnly`) may
+be allowed for the session (ADFA-7147): still one explicit approval per tool, and the
+grant is keyed by provider, the tool's own name and a SHA-256 of its description and
+input schema rather than by the registered name, which can pass to another plugin's tool
+when the sources change. A tool its provider republishes under the same name with
+another description or schema therefore asks again. The grant lapses as soon as the tool list changes and the tool is changed, dropped
+or no longer declares itself read-only (`ToolApprovalManager.retainSessionApprovals`), and every grant, built-in or contributed, ends with the chat:
+`ChatViewModel` clears them whenever the current chat changes (new, opened, imported, or
+deleted and replaced) or is cleared, since its `ToolApprovalManager` lives as long as the
+plugin. The declaration is the provider's own and nothing checks it,
+so a dialog offering "Always Allow" for a contributed tool says exactly that
+(`ApprovalRequest.readOnlyOnProvidersWord`).
 
 For the same reason a source's own `requiresApproval = false` is ignored:
 `ensureApproved` returns early on it, before `allowsSessionApproval` is ever
 consulted, so honouring it would let a provider decline the only control there is
-by asking. The dialog's title is the *registered* name, and all three
-provider-supplied strings on it — the tool's own name, its description and the
-source's label — are flattened and capped first, at the `ContributedToolHandler`
-boundary rather than in each provider. A remote `displayName` carrying a newline
-and a copy of the dialog's own header could otherwise forge structure the user
-then trusts. Contributing plugins therefore ship no sanitising of their own and
-depend on the installed `ai-core` for it; the two version independently.
+by asking. The dialog's message opens with the *registered* name, whole, under a
+short generic title (the stock title is one line, two at most, and cut a long name
+off at font scale 2.0). All three provider-supplied strings on it — the tool's own
+name, its description and the source's label — are flattened and capped first, at
+the `ContributedToolHandler` boundary rather than in each provider. A remote
+`displayName` carrying a newline and a copy of the dialog's own lines could
+otherwise forge structure the user then trusts. Contributing plugins therefore
+ship no sanitising of their own and depend on the installed `ai-core` for it; the
+two version independently.
 
 ## System prompt config
 
@@ -161,7 +175,7 @@ into one document:
 | `rules.yml` | `rules` | Priority groups, highest first; each has a `heading` (`CRITICAL`, `IMPORTANT`, `MANDATORY`, `OPTIONAL`) and its `items`. **Adding a rule is adding an item.** |
 | `tools.yml` | `tools`, `tool_call_format` | What introduces the tool list, and how to write a call as text (sent only under the text protocol). The list itself is the tools the run offers (`PromptToolCatalog`). |
 | `ide_context.yml` | `ide_context`, `session` | One line per fact the IDE can state: open files, module paths. `session` states the device's date and time on every prompt, and that the web tools are there. |
-| `agent_loop.yml` | `agent_loop`, `approval` | What the agent is told after each tool batch: the `FAILED:` marker, the truncation notice, what to do next after a success or a failure, the `unfinished` turn sent once when a run that has used tools replies without `respond`, the `unapplied_write` turn sent once when a run tries to finish while a file change it tried failed and was not redone, and the `required_tool` turn sent once when a run that had to search first answers without searching. `approval` is what it is told when the user denies a call, asks for a revision, or leaves the dialog unanswered. |
+| `agent_loop.yml` | `agent_loop`, `approval` | What the agent is told after each tool batch: the `FAILED:` marker, the truncation notice, what to do next after a success or a failure, the `unfinished` turn sent once when a run that has used tools replies without `respond`, the `unapplied_write` turn sent once when a run tries to finish while a file change it tried failed and was not redone, the `repeated_after_success` turn sent when a run re-issues the call that just succeeded, asking it to answer or make a different call (at most once until a different call succeeds), and the `required_tool` turn sent once when a run that had to search first answers without searching. `approval` is what it is told when the user denies a call, asks for a revision, or leaves the dialog unanswered. |
 | `context_files.yml` | `context_files` | The heading over the files the user attached to a message, and the notice inside one cut to the size limit. |
 | `chat_title.yml` | `chat_title` | The system prompt of the one-off request that names a chat from its first message, before the agent replies. |
 | `web_search.yml` | `web_search` | The system prompt of the one-off request the `web_search` tool makes through the active backend. It may use `CURRENT_TIME`, so "latest" is read as of the device's date. |

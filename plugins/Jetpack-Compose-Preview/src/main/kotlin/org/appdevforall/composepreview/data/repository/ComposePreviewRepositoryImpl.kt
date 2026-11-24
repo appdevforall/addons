@@ -7,6 +7,7 @@ import org.appdevforall.composepreview.compiler.ComposeClasspathManager
 import org.appdevforall.composepreview.compiler.ComposeCompiler
 import org.appdevforall.composepreview.compiler.ComposeDexCompiler
 import org.appdevforall.composepreview.compiler.DexCache
+import org.appdevforall.composepreview.compiler.SharedCompilerDaemon
 import org.appdevforall.composepreview.data.source.ProjectContext
 import org.appdevforall.composepreview.data.source.ProjectContextSource
 import org.appdevforall.composepreview.domain.model.ParsedPreviewSource
@@ -80,7 +81,7 @@ class ComposePreviewRepositoryImpl(
 
     private fun initializeInfrastructure(context: Context): ComposeClasspathManager {
         val cacheDir = context.cacheDir
-        val work = File(cacheDir, "compose_preview_work").apply { mkdirs() }
+        val work = SharedCompilerDaemon.workDirFor(context)
         workDir = work
 
         dexCache = DexCache(File(cacheDir, "compose_dex_cache"))
@@ -88,7 +89,7 @@ class ComposePreviewRepositoryImpl(
         val cpManager = ComposeClasspathManager(context)
         classpathManager = cpManager
         compiler = ComposeCompiler(cpManager, work)
-        compilerDaemon = CompilerDaemon(cpManager, work)
+        compilerDaemon = SharedCompilerDaemon.get(cpManager, work)
         dexCompiler = ComposeDexCompiler(cpManager)
         return cpManager
     }
@@ -120,17 +121,20 @@ class ComposePreviewRepositoryImpl(
             val generatedClassName = "${fileName}Kt"
             val fullClassName = "${parsedSource.packageName}.$generatedClassName"
 
-            val sourceHash = cache.computeSourceHash(source)
+            val projectDex = projectClassesDex(context, cache, compilerDaemon, workDir)
+            val startedAt = System.currentTimeMillis()
+            val projectDexFiles = projectDex.files + context.projectDexFiles
+            val sourceHash = cache.computeSourceHash(source + '\u0000' + projectDex.signature)
 
             val cached = cache.getCachedDex(sourceHash)
             if (cached != null) {
                 LOG.info("Using cached DEX for hash: {}, runtimeDex={}, projectDexFiles={}",
-                    sourceHash, runtimeDex?.absolutePath ?: "null", context.projectDexFiles.size)
+                    sourceHash, runtimeDex?.absolutePath ?: "null", projectDexFiles.size)
                 return@runCatching CompilationResult(
                     dexFile = cached.dexFile,
                     className = fullClassName,
                     runtimeDex = runtimeDex,
-                    projectDexFiles = context.projectDexFiles
+                    projectDexFiles = projectDexFiles
                 )
             }
 
@@ -141,7 +145,10 @@ class ComposePreviewRepositoryImpl(
             val sourceFile = File(packageDir, "$fileName.kt")
             sourceFile.writeText(source)
 
-            val classesDir = File(workDir, "classes").apply { mkdirs() }
+            val classesDir = File(workDir, "classes").apply {
+                deleteRecursively()
+                mkdirs()
+            }
 
             LOG.debug("Compiling source: {}", sourceFile.absolutePath)
             LOG.info("Using {} project classpaths for compilation", context.compileClasspaths.size)
@@ -199,6 +206,7 @@ class ComposePreviewRepositoryImpl(
                 )
             }
 
+            val compiledAt = System.currentTimeMillis()
             val dexDir = File(workDir, "dex").apply { mkdirs() }
 
             LOG.debug("Converting to DEX")
@@ -240,16 +248,54 @@ class ComposePreviewRepositoryImpl(
                 LOG.warn("Failed to cache DEX file (non-fatal): {}", e.message)
             }
 
-            LOG.info("Preview ready: {} with {} previews, {} project DEX files",
-                fullClassName, parsedSource.previewConfigs.size, context.projectDexFiles.size)
+            val finishedAt = System.currentTimeMillis()
+            LOG.info("Preview ready: {} with {} previews, {} project DEX files; kotlinc {} ms, d8 {} ms, total {} ms",
+                fullClassName, parsedSource.previewConfigs.size, projectDexFiles.size,
+                compiledAt - startedAt, finishedAt - compiledAt, finishedAt - startedAt)
 
             CompilationResult(
                 dexFile = dexFile,
                 className = fullClassName,
                 runtimeDex = runtimeDex,
-                projectDexFiles = context.projectDexFiles
+                projectDexFiles = projectDexFiles
             )
         }
+    }
+
+    private data class ProjectDex(val signature: String, val files: List<File>)
+
+    private suspend fun projectClassesDex(
+        context: ProjectContext,
+        cache: DexCache,
+        daemon: CompilerDaemon?,
+        workDir: File
+    ): ProjectDex {
+        val inputs = context.intermediateClasspaths
+            .flatMap { root ->
+                if (root.isDirectory) root.walkTopDown().filter { it.extension == "class" }.toList() else listOf(root)
+            }
+            .filter { it.isFile }
+            .sortedBy { it.absolutePath }
+        val signature = cache.computeSourceHash(
+            inputs.joinToString("|") { "${it.absolutePath}:${it.lastModified()}:${it.length()}" }
+        )
+        if (inputs.isEmpty() || daemon == null) return ProjectDex(signature, emptyList())
+
+        val root = File(workDir, "project-dex")
+        val outDir = File(root, signature)
+        val done = File(outDir, "done")
+        if (!done.exists()) {
+            root.deleteRecursively()
+            val startedAt = System.currentTimeMillis()
+            val result = daemon.dex(inputs, outDir, context.compileClasspaths)
+            if (!result.success) {
+                LOG.warn("Could not dex the project's compiled classes: {}", result.errorOutput)
+                return ProjectDex(signature, emptyList())
+            }
+            done.createNewFile()
+            LOG.info("Dexed {} project class inputs in {} ms", inputs.size, System.currentTimeMillis() - startedAt)
+        }
+        return ProjectDex(signature, outDir.listFiles { file -> file.extension == "dex" }.orEmpty().sortedBy { it.name })
     }
 
     override fun computeSourceHash(source: String): String {
@@ -262,7 +308,6 @@ class ComposePreviewRepositoryImpl(
     }
 
     override fun reset() {
-        compilerDaemon?.shutdown()
         classpathManager = null
         compiler = null
         compilerDaemon = null

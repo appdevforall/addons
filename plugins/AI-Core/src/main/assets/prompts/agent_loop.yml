@@ -39,6 +39,13 @@ agent_loop:
     the file already exists, use update_file; if update_file said the file does not exist, use
     create_file; otherwise fix what the error said. If you cannot, call the "{{TERMINAL_TOOL}}"
     tool and say plainly that the change was not made.
+  # Sent when a run re-issues the batch it has just run successfully: at most once until a
+  # different batch succeeds, then again for a later repeat. The batch is not run again; the
+  # earlier result is already in the transcript.
+  repeated_after_success: >-
+    Your previous tool call(s) already succeeded and were not run again; their results are above.
+    If those results are enough, answer the user now: write the answer, or call the
+    "{{TERMINAL_TOOL}}" tool with it. Otherwise make a different call, not the same one again.
   # Sent once when a run that had to check the web first answered without searching; TOOL is the
   # search tool. A backend that forces the call never sends it (see VerificationPolicy).
   required_tool: >-

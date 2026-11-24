@@ -1,13 +1,20 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import android.app.Dialog
+import android.content.Context
 import android.content.res.Resources
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
+import android.util.TypedValue
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.res.use
+import androidx.core.view.ViewCompat
+import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
@@ -53,6 +60,8 @@ class ApprovalDialogFragment : DialogFragment() {
     }
 
     companion object {
+        /** The least the approval message is given (about three lines), whatever the buttons need. */
+        private const val MESSAGE_FLOOR_DP = 96
         private const val ARG_TOOL_NAME = "tool_name"
         private const val ARG_PROVIDER_NAME = "provider_name"
         private const val ARG_SOURCE = "source"
@@ -60,6 +69,7 @@ class ApprovalDialogFragment : DialogFragment() {
         private const val ARG_ARGS = "args"
         private const val ARG_PREVIEW = "preview"
         private const val ARG_ALLOWS_ALWAYS_ALLOW = "allows_always_allow"
+        private const val ARG_READ_ONLY_ON_PROVIDERS_WORD = "read_only_on_providers_word"
 
         /**
          * Builds the dialog. Everything it needs is in [getArguments], so the framework can
@@ -83,6 +93,7 @@ class ApprovalDialogFragment : DialogFragment() {
                     putString(ARG_PREVIEW, preview.name)
                     putString(ARG_ARGS, ApprovalPresentation.format(preview, request.args, resources))
                     putBoolean(ARG_ALLOWS_ALWAYS_ALLOW, request.allowsSessionApproval)
+                    putBoolean(ARG_READ_ONLY_ON_PROVIDERS_WORD, request.readOnlyOnProvidersWord)
                 }
             }
         }
@@ -97,33 +108,26 @@ class ApprovalDialogFragment : DialogFragment() {
         val preview = ApprovalPresentation.named(arguments?.getString(ARG_PREVIEW))
         val isEdit = preview == ApprovalPreview.EDIT
         val allowsAlwaysAllow = arguments?.getBoolean(ARG_ALLOWS_ALWAYS_ALLOW) ?: false
+        // An edit never offers it, whatever the request allows; see the buttons below.
+        val offersAlwaysAllow = allowsAlwaysAllow && !isEdit
+        val readOnlyOnProvidersWord = arguments?.getBoolean(ARG_READ_ONLY_ON_PROVIDERS_WORD) ?: false
 
-        val message = buildString {
-            append(getString(R.string.approval_header))
-            append("\n\n")
-            // Provenance before the description: a tool that leaves the device is a different
-            // decision from a local edit, and only the source says which this is.
-            if (!source.isNullOrBlank()) {
-                append(getString(R.string.approval_source, source))
-                append("\n")
-                // Both names, when they differ: the title says what runs, this says what the
-                // source calls it, so neither can be passed off as the other.
-                if (!providerName.isNullOrBlank()) {
-                    append(getString(R.string.approval_provider_name, providerName))
-                    append("\n")
-                }
-                append("\n")
-            }
-            append(description)
-            append("\n\n")
-            append(getString(ApprovalPresentation.argsLabel(preview)))
-            append("\n")
-            append(argsText)
-        }
+        // The full name opens the message, not the title, which a long name overflows; see message().
+        val message = ApprovalPresentation.message(
+            toolName = toolName,
+            source = source,
+            providerName = providerName,
+            readOnlyClaim = offersAlwaysAllow && readOnlyOnProvidersWord,
+            description = description,
+            preview = preview,
+            argsText = argsText,
+            resources = resources,
+        )
 
         val builder = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(getString(R.string.approval_confirm_title, toolName))
-            .setMessage(message)
+        builder
+            .setTitle(getString(R.string.approval_confirm_title))
+            .setView(messageView(builder.context, message))
             .setNegativeButton(getString(R.string.approval_decline)) { _, _ ->
                 decide(ApprovalResult.DENIED)
                 dismiss()
@@ -144,7 +148,7 @@ class ApprovalDialogFragment : DialogFragment() {
                 decide(ApprovalResult.APPROVED_ONCE)
                 dismiss()
             }
-            if (allowsAlwaysAllow) {
+            if (offersAlwaysAllow) {
                 builder.setNeutralButton(getString(R.string.approval_always_allow)) { _, _ ->
                     decide(ApprovalResult.APPROVED_FOR_SESSION)
                     dismiss()
@@ -186,6 +190,89 @@ class ApprovalDialogFragment : DialogFragment() {
         dialog.setCanceledOnTouchOutside(false)
 
         return dialog
+    }
+
+    /**
+     * The message as a scrolling view bounded by [BoundedScrollView]. The stock layout gives the middle
+     * panel its height before the buttons get more than their minimum, so a long message squeezed the
+     * stacked buttons off screen at a large font scale; the bound leaves the buttons their full height.
+     * The text looks like the stock message: it takes the dialog theme's own `materialAlertDialogBodyTextStyle`
+     * and `dialogPreferredPadding`, from [context] (the builder's, so it carries the dialog theme overlay).
+     */
+    private fun messageView(context: Context, message: CharSequence): View {
+        val style = TypedValue()
+        val styleRes = if (context.theme.resolveAttribute(
+                com.google.android.material.R.attr.materialAlertDialogBodyTextStyle, style, true,
+            )
+        ) style.resourceId else 0
+        val padding = context.obtainStyledAttributes(
+            intArrayOf(androidx.appcompat.R.attr.dialogPreferredPadding),
+        ).use { it.getDimensionPixelSize(0, 0) }
+        val text = TextView(context, null, 0, styleRes).apply {
+            this.text = message
+            setPadding(padding, paddingTop, padding, paddingBottom)
+        }
+        // The stock layout puts this gap (titleDividerNoCustom) between the title and a message
+        // it owns; a custom view loses it, so it is restored as top padding on the scroll view.
+        val gap = context.resources.getDimensionPixelSize(androidx.appcompat.R.dimen.abc_dialog_title_divider_material)
+        return BoundedScrollView(context).apply {
+            setPadding(paddingLeft, gap, paddingRight, paddingBottom)
+            // The stock content panel shows these edge indicators while it can scroll; setView drops them.
+            scrollIndicators = View.SCROLL_INDICATOR_TOP or View.SCROLL_INDICATOR_BOTTOM
+            addView(text)
+        }
+    }
+
+    /**
+     * A [NestedScrollView] capped by [ApprovalPresentation.messageMaxHeightPx] so the stock button panel
+     * keeps its full height. `AlertDialogLayout.tryOnMeasure` measures the button panel (unspecified, so
+     * at its full height) before it measures this view, counts only its minimum, then may measure this
+     * view again with the height left over once the buttons took theirs, and `forceUniformWidth` may
+     * measure it a third time. Only the first measure of a sequence reserves room for the buttons;
+     * [firstOffered] remembers that offer so the later ones are recognised. [onLayout] ends the sequence,
+     * and so does a larger offer, which is a new measure pass before any layout
+     * ([ApprovalPresentation.sequenceFirstOfferPx]).
+     */
+    private class BoundedScrollView(context: Context) : NestedScrollView(context) {
+        private var firstOffered: Int? = null
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val unlimited = View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED
+            val offered = if (unlimited) Int.MAX_VALUE else View.MeasureSpec.getSize(heightMeasureSpec)
+            val panel = rootView?.findViewById<View>(androidx.appcompat.R.id.buttonPanel)
+                ?.takeIf { it.visibility == View.VISIBLE && it.measuredHeight > 0 }
+            val metrics = resources.displayMetrics
+            firstOffered = ApprovalPresentation.sequenceFirstOfferPx(firstOffered, offered)
+            val cap = ApprovalPresentation.messageMaxHeightPx(
+                windowHeightPx = metrics.heightPixels,
+                offeredPx = offered,
+                buttonsFullPx = panel?.measuredHeight,
+                buttonsMinPx = panel?.let(::minimumHeightOf) ?: 0,
+                floorPx = (MESSAGE_FLOOR_DP * metrics.density).toInt(),
+                firstOfferedPx = firstOffered,
+            )
+            super.onMeasure(
+                widthMeasureSpec,
+                View.MeasureSpec.makeMeasureSpec(minOf(cap, offered), View.MeasureSpec.AT_MOST),
+            )
+        }
+
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            firstOffered = null
+            super.onLayout(changed, l, t, r, b)
+        }
+
+        override fun onDetachedFromWindow() {
+            firstOffered = null
+            super.onDetachedFromWindow()
+        }
+
+        /** Mirrors `AlertDialogLayout.resolveMinimumHeight`: the view's own, else its only child's. */
+        private fun minimumHeightOf(view: View): Int {
+            val own = ViewCompat.getMinimumHeight(view)
+            if (own > 0) return own
+            return if (view is ViewGroup && view.childCount == 1) minimumHeightOf(view.getChildAt(0)) else 0
+        }
     }
 
     /**
