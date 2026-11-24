@@ -1,0 +1,335 @@
+package org.appdevforall.customidebuilder
+
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.net.Uri
+import android.os.Bundle
+import android.text.InputType
+import android.util.TypedValue
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.Fragment
+import org.appdevforall.customidebuilder.core.AddonKind
+import org.appdevforall.customidebuilder.core.Catalog
+
+/**
+ * The Custom IDE Builder screen. Views are built in code, so there is no layout to inflate against the
+ * host's resources, and every text size is in sp and every gap in dp, inside a ScrollView, so the screen
+ * holds up at 2x font scale. State that must outlive the screen is in [Session].
+ */
+class BuilderFragment : Fragment() {
+    private lateinit var prefs: SharedPreferences
+    private lateinit var itemsBox: LinearLayout
+    private lateinit var keystoreLabel: TextView
+    private lateinit var storePassword: EditText
+    private lateinit var keyPassword: EditText
+    private lateinit var aliasSpinner: Spinner
+    private lateinit var fingerprint: TextView
+    private lateinit var folderLabel: TextView
+    private lateinit var progress: ProgressBar
+    private lateinit var stageLabel: TextView
+    private lateinit var messageLabel: TextView
+    private lateinit var cancelButton: Button
+    private val actionButtons = ArrayList<Button>()
+    private var shownAliases: List<String>? = null
+    private val listener: () -> Unit = { refresh() }
+
+    private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) Session.addFromDevice(requireContext().applicationContext, uris)
+    }
+    private val pickKeystore = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            Session.keystoreUri = uri
+            Session.keystoreName = AndroidBits.displayName(requireContext(), uri) ?: uri.lastPathSegment
+            Session.aliases = emptyList()
+            Session.fingerprints = emptyMap()
+            Session.selectedAlias = null
+            refresh()
+        }
+    }
+    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            requireContext().contentResolver.takePersistableUriPermission(uri, flags)
+            prefs.edit().putString(PREF_TREE, uri.toString()).apply()
+            refresh()
+        }
+    }
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        val ctx = requireContext()
+        prefs = prefsOf()
+        actionButtons.clear()
+        shownAliases = null
+        val column = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(24))
+        }
+        column.addView(text(ctx, "Custom IDE Builder", 22f, bold = true))
+        column.addView(text(ctx, "Makes a copy of the Code on the Go installed on this device with the add-ons you choose bundled inside, signed with your own key.", 14f))
+
+        column.addView(heading(ctx, "1. Add-ons to bundle"))
+        itemsBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(itemsBox)
+        column.addView(action(ctx, "Add from this device", Help.ADDONS) {
+            pickAddons.launch(arrayOf("*/*"))
+        })
+        column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
+
+        column.addView(heading(ctx, "2. Signing key"))
+        keystoreLabel = text(ctx, "", 14f)
+        column.addView(keystoreLabel)
+        column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
+        storePassword = passwordField(ctx, "Store password")
+        column.addView(storePassword)
+        column.addView(action(ctx, "Read keys", Help.KEYSTORE) {
+            val chars = charsOf(storePassword)
+            if (chars.isEmpty()) Session.message = "Enter the store password first." else Session.loadKeystore(requireContext().applicationContext, chars)
+            refresh()
+        })
+        aliasSpinner = Spinner(ctx)
+        aliasSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                Session.selectedAlias = Session.aliases.getOrNull(position)
+                fingerprint.text = Session.selectedAlias?.let { "Certificate SHA-256: ${Session.fingerprints[it].orEmpty()}" }.orEmpty()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        column.addView(aliasSpinner)
+        fingerprint = text(ctx, "", 12f)
+        column.addView(fingerprint)
+        keyPassword = passwordField(ctx, "Key password (blank: same as store password)")
+        column.addView(keyPassword)
+
+        column.addView(heading(ctx, "3. Output folder"))
+        folderLabel = text(ctx, "", 14f)
+        column.addView(folderLabel)
+        column.addView(action(ctx, "Choose folder", Help.FOLDER) { pickFolder.launch(null) })
+
+        column.addView(heading(ctx, "4. Build"))
+        column.addView(action(ctx, "Build APK", Help.BUILD) { startBuild() })
+        stageLabel = text(ctx, "", 14f)
+        column.addView(stageLabel)
+        progress = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000 }
+        column.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        cancelButton = Button(ctx).apply {
+            this.text = "Cancel"
+            setOnClickListener { Session.cancel() }
+        }
+        column.addView(cancelButton)
+        messageLabel = text(ctx, "", 14f).apply { setTextIsSelectable(true) }
+        column.addView(messageLabel)
+
+        return ScrollView(ctx).apply {
+            isFillViewport = true
+            addView(column)
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        Session.listen(listener)
+        refresh()
+        if (!prefs.getBoolean(PREF_WARNED, false)) {
+            AlertDialog.Builder(requireContext())
+                .setTitle("Sign every build with the same key")
+                .setMessage(
+                    "Android installs an update only if it is signed with the same key as the version already installed. " +
+                        "Every later build you make here must use this same key, or a device that has an earlier build " +
+                        "must uninstall it first, and uninstalling Code on the Go erases the projects stored in its data.",
+                )
+                .setPositiveButton("I understand") { _, _ -> prefs.edit().putBoolean(PREF_WARNED, true).apply() }
+                .setCancelable(false)
+                .show()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refresh()
+    }
+
+    override fun onDestroyView() {
+        Session.unlisten(listener)
+        // Passwords live only in these fields. Clearing the text drops the plaintext with the screen.
+        storePassword.text.clear()
+        keyPassword.text.clear()
+        super.onDestroyView()
+    }
+
+    private fun refresh() {
+        if (view == null) return
+        val busy = Session.busy
+        itemsBox.removeAllViews()
+        if (Session.items.isEmpty()) {
+            itemsBox.addView(text(requireContext(), "Nothing chosen: the copy will carry no add-ons.", 14f))
+        }
+        for (chosen in Session.items) {
+            val kind = if (AddonKind.PLUGIN.extension == chosen.picked.fileName.substringAfterLast('.').lowercase()) "plugin" else "template"
+            val row = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4)) }
+            row.addView(text(requireContext(), "${chosen.picked.label} ($kind, from ${chosen.source})", 14f))
+            row.addView(Button(requireContext()).apply {
+                this.text = "Remove"
+                isEnabled = !busy
+                setOnClickListener { Session.remove(chosen) }
+            })
+            itemsBox.addView(row)
+        }
+        keystoreLabel.text = Session.keystoreName?.let { "Keystore: $it" } ?: "No keystore chosen."
+        val aliases = Session.aliases
+        if (aliases != shownAliases) {
+            shownAliases = aliases
+            aliasSpinner.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, aliases).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            val index = aliases.indexOf(Session.selectedAlias)
+            if (index >= 0) aliasSpinner.setSelection(index)
+        }
+        aliasSpinner.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
+        fingerprint.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
+        val tree = prefs.getString(PREF_TREE, null)?.let(Uri::parse)
+        folderLabel.text = tree?.let { "Saving to: ${AndroidBits.treeLabel(it)}" } ?: "No folder chosen."
+        actionButtons.forEach { it.isEnabled = !busy }
+        cancelButton.visibility = if (busy) View.VISIBLE else View.GONE
+        progress.visibility = if (busy) View.VISIBLE else View.GONE
+        progress.progress = Session.progress
+        stageLabel.text = Session.stage
+        messageLabel.text = Session.message
+
+        // A dialog needs a visible screen: if the list arrives while the screen is away, onResume shows it.
+        val offer = Session.offer
+        if (offer != null && isResumed) {
+            Session.offer = null
+            showOffer(offer)
+        }
+    }
+
+    private fun confirmWebsite() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Download from the internet?")
+            .setMessage(
+                "This reads the list of add-ons and downloads the ones you choose from addons.appdevforall.org, " +
+                    "which is off this device. Nothing else is sent.",
+            )
+            .setPositiveButton("Continue") { _, _ -> Session.fetchOffer(hostVersionName()) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun hostVersionName(): String? =
+        try {
+            AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, requireContext()).versionName
+        } catch (e: Exception) {
+            null
+        }
+
+    private fun showOffer(offer: Catalog.Offer) {
+        if (offer.addons.isEmpty()) {
+            Session.message = "The website has no add-ons that work with this version of Code on the Go."
+            refresh()
+            return
+        }
+        val labels = offer.addons.map { "${it.name} ${it.version} (${it.kind.name.lowercase()}, ${megabytes(it.size)})" }.toTypedArray()
+        val checked = BooleanArray(labels.size)
+        if (!offer.hostVersionKnown) {
+            Session.message = "This app's version could not be read, so every add-on is listed."
+            messageLabel.text = Session.message
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Add-ons on the website")
+            .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
+            .setPositiveButton("Add") { _, _ ->
+                val wanted = offer.addons.filterIndexed { i, _ -> checked[i] }
+                if (wanted.isNotEmpty()) Session.addFromWebsite(requireContext().applicationContext, wanted)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startBuild() {
+        val ctx = requireContext()
+        val tree = prefs.getString(PREF_TREE, null)?.let(Uri::parse)
+        val writable = tree != null && ctx.contentResolver.persistedUriPermissions.any { it.uri == tree && it.isWritePermission }
+        val store = charsOf(storePassword)
+        val key = charsOf(keyPassword)
+        val problem =
+            when {
+                Session.aliases.isEmpty() || Session.selectedAlias == null -> "Choose a keystore, enter its password and tap Read keys."
+                store.isEmpty() -> "Enter the store password."
+                !writable -> "Choose the output folder."
+                else -> null
+            }
+        if (problem != null) {
+            store.fill('\u0000'); key.fill('\u0000')
+            Session.message = problem
+            refresh()
+            return
+        }
+        val host =
+            try {
+                AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, ctx)
+            } catch (e: Exception) {
+                store.fill('\u0000'); key.fill('\u0000')
+                Session.message = "Could not read the installed app's details: ${e.message}"
+                refresh()
+                return
+            }
+        Session.build(ctx.applicationContext, host, tree!!, store, key)
+    }
+
+    private fun prefsOf(): SharedPreferences =
+        CustomIdeBuilderPlugin.context?.getPluginSharedPreferences("custom_ide_builder")
+            ?: requireContext().getSharedPreferences("custom_ide_builder", Context.MODE_PRIVATE)
+
+    private fun charsOf(field: EditText): CharArray = CharArray(field.length()).also { field.text.getChars(0, it.size, it, 0) }
+
+    private fun megabytes(bytes: Long): String = if (bytes < 1024 * 1024) "${(bytes + 1023) / 1024} KB" else "%.1f MB".format(bytes / 1048576.0)
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun text(ctx: Context, content: String, sp: Float, bold: Boolean = false) = TextView(ctx).apply {
+        text = content
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+        if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setPadding(0, dp(4), 0, dp(4))
+    }
+
+    private fun heading(ctx: Context, content: String) = text(ctx, content, 18f, bold = true).apply { setPadding(0, dp(20), 0, dp(4)) }
+
+    private fun action(ctx: Context, label: String, tooltip: String, onClick: () -> Unit) = Button(ctx).apply {
+        text = label
+        setOnClickListener { onClick() }
+        setOnLongClickListener { v ->
+            CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tooltip)
+            true
+        }
+        actionButtons.add(this)
+    }
+
+    private fun passwordField(ctx: Context, hintText: String) = EditText(ctx).apply {
+        hint = hintText
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        // Never let the system put a password in saved instance state.
+        isSaveEnabled = false
+    }
+
+    private companion object {
+        const val PREF_WARNED = "warned_same_key"
+        const val PREF_TREE = "output_tree_uri"
+    }
+}
