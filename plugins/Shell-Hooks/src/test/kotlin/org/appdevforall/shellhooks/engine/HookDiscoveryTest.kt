@@ -3,6 +3,7 @@ package org.appdevforall.shellhooks.engine
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
@@ -25,6 +26,22 @@ class HookDiscoveryTest {
         val names = HookDiscovery.discover(root, "file-saved").map { it.relativeTo(root).path }
 
         assertEquals(listOf("file-saved", "file-saved.d/10-x", "file-saved.d/2-y", "file-saved.d/A", "file-saved.d/b"), names)
+    }
+
+    @Test
+    fun aNameAboveUFFFFIsInByteOrderToo() {
+        // U+FF41 (fullwidth a) is EF BD A1 in UTF-8 and U+1F600 (an emoji) is F0 9F 98 80, so the
+        // emoji runs second. Their UTF-16 units, FF41 against D83D DE00, would put it first.
+        val fullwidthA = "\uFF41"
+        val emoji = "\uD83D\uDE00"
+        root.script("file-saved.d/$emoji")
+        root.script("file-saved.d/$fullwidthA")
+        root.script("file-saved")
+        assumeTrue("the file system keeps the names", File(root, "file-saved.d").list().orEmpty().toSet() == setOf(emoji, fullwidthA))
+
+        val names = HookDiscovery.discover(root, "file-saved").map { it.relativeTo(root).path }
+
+        assertEquals(listOf("file-saved", "file-saved.d/$fullwidthA", "file-saved.d/$emoji"), names)
     }
 
     @Test

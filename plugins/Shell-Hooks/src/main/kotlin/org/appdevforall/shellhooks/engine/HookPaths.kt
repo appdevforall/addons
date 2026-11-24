@@ -56,10 +56,17 @@ object HookDiscovery {
         File(root, hookId).takeIf { isRunnable(it, requireExecutable) }?.let(scripts::add)
         File(root, "$hookId.d").listFiles()
             ?.filter { isRunnable(it, requireExecutable) }
-            ?.sortedBy { it.name }
+            ?.sortedBy { byteOrderKey(it.name) }
             ?.let(scripts::addAll)
         return scripts
     }
+
+    /**
+     * [name]'s UTF-8 bytes, one char per byte, so comparing two keys compares the bytes unsigned.
+     * Comparing names compares UTF-16 units, which puts a character above U+FFFF (a surrogate
+     * pair) before one from U+E000 to U+FFFF.
+     */
+    private fun byteOrderKey(name: String) = String(name.toByteArray(Charsets.UTF_8), Charsets.ISO_8859_1)
 
     /** The actions offered on a file's menu, sorted by name. */
     fun actions(actionsDir: File): List<File> =
