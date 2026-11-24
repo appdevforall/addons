@@ -7,11 +7,16 @@
     android:paddingTop="@dimen/space_xs"
     android:paddingBottom="@dimen/space_xs">
 
+    <!--
+      Every row's switch has this id, so saved view state would put the last row's value into all
+      of them, and the change listener would store it. bindHooks sets each from settings instead.
+    -->
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/hookSwitch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:minHeight="@dimen/touch_target_min"
+        android:saveEnabled="false"
         android:textColor="@color/plugin_on_surface"
         android:textSize="@dimen/text_body" />
 
