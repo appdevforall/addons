@@ -18,11 +18,12 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -33,7 +34,6 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -405,12 +405,15 @@ class ChatViewModelPromptEditTest {
             assertTrue("run never reached its finally", entered.await(WAIT_MS, TimeUnit.MILLISECONDS))
             assertTrue(viewModel.canChangePrompts.value)
 
-            val waiting = CompletableFuture.runAsync { runBlocking { viewModel.awaitRun() } }
-
-            // Still inside the finally: bounded wait, expected to time out.
-            assertThrows(TimeoutException::class.java) { waiting.get(300, TimeUnit.MILLISECONDS) }
+            // UNDISPATCHED runs awaitRun() on this thread up to its first suspension, so the waiter
+            // has already joined the run when the check below reads it; no timing window.
+            val waiting =
+                CoroutineScope(Dispatchers.Default).async(start = CoroutineStart.UNDISPATCHED) {
+                    viewModel.awaitRun()
+                }
+            assertFalse("awaitRun() returned while the run was still in its finally", waiting.isCompleted)
             release.countDown()
-            waiting.get(WAIT_MS, TimeUnit.MILLISECONDS)
+            runBlocking { withTimeout(WAIT_MS) { waiting.await() } }
             assertEquals(AgentState.Idle, viewModel.agentState.value)
             awaitCondition { "build the app" in stored.getValue(SESSIONS_KEY) }
         } finally {
