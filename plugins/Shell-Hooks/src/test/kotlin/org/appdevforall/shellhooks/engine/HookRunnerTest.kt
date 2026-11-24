@@ -373,6 +373,28 @@ class HookRunnerTest {
         }
 
     @Test
+    fun anErrorFromTheCommandServiceIsRecordedAndTheQueueKeepsGoing() =
+        runTest {
+            var calls = 0
+            val runner =
+                runner(
+                    CommandRunner { _, _, _ ->
+                        // A host whose plugin API differs from the one the plugin was built against.
+                        if (calls++ == 0) throw NoSuchMethodError("executeCommand")
+                        success
+                    },
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            runner.submit(HookEvent.buildSucceeded(project))
+            settle()
+
+            val runs = log.runs.value.reversed()
+            assertEquals(listOf(Outcome.NOT_STARTED, Outcome.SUCCEEDED), runs.map { it.outcome })
+            assertEquals("executeCommand", runs.first().output)
+        }
+
+    @Test
     fun aNonZeroExitIsAFailureWithItsCodeAndOutput() =
         runTest {
             val runner = runner(CommandRunner { _, _, _ -> CommandResult.Failure(3, "out", "err", null, 5) })

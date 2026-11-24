@@ -203,8 +203,10 @@ class HookRunner(
                         ?: Triple(Outcome.TIMED_OUT, null, stopped(tail.text(), limit))
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
-                    // A refused start: the concurrency limit, or a permission the plugin lacks.
+                } catch (e: Throwable) {
+                    // A refused start: the concurrency limit, or a permission the plugin lacks. An
+                    // Error too (say a LinkageError from a host with another API): it must not end
+                    // the worker for the session.
                     Triple(Outcome.NOT_STARTED, null, e.message ?: e.javaClass.simpleName)
                 }
             }
