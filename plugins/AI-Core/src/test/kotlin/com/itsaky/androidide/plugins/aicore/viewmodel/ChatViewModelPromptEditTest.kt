@@ -16,6 +16,9 @@ import io.mockk.mockk
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,9 +29,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -167,15 +172,14 @@ class ChatViewModelPromptEditTest {
         }
         assertTrue(viewModel.sendMessage("build teh app"))
         val prompt = awaitUserMessage(viewModel, "build teh app")
-        awaitCondition { viewModel.history.value.size == 2 && viewModel.runFinished() }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
 
         val result = viewModel.editPrompt(prompt, "build the app")
 
         assertEquals(ChatViewModel.EditResult.STARTED, result)
-        awaitCondition {
-            viewModel.history.value.firstOrNull()?.content == "build the app" &&
-                viewModel.runFinished()
-        }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.firstOrNull()?.content == "build the app" }
         assertEquals(listOf(Role.USER, Role.ASSISTANT), viewModel.history.value.map { it.role })
         assertEquals(
             listOf("build the app"),
@@ -194,9 +198,8 @@ class ChatViewModelPromptEditTest {
         val result = viewModel.editPrompt(first, "build the release app")
 
         assertEquals(ChatViewModel.EditResult.STARTED, result)
-        awaitCondition {
-            viewModel.history.value.size == 2 && viewModel.runFinished()
-        }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
         assertEquals(
             listOf("build the release app"),
             viewModel.messages.value.filter { it.sender == Sender.USER }.map { it.text },
@@ -214,9 +217,8 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition {
-            viewModel.history.value.size == 2 && viewModel.runFinished()
-        }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
         val edited = viewModel.messages.value.first { it.sender == Sender.USER }.id
 
         assertTrue(viewModel.switchPromptVersion(edited, -1))
@@ -238,9 +240,8 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition {
-            viewModel.history.value.size == 2 && viewModel.runFinished()
-        }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
         viewModel.persistState()
         awaitCondition { "now run the tests" in stored.getValue(SESSIONS_KEY) }
 
@@ -259,7 +260,8 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
 
         viewModel.clearMessages()
 
@@ -295,7 +297,7 @@ class ChatViewModelPromptEditTest {
         composer.cancel()
         val edited = viewModel.messages.value.single { it.sender == Sender.USER }
         assertEquals(listOf(File("/project/Edited.kt").absolutePath), edited.contextFiles)
-        awaitCondition { viewModel.runFinished() }
+        viewModel.awaitRunFinished()
     }
 
     @Test
@@ -306,11 +308,13 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
         val version = viewModel.messages.value.single { it.sender == Sender.USER }.id
 
         assertEquals(ChatViewModel.EditResult.STARTED, viewModel.editPrompt(version, "build the debug app"))
-        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
 
         val replacement = viewModel.messages.value.single { it.sender == Sender.USER }
         assertEquals("build the debug app", replacement.text)
@@ -329,7 +333,8 @@ class ChatViewModelPromptEditTest {
         val first = sendAndAwait(viewModel, "build the app")
         sendAndAwait(viewModel, "now run the tests")
         viewModel.editPrompt(first, "build the release app")
-        awaitCondition { viewModel.runFinished() && viewModel.history.value.size == 2 }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == 2 }
         val edited = viewModel.messages.value.single { it.sender == Sender.USER }.id
 
         assertFalse(viewModel.switchPromptVersion(edited, 1))
@@ -375,14 +380,52 @@ class ChatViewModelPromptEditTest {
         awaitCondition { viewModel.sendMessage("and run it") }
     }
 
+    @Test
+    fun givenARunHeldAfterCanChangePromptsTurnsTrue_whenAwaitingTheRun_thenItWaitsForTheCleanup() {
+        val viewModel = newViewModelWithBackend { callback ->
+            callback.onComplete(LlmInferenceService.LlmResponse.success(RESPOND_REPLY, 4, 10))
+        }
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        // Unconfined, so the callback runs on the run's thread inside the `finally`, right after
+        // it clears isGenerating and before finishActivity() and persistState().
+        val observer = CoroutineScope(Dispatchers.Unconfined).launch {
+            var sawBusy = false
+            viewModel.canChangePrompts.collect { idle ->
+                if (!idle) {
+                    sawBusy = true
+                } else if (sawBusy) {
+                    entered.countDown()
+                    release.await(WAIT_MS, TimeUnit.MILLISECONDS)
+                }
+            }
+        }
+        try {
+            assertTrue(viewModel.sendMessage("build the app"))
+            assertTrue("run never reached its finally", entered.await(WAIT_MS, TimeUnit.MILLISECONDS))
+            assertTrue(viewModel.canChangePrompts.value)
+
+            val waiting = CompletableFuture.runAsync { runBlocking { viewModel.awaitRun() } }
+
+            // Still inside the finally: bounded wait, expected to time out.
+            assertThrows(TimeoutException::class.java) { waiting.get(300, TimeUnit.MILLISECONDS) }
+            release.countDown()
+            waiting.get(WAIT_MS, TimeUnit.MILLISECONDS)
+            assertEquals(AgentState.Idle, viewModel.agentState.value)
+            awaitCondition { "build the app" in stored.getValue(SESSIONS_KEY) }
+        } finally {
+            release.countDown()
+            observer.cancel()
+        }
+    }
+
     /** Sends [text], waits for its run to finish, and returns the prompt's message id. */
     private fun sendAndAwait(viewModel: ChatViewModel, text: String): String {
         val before = viewModel.history.value.size
         assertTrue(viewModel.sendMessage(text))
         val id = awaitUserMessage(viewModel, text)
-        awaitCondition {
-            viewModel.history.value.size == before + 2 && viewModel.runFinished()
-        }
+        viewModel.awaitRunFinished()
+        awaitCondition { viewModel.history.value.size == before + 2 }
         return id
     }
 
@@ -431,8 +474,15 @@ class ChatViewModelPromptEditTest {
         }
     }
 
-    private fun ChatViewModel.runFinished(): Boolean =
-        agentState.value == AgentState.Idle && canChangePrompts.value
+    /**
+     * Waits for the run to finish, `finally` included (it closes the activity line and saves after
+     * [ChatViewModel.canChangePrompts] has already turned true), then checks it ended Idle.
+     * Call it after the edit or send that starts the run, which has set the job by then.
+     */
+    private fun ChatViewModel.awaitRunFinished() {
+        runBlocking { withTimeout(WAIT_MS) { awaitRun() } }
+        assertEquals(AgentState.Idle, agentState.value)
+    }
 
     private fun seedTwoExchanges() {
         stored[SESSIONS_KEY] =

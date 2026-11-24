@@ -287,6 +287,7 @@ class ChatViewModel(
     private val toolSourcesChanged: () -> Unit = { rebuildAgentTools() }
 
     /** The in-flight agent run (streaming + tool loop), so it can be cancelled. */
+    @Volatile
     private var generationJob: Job? = null
 
     /**
@@ -1494,6 +1495,15 @@ class ChatViewModel(
         titleRequest = TitleRequest(sessionId, job)
         job.start()
         return true
+    }
+
+    /**
+     * Test hook: returns once the current run's `finally` has finished, `finishActivity()` and
+     * `persistState()` included. [canChangePrompts] turns true before that. Returns at once when
+     * there is no run, or when Stop has set the job to null.
+     */
+    internal suspend fun awaitRun() {
+        generationJob?.join()
     }
 
     /**
