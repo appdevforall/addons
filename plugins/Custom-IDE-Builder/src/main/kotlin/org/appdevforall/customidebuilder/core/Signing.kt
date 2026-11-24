@@ -18,6 +18,9 @@ class VerifyReport(
 
 /** Signs and checks an APK with apksig: v1, v2 and v3 together. */
 object Signing {
+    /** The newest platform whose verification still checks v1: Android 6.0 (API 23). */
+    private const val V1_CHECKED_PLATFORM = 23
+
     /**
      * Signs [input] into [output] with [key]. [minSdk] is the lowest Android version the APK
      * runs on; it is given rather than read from the APK so apksig never has to parse the
@@ -44,7 +47,10 @@ object Signing {
 
     /** Verifies every scheme in [apk]; used on the finished file before it is handed to the user. */
     fun verify(apk: File, minSdk: Int): VerifyReport {
-        val result = ApkVerifier.Builder(apk).setMinCheckedPlatformVersion(minSdk).build().verify()
+        // apksig checks the v1 (JAR) signature only for platforms below 24 when a v2/v3 block is
+        // present, so a range starting at minSdk >= 24 always reports v1 unverified. Start at 23 at
+        // the latest so the v1 signature this signer wrote is checked too.
+        val result = ApkVerifier.Builder(apk).setMinCheckedPlatformVersion(minOf(minSdk, V1_CHECKED_PLATFORM)).build().verify()
         val signer = result.signerCertificates.firstOrNull()
         return VerifyReport(
             verified = result.isVerified,
