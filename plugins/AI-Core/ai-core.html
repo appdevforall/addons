@@ -89,9 +89,10 @@
       <code>edit_file</code>; one that arrives with a name already in use is
       offered under a provider-prefixed name instead of being dropped.</li>
     <li><b>Approval with provenance</b> — the approval dialog names the plugin a
-      tool came from, and a contributed tool can never be blanket-approved for the
-      session: it asks every time, because it runs outside the path containment
-      that covers the agent's own tools.</li>
+      tool came from, and a contributed tool asks on every call, because it runs
+      outside the path containment that covers the agent's own tools. The one
+      exception is a tool its plugin says only reads: it may be allowed for the
+      rest of the chat, and the dialog says Code on the Go cannot check that claim.</li>
     <li>Text completion, chat with history, and streaming responses, plus a
       single cancellation path so <b>Stop</b> reaches whichever backend is
       running.</li>
@@ -185,9 +186,9 @@
       backend plugin, and a new agent capability is a new tool source. Neither
       requires a change to AI Core or to any consumer plugin.</li>
     <li><b>Informed consent for third-party tools</b> — a contributed tool names
-      its plugin in the approval dialog and asks every single time, so approving
-      something that leaves the device stays a deliberate decision rather than a
-      side effect of one earlier tap.</li>
+      its plugin in the approval dialog and asks on every call, unless the plugin
+      says it only reads and you choose Always Allow for the rest of the chat, so
+      approving something that leaves the device stays a deliberate decision.</li>
   </ul>
 </body>
 </html>

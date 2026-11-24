@@ -1,0 +1,146 @@
+name: Watch addons catalog
+
+# Once a day, tells Slack which addons were added to or removed from the
+# published catalog (ADFA-7231, docs/catalog-watcher-design.md). The logic is
+# `addons watch` in tools/addons; this file only schedules it and keeps state.
+#
+# The snapshot lives on its own branch, catalog-watcher-state, not on main: the
+# main ruleset requires a reviewed pull request and GITHUB_TOKEN cannot bypass
+# it. That branch's history is the record of what was published and when.
+#
+# Configuration, in Settings > Secrets and variables > Actions:
+#   secret   SLACK_WEBHOOK_URL   incoming webhook for #documentation
+#   variable ADDONS_CATALOG_URL  https://addons.appdevforall.org/v2/catalog.json
+
+on:
+  # 03:17 EST, 04:17 EDT: cron is UTC and nobody minds the hour's drift. Off
+  # the top of the hour, which GitHub says is when runs are delayed or dropped.
+  schedule:
+    - cron: '17 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two runs pushing the same state branch would race.
+concurrency: watch-catalog
+
+env:
+  STATE_BRANCH: catalog-watcher-state
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+# Two jobs because token permissions are per job, not per step. setup-uv
+# defaults its github-token input to the job's token, so the job that runs it
+# stays read-only, and only `commit`, which runs no third-party action, can
+# write. The webhook secret goes only to the steps that post.
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      CATALOG_URL: ${{ vars.ADDONS_CATALOG_URL }}
+    steps:
+      - name: Pre-flight checks
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          failed=0
+          [ -n "$SLACK_WEBHOOK_URL" ] || { echo "::error::Repository secret SLACK_WEBHOOK_URL is missing or empty."; failed=1; }
+          [ -n "$CATALOG_URL" ] || { echo "::error::Repository variable ADDONS_CATALOG_URL is missing or empty."; failed=1; }
+          exit "$failed"
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out the snapshot branch
+        run: |
+          set -euo pipefail
+          # Only "absent" (exit 2) means a first run. Any other failure must
+          # fail the run, or a network blip would silently reset the baseline.
+          status=0
+          git ls-remote --exit-code --heads origin "$STATE_BRANCH" > /dev/null || status=$?
+          case "$status" in
+            0) git fetch --depth=1 origin "$STATE_BRANCH"
+               git worktree add -B "$STATE_BRANCH" state FETCH_HEAD ;;
+            2) echo "No $STATE_BRANCH yet; this run saves the baseline."
+               git worktree add --orphan -b "$STATE_BRANCH" state ;;
+            *) echo "::error::Could not look up $STATE_BRANCH (git exit $status)."
+               exit 1 ;;
+          esac
+
+      - uses: astral-sh/setup-uv@v5
+
+      # Its own step, so a PyPI failure is a failed step the fallback alert
+      # below reports, not a silent failure inside the comparison step.
+      - name: Install the addons tool
+        run: uv sync --directory tools/addons
+
+      - name: Compare the catalog with the snapshot
+        id: watch
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: uv run --directory tools/addons addons watch --url "$CATALOG_URL" --snapshot "$GITHUB_WORKSPACE/state/catalog-snapshot.json"
+
+      # Only reached once any Slack post has succeeded.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog-snapshot
+          path: state/catalog-snapshot.json
+          retention-days: 1
+          if-no-files-found: error
+
+      # `addons watch` reports its own failures; this covers every other step.
+      - name: Report a failed run to Slack
+        if: failure() && steps.watch.outcome != 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          [ -n "$SLACK_WEBHOOK_URL" ] || exit 0  # pre-flight already said so
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\":\"⚠️ Add-ons catalog check failed outside the comparison. Snapshot not updated. $RUN_URL\"}" \
+            "$SLACK_WEBHOOK_URL"
+
+  # Every successful run commits, changed or not, so the branch also shows the
+  # check ran.
+  commit:
+    needs: watch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: catalog-snapshot
+          path: snapshot
+
+      - name: Commit the snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q state && cd state
+          # The repo is public: fetching needs no token.
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 origin "$STATE_BRANCH"; then
+            git checkout -q -b "$STATE_BRANCH" FETCH_HEAD
+          else
+            git checkout -q --orphan "$STATE_BRANCH"
+          fi
+          cp ../snapshot/catalog-snapshot.json .
+          date -u +%Y-%m-%dT%H:%M:%SZ > last-checked
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalog-snapshot.json last-checked
+          git commit -q -m "Catalog check $(cat last-checked)"
+          # The token is masked in the log and never written to git config.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$STATE_BRANCH"
+
+      - name: Report a failed run to Slack
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          [ -n "$SLACK_WEBHOOK_URL" ] || exit 0
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\":\"⚠️ Add-ons catalog check could not save the snapshot. The same changes will be reported next run. $RUN_URL\"}" \
+            "$SLACK_WEBHOOK_URL"

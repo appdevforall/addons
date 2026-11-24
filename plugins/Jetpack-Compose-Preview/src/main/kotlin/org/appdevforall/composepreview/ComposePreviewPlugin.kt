@@ -13,6 +13,12 @@ import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeEnvironmentService
 import com.itsaky.androidide.plugins.services.IdeUIService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import org.appdevforall.composepreview.compiler.SharedCompilerDaemon
+import org.appdevforall.composepreview.domain.blankComments
 
 /**
  * Entry point for the extracted Jetpack Compose preview feature.
@@ -24,6 +30,7 @@ import com.itsaky.androidide.plugins.services.IdeUIService
 class ComposePreviewPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
@@ -35,9 +42,12 @@ class ComposePreviewPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun activate(): Boolean = true
 
-    override fun deactivate(): Boolean = true
+    override fun deactivate(): Boolean {
+        SharedCompilerDaemon.shutdown()
+        return true
+    }
 
-    override fun dispose() = Unit
+    override fun dispose() = SharedCompilerDaemon.shutdown()
 
     override fun getToolbarActions(): List<ToolbarAction> = listOf(
         ToolbarAction(
@@ -100,19 +110,30 @@ class ComposePreviewPlugin : IPlugin, UIExtension, DocumentationExtension {
         }
 
         ComposePreviewState.set(file.absolutePath, source)
-        context.services.get(IdeUIService::class.java)
-            ?.openPluginScreen(PLUGIN_ID, ComposePreviewFragment::class.java.name, "Compose Preview")
+        scope.launch {
+            try {
+                if (editor?.saveFile(file) != true) {
+                    context.logger.warn("Compose Preview could not save ${file.name} before opening")
+                }
+            } catch (e: SecurityException) {
+                context.logger.warn("Compose Preview is not allowed to save ${file.name}: ${e.message}")
+            }
+            context.services.get(IdeUIService::class.java)
+                ?.openPluginScreen(PLUGIN_ID, ComposePreviewFragment::class.java.name, "Compose Preview")
+        }
     }
 
     private fun hasComposePreview(): Boolean {
         val editor = context.services.get(IdeEditorService::class.java) ?: return false
         val file = editor.getCurrentFile() ?: return false
         val source = editor.getCurrentFileContent() ?: return false
-        return isComposePreviewSource(file.name, source)
+        if (!isComposePreviewSource(file.name, source)) return false
+        SharedCompilerDaemon.warmUpOnce(context.androidContext)
+        return true
     }
 
     private fun isComposePreviewSource(fileName: String, source: String): Boolean =
-        fileName.endsWith(".kt") && PREVIEW_REGEX.containsMatchIn(source)
+        fileName.endsWith(".kt") && PREVIEW_REGEX.containsMatchIn(blankComments(source))
 
     companion object {
         const val PLUGIN_ID = "org.appdevforall.composepreview"

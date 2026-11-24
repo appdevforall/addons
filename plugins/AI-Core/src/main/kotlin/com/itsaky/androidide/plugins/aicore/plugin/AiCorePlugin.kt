@@ -57,6 +57,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         const val TOOLTIP_TAG_CHAT_SEND = "agent_chat_send"
         /** The toolbar button that opens the sidebar; it took the overflow menu's place and tag. */
         const val TOOLTIP_TAG_CHAT_MENU = "agent_chat_menu"
+        /** The toolbar button that opens the chat full screen, and closes it again there. */
+        const val TOOLTIP_TAG_CHAT_FULL_SCREEN = "agent_chat_full_screen"
         const val TOOLTIP_TAG_CHAT_SESSIONS = "agent_chat_sessions"
         /** The Export entry in a chat row's options menu. */
         const val TOOLTIP_TAG_CHAT_EXPORT = "agent_chat_export"
@@ -409,6 +411,22 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             )
         ),
         PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CHAT_FULL_SCREEN,
+            summary = "Shows this chat over the whole screen, or returns to the editor from there.",
+            detail = """
+                <p>In the bottom sheet, opens the same chat on a screen of its own,
+                so the conversation gets the height the editor, its toolbar and the
+                tabs take up. It is the same conversation: a reply still being
+                written carries on, and anything you send there is in the chat when
+                you come back.</p>
+                <p>On that screen the same button, or <b>Back</b>, returns you to the
+                editor.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
             tag = TOOLTIP_TAG_SIDEBAR_ADD,
             summary = "Start a chat: a new one, or one imported from a .txt file.",
             detail = """
@@ -642,12 +660,18 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW,
-            summary = "Stop asking about this tool for the rest of this session.",
+            summary = "Stop asking about this tool for the rest of this chat.",
             detail = """
-                <p>Approves this tool for the current session, so the agent can use
-                it again without prompting. The grant is by <b>tool name only</b> —
-                it does not depend on the arguments — and it is forgotten when the
-                session ends.</p>
+                <p>Approves this tool for the rest of this chat, so the agent can use
+                it again without prompting. The grant does not depend on the
+                arguments. It is forgotten when you start a new chat, open another
+                one or clear this one, and when the IDE closes.</p>
+                <p>For a tool from another plugin, the button appears only when
+                that plugin says the tool only reads. Code on the Go cannot check
+                that, and after one tap the agent can call the tool with any
+                arguments. If the plugin changes the tool's description or inputs, or
+                stops listing it, you are asked again. A tool from another plugin that may change
+                something asks every time.</p>
                 <p>It is deliberately unavailable for file edits: those are
                 re-confirmed every time, with the change on screen.</p>
             """.trimIndent(),

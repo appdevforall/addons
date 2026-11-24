@@ -49,7 +49,6 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Voice-Alerts/`](plugins/Voice-Alerts/) | Plays a sound when a build finishes or fails. |
 
 > `cotg-ndk` and `pebble-custom-function-template-installer` are not listed. They are still at the repository root, beside `libs/` and `tools/`, until their own work lands.
-> The `AI-*` addons above build from `plugins/` like every other example but are still held out of the published gallery; `tools/addons/skip.txt` states the reason for each.
 
 ## Templates
 
