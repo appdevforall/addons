@@ -280,8 +280,11 @@ class WrapperScriptTest(
 
     private fun comm(pid: Long): String = runCatching { File("/proc/$pid/comm").readText().trim() }.getOrDefault("")
 
-    /** This test's own process: the JVM that started the wrapper, as the IDE does. */
-    private val jvmPid: Long = File("/proc/self").canonicalFile.name.toLong()
+    /**
+     * This test's own process: the JVM that started the wrapper, as the IDE does. Lazy, so only a
+     * test that found /proc reads it, and the others still run on a machine without one.
+     */
+    private val jvmPid: Long by lazy { File("/proc/self").canonicalFile.name.toLong() }
 
     /** The wrapper this test started with [mark]: the JVM's child carrying it. */
     private fun wrapperPid(mark: String): Long? = leftBehind(mark).firstOrNull { stat(it)?.getOrNull(1)?.toLongOrNull() == jvmPid }
