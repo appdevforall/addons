@@ -604,9 +604,10 @@ open class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
         // The field scrolls its own long prompts, and answers the chat's keyboard chords.
         binding.promptInputEdittext.keepVerticalDragsToItself()
+        binding.root.fitContentToVisibleBottom()
         binding.promptInputEdittext.growUpTo(
             resources.getInteger(R.integer.chat_input_max_lines),
-            binding.root,
+            binding.chatColumn,
         )
         binding.promptInputEdittext.bindShortcuts(ChatShortcuts.SEND_MESSAGE runs ::sendPrompt)
         binding.promptInputEdittext.doAfterTextChanged { viewModel.setComposerDraft(it?.toString().orEmpty()) }

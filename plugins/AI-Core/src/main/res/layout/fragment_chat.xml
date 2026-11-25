@@ -16,6 +16,7 @@
     android:background="@color/plugin_surface">
 
   <LinearLayout
+    android:id="@+id/chat_column"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
