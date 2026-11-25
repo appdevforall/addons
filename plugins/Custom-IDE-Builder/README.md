@@ -22,6 +22,7 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `ApkRewriter.kt` | Copies the host APK entry by entry, drops the old bundle and v1 signature, adds the add-ons and a new index |
 | `Bundle.kt` | The bundle index, byte for byte as Code on the Go's build writes it |
 | `Selection.kt` | Validates the chosen add-ons: duplicate plugin IDs, duplicate template names, `core.cgt`, entry names |
+| `Naming.kt` | The output file name; cleans a typed one, finds a free `<stem>-2.apk` when the folder already holds the name, and words the note when the provider saved a different name |
 | `Staging.kt` | Names the copy of a picked file (`<n>/addon.cgp`, never the provider's name) and checks a path is inside the staging folder before any write or delete |
 | `Keystores.kt` | Detects PKCS12 or BKS, rejects JKS with the `keytool` conversion, loads a key |
 | `Signing.kt` | apksig: signs v1, v2 and v3, then verifies |
@@ -29,7 +30,9 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `Pipeline.kt` | Rewrite, sign, verify, check alignment |
 
 The Android side (`BuilderFragment`, `Session`, `AndroidBits`) is the screen, the file pickers and
-the Storage Access Framework output.
+the Storage Access Framework output. A taken output name is a question held in `Session`
+(`nameQuestion`, a `CompletableDeferred`) that the build coroutine waits on and the Fragment shows as a
+dialog, so it survives a rotation; it is asked when Build is tapped and again before saving.
 
 ## Mirrors of Code on the Go
 

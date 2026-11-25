@@ -24,6 +24,8 @@ object Help {
     const val STATUS = "customidebuilder.status"
     const val RESULT = "customidebuilder.result"
     const val SAME_KEY = "customidebuilder.samekey"
+    const val NAME_TAKEN = "customidebuilder.nametaken"
+    const val NAME_FIELD = "customidebuilder.namefield"
 
     private val more = listOf(PluginTooltipButton(description = "About Custom IDE Builder", uri = "index.html", order = 0))
 
@@ -65,7 +67,8 @@ object Help {
             FOLDER,
             "The folder the signed APK is saved in.",
             "<p>Chosen once and remembered. The file is named after the app and its version, ending in " +
-                "<code>-custom.apk</code>.</p>",
+                "<code>-custom.apk</code>. If the folder already has a file with that name, you are asked for " +
+                "another one.</p>",
             more,
         ),
         PluginTooltipEntry(
@@ -134,6 +137,24 @@ object Help {
             "<p>Android installs an update only if it is signed with the same key as the version already " +
                 "installed. A device that has a build signed with another key must uninstall it first, and " +
                 "uninstalling Code on the Go erases the projects stored in its data.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            NAME_TAKEN,
+            "The folder already has a file with this name. Choose another, or cancel the save.",
+            "<p>The plugin never lets the folder rename your APK on its own. It looks for the name when you tap " +
+                "Build, and again just before saving, because a file can appear while the app is being built. " +
+                "If the name is taken you are asked for another one; a free name is filled in for you.</p>" +
+                "<p>Save keeps the name you typed (spaces and other odd characters become dashes, and " +
+                "<code>.apk</code> is added). Cancel stops: nothing is built, or the APK that was built is deleted. " +
+                "The build waits for your answer, also if you leave this screen and come back.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            NAME_FIELD,
+            "The file name for the APK, ending in .apk.",
+            "<p>Letters, digits, dot, underscore and dash. Anything else becomes a dash. The name is checked " +
+                "again against the folder when you tap Save.</p>",
             more,
         ),
     )

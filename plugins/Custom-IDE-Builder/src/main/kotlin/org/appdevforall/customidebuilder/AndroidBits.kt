@@ -123,7 +123,24 @@ object AndroidBits {
         }
     }
 
-    /** Creates [name] in the folder [tree] (a tree URI from ACTION_OPEN_DOCUMENT_TREE) and returns its URI. */
+    /**
+     * The display names of what is directly in the folder [tree]. Empty when the provider will not
+     * list it, so a caller cannot tell an empty folder from one it could not read; the name check
+     * after saving (see [displayName]) is what catches a collision then.
+     */
+    fun childNames(context: Context, tree: Uri): Set<String> =
+        try {
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+            context.contentResolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { cursor ->
+                val names = HashSet<String>()
+                while (cursor.moveToNext()) cursor.getString(0)?.let { names.add(it) }
+                names
+            } ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+
+    /** Creates [name] in the folder [tree] (a tree URI from ACTION_OPEN_DOCUMENT_TREE) and returns its URI. The provider may pick another name if [name] is taken: read it back with [displayName]. */
     fun createInTree(context: Context, tree: Uri, name: String): Uri {
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
         return DocumentsContract.createDocument(context.contentResolver, parent, APK_MIME, name)
