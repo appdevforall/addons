@@ -70,7 +70,7 @@ class BrandingPipelineTest {
 
     @Test
     fun aCompressedHostTableComesOutStored() {
-        val out = run(Branding("My IDE", null), host(method = ZipEntry.DEFLATED))
+        val out = run(Branding("My IDE", icons), host(method = ZipEntry.DEFLATED))
         RawZipFile(out.apk).use { z -> assertTrue(z.entries.first { it.name == "resources.arsc" }.isStored) }
     }
 
@@ -90,7 +90,7 @@ class BrandingPipelineTest {
         Signing.sign(unsigned, signed, TestSupport.signingKey("H"), minSdk)
         val work = tmp.newFolder("w")
         try {
-            Pipeline.run(BuildInput(signed, emptyList(), emptyList(), TestSupport.signingKey("U"), minSdk, work, "x.apk", Branding("My IDE", null)))
+            Pipeline.run(BuildInput(signed, emptyList(), emptyList(), TestSupport.signingKey("U"), minSdk, work, "x.apk", Branding("My IDE", icons)))
             throw AssertionError("accepted")
         } catch (e: BuildException) {
             assertTrue(e.message, e.message!!.contains("name or icon"))

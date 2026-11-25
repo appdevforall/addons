@@ -22,7 +22,7 @@ class BuildInput(
     val workDir: File,
     /** The final file's name, inside [workDir]. */
     val outputName: String,
-    /** The new name and icon, or null to leave both as the host has them. */
+    /** The copy's own name and icon. The screen always gives one; null (add-ons only, the host's own name and icon) is for tests of the rewrite and signing alone. */
     val branding: Branding? = null,
 )
 

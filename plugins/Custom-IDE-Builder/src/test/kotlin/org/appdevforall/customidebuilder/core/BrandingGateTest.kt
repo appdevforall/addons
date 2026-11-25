@@ -1,7 +1,6 @@
 package org.appdevforall.customidebuilder.core
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -9,45 +8,67 @@ class BrandingGateTest {
     private val different = IconVerdict.Different(40)
 
     @Test
-    fun withNeitherNameNorIconNothingIsRequired() {
-        assertEquals(emptyList<String>(), BrandingGate.problems("", false, null, false))
-        assertEquals(emptyList<String>(), BrandingGate.problems("   ", false, null, false))
-        assertTrue(!BrandingGate.isCustom(" ", false))
+    fun aBuildWithNeitherNameNorIconIsRefusedWithAMessageForEach() {
+        for (blank in listOf("", "   ")) {
+            val p = BrandingGate.problems(blank, false, null, true)
+            assertEquals(p.toString(), 2, p.size)
+            assertTrue(p[0], p[0].startsWith("Name:") && "enter a name" in p[0])
+            assertTrue(p[1], p[1].startsWith("Icon:") && "choose a picture" in p[1])
+        }
     }
 
     @Test
-    fun aGoodNameNeedsTheConfirmation() {
-        val p = BrandingGate.problems("My IDE", false, null, false)
+    fun aNameWithoutAnIconIsRefusedForTheMissingIcon() {
+        val p = BrandingGate.problems("My IDE", false, null, true)
+        assertEquals(p.toString(), 1, p.size)
+        assertTrue(p[0], p[0].startsWith("Icon:") && "choose a picture" in p[0])
+    }
+
+    @Test
+    fun anIconWithoutANameIsRefusedForTheMissingName() {
+        val p = BrandingGate.problems("", true, different, true)
+        assertEquals(p.toString(), 1, p.size)
+        assertTrue(p[0], p[0].startsWith("Name:") && "enter a name" in p[0])
+    }
+
+    @Test
+    fun nameIconAndConfirmationTogetherPass() {
+        assertEquals(emptyList<String>(), BrandingGate.problems("My IDE", true, different, true))
+        assertEquals(emptyList<String>(), BrandingGate.problems("My IDE", true, IconVerdict.Unchecked("no detail"), true))
+    }
+
+    @Test
+    fun theConfirmationIsAlwaysNeeded() {
+        val p = BrandingGate.problems("My IDE", true, different, false)
         assertEquals(1, p.size)
         assertTrue(p[0], p[0].contains(BrandingGate.CONFIRMATION))
-        assertEquals(emptyList<String>(), BrandingGate.problems("My IDE", false, null, true))
+        // Also with nothing else chosen, where the old gate asked for nothing.
+        assertTrue(BrandingGate.problems("", false, null, false).any { BrandingGate.CONFIRMATION in it })
     }
 
     @Test
     fun aRefusedNameBlocksEvenWhenConfirmed() {
-        val p = BrandingGate.problems("CoGo", false, null, true)
+        val p = BrandingGate.problems("CoGo", true, different, true)
         assertEquals(1, p.size)
         assertTrue(p[0], p[0].startsWith("Name:"))
     }
 
     @Test
     fun aPictureTooCloseToTheOriginalBlocksAndOneStillBeingCheckedWaits() {
-        assertTrue(BrandingGate.problems("", true, IconVerdict.TooSimilar(3), true).single().startsWith("Icon:"))
-        assertTrue(BrandingGate.problems("", true, null, true).single().contains("wait"))
-        assertEquals(emptyList<String>(), BrandingGate.problems("", true, different, true))
-        assertEquals(emptyList<String>(), BrandingGate.problems("", true, IconVerdict.Unchecked("no detail"), true))
+        assertTrue(BrandingGate.problems("My IDE", true, IconVerdict.TooSimilar(3), true).single().startsWith("Icon:"))
+        assertTrue(BrandingGate.problems("My IDE", true, null, true).single().contains("wait"))
     }
 
     @Test
     fun everyProblemIsListedTogether() {
         val p = BrandingGate.problems("Code on the Go", true, IconVerdict.TooSimilar(0), false)
         assertEquals(3, p.size)
+        assertEquals(3, BrandingGate.problems("", false, null, false).size)
     }
 
     @Test
-    fun theNameToWriteIsTheTrimmedOneOrNullForBlank() {
+    fun theNameToWriteIsTheTrimmedOne() {
         assertEquals("My IDE", BrandingGate.nameToWrite("  My IDE "))
-        assertNull(BrandingGate.nameToWrite("   "))
     }
 
     @Test

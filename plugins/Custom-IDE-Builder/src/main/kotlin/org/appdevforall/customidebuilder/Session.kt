@@ -74,7 +74,7 @@ object Session {
     var fingerprints: Map<String, String> = emptyMap()
     var selectedAlias: String? = null
 
-    /** The name typed for the copy; blank keeps Code on the Go's own. */
+    /** The name typed for the copy. A build needs one that passes the name check. */
     var appName: String = ""
 
     /** The picture chosen for the icon, with its PNGs and the outcome of the look-alike check (null until that finishes). */
@@ -439,13 +439,14 @@ object Session {
         }
         val prepared = icon
         val gate = BrandingGate.problems(appName, prepared != null, iconVerdict, confirmedOwn)
-        if (gate.isNotEmpty()) {
+        // A missing icon is also in the gate's list, so the null test only narrows the type.
+        if (prepared == null || gate.isNotEmpty()) {
             storePassword.fill('\u0000'); keyPassword.fill('\u0000')
             return report(gate.joinToString("\n"))
         }
-        val branding = if (BrandingGate.isCustom(appName, prepared != null)) Branding(BrandingGate.nameToWrite(appName), prepared?.icons) else null
+        val branding = Branding(BrandingGate.nameToWrite(appName), prepared.icons)
         launch("Building", listOf(storePassword, keyPassword)) { gen ->
-            var name = Naming.outputName(branding?.appName ?: host.label, host.versionName)
+            var name = Naming.outputName(branding.appName, host.versionName)
             val out = File(dir, "out")
             var saved: Uri? = null
             var finished = false

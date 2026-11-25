@@ -24,16 +24,15 @@ class BrandingTest {
 
     @Test
     fun appNameIsReplacedInEveryConfig() {
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, null))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all)))
         val s = strings(ArscSupport.load(r.table))
         for (cfg in listOf("", "de", "fr", "es-rMX")) assertEquals(name, s["string/app_name [$cfg]"])
         assertEquals(4, r.report.appNameEntries)
-        assertTrue("a name alone adds no files", r.files.isEmpty())
     }
 
     @Test
     fun protectedStringsKeepTheirText() {
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, null))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all)))
         val s = strings(ArscSupport.load(r.table))
         assertEquals(ArscSupport.OLD, s["string/made_with_code_on_the_go []"])
         assertEquals(ArscSupport.OLD, s["string/made_with_code_on_the_go [de]"])
@@ -47,7 +46,7 @@ class BrandingTest {
         val original = ArscSupport.load(ArscSupport.table())
         val pool = original.stringPool.toList().filter { it.get() == ArscSupport.OLD }
         assertEquals("one shared pool item", 1, pool.size)
-        val after = ResourceBranding.apply(ArscSupport.table(), Branding(name, null))
+        val after = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all)))
         val s = strings(ArscSupport.load(after.table))
         assertEquals(name, s["string/app_name []"])
         assertEquals(ArscSupport.OLD, s["string/made_with_code_on_the_go []"])
@@ -55,7 +54,7 @@ class BrandingTest {
 
     @Test
     fun otherStringsThatNameTheAppAreRewrittenInAnySpacingAndCase() {
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, null))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all)))
         val s = strings(ArscSupport.load(r.table))
         assertEquals("Welcome to My IDE!", s["string/welcome []"])
         assertEquals("Willkommen bei My IDE, dem Editor", s["string/welcome [de]"])
@@ -66,7 +65,7 @@ class BrandingTest {
 
     @Test
     fun urlsAndOtherWordsAreNotMistakenForTheName() {
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, null))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all)))
         val s = strings(ArscSupport.load(r.table))
         assertEquals("https://github.com/appdevforall/CodeOnTheGo", s["string/url []"])
         assertEquals("Code on the Gone", s["string/gone []"])
@@ -77,7 +76,7 @@ class BrandingTest {
     @Test
     fun aNameWithRegexSpecialCharactersIsWrittenLiterally() {
         val tricky = "A\$1 \\B &"
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(tricky, null))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(tricky, icons(*all)))
         val s = strings(ArscSupport.load(r.table))
         assertEquals(tricky, s["string/app_name []"])
         assertEquals("Welcome to $tricky!", s["string/welcome []"])
@@ -100,7 +99,7 @@ class BrandingTest {
             val styledBefore = before.stringPool.toList().filter { it.hasStyle() }
             assertEquals("the fixture holds a styled string (utf8=$utf8)", 1, styledBefore.size)
             val spanned = styledBefore[0].styleDocument.styledString
-            val r = ResourceBranding.apply(source, Branding(name, null))
+            val r = ResourceBranding.apply(source, Branding(name, icons(*all)))
             assertEquals(1, r.report.styledSkipped)
             assertEquals("the plain string and the unstyled German one", 2, r.report.otherStringsReplaced)
             val after = ArscSupport.load(r.table)
@@ -116,7 +115,7 @@ class BrandingTest {
     }
 
     @Test
-    fun aRealFrameworkTableSurvivesAnEditThatMatchesNothingInIt() {
+    fun aRealFrameworkTableIsReadAndEditedUntilTheMissingAppNameRefusesIt() {
         // ARSCLib ships Android's own framework tables (900 KB, seven packages, thousands of entries) for its decoder.
         val apk = javaClass.classLoader.getResourceAsStream("frameworks/android/android-36.apk")
         org.junit.Assume.assumeNotNull(apk)
@@ -124,16 +123,20 @@ class BrandingTest {
             generateSequence { z.nextEntry }.first { it.name == "resources.arsc" }
             z.readBytes()
         }
-        val r = ResourceBranding.apply(arsc, Branding(null, icons(*all)))
-        assertEquals(0, r.report.iconEntriesRepointed)
-        assertEquals(ArscSupport.ids(ArscSupport.load(arsc)), ArscSupport.ids(ArscSupport.load(r.table)))
+        // The table holds no app_name, so the edit is refused; reading and editing all of it got that far without trouble.
+        try {
+            ResourceBranding.apply(arsc, Branding(name, icons(*all)))
+            fail("renamed a table with no app_name")
+        } catch (e: BrandingException) {
+            assertTrue(e.message, e.message!!.contains("app_name"))
+        }
     }
 
     @Test
     fun aTableMadeByAnotherWriterSurvivesAnUneditedRoundTripOfItsPool() {
         // A name-only edit of a table that holds no name leaves every other string as it was.
         val source = BinaryArsc.build(listOf(BinaryArsc.Str("app_name", "X"), BinaryArsc.Str("styled", "a b c", boldFrom = 2, boldTo = 2)), true)
-        val r = ResourceBranding.apply(source, Branding(name, null))
+        val r = ResourceBranding.apply(source, Branding(name, icons(*all)))
         val after = ArscSupport.load(r.table)
         assertEquals(name, ArscSupport.strings(after, "string")["string/app_name []"])
         assertEquals(1, after.stringPool.toList().count { it.hasStyle() })
@@ -156,7 +159,7 @@ class BrandingTest {
 
     @Test
     fun theIconsAndTheLogoAreRepointedInEveryConfigWithTheirIdsKept() {
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(null, icons(*all)))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all)))
         val after = ArscSupport.load(r.table)
         val dr = ArscSupport.strings(after, "drawable")
         val mm = ArscSupport.strings(after, "mipmap")
@@ -184,7 +187,7 @@ class BrandingTest {
 
     @Test
     fun aDensityThatWasNotGeneratedTakesTheNearest() {
-        val r = ResourceBranding.apply(ArscSupport.table(), Branding(null, icons(Density.XHDPI, Density.XXXHDPI)))
+        val r = ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(Density.XHDPI, Density.XXXHDPI)))
         val mm = ArscSupport.strings(ArscSupport.load(r.table), "mipmap")
         val d = "res/custom-ide-builder"
         assertEquals("$d/launcher-xhdpi.png", mm["mipmap/ic_launcher [mdpi]"])
@@ -195,15 +198,6 @@ class BrandingTest {
             setOf("$d/launcher-xhdpi.png", "$d/launcher-xxxhdpi.png", "$d/foreground-xhdpi.png", "$d/foreground-xxxhdpi.png", "$d/notification-xxxhdpi.png", "$d/mark-xxxhdpi.png"),
             r.files.keys,
         )
-    }
-
-    @Test
-    fun anIconAloneLeavesTheNameAndANameAloneLeavesTheIcons() {
-        val iconsOnly = ArscSupport.load(ResourceBranding.apply(ArscSupport.table(), Branding(null, icons(*all))).table)
-        assertEquals(ArscSupport.OLD, strings(iconsOnly)["string/app_name []"])
-        assertEquals("Welcome to Code On The Go!", strings(iconsOnly)["string/welcome []"])
-        val nameOnly = ArscSupport.load(ResourceBranding.apply(ArscSupport.table(), Branding(name, null)).table)
-        assertEquals("res/drawable/ic_launcher.xml", ArscSupport.strings(nameOnly, "drawable")["drawable/ic_launcher []"])
     }
 
     @Test
@@ -234,17 +228,17 @@ class BrandingTest {
         val changed = ArscSupport.load(original)
         changed.iterator().next().getEntry("", "integer", "answer").setValueAsRaw(com.reandroid.arsc.value.ValueType.DEC, 7)
         changed.refreshFull()
-        failsVerification(changed.bytes, original, Branding(null, null), emptyMap(), "more than intended")
+        failsVerification(changed.bytes, original, Branding(name, icons(*all)), emptyMap(), "more than intended")
 
         val fewer = BinaryArsc.build(listOf(BinaryArsc.Str("app_name", "X")), true)
-        failsVerification(fewer, original, Branding(null, null), emptyMap(), "more than intended")
+        failsVerification(fewer, original, Branding(name, icons(*all)), emptyMap(), "more than intended")
 
-        failsVerification(original, original, Branding(name, null), emptyMap(), "app_name")
+        failsVerification(original, original, Branding(name, icons(*all)), emptyMap(), "app_name")
 
         val stray = ArscSupport.load(original)
         stray.iterator().next().getEntry("xhdpi", "mipmap", "ic_launcher").setValueAsString("res/custom-ide-builder/zzz.png")
         stray.refreshFull()
-        failsVerification(stray.bytes, original, Branding(null, null), emptyMap(), "zzz.png")
+        failsVerification(stray.bytes, original, Branding(ArscSupport.OLD, icons(*all)), emptyMap(), "zzz.png")
     }
 
     @Test
@@ -260,7 +254,7 @@ class BrandingTest {
         t.newPackage(0x7f, "x").getOrCreate("", "string", "other").setValueAsString("x")
         t.refreshFull()
         try {
-            ResourceBranding.apply(t.bytes, Branding(name, null))
+            ResourceBranding.apply(t.bytes, Branding(name, icons(*all)))
             fail("renamed a table with no app_name")
         } catch (e: BrandingException) {
             assertTrue(e.message, e.message!!.contains("app_name"))
@@ -270,7 +264,7 @@ class BrandingTest {
     @Test
     fun garbageIsRefusedWithAMessage() {
         try {
-            ResourceBranding.apply(ByteArray(64) { 7 }, Branding(name, null))
+            ResourceBranding.apply(ByteArray(64) { 7 }, Branding(name, icons(*all)))
             fail("accepted garbage")
         } catch (e: BrandingException) {
             assertNotNull(e.message)

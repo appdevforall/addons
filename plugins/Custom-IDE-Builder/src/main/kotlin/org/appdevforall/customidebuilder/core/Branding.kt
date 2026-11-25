@@ -24,8 +24,8 @@ class BrandIcons(
     val mark: Map<Density, ByteArray>,
 )
 
-/** What the user chose: a new name, a new icon, or both. A null part is left as the host has it. */
-class Branding(val appName: String?, val icons: BrandIcons?)
+/** What the user chose: the copy's own name and its own icon. Both are always written. */
+class Branding(val appName: String, val icons: BrandIcons)
 
 class BrandingException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
@@ -126,41 +126,38 @@ object ResourceBranding {
 
         for (pkg in table) {
             val newName = branding.appName
-            if (newName != null) {
-                val strings = pkg.getResources("string")
-                while (strings.hasNext()) {
-                    val resource = strings.next()
-                    val key = resource.name
-                    for (entry in resource) {
-                        val value = entry.valueAsString
-                        if (key == BrandingRules.APP_NAME_KEY) {
-                            if (entry.valueType != ValueType.STRING || value == null) {
-                                notes.add("app_name [${entry.resConfig.qualifiers}] is not plain text, left as it is")
-                            } else {
-                                entry.setValueAsString(newName)
-                                appNameEntries++
-                            }
-                            continue
+            val strings = pkg.getResources("string")
+            while (strings.hasNext()) {
+                val resource = strings.next()
+                val key = resource.name
+                for (entry in resource) {
+                    val value = entry.valueAsString
+                    if (key == BrandingRules.APP_NAME_KEY) {
+                        if (entry.valueType != ValueType.STRING || value == null) {
+                            notes.add("app_name [${entry.resConfig.qualifiers}] is not plain text, left as it is")
+                        } else {
+                            entry.setValueAsString(newName)
+                            appNameEntries++
                         }
-                        if (value == null || entry.valueType != ValueType.STRING) continue
-                        if (!BrandingRules.NAME.containsMatchIn(value)) continue
-                        if (key in BrandingRules.KEEP_LITERAL) {
-                            kept++
-                            continue
-                        }
-                        if (entry.resValue.dataAsPoolString?.hasStyle() == true) {
-                            styled++
-                            continue
-                        }
-                        entry.setValueAsString(BrandingRules.NAME.replace(value) { newName })
-                        otherReplaced++
+                        continue
                     }
+                    if (value == null || entry.valueType != ValueType.STRING) continue
+                    if (!BrandingRules.NAME.containsMatchIn(value)) continue
+                    if (key in BrandingRules.KEEP_LITERAL) {
+                        kept++
+                        continue
+                    }
+                    if (entry.resValue.dataAsPoolString?.hasStyle() == true) {
+                        styled++
+                        continue
+                    }
+                    entry.setValueAsString(BrandingRules.NAME.replace(value) { newName })
+                    otherReplaced++
                 }
             }
-            val icons = branding.icons
-            if (icons != null) repointed += repointIcons(pkg, icons, files, notes)
+            repointed += repointIcons(pkg, branding.icons, files, notes)
         }
-        if (branding.appName != null && appNameEntries == 0) {
+        if (appNameEntries == 0) {
             throw BrandingException("The app's resource table has no app_name string, so it cannot be renamed.")
         }
         table.refreshFull()
@@ -248,12 +245,10 @@ object ResourceBranding {
         }
         val name = branding.appName
         for (pkg in reloaded) {
-            if (name != null) {
-                val entries = pkg.getEntries("string", BrandingRules.APP_NAME_KEY)
-                while (entries.hasNext()) {
-                    val e = entries.next()
-                    if (e.valueType == ValueType.STRING && e.valueAsString != name) throw BrandingException("app_name was not written back as given.")
-                }
+            val entries = pkg.getEntries("string", BrandingRules.APP_NAME_KEY)
+            while (entries.hasNext()) {
+                val e = entries.next()
+                if (e.valueType == ValueType.STRING && e.valueAsString != name) throw BrandingException("app_name was not written back as given.")
             }
             for (type in BrandingRules.ICON_TYPES) {
                 val resources = pkg.getResources(type)

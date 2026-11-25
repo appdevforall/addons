@@ -121,8 +121,8 @@ class BuilderFragment : Fragment() {
         })
         column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
 
-        column.addView(heading(ctx, "2. Name and icon (optional)", Help.NAME))
-        column.addView(text(ctx, "Leave both empty to keep the name and icon Code on the Go has. A name or icon you choose replaces them everywhere the app shows them.", 14f, tooltip = Help.NAME))
+        column.addView(heading(ctx, "2. Name and icon", Help.NAME))
+        column.addView(text(ctx, "Every copy needs its own name and its own icon. They replace Code on the Go's everywhere the app shows them.", 14f, tooltip = Help.NAME))
         nameField = EditText(ctx).apply {
             hint = "App name"
             withTooltip(this, Help.APP_NAME, consume = false)
@@ -372,12 +372,12 @@ class BuilderFragment : Fragment() {
         nameStatus.text =
             when (val v = AppNameCheck.check(Session.appName)) {
                 is NameVerdict.Ok -> "This name can be used."
-                is NameVerdict.Rejected -> if (Session.appName.isBlank()) "Blank keeps the name Code on the Go has." else v.reason
+                is NameVerdict.Rejected -> if (Session.appName.isBlank()) "Enter a name for the copy." else v.reason
             }
         val icon = Session.icon
         iconPreview.visibility = if (icon == null) View.GONE else View.VISIBLE
         if (icon != null) iconPreview.setImageBitmap(icon.preview)
-        iconLabel.text = Session.iconName?.let { "Icon: $it" } ?: "No icon chosen: the one Code on the Go has is kept."
+        iconLabel.text = Session.iconName?.let { "Icon: $it" } ?: "No icon chosen yet."
         iconStatus.text =
             when (val v = Session.iconVerdict) {
                 null -> if (icon != null) "Checking the picture." else ""
@@ -387,9 +387,8 @@ class BuilderFragment : Fragment() {
             }
         iconStatus.visibility = if (iconStatus.text.isEmpty()) View.GONE else View.VISIBLE
         clearIconButton.visibility = if (icon == null) View.GONE else View.VISIBLE
-        val custom = BrandingGate.isCustom(Session.appName, icon != null)
-        confirmBox.isChecked = Session.confirmedOwn && custom
-        confirmBox.isEnabled = custom && !busy
+        confirmBox.isChecked = Session.confirmedOwn
+        confirmBox.isEnabled = !busy
         nameField.isEnabled = !busy
     }
 
