@@ -100,7 +100,8 @@ class BuilderFragment : Fragment() {
         keystoreLabel = text(ctx, "", 14f, tooltip = Help.KEYSTORE)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
-        storePassword = passwordField(ctx, "Store password", Help.STORE_PASSWORD)
+        storePassword = passwordField(ctx, Help.STORE_PASSWORD)
+        column.addView(fieldLabel(ctx, "Store password", Help.STORE_PASSWORD, storePassword))
         column.addView(storePassword)
         column.addView(action(ctx, "Read keys", Help.KEYSTORE) {
             val chars = charsOf(storePassword)
@@ -120,7 +121,8 @@ class BuilderFragment : Fragment() {
         column.addView(aliasSpinner)
         fingerprint = text(ctx, "", 12f, tooltip = Help.KEY_ALIAS)
         column.addView(fingerprint)
-        keyPassword = passwordField(ctx, "Key password (blank: same as store password)", Help.KEY_PASSWORD)
+        keyPassword = passwordField(ctx, Help.KEY_PASSWORD)
+        column.addView(fieldLabel(ctx, "Key password (leave blank if it is the same as the store password)", Help.KEY_PASSWORD, keyPassword))
         column.addView(keyPassword)
 
         column.addView(heading(ctx, "3. Output folder", Help.FOLDER))
@@ -439,9 +441,20 @@ class BuilderFragment : Fragment() {
         }
     }
 
-    private fun passwordField(ctx: Context, hintText: String, tooltip: String) = EditText(ctx).apply {
+    /**
+     * A label that stays above a field, so a filled field is never read as anything else. It names
+     * [field] for accessibility, and long-press shows the field's tooltip.
+     */
+    private fun fieldLabel(ctx: Context, content: String, tooltip: String, field: View) =
+        text(ctx, content, 14f, tooltip = tooltip).apply {
+            setPadding(0, dp(8), 0, 0)
+            labelFor = field.id
+        }
+
+    /** The label is [fieldLabel], above it; the id lets the label name it for accessibility. */
+    private fun passwordField(ctx: Context, tooltip: String) = EditText(ctx).apply {
+        id = View.generateViewId()
         withTooltip(this, tooltip, consume = false)
-        hint = hintText
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
         // Never let the system put a password in saved instance state.
