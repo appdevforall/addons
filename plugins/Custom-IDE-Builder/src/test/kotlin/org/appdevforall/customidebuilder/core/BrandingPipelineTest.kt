@@ -82,6 +82,35 @@ class BrandingPipelineTest {
     }
 
     @Test
+    fun aHostWithoutTheContactStringsIsRefusedBeforeAnyWork() {
+        val work = File(tmp.root, "never-made")
+        try {
+            Pipeline.run(
+                BuildInput(host(), emptyList(), emptyList(), TestSupport.signingKey("U"), minSdk, work, "x.apk", Branding("My IDE", icons, Contacts()), hostVersionName = "26.48"),
+            )
+            throw AssertionError("built on a host without about_website_url")
+        } catch (e: BuildException) {
+            assertEquals(HostSupport.tooOldMessage("26.48"), e.message)
+        }
+        assertEquals("the work folder was not even made", false, work.exists())
+    }
+
+    @Test
+    fun aHostWithTheContactStringsGetsTheUsersDetails() {
+        val contacts = Contacts(website = "https://my.example/", feedbackEmail = "bugs@my.example")
+        val key = TestSupport.signingKey("User")
+        val out = Pipeline.run(BuildInput(host(ArscSupport.tableWithContacts()), emptyList(), emptyList(), key, minSdk, tmp.newFolder(), "out.apk", Branding("My IDE", icons, contacts)))
+        assertTrue(out.verify.verified)
+        ZipFile(out.apk).use { zip ->
+            val s = ArscSupport.strings(ArscSupport.load(zip.getInputStream(zip.getEntry("resources.arsc")).readBytes()), "string")
+            assertEquals("https://my.example/", s["string/about_website_url [de]"])
+            assertEquals("bugs@my.example", s["string/feedback_email []"])
+            assertEquals("", s["string/adfa_email [de]"])
+            assertEquals("", s["string/bilibili_video_url []"])
+        }
+    }
+
+    @Test
     fun aHostWithoutATableFailsWithAClearMessageAndLeavesNoFiles() {
         val unsigned = tmp.newFile("nores-unsigned.apk")
         TestSupport.syntheticApk(unsigned)

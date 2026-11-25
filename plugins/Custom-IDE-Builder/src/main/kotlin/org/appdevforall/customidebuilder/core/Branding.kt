@@ -24,8 +24,11 @@ class BrandIcons(
     val mark: Map<Density, ByteArray>,
 )
 
-/** What the user chose: the copy's own name and its own icon. Both are always written. */
-class Branding(val appName: String, val icons: BrandIcons)
+/**
+ * What the user chose: the copy's own name and its own icon, both always written, and its contact details. The screen
+ * always passes [contacts]; null leaves the contact strings as they are, for tests of the name and icon edit alone.
+ */
+class Branding(val appName: String, val icons: BrandIcons, val contacts: Contacts? = null)
 
 class BrandingException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
@@ -42,6 +45,8 @@ class BrandingReport(
     val iconEntriesRepointed: Int,
     /** Problems that did not stop the build, for the screen's log. */
     val notes: List<String>,
+    /** Entries of the contact strings set (one per key and config); 0 when no contacts were given. */
+    val contactEntries: Int = 0,
 )
 
 class BrandedResources(val table: ByteArray, val files: Map<String, ByteArray>, val report: BrandingReport)
@@ -98,23 +103,31 @@ object ResourceBranding {
     /** `RES_TABLE_TYPE`, the first chunk type of a resources.arsc. */
     private const val RES_TABLE_TYPE = 0x0002
 
+    /** Reads [arsc] with ARSCLib, or throws [BrandingException] when it is not a resource table. */
+    internal fun loadTable(arsc: ByteArray): TableBlock {
+        // ARSCLib trusts the sizes in the header and allocates by them, so a file that is not a table is refused first.
+        val header = java.nio.ByteBuffer.wrap(arsc).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        if (arsc.size < 12 || header.getShort(0).toInt() != RES_TABLE_TYPE || header.getInt(4) != arsc.size) {
+            throw BrandingException("The app's resource table is not in a format this builder knows.")
+        }
+        return try {
+            TableBlock.load(ByteArrayInputStream(arsc))
+        } catch (e: Exception) {
+            throw BrandingException("The app's resource table could not be read: ${e.message ?: e.javaClass.simpleName}", e)
+        }
+    }
+
     /** [checkEdit] is [verify]; a parameter only so a test can see that the check runs on the bytes returned. */
     fun apply(
         arsc: ByteArray,
         branding: Branding,
         checkEdit: (ByteArray, Map<String, String>, Branding, Map<String, ByteArray>) -> Unit = ::verify,
     ): BrandedResources {
-        // ARSCLib trusts the sizes in the header and allocates by them, so a file that is not a table is refused first.
-        val header = java.nio.ByteBuffer.wrap(arsc).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-        if (arsc.size < 12 || header.getShort(0).toInt() != RES_TABLE_TYPE || header.getInt(4) != arsc.size) {
-            throw BrandingException("The app's resource table is not in a format this builder knows.")
-        }
-        val table =
-            try {
-                TableBlock.load(ByteArrayInputStream(arsc))
-            } catch (e: Exception) {
-                throw BrandingException("The app's resource table could not be read: ${e.message ?: e.javaClass.simpleName}", e)
-            }
+        val table = loadTable(arsc)
+        val contacts = branding.contacts
+        // Written after the name, so a contact the user typed is never taken for the app's name and rewritten.
+        val contactKeys = if (contacts == null) emptySet() else ContactBranding.values(contacts).keys
+        val contactsWritten = HashMap<String, Int>()
         val before = fingerprint(table)
         val notes = ArrayList<String>()
         var appNameEntries = 0
@@ -142,6 +155,7 @@ object ResourceBranding {
                         continue
                     }
                     if (value == null || entry.valueType != ValueType.STRING) continue
+                    if (key in contactKeys) continue
                     if (!BrandingRules.NAME.containsMatchIn(value)) continue
                     if (key in BrandingRules.KEEP_LITERAL) {
                         kept++
@@ -156,14 +170,16 @@ object ResourceBranding {
                 }
             }
             repointed += repointIcons(pkg, branding.icons, files, notes)
+            if (contacts != null) ContactBranding.write(pkg, contacts, contactsWritten)
         }
         if (appNameEntries == 0) {
             throw BrandingException("The app's resource table has no app_name string, so it cannot be renamed.")
         }
+        for (key in contactKeys) if (key !in contactsWritten) notes.add("$key is not in the app's resources, left out")
         table.refreshFull()
         val bytes = table.bytes
         checkEdit(bytes, before, branding, files)
-        return BrandedResources(bytes, files, BrandingReport(appNameEntries, otherReplaced, styled, kept, repointed, notes))
+        return BrandedResources(bytes, files, BrandingReport(appNameEntries, otherReplaced, styled, kept, repointed, notes, contactsWritten.values.sum()))
     }
 
     private fun repointIcons(pkg: PackageBlock, icons: BrandIcons, files: MutableMap<String, ByteArray>, notes: MutableList<String>): Int {
@@ -262,5 +278,6 @@ object ResourceBranding {
                 }
             }
         }
+        branding.contacts?.let { ContactBranding.verify(reloaded, it) }
     }
 }

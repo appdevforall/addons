@@ -24,6 +24,8 @@ class BuildInput(
     val outputName: String,
     /** The copy's own name and icon. The screen always gives one; null (add-ons only, the host's own name and icon) is for tests of the rewrite and signing alone. */
     val branding: Branding? = null,
+    /** The installed Code on the Go's versionName, for the refusal of one too old for contact details; null if unknown. */
+    val hostVersionName: String? = null,
 )
 
 class BuildOutput(val apk: File, val rewrite: RewriteReport, val verify: VerifyReport)
@@ -51,6 +53,8 @@ object Pipeline {
         if (input.hostApk.name.endsWith(".cgp", ignoreCase = true)) {
             throw BuildException("That is a plugin file, not the Code on the Go APK.")
         }
+        // Before any work: a Code on the Go without the contact strings would keep App Dev For All's details.
+        if (input.branding?.contacts != null) HostSupport.problem(input.hostApk, input.hostVersionName)?.let { throw BuildException(it) }
         input.workDir.mkdirs()
         val addonBytes = input.addons.sumOf { it.file.length() }
         val needed = spaceNeeded(input.hostApk.length(), addonBytes)

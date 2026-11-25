@@ -67,6 +67,25 @@ class BrandingGateTest {
     }
 
     @Test
+    fun blankContactDetailsPassAndBadOnesBlockWithTheirFieldNamed() {
+        assertEquals(emptyList<String>(), BrandingGate.problems("My IDE", true, different, true, Contacts()))
+        assertEquals(emptyList<String>(), BrandingGate.problems("My IDE", true, different, true, Contacts(website = "https://my.example/", feedbackEmail = "a@my.example")))
+        val p = BrandingGate.problems("My IDE", true, different, true, Contacts(website = "http://my.example/", contactEmail = "nobody"))
+        assertEquals(p.toString(), 2, p.size)
+        assertTrue(p[0], p[0].startsWith("Website: ") && "https://" in p[0])
+        assertTrue(p[1], p[1].startsWith("Contact email: "))
+    }
+
+    @Test
+    fun contactProblemsAreListedWithTheOthers() {
+        val p = BrandingGate.problems("", true, different, false, Contacts(youtubeUrl = "youtube"))
+        assertEquals(p.toString(), 3, p.size)
+        assertTrue(p.any { it.startsWith("Name:") })
+        assertTrue(p.any { it.startsWith("YouTube channel: ") })
+        assertTrue(p.any { BrandingGate.CONFIRMATION in it })
+    }
+
+    @Test
     fun theNameToWriteIsTheTrimmedOne() {
         assertEquals("My IDE", BrandingGate.nameToWrite("  My IDE "))
     }

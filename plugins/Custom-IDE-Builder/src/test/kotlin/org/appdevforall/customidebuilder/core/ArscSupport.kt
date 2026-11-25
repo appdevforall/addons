@@ -59,6 +59,31 @@ object ArscSupport {
         return t.bytes
     }
 
+    /** App Dev For All's contact strings as Code on the Go carries them, each in the default config and in German. */
+    val CONTACT_DEFAULTS: Map<String, String> = linkedMapOf(
+        "about_website_url" to "https://www.appdevforall.org/",
+        "adfa_email" to "info@appdevforall.org",
+        "feedback_email" to "feedback@appdevforall.org",
+        "github_sponsors_url" to "https://github.com/sponsors/appdevforall",
+        "github_discussions_url" to "https://github.com/appdevforall/CodeOnTheGo/discussions",
+        "telegram_channel_url" to "https://t.me/CodeOnTheGoOfficial",
+        "youtube_channel_url" to "https://youtube.com/@appdevforall",
+        "bilibili_video_url" to "https://www.bilibili.com/video/BV1AUgR6sE3G/",
+    )
+
+    /** [table] plus [CONTACT_DEFAULTS] in the default config and in `de`, minus the keys in [without]. */
+    fun tableWithContacts(without: Set<String> = emptySet()): ByteArray {
+        val t = TableBlock.load(ByteArrayInputStream(table()))
+        val p = t.iterator().next()
+        for ((key, value) in CONTACT_DEFAULTS) {
+            if (key in without) continue
+            p.getOrCreate("", "string", key).setValueAsString(value)
+            p.getOrCreate("de", "string", key).setValueAsString(value)
+        }
+        t.refreshFull()
+        return t.bytes
+    }
+
     fun load(bytes: ByteArray): TableBlock = TableBlock.load(ByteArrayInputStream(bytes))
 
     /** `type/name [config]` to the entry's string value, for every string-valued entry of the given types. */
