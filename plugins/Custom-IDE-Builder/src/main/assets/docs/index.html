@@ -82,7 +82,8 @@
       white-outline status-bar icon, at every screen density.</li>
     <li>The name is refused if it is blank, over 50 characters, or close to <i>Code on the Go</i> or its short
       form (look-alike letters and spaces do not fool the comparison). The picture is compared with Code on
-      the Go's own icon and refused if it looks like it.</li>
+      the Go's own icon as the launcher, older launchers and the app's own screens draw it, with and without its
+      margins, and refused if it looks like any of them.</li>
     <li>For each plugin the builder reads the lowest Android version it needs from the plugin's manifest,
       reading at most 1 MiB of it, and compares it with the Android version this copy of Code on the Go
       supports.</li>

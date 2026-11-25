@@ -75,7 +75,7 @@ class BuilderFragment : Fragment() {
                 Session.message = "Could not read the installed app's details."
                 refresh()
             } else {
-                Session.pickIcon(requireContext().applicationContext, uri, host.packageName)
+                Session.pickIcon(requireContext().applicationContext, uri, host.packageName, host.apk)
             }
         }
     }

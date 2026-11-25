@@ -29,14 +29,15 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `Pipeline.kt` | Rewrite, sign, verify, check alignment |
 | `Branding.kt` | Edits the host's `resources.arsc` with ARSCLib: `app_name` and the other strings that name the app, and the files the icon and logo resources resolve to |
 | `IconRaster.kt` | Densities and icon sizes, nearest-density choice, the white status-bar silhouette |
-| `IconCheck.kt` | Perceptual hash of a picture and the "is this Code on the Go's own icon" decision |
+| `IconCheck.kt` | Perceptual hash of a picture, trimming to content, and the "is this Code on the Go's own icon" decision |
+| `HostIcons.kt` | The raster files the host's icon resources resolve to, found through its `resources.arsc` |
 | `AppNameCheck.kt` | Name rules: blank, length, look-alike normalising, "cogo" / "codeonthego" |
 | `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked) before a branded build starts |
 | `MinSdk.kt` | A plugin's `minSdkVersion` from its binary manifest, and the warning when it is above the host's |
 
 The Android side (`BuilderFragment`, `Session`, `AndroidBits`, `IconImages`) is the screen, the file
 pickers, the Storage Access Framework output, and the bitmap work: decoding the chosen picture, scaling it
-to each density, and drawing the host's own launcher icon for the look-alike check.
+to each density, and drawing the host's own icon every way it appears for the look-alike check.
 
 ## Name and icon
 
@@ -70,9 +71,16 @@ do not change. New files are `res/custom-ide-builder/<role>-<density>.png`, stor
 - **Status-bar icon.** The silhouette uses the picture's alpha. A picture with no transparency uses whatever
   differs from the colour of its corners.
 - **Look-alike check.** A 128-bit difference hash (9x8 horizontal and 8x9 vertical, brightness steps under 4
-  levels ignored) of the chosen picture is compared, flipped or not, with the hash of the host's own
-  `drawable/ic_launcher` as it draws. At most 14 differing bits is refused. `IconCheckTest` measures the margin
-  on drawn pictures; the real icon has not been measured, so the threshold may need tuning against it.
+  levels ignored) of the chosen picture is compared, flipped or not, with every drawing of the host's icon:
+  `drawable/ic_launcher` (a vector, full-bleed), `mipmap/ic_launcher` and `ic_launcher_round` as the device
+  resolves them (the masked adaptive icon, and its layers unmasked), `cogo_brand_mark`, and the raster files
+  those resources name in the APK (the legacy launcher PNGs). Each pair is compared as it is and trimmed to
+  what stands out from a background the corners agree on, so padding does not count; the closest is kept. At
+  most 14 differing bits is refused. Before trimming, the vector (the phone fills its height) and the legacy
+  PNG (the phone is two thirds of it) were about 45 bits apart, so the app's own PNG passed (F51).
+  `CogoIconCheckTest` measures it on the real PNGs: every density, crops and rescales within 9 bits, 300
+  unrelated pictures no closer than 18. The vector references are rebuilt there from the PNG at the vectors'
+  geometry, since a JVM cannot draw a vector drawable.
 - **Name check.** After case-folding, accent and width folding and look-alike mapping (0, 1, 3, 4, 5, 7, 9,
   `@`, `$`, `!`, Cyrillic and Greek homoglyphs), with everything but letters and digits removed, a name is
   refused if it contains `cogo` or `codeonthego` or has a substring within two edits of `codeonthego`. `cogo`

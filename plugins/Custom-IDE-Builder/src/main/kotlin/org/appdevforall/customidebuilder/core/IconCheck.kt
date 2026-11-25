@@ -81,14 +81,82 @@ class IconHash(val bits: LongArray) {
     }
 }
 
-sealed class IconVerdict {
-    /** Different enough from Code on the Go's own icon. [distance] is the smaller of the plain and mirrored comparisons. */
-    class Different(val distance: Int) : IconVerdict()
+/**
+ * Crops a picture to what stands out from its background, then pads it back to a square in that background colour.
+ * Two drawings of one icon that differ only in their margins (a launcher PNG with its padding and the same icon
+ * drawn full-bleed from a vector, or a user's crop of either) come out alike, so their hashes do too.
+ */
+object IconTrim {
+    /** Summed RGB difference (of 765) from the background at which a pixel counts as part of the picture. */
+    const val CONTENT_DIFFERENCE = 48
 
-    class TooSimilar(val distance: Int) : IconVerdict()
+    /** The corners must agree to this summed difference to be a background at all; a photo's corners do not. */
+    const val CORNER_AGREEMENT = 48
+
+    /**
+     * [image] trimmed and padded, after transparency is composited on white (as [IconHash] sees it). The image
+     * itself when its corners disagree, when nothing stands out or when the picture already fills it.
+     */
+    fun of(image: PixelImage): PixelImage {
+        val w = image.width
+        val h = image.height
+        val rgb = IntArray(image.argb.size) { onWhite(image.argb[it]) }
+        val corners = intArrayOf(rgb[0], rgb[w - 1], rgb[(h - 1) * w], rgb[h * w - 1])
+        for (a in corners) for (b in corners) if (difference(a, b) > CORNER_AGREEMENT) return image
+        val bg = average(corners)
+        var top = h
+        var bottom = -1
+        var left = w
+        var right = -1
+        for (y in 0 until h) for (x in 0 until w) {
+            if (difference(rgb[y * w + x], bg) >= CONTENT_DIFFERENCE) {
+                if (y < top) top = y
+                if (y > bottom) bottom = y
+                if (x < left) left = x
+                if (x > right) right = x
+            }
+        }
+        if (bottom < 0) return image
+        val cw = right - left + 1
+        val ch = bottom - top + 1
+        if (cw == w && ch == h) return image
+        val side = maxOf(cw, ch)
+        val out = IntArray(side * side) { bg }
+        val ox = (side - cw) / 2
+        val oy = (side - ch) / 2
+        for (y in 0 until ch) System.arraycopy(rgb, (top + y) * w + left, out, (oy + y) * side + ox, cw)
+        return PixelImage(out, side, side)
+    }
+
+    private fun onWhite(argb: Int): Int {
+        val a = argb ushr 24
+        fun c(shift: Int) = (((argb shr shift) and 0xFF) * a + 255 * (255 - a)) / 255
+        return (0xFF shl 24) or (c(16) shl 16) or (c(8) shl 8) or c(0)
+    }
+
+    private fun difference(a: Int, b: Int): Int =
+        Math.abs(((a shr 16) and 0xFF) - ((b shr 16) and 0xFF)) + Math.abs(((a shr 8) and 0xFF) - ((b shr 8) and 0xFF)) + Math.abs((a and 0xFF) - (b and 0xFF))
+
+    private fun average(c: IntArray): Int {
+        fun ch(shift: Int) = c.sumOf { (it shr shift) and 0xFF } / c.size
+        return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+}
+
+sealed class IconVerdict {
+    /** Different enough from every drawing of Code on the Go's icon. [distance] is the smallest of all the comparisons. */
+    class Different(val distance: Int) : IconVerdict() {
+        override fun toString() = "Different($distance)"
+    }
+
+    class TooSimilar(val distance: Int) : IconVerdict() {
+        override fun toString() = "TooSimilar($distance)"
+    }
 
     /** The comparison could not be made; the build is not blocked by it. */
-    class Unchecked(val reason: String) : IconVerdict()
+    class Unchecked(val reason: String) : IconVerdict() {
+        override fun toString() = "Unchecked($reason)"
+    }
 }
 
 /** Decides whether a chosen picture is Code on the Go's own icon, or a copy of it. */
@@ -100,23 +168,39 @@ object IconCheck {
      * fewer, while unrelated pictures average about 37. So 14 refuses the copies and costs a rare false alarm,
      * which the user answers by choosing another picture. A hash this small cannot do better, and it is a guard
      * against honest reuse, not a defence against a determined imitation (the user also confirms the picture is their own).
+     * On Code on the Go's real icon (CogoIconCheckTest) its launcher PNGs at every density, crops and rescales of
+     * them come within 9 bits of its drawings, and 300 unrelated pictures no closer than 18.
      */
     const val MAX_SIMILAR_DISTANCE = 14
 
     /**
-     * The reference needs more than this many set bits. A picture with no detail hashes to nothing, and its distance
+     * A reference needs more than this many set bits. A picture with no detail hashes to nothing, and its distance
      * from the reference is then the reference's own count: with more than [MAX_SIMILAR_DISTANCE] a plain picture is
      * never mistaken for it, and with fewer the comparison is skipped instead.
      */
     private const val MIN_DETAIL = MAX_SIMILAR_DISTANCE + 8
 
-    fun compare(chosen: PixelImage, reference: PixelImage): IconVerdict {
-        val ref = IconHash.of(reference)
-        if (ref.ones() < MIN_DETAIL) {
+    fun compare(chosen: PixelImage, reference: PixelImage): IconVerdict = compare(chosen, listOf(reference))
+
+    /**
+     * Compares [chosen] with every drawing of the host's icon in [references] (the vector drawn full-bleed, the
+     * adaptive icon masked and unmasked, the legacy PNGs, the in-app logo), each as it is and trimmed to its
+     * content ([IconTrim]), each also mirrored, and keeps the smallest distance. The icon is refused if any
+     * drawing of it matches: the drawings differ in their padding and mask, and a copy matches at least one.
+     */
+    fun compare(chosen: PixelImage, references: List<PixelImage>): IconVerdict {
+        val plain = listOf(chosen, chosen.mirrored()).map { IconHash.of(it) }
+        val trimmed = listOf(chosen, chosen.mirrored()).map { IconHash.of(IconTrim.of(it)) }
+        var best = Int.MAX_VALUE
+        for (reference in references) {
+            val ref = IconHash.of(reference)
+            if (ref.ones() >= MIN_DETAIL) best = minOf(best, plain.minOf { it.distance(ref) })
+            val refTrimmed = IconHash.of(IconTrim.of(reference))
+            if (refTrimmed.ones() >= MIN_DETAIL) best = minOf(best, trimmed.minOf { it.distance(refTrimmed) })
+        }
+        if (best == Int.MAX_VALUE) {
             return IconVerdict.Unchecked("Code on the Go's icon has too little detail to compare with.")
         }
-        // A flipped copy is still the same picture.
-        val d = minOf(IconHash.of(chosen).distance(ref), IconHash.of(chosen.mirrored()).distance(ref))
-        return if (d <= MAX_SIMILAR_DISTANCE) IconVerdict.TooSimilar(d) else IconVerdict.Different(d)
+        return if (best <= MAX_SIMILAR_DISTANCE) IconVerdict.TooSimilar(best) else IconVerdict.Different(best)
     }
 }

@@ -141,15 +141,15 @@ object Session {
     }
 
     /** Decodes the picture, makes the icon files and compares it with Code on the Go's own icon. */
-    fun pickIcon(context: Context, uri: Uri, hostPackage: String) {
+    fun pickIcon(context: Context, uri: Uri, hostPackage: String, hostApk: File) {
         launch("Reading the picture") {
             val name = AndroidBits.displayName(context, uri) ?: "picture"
             try {
                 val prepared = withContext(Dispatchers.IO) { IconImages.prepare(context, uri) }
                 val verdict =
                     withContext(Dispatchers.IO) {
-                        val reference = IconImages.hostIcon(context, hostPackage)
-                        if (reference == null) IconVerdict.Unchecked("Code on the Go's icon could not be drawn.") else IconCheck.compare(prepared.hashPixels, reference)
+                        val references = IconImages.hostIcons(context, hostPackage, hostApk)
+                        if (references.isEmpty()) IconVerdict.Unchecked("Code on the Go's icon could not be drawn.") else IconCheck.compare(prepared.hashPixels, references)
                     }
                 clearIcon()
                 icon = prepared
