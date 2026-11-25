@@ -75,6 +75,16 @@ object AndroidBits {
             null
         }
 
+    /** The size the provider reports for [uri] in bytes, or null when it does not say. */
+    fun displaySize(context: Context, uri: Uri): Long? =
+        try {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
+                if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { n -> n >= 0 } else null
+            }
+        } catch (e: Exception) {
+            null
+        }
+
     /**
      * Copies what [uri] holds into [target], stopping at [limit] bytes. [checkCancelled] is called
      * between buffers and may throw to stop; [target] is then left partly written for the caller to delete.

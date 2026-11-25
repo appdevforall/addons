@@ -28,8 +28,8 @@ class CustomIdeBuilderPlugin : IPlugin, UIExtension, DocumentationExtension {
     override fun deactivate(): Boolean = true
 
     override fun dispose() {
+        // end() also deletes the staged files, so it runs while the context that locates them is still set.
         Session.end()
-        Session.clearItems()
         context = null
     }
 
