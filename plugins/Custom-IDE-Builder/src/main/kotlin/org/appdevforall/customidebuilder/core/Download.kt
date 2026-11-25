@@ -45,7 +45,7 @@ class HttpFetcher(
                 301, 302, 303, 307, 308 -> {
                     val next = connection.getHeaderField("Location") ?: throw DownloadException("Redirect without a location from $current")
                     connection.disconnect()
-                    current = URI(current).resolve(next).toString()
+                    current = resolveRedirect(current, next)
                 }
                 else -> {
                     connection.disconnect()
@@ -57,13 +57,24 @@ class HttpFetcher(
     }
 }
 
+/** The URL a redirect from [current] to [location] points at. A malformed `Location` is a [DownloadException], not an unchecked one. */
+internal fun resolveRedirect(current: String, location: String): String =
+    try {
+        URI(current).resolve(location).toString()
+    } catch (e: IllegalArgumentException) {
+        throw DownloadException("Redirect from $current to an address that is not valid", e)
+    } catch (e: java.net.URISyntaxException) {
+        throw DownloadException("Redirect from $current to an address that is not valid", e)
+    }
+
 /** Downloads and verifies catalog add-ons. */
 class AddonDownloader(private val fetcher: Fetcher) {
-    /** The catalog text, at most [MAX_CATALOG_BYTES]. */
-    fun fetchCatalog(url: String = Catalog.URL): String =
+    /** The catalog text, at most [MAX_CATALOG_BYTES]. [checkCancelled] is called between reads and may throw to stop. */
+    fun fetchCatalog(url: String = Catalog.URL, checkCancelled: () -> Unit = {}): String =
         fetcher.open(url).use { input ->
             val out = java.io.ByteArrayOutputStream()
             pump(input) { buf, n ->
+                checkCancelled()
                 out.write(buf, 0, n)
                 if (out.size() > MAX_CATALOG_BYTES) throw DownloadException("The catalog is larger than expected.")
             }
@@ -74,8 +85,10 @@ class AddonDownloader(private val fetcher: Fetcher) {
      * Downloads [addon] into [dir] as `<slug>.cgp|cgt` and checks its size and SHA-256 against the
      * catalog; on any mismatch the file is deleted and the call throws. It reads no more than
      * the promised size plus one byte, so a server cannot make it fill the disk.
+     * [checkCancelled] is called between reads and before the check and the rename, and may throw to
+     * stop; the partial file is deleted then too.
      */
-    fun download(addon: CatalogAddon, dir: File, onBytes: (Long) -> Unit = {}): File {
+    fun download(addon: CatalogAddon, dir: File, checkCancelled: () -> Unit = {}, onBytes: (Long) -> Unit = {}): File {
         dir.mkdirs()
         val target = File(dir, addon.fileName)
         val partial = File(dir, addon.fileName + ".part")
@@ -84,6 +97,7 @@ class AddonDownloader(private val fetcher: Fetcher) {
             fetcher.open(addon.downloadUrl).use { input ->
                 partial.outputStream().use { out ->
                     pump(input) { buf, n ->
+                        checkCancelled()
                         total += n
                         if (total > addon.size) throw DownloadException("${addon.name}: the download is larger than the catalog says (${addon.size} bytes).")
                         out.write(buf, 0, n)
@@ -91,7 +105,9 @@ class AddonDownloader(private val fetcher: Fetcher) {
                     }
                 }
             }
+            checkCancelled()
             Catalog.verifyDownload(partial, addon)?.let { throw DownloadException(it) }
+            checkCancelled()
             target.delete()
             if (!partial.renameTo(target)) throw DownloadException("${addon.name}: could not save the download.")
             return target

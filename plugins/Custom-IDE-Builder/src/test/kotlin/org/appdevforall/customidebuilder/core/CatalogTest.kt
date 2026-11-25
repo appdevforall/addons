@@ -175,6 +175,46 @@ class CatalogTest {
     }
 
     @Test
+    fun cancellingAtAnyCheckStopsTheDownloadAndLeavesNothing() {
+        val bytes = TestSupport.noise(1000)
+        val addon = addonFor(bytes)
+        // Call 1 is after the only chunk is read, 2 before the verification, 3 before the rename.
+        for (stopAt in 1..3) {
+            val dir = tmp.newFolder()
+            var calls = 0
+            try {
+                AddonDownloader { ByteArrayInputStream(bytes) }.download(addon, dir, checkCancelled = { if (++calls == stopAt) throw java.util.concurrent.CancellationException("stop") })
+                throw AssertionError("finished although cancelled at check $stopAt")
+            } catch (e: java.util.concurrent.CancellationException) {
+                assertEquals(stopAt, calls)
+            }
+            assertEquals("check $stopAt", 0, dir.listFiles()!!.size)
+        }
+    }
+
+    @Test
+    fun cancellingStopsTheCatalogRead() {
+        try {
+            AddonDownloader { ByteArrayInputStream("hello".toByteArray()) }.fetchCatalog(checkCancelled = { throw java.util.concurrent.CancellationException("stop") })
+            throw AssertionError("finished")
+        } catch (e: java.util.concurrent.CancellationException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun aMalformedRedirectLocationIsADownloadExceptionWithItsCause() {
+        try {
+            resolveRedirect("https://addons.appdevforall.org/a", "/bad path")
+            throw AssertionError("accepted")
+        } catch (e: DownloadException) {
+            assertTrue(e.cause is IllegalArgumentException || e.cause is java.net.URISyntaxException)
+        }
+        assertEquals("https://addons.appdevforall.org/b/c", resolveRedirect("https://addons.appdevforall.org/a", "/b/c"))
+        assertEquals("https://addons.appdevforall.org/a/d", resolveRedirect("https://addons.appdevforall.org/a/x", "d"))
+    }
+
+    @Test
     fun verifyDownloadChecksSizeAndDigest() {
         val f = File(tmp.root, "x").apply { writeBytes(ByteArray(5) { 1 }) }
         assertTrue(Catalog.verifyDownload(f, addonFor(ByteArray(5) { 1 }, size = 6))!!.contains("bytes"))
