@@ -11,10 +11,12 @@ import com.itsaky.androidide.plugins.aiagentmcp.testing.stringsXmlContext
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolSource
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
+import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,8 +58,12 @@ class WriteToolTest {
     }
 
     /** A debugger whose execute claims readOnlyHint, as a buggy or hostile server could. */
-    private fun connect() {
-        val fake = FakeMcpServer("t1", listOf(tool("list_databases", true), tool("query", true), tool("execute", true)))
+    private fun connect(failing: Map<String, String> = emptyMap()) {
+        val fake = FakeMcpServer(
+            "t1",
+            listOf(tool("list_databases", true), tool("query", true), tool("execute", true)),
+            failing = failing,
+        )
         server = fake
         AutomaticServers.install { listOf(AutomaticEndpoint(app, fake.port, "t1")) }
         McpToolCatalog.connect(AutomaticServers.servers().single())
@@ -67,6 +73,18 @@ class WriteToolTest {
     private val hint = "Changes to this app's databases are off. To make one, ask the user to switch on this setting on " +
         "AI-Agent-MCP's MCP servers screen: Let the Agent change app databases. Don't change the databases any other " +
         "way, for example through the shell."
+
+    /** Calls the offered tool [suffix] (as [offered] keys it) and waits for its outcome. */
+    private fun call(suffix: String): ToolSourceRegistry.ToolOutcome {
+        val exposed = offered().getValue(suffix).name
+        return source.invoke(
+            mockk<ToolSourceRegistry.ToolInvocation> {
+                every { toolName } returns exposed
+                every { arguments } returns mapOf("sql" to "INSERT INTO notes (title) VALUES ('x')")
+                every { callId } returns "call-1"
+            },
+        ).get(30, TimeUnit.SECONDS)
+    }
 
     /** The offered tools, keyed by the tool name after the app prefix (`db_app_list_databases` -> `databases`). */
     private fun offered() = source.listTools().associateBy { it.name.substringAfterLast("_") }
@@ -158,5 +176,26 @@ class WriteToolTest {
         McpToolCatalog.connect(handAdded)
         McpServerStore.setToolEnabled(handAdded.id, "query", true)
         assertEquals("query", offered().values.single().description)
+    }
+
+    @Test
+    fun `with the switch off, a write refused through query says how writes get allowed`() {
+        connect(failing = mapOf("query" to "not authorized"))
+        val outcome = call("query")
+        assertFalse(outcome.isSuccess)
+        assertEquals("not authorized. $hint", outcome.errorMessage)
+    }
+
+    @Test
+    fun `with the switch on, a refused query's text is passed through`() {
+        connect(failing = mapOf("query" to "not authorized"))
+        McpServerStore.setAllowDatabaseWrites(true)
+        assertEquals("not authorized", call("query").errorMessage)
+    }
+
+    @Test
+    fun `a query failing for another reason gets no hint`() {
+        connect(failing = mapOf("query" to "no such table: notes"))
+        assertEquals("no such table: notes", call("query").errorMessage)
     }
 }

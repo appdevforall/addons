@@ -121,7 +121,12 @@ Servers you add yourself keep the name prefix taken from their label.
   other way (`ReadOnlyTrust.needsWriteSwitchHint`). Told only "use execute", a
   tool it did not have, the model asked to run `sqlite3` in the shell instead
   (a Note 20, 2026-11-25). The shell would not reach another app's private
-  files, but the user was never told about the switch. With the switch on, each app offers five tools, in the order the server lists
+  files, but the user was never told about the switch. When SQLite refuses a
+  write sent through `query` ("not authorized", or a read-only database), the
+  same sentence follows the failure's text (`ReadOnlyTrust.isWriteRefusal`),
+  which AI-Core shows under the chat: after a failed call, AI-Core replaces the
+  Agent's own answer with "I couldn't complete that, the last action failed".
+  With the switch on, each app offers five tools, in the order the server lists
   them (today `list_databases`, `get_schema`, `query`, `execute`, `get_events`),
   so two apps take 10 of AI-Core's 12 slots, and in compact mode (4) AI-Core
   drops the first app's `get_events` and every later tool.

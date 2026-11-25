@@ -228,7 +228,7 @@ class McpToolSource internal constructor(
             // or moved to another URL. Checked with the write, under the lock the removal takes, so
             // it cannot land between.
             McpServerHealth.available(server.id) { McpServers.isConfigured(server) }
-            Outcome(result.success, result.text, result.errorMessage)
+            Outcome(result.success, result.text, errorWithHint(server, tool, result.errorMessage))
         } catch (e: Throwable) {
             // Throwable, unlike the other host-facing catches in this plugin: this runs inside
             // CompletableFuture.supplyAsync, which catches every Throwable itself, so narrowing this
@@ -346,9 +346,26 @@ class McpToolSource internal constructor(
         if (!server.automatic) return tool.description
         val app = "${AutomaticServers.applicationIdOf(server.id)} (SQLite debugger)"
         val text = if (tool.description.isBlank()) app else "$app: ${tool.description}"
-        if (!ReadOnlyTrust.needsWriteSwitchHint(tool.name, server.knownTools, server.enabledTools)) return text
-        return "$text ${string(R.string.mcp_write_switch_hint, string(R.string.mcp_allow_database_writes))}"
+        if (!needsWriteSwitchHint(server, tool)) return text
+        return "$text ${writeSwitchHint()}"
     }
+
+    /**
+     * A failed call's text, with [writeSwitchHint] after it when SQLite refused a write through an
+     * app's `query` while the switch keeps `execute` off. AI-Core shows that text under the chat, so the
+     * user reads how to allow writes even when the Agent's own answer is not shown.
+     */
+    private fun errorWithHint(server: McpServer, tool: McpTool, error: String?): String? {
+        if (error == null || !needsWriteSwitchHint(server, tool) || !ReadOnlyTrust.isWriteRefusal(error)) return error
+        return "${error.trimEnd().trimEnd('.')}. ${writeSwitchHint()}"
+    }
+
+    private fun needsWriteSwitchHint(server: McpServer, tool: McpTool): Boolean =
+        server.automatic && ReadOnlyTrust.needsWriteSwitchHint(tool.name, server.knownTools, server.enabledTools)
+
+    /** How the user allows writes, naming the switch by its own label. */
+    private fun writeSwitchHint(): String =
+        string(R.string.mcp_write_switch_hint, string(R.string.mcp_allow_database_writes))
 
     /**
      * One tool, as the host contract describes it.

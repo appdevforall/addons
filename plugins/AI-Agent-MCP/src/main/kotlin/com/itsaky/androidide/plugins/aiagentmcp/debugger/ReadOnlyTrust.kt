@@ -73,6 +73,16 @@ object ReadOnlyTrust {
         toolName == "query" && WRITE_TOOLS.any { it in knownTools && it !in enabledTools }
 
     /**
+     * Whether [message], a failed `query`'s text, is SQLite refusing a write on the server's read-only
+     * connection: "not authorized" from its authorizer, or "attempt to write a readonly database" from
+     * `query_only`. On a Note 20 the model sent an INSERT through `query`, and that refusal was the last
+     * thing the chat showed (ADFA-7300, 2026-11-25).
+     */
+    fun isWriteRefusal(message: String?): Boolean =
+        message != null && (message.contains("not authorized", ignoreCase = true) ||
+            message.contains("readonly database", ignoreCase = true))
+
+    /**
      * Reads the hint from one `tools/list` entry's `annotations`.
      *
      * Exactly boolean true counts. The string "true", 1, false, null and a missing key do not: an
