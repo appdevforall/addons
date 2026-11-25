@@ -64,11 +64,19 @@
       <b>Add from the website</b> to choose from the add-ons that work with this version of Code on the Go.
       Nothing is downloaded until you confirm; the downloads come from <code>addons.appdevforall.org</code>
       and each one is checked against the size and SHA-256 the website publishes.</li>
+    <li><b>Name and icon (optional).</b> Type a name for the copy and tap <b>Choose icon</b> to pick a
+      picture; leave them empty to keep the ones Code on the Go has. The name replaces <i>Code on the Go</i>
+      on the launcher and wherever the app shows its own name. The picture is cropped to a square and becomes
+      the launcher icon, the splash-screen picture and (as a white outline) the status-bar icon, at every screen
+      density. When you choose either one, tick <b>This name and icon are my own, and not Code on the Go's</b>.
+      The builder refuses a blank name, a name over 50 characters, a name that is close to <i>Code on the Go</i>
+      or to its short form (look-alike letters and spaces do not fool it), and a picture that looks like Code on the
+      Go's own icon.</li>
     <li><b>Signing key.</b> Choose the keystore file, type the store password and tap <b>Read keys</b>,
       then pick the key. Leave the key password blank if it is the same as the store password.</li>
     <li><b>Output folder.</b> Choose it once; it is remembered.</li>
     <li>Tap <b>Build APK</b>. The file is saved as
-      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>.</li>
+      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>, using your name if you gave one.</li>
   </ol>
 
   <h2>Good to know</h2>
@@ -81,6 +89,16 @@
       says which add-ons clash. <code>core.cgt</code> is never bundled, because Code on the Go installs it
       itself.</li>
     <li><b>Nothing chosen</b> makes a copy that carries no add-ons.</li>
+    <li><b>A plugin can need a newer Android</b> than this copy of Code on the Go does. The screen then warns,
+      naming the Android version the plugin needs, and you decide whether to keep it or remove it. If the
+      plugin's requirement cannot be read, it says so with a softer warning.</li>
+    <li><b>Some text keeps the original name on purpose:</b> the credit line added to Git commits, the link to
+      Code on the Go's download page and the invitation to contribute to the project. Text that carries
+      formatting and names Code on the Go on an older version of the app is also left as it is; the screen
+      reports how many.</li>
+    <li><b>Check the result on a device.</b> Install the copy and look at the launcher, the splash screen and a
+      notification. A picture with a clear shape on a plain or transparent background gives the best
+      status-bar icon.</li>
     <li>The copy is built from the APK of this installation. It does not work if Code on the Go was
       installed as split APKs; the screen says so.</li>
     <li>The app is copied without being recompressed, so building takes about as long as copying the file,

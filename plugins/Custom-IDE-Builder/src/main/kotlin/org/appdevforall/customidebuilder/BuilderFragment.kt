@@ -13,8 +13,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -23,7 +27,12 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import org.appdevforall.customidebuilder.core.AddonKind
+import org.appdevforall.customidebuilder.core.AppNameCheck
+import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.Catalog
+import org.appdevforall.customidebuilder.core.IconVerdict
+import org.appdevforall.customidebuilder.core.MinSdkCheck
+import org.appdevforall.customidebuilder.core.NameVerdict
 
 /**
  * The Custom IDE Builder screen. Views are built in code, so there is no layout to inflate against the
@@ -33,6 +42,14 @@ import org.appdevforall.customidebuilder.core.Catalog
 class BuilderFragment : Fragment() {
     private lateinit var prefs: SharedPreferences
     private lateinit var itemsBox: LinearLayout
+    private lateinit var nameField: EditText
+    private lateinit var nameStatus: TextView
+    private lateinit var iconPreview: ImageView
+    private lateinit var iconLabel: TextView
+    private lateinit var iconStatus: TextView
+    private lateinit var clearIconButton: Button
+    private lateinit var confirmBox: CheckBox
+    private var refreshing = false
     private lateinit var keystoreLabel: TextView
     private lateinit var storePassword: EditText
     private lateinit var keyPassword: EditText
@@ -49,6 +66,17 @@ class BuilderFragment : Fragment() {
 
     private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) Session.addFromDevice(requireContext().applicationContext, uris)
+    }
+    private val pickIcon = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val host = hostOrNull()
+            if (host == null) {
+                Session.message = "Could not read the installed app's details."
+                refresh()
+            } else {
+                Session.pickIcon(requireContext().applicationContext, uri, host.packageName)
+            }
+        }
     }
     private val pickKeystore = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -89,7 +117,47 @@ class BuilderFragment : Fragment() {
         })
         column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
 
-        column.addView(heading(ctx, "2. Signing key"))
+        column.addView(heading(ctx, "2. Name and icon (optional)").apply { help(Help.NAME) })
+        column.addView(text(ctx, "Leave both empty to keep the name and icon Code on the Go has. A name or icon you choose replaces them everywhere the app shows them.", 14f))
+        nameField = EditText(ctx).apply {
+            hint = "App name"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+                override fun afterTextChanged(s: Editable?) {
+                    if (!refreshing) Session.setName(s?.toString().orEmpty())
+                }
+            })
+        }
+        column.addView(nameField)
+        nameStatus = text(ctx, "", 14f)
+        column.addView(nameStatus)
+        iconPreview = ImageView(ctx).apply {
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Preview of the chosen icon"
+        }
+        column.addView(iconPreview, LinearLayout.LayoutParams(dp(96), dp(96)).apply { topMargin = dp(8) })
+        iconLabel = text(ctx, "", 14f)
+        column.addView(iconLabel)
+        iconStatus = text(ctx, "", 14f)
+        column.addView(iconStatus)
+        column.addView(action(ctx, "Choose icon", Help.ICON) { pickIcon.launch(arrayOf("image/*")) })
+        clearIconButton = action(ctx, "Remove icon", Help.ICON) { Session.clearIcon() }
+        column.addView(clearIconButton)
+        confirmBox = CheckBox(ctx).apply {
+            text = BrandingGate.CONFIRMATION
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setOnCheckedChangeListener { _, checked -> if (!refreshing) Session.confirmedOwn = checked }
+            help(Help.CONFIRM)
+        }
+        column.addView(confirmBox)
+
+        column.addView(heading(ctx, "3. Signing key"))
         keystoreLabel = text(ctx, "", 14f)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
@@ -115,12 +183,12 @@ class BuilderFragment : Fragment() {
         keyPassword = passwordField(ctx, "Key password (blank: same as store password)")
         column.addView(keyPassword)
 
-        column.addView(heading(ctx, "3. Output folder"))
+        column.addView(heading(ctx, "4. Output folder"))
         folderLabel = text(ctx, "", 14f)
         column.addView(folderLabel)
         column.addView(action(ctx, "Choose folder", Help.FOLDER) { pickFolder.launch(null) })
 
-        column.addView(heading(ctx, "4. Build"))
+        column.addView(heading(ctx, "5. Build"))
         column.addView(action(ctx, "Build APK", Help.BUILD) { startBuild() })
         stageLabel = text(ctx, "", 14f)
         column.addView(stageLabel)
@@ -174,6 +242,7 @@ class BuilderFragment : Fragment() {
     private fun refresh() {
         if (view == null) return
         val busy = Session.busy
+        refreshing = true
         itemsBox.removeAllViews()
         if (Session.items.isEmpty()) {
             itemsBox.addView(text(requireContext(), "Nothing chosen: the copy will carry no add-ons.", 14f))
@@ -187,8 +256,13 @@ class BuilderFragment : Fragment() {
                 isEnabled = !busy
                 setOnClickListener { Session.remove(chosen) }
             })
+            val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk)).firstOrNull()
+            if (warning != null) {
+                row.addView(text(requireContext(), "Warning: ${warning.message} Keep it, or tap Remove.", 14f))
+            }
             itemsBox.addView(row)
         }
+        refreshBranding(busy)
         keystoreLabel.text = Session.keystoreName?.let { "Keystore: $it" } ?: "No keystore chosen."
         val aliases = Session.aliases
         if (aliases != shownAliases) {
@@ -210,11 +284,56 @@ class BuilderFragment : Fragment() {
         stageLabel.text = Session.stage
         messageLabel.text = Session.message
 
+        refreshing = false
+
         // A dialog needs a visible screen: if the list arrives while the screen is away, onResume shows it.
         val offer = Session.offer
         if (offer != null && isResumed) {
             Session.offer = null
             showOffer(offer)
+        }
+    }
+
+    private fun refreshBranding(busy: Boolean) {
+        if (nameField.text.toString() != Session.appName) nameField.setText(Session.appName)
+        nameStatus.text =
+            when (val v = AppNameCheck.check(Session.appName)) {
+                is NameVerdict.Ok -> "This name can be used."
+                is NameVerdict.Rejected -> if (Session.appName.isBlank()) "Blank keeps the name Code on the Go has." else v.reason
+            }
+        val icon = Session.icon
+        iconPreview.visibility = if (icon == null) View.GONE else View.VISIBLE
+        if (icon != null) iconPreview.setImageBitmap(icon.preview)
+        iconLabel.text = Session.iconName?.let { "Icon: $it" } ?: "No icon chosen: the one Code on the Go has is kept."
+        iconStatus.text =
+            when (val v = Session.iconVerdict) {
+                null -> if (icon != null) "Checking the picture." else ""
+                is IconVerdict.TooSimilar -> "Too close to Code on the Go's own icon. Choose a picture of your own."
+                is IconVerdict.Unchecked -> "Not compared with Code on the Go's icon: ${v.reason}"
+                is IconVerdict.Different -> "Different from Code on the Go's icon."
+            }
+        iconStatus.visibility = if (iconStatus.text.isEmpty()) View.GONE else View.VISIBLE
+        clearIconButton.visibility = if (icon == null) View.GONE else View.VISIBLE
+        val custom = BrandingGate.isCustom(Session.appName, icon != null)
+        confirmBox.isChecked = Session.confirmedOwn && custom
+        confirmBox.isEnabled = custom && !busy
+        nameField.isEnabled = !busy
+    }
+
+    private fun hostOrNull(): HostInfo? =
+        try {
+            AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, requireContext())
+        } catch (e: Exception) {
+            null
+        }
+
+    /** The lowest Android this copy installs on; 0 (so nothing is flagged) if the app's details cannot be read. */
+    private fun hostMinSdk(): Int = hostOrNull()?.minSdk ?: 0
+
+    private fun View.help(tooltip: String) {
+        setOnLongClickListener { v ->
+            CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tooltip)
+            true
         }
     }
 

@@ -16,16 +16,22 @@ import org.appdevforall.customidebuilder.core.AddonKind
 import org.appdevforall.customidebuilder.core.AddonSelection
 import org.appdevforall.customidebuilder.core.BuildException
 import org.appdevforall.customidebuilder.core.BuildInput
+import org.appdevforall.customidebuilder.core.Branding
+import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.BuildStage
 import org.appdevforall.customidebuilder.core.Catalog
 import org.appdevforall.customidebuilder.core.CatalogAddon
 import org.appdevforall.customidebuilder.core.CatalogException
 import org.appdevforall.customidebuilder.core.HttpFetcher
+import org.appdevforall.customidebuilder.core.IconCheck
+import org.appdevforall.customidebuilder.core.IconVerdict
 import org.appdevforall.customidebuilder.core.KeyLoad
 import org.appdevforall.customidebuilder.core.KeystoreOpen
 import org.appdevforall.customidebuilder.core.Keystores
+import org.appdevforall.customidebuilder.core.MinSdk
 import org.appdevforall.customidebuilder.core.Naming
 import org.appdevforall.customidebuilder.core.PickedAddon
+import org.appdevforall.customidebuilder.core.PluginMinSdk
 import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.SelectionResult
 import java.io.File
@@ -33,7 +39,7 @@ import java.security.MessageDigest
 import java.security.cert.X509Certificate
 
 /** One add-on on the list. [source] is for the screen: where it came from. */
-class Chosen(val picked: PickedAddon, val source: String)
+class Chosen(val picked: PickedAddon, val source: String, val minSdk: MinSdk? = null)
 
 /**
  * What the screen shows, kept outside the Fragment because a build takes minutes and the Fragment
@@ -49,6 +55,17 @@ object Session {
     var aliases: List<String> = emptyList()
     var fingerprints: Map<String, String> = emptyMap()
     var selectedAlias: String? = null
+
+    /** The name typed for the copy; blank keeps Code on the Go's own. */
+    var appName: String = ""
+
+    /** The picture chosen for the icon, with its PNGs and the outcome of the look-alike check (null until that finishes). */
+    var icon: PreparedIcon? = null
+    var iconName: String? = null
+    var iconVerdict: IconVerdict? = null
+
+    /** The ownership checkbox. It is cleared whenever the name or picture changes, so it always covers what is on screen. */
+    var confirmedOwn: Boolean = false
 
     /** The catalog entries just fetched, for the screen to show once and clear. */
     var offer: Catalog.Offer? = null
@@ -93,6 +110,57 @@ object Session {
 
     fun cancel() {
         job?.cancel()
+    }
+
+    fun setName(text: String) {
+        if (text == appName) return
+        appName = text
+        confirmedOwn = false
+        changed()
+    }
+
+    fun clearIcon() {
+        // The preview is not recycled: the ImageView may still be drawing it.
+        icon = null
+        iconName = null
+        iconVerdict = null
+        confirmedOwn = false
+        changed()
+    }
+
+    /** Decodes the picture, makes the icon files and compares it with Code on the Go's own icon. */
+    fun pickIcon(context: Context, uri: Uri, hostPackage: String) {
+        launch("Reading the picture") {
+            val name = AndroidBits.displayName(context, uri) ?: "picture"
+            try {
+                val prepared = withContext(Dispatchers.IO) { IconImages.prepare(context, uri) }
+                val verdict =
+                    withContext(Dispatchers.IO) {
+                        val reference = IconImages.hostIcon(context, hostPackage)
+                        if (reference == null) IconVerdict.Unchecked("Code on the Go's icon could not be drawn.") else IconCheck.compare(prepared.hashPixels, reference)
+                    }
+                clearIcon()
+                icon = prepared
+                iconName = name
+                iconVerdict = verdict
+                report(
+                    when (verdict) {
+                        is IconVerdict.TooSimilar -> "$name is too close to Code on the Go's own icon. Choose a picture of your own."
+                        is IconVerdict.Unchecked -> "${verdict.reason} The picture was not compared with it."
+                        is IconVerdict.Different ->
+                            if (prepared.silhouetteCoverage < 0.02 || prepared.silhouetteCoverage > 0.9) {
+                                "The status-bar icon made from $name will be nearly empty or a solid block. A picture with a clear shape on a plain or transparent background works best."
+                            } else {
+                                ""
+                            }
+                    },
+                )
+            } catch (e: java.io.IOException) {
+                report("$name: ${e.message}")
+            } catch (e: OutOfMemoryError) {
+                report("$name is too large to read on this device. Choose a smaller picture.")
+            }
+        }
     }
 
     /** Copies the chosen files into the plugin's folder and adds each one that passes [AddonSelection.validate]. */
@@ -172,9 +240,10 @@ object Session {
             return "$label: not a template bundle (it is not a zip file)"
         }
         val picked = PickedAddon(label, fileName, file, id)
+        val minSdk = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginMinSdk.fromArchive(file) } else null
         return when (val r = AddonSelection.validate(items.map { it.picked } + picked)) {
             is SelectionResult.Valid -> {
-                items.add(Chosen(picked, source))
+                items.add(Chosen(picked, source, minSdk))
                 null
             }
             is SelectionResult.Invalid -> {
@@ -245,8 +314,15 @@ object Session {
             storePassword.fill('\u0000'); keyPassword.fill('\u0000')
             return report("Choose a keystore and load its keys first.")
         }
+        val prepared = icon
+        val gate = BrandingGate.problems(appName, prepared != null, iconVerdict, confirmedOwn)
+        if (gate.isNotEmpty()) {
+            storePassword.fill('\u0000'); keyPassword.fill('\u0000')
+            return report(gate.joinToString("\n"))
+        }
+        val branding = if (BrandingGate.isCustom(appName, prepared != null)) Branding(BrandingGate.nameToWrite(appName), prepared?.icons) else null
         launch("Building") {
-            val name = Naming.outputName(host.label, host.versionName)
+            val name = Naming.outputName(branding?.appName ?: host.label, host.versionName)
             val out = File(dir, "out")
             try {
                 val result =
@@ -262,7 +338,7 @@ object Session {
                             }
                         out.deleteRecursively()
                         val built =
-                            Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name), check) { s, f ->
+                            Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding), check) { s, f ->
                                 main.post { setStage(s, f) }
                             }
                         main.post { stage = "Saving to your folder"; progress = 0; changed() }
@@ -270,10 +346,13 @@ object Session {
                         AndroidBits.copyFileTo(context, built.apk, target) { got ->
                             main.post { progress = (got * 1000 / built.apk.length().coerceAtLeast(1)).toInt(); changed() }
                         }
-                        built.verify.signerSha256 to AndroidBits.treeLabel(tree)
+                        Triple(built.verify.signerSha256, AndroidBits.treeLabel(tree), built.rewrite.branding)
                     }
+                val skipped = result.third?.styledSkipped ?: 0
                 report(
-                    "Done. $name is in ${result.second}.\nSigned with certificate ${result.first}.\n\n" +
+                    "Done. $name is in ${result.second}.\nSigned with certificate ${result.first}.\n" +
+                        (if (skipped > 0) "$skipped text${if (skipped == 1) "" else "s"} that name Code on the Go and carry formatting were left as they are.\n" else "") +
+                        "\n" +
                         "It installs only after Code on the Go is uninstalled, because it is signed with a different key. " +
                         "Uninstalling erases the projects stored in the app's data, so copy them out first.",
                 )

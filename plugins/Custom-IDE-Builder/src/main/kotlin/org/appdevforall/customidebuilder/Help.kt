@@ -14,6 +14,9 @@ object Help {
     const val ADDONS = "customidebuilder.addons"
     const val WEBSITE = "customidebuilder.website"
     const val KEYSTORE = "customidebuilder.keystore"
+    const val NAME = "customidebuilder.name"
+    const val ICON = "customidebuilder.icon"
+    const val CONFIRM = "customidebuilder.confirm"
     const val FOLDER = "customidebuilder.folder"
     const val BUILD = "customidebuilder.build"
 
@@ -43,6 +46,32 @@ object Help {
             "<p>This is the only part of the plugin that uses the internet. You are asked first. The list shows " +
                 "the plugins and templates that work with this version of Code on the Go, and every download is " +
                 "checked against the size and SHA-256 the catalog publishes.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            NAME,
+            "Give the copy a name and an icon of your own, or leave both to keep Code on the Go's.",
+            "<p>The name replaces <i>Code on the Go</i> on the launcher, in the app's own screens and in notifications. " +
+                "The icon replaces the launcher icon, the splash screen picture and the status-bar icon; the status-bar " +
+                "icon is a white outline made from your picture, so a clear shape on a plain or transparent background " +
+                "works best. Text that must keep naming Code on the Go, such as the credit line added to Git commits, " +
+                "is left as it is.</p>" +
+                "<p>A name close to <i>Code on the Go</i> or its short form, a blank name, or one over 50 characters is " +
+                "refused, and so is a picture that looks like Code on the Go's own icon.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            ICON,
+            "Choose a picture for the icon. It is cropped to a square.",
+            "<p>Any picture Android can open, up to 25 MB. The builder makes the launcher, splash and status-bar " +
+                "icons from it at every screen density. Nothing is uploaded.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            CONFIRM,
+            "Required when you choose a name or icon.",
+            "<p>Tick it to say the name and picture are yours to use and are not Code on the Go's. The box clears " +
+                "whenever you change the name or the picture.</p>",
             more,
         ),
         PluginTooltipEntry(

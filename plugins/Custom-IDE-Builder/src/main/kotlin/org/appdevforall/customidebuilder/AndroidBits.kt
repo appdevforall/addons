@@ -11,6 +11,7 @@ import java.io.IOException
 
 /** What the screen needs to know about the Code on the Go that is running. */
 class HostInfo(
+    val packageName: String,
     val apk: File,
     val splitDirs: List<String>,
     val label: String,
@@ -35,6 +36,7 @@ object AndroidBits {
         @Suppress("DEPRECATION")
         val versionName = pm.getPackageInfo(app.packageName, 0).versionName
         return HostInfo(
+            packageName = app.packageName,
             apk = File(info.sourceDir),
             splitDirs = info.splitSourceDirs?.toList().orEmpty(),
             label = pm.getApplicationLabel(info).toString(),
