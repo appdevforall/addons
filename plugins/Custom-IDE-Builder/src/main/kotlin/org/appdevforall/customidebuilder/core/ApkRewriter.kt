@@ -21,10 +21,24 @@ class RewriteReport(
 object ApkRewriter {
     /** Entries that belong to the build being replaced: its add-ons, their index and its v1 signature. */
     fun isDropped(name: String): Boolean {
-        if (name.startsWith("$ASSETS/${AddonKind.PLUGIN.dir}/") || name.startsWith("$ASSETS/${AddonKind.TEMPLATE.dir}/")) return true
+        if (isBundledAddon(name)) return true
         if (name == INDEX_APK_ENTRY) return true
         return isV1SignatureFile(name)
     }
+
+    /**
+     * A bundled add-on of the host: a file directly in `assets/plugins/` or `assets/templates/` with its
+     * kind's extension, not hidden and not `core.cgt`, the rule Code on the Go's build stages them by
+     * (`BundledAddonFiles.isAddonName`). Anything else in those folders is the IDE's own: CoGo reads
+     * the XML files in `assets/templates/xml/` when it creates layout, menu and drawable files.
+     */
+    fun isBundledAddon(name: String): Boolean =
+        AddonKind.values().any { kind ->
+            val prefix = "$ASSETS/${kind.dir}/"
+            val file = name.removePrefix(prefix)
+            name.startsWith(prefix) && '/' !in file && !file.startsWith(".") &&
+                file.endsWith(".${kind.extension}", ignoreCase = true) && !file.equals("core.cgt", ignoreCase = true)
+        }
 
     /** `META-INF/MANIFEST.MF`, the `.SF`, `.RSA`, `.DSA` and `.EC` files and the reserved `SIG-*` names, directly in `META-INF/`. */
     fun isV1SignatureFile(name: String): Boolean {
