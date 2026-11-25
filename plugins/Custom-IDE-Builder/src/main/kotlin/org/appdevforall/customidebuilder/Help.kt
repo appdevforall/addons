@@ -62,27 +62,28 @@ object Help {
         ),
         PluginTooltipEntry(
             NAME,
-            "Give the copy a name and an icon of your own, or leave both to keep Code on the Go's.",
+            "Give the copy a name and an icon of your own. Both are required.",
             "<p>The name replaces <i>Code on the Go</i> on the launcher, in the app's own screens and in notifications. " +
                 "The icon replaces the launcher icon, the splash screen picture, the logo on the app's own screens and the " +
                 "status-bar icon; the status-bar " +
                 "icon is a white outline made from your picture, so a clear shape on a plain or transparent background " +
                 "works best. Text that must keep naming Code on the Go, such as the credit line added to Git commits, " +
                 "is left as it is.</p>" +
-                "<p>A name close to <i>Code on the Go</i> or its short form, a blank name, or one over 50 characters is " +
-                "refused, and so is a picture that looks like Code on the Go's own icon.</p>",
+                "<p>A name close to <i>Code on the Go</i> or its short form, an empty name, or one over 50 characters is " +
+                "refused, and so is a picture that looks like Code on the Go's own icon. A build needs a name, an " +
+                "icon and the confirmation box ticked.</p>",
             more,
         ),
         PluginTooltipEntry(
             ICON,
-            "Choose a picture for the icon. It is cropped to a square.",
+            "Choose a picture for the icon (required). It is cropped to a square.",
             "<p>Any picture Android can open, up to 25 MB. The builder makes the launcher, splash and status-bar " +
                 "icons and the in-app logo from it at every screen density. Nothing is uploaded.</p>",
             more,
         ),
         PluginTooltipEntry(
             CONFIRM,
-            "Required when you choose a name or icon.",
+            "Required for every build.",
             "<p>Tick it to say the name and picture are yours to use and are not Code on the Go's. The box clears " +
                 "whenever you change the name or the picture.</p>",
             more,
@@ -151,8 +152,8 @@ object Help {
         ),
         PluginTooltipEntry(
             APP_NAME,
-            "The name the copy shows on the launcher. Leave it empty to keep Code on the Go's.",
-            "<p>At most 50 characters, and not close to <i>Code on the Go</i> or its short form. The line under " +
+            "The name the copy shows on the launcher. Required.",
+            "<p>Needed for every build. At most 50 characters, and not close to <i>Code on the Go</i> or its short form. The line under " +
                 "the field says what is wrong with a name that is refused. Changing the name clears the " +
                 "confirmation box.</p>",
             more,

@@ -1,7 +1,7 @@
 # Custom IDE Builder
 
 Builds a copy of the installed Code on the Go with a chosen set of plugins (`.cgp`) and templates
-(`.cgt`) bundled inside, signed with the user's own key, optionally under a new app name and icon. Release builds only: the host reads the bundle
+(`.cgt`) bundled inside, signed with the user's own key, under the user's own app name and icon. Release builds only: the host reads the bundle
 from `assets/plugins/`, `assets/templates/` and `assets/bundled-addons.tsv` in its APK.
 
 ## Layout
@@ -32,8 +32,8 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `IconRaster.kt` | Densities and icon sizes, nearest-density choice, the white status-bar silhouette |
 | `IconCheck.kt` | Perceptual hash of a picture, trimming to content, and the "is this Code on the Go's own icon" decision |
 | `HostIcons.kt` | The raster files the host's icon resources resolve to, found through its `resources.arsc` |
-| `AppNameCheck.kt` | Name rules: blank, length, look-alike normalising, "cogo" / "codeonthego" |
-| `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked) before a branded build starts |
+| `AppNameCheck.kt` | Name rules: empty, length, look-alike normalising, "cogo" / "codeonthego" |
+| `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked) before a build starts |
 | `MinSdk.kt` | A plugin's `minSdkVersion`, `plugin.id` and `plugin.main_class` from its binary manifest, and the warning when the minimum is above the host's. The platform's `getPackageArchiveInfo` is not used: it refuses a plugin for a newer Android than the device's (F50) |
 
 The Android side (`BuilderFragment`, `Session`, `AndroidBits`, `IconImages`) is the screen, the file
@@ -44,8 +44,10 @@ dialog, so it survives a rotation; it is asked when Build is tapped and again be
 
 ## Name and icon
 
-Both are optional and independent; choosing either requires ticking "This name and icon are my own, and
-not Code on the Go's".
+Every build needs both, and the box "This name and icon are my own, and not Code on the Go's" ticked
+(`BrandingGate`). There is no unbranded build: a name or icon that fails the checks below is refused, not
+replaced by Code on the Go's own. `Branding` therefore holds a name and an icon, never a null part; the
+rewrite and signing code (`Pipeline`, `ApkRewriter`) still accepts no `Branding` at all, which only their tests use.
 
 **Name.** `app_name` is replaced in every config (every locale). After ADFA-7237 every other display string
 takes its name from `app_name`, so that is normally all there is. For older hosts, every other string value
@@ -88,7 +90,7 @@ do not change. New files are `res/custom-ide-builder/<role>-<density>.png`, stor
   `@`, `$`, `!`, Cyrillic and Greek homoglyphs), with everything but letters and digits removed, a name is
   refused if it contains `cogo` or `codeonthego` or has a substring within two edits of `codeonthego`. `cogo`
   is matched exactly only: two edits from four letters reach "logo", "congo" and "cargo". "Taco Go" is refused
-  because spaces are ignored. Blank names, names over 50 characters, control characters and `%` are refused too.
+  because spaces are ignored. Empty names, names over 50 characters, control characters and `%` are refused too.
 
 The edited table is read back and compared with the original before it is used: every entry must still be there
 and every non-string value unchanged.

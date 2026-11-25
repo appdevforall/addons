@@ -56,8 +56,8 @@
       which lists the ones that work with this version of Code on the Go.</li>
     <li><b>Signing.</b> The copy is signed with a key from your own keystore, and the signature is checked
       before the file is saved.</li>
-    <li><b>Your own name and icon (optional).</b> The copy can carry a name and a launcher icon of your
-      choosing instead of Code on the Go's, so it is not mistaken for the original.</li>
+    <li><b>Your own name and icon.</b> Every copy carries a name and a launcher icon of your choosing
+      instead of Code on the Go's, so it is not mistaken for the original. Both are required.</li>
     <li><b>Checks before it is built.</b> The name, the picture and each plugin's requirements are checked,
       and you confirm the name and icon are yours.</li>
     <li><b>Output folder.</b> The finished APK is saved to a folder you choose, as
@@ -81,7 +81,7 @@
       the app carries. The picture is cropped to a square and drawn as the launcher icon, the splash-screen
       picture, the logo on the app's own screens (welcome, main screen, About and the editor sidebar) and a
       white-outline status-bar icon, at every screen density.</li>
-    <li>The name is refused if it is blank, over 50 characters, or close to <i>Code on the Go</i> or its short
+    <li>The name is refused if it is empty, over 50 characters, or close to <i>Code on the Go</i> or its short
       form (look-alike letters and spaces do not fool the comparison). The picture is compared with Code on
       the Go's own icon as the launcher, older launchers and the app's own screens draw it, with and without its
       margins, and refused if it looks like any of them.</li>
@@ -122,12 +122,11 @@
       Nothing is downloaded until you confirm; the downloads come from <code>addons.appdevforall.org</code>
       and each one is checked against the size and SHA-256 the website publishes. Tap <b>Remove</b> beside an
       add-on to take it off the list.</li>
-    <li><b>Name and icon (optional).</b> Type a name for the copy and tap <b>Choose icon</b> to pick a
-      picture; leave them empty to keep the ones Code on the Go has. The name replaces <i>Code on the Go</i>
-      on the launcher and wherever the app shows its own name. When you choose either one, tick <b>This name
-      and icon are my own, and not Code on the Go's</b>; the build will not start until you do. The builder
-      refuses a blank name, a name over 50 characters, a name that is close to <i>Code on the Go</i>, and a
-      picture that looks like Code on the Go's own icon.</li>
+    <li><b>Name and icon.</b> Type a name for the copy and tap <b>Choose icon</b> to pick a picture. Both
+      are required. The name replaces <i>Code on the Go</i> on the launcher and wherever the app shows its
+      own name. Tick <b>This name and icon are my own, and not Code on the Go's</b>; the build will not
+      start until you do. The builder refuses an empty name, a name over 50 characters, a name that is
+      close to <i>Code on the Go</i>, and a picture that looks like Code on the Go's own icon.</li>
     <li><b>Signing key.</b> Choose the keystore file, type the store password and tap <b>Read keys</b>,
       then pick the key. Leave the key password blank if it is the same as the store password.</li>
     <li><b>Output folder.</b> Choose it once; it is remembered.</li>
@@ -137,7 +136,7 @@
       built is deleted. The finished message names the file the folder actually saved.</li>
     <li>Tap <b>Build APK</b>. Tap <b>Cancel</b> to stop it. A cancelled or failed build saves nothing: if it had
       already begun writing the APK to your folder, that unfinished file is deleted. The file is saved as
-      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>, using your name if you gave one.</li>
+      <code>&lt;your app name&gt;-&lt;version&gt;-custom.apk</code>.</li>
   </ol>
   <p>Long-press any button or field on the screen for a short explanation.</p>
 
@@ -145,7 +144,7 @@
   <ul>
     <li>Hand out one APK that arrives with the plugins and templates a group needs, with nothing to install
       afterwards.</li>
-    <li>It is signed with your key, so you decide who the publisher is, and it can carry your own name and
+    <li>It is signed with your key, so you decide who the publisher is, and it carries your own name and
       icon.</li>
     <li>It works offline once you have the files, and does not need a computer.</li>
     <li>Every download and every selection is checked before it goes into the copy.</li>
