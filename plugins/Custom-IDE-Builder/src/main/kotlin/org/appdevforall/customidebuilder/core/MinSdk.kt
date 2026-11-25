@@ -73,7 +73,7 @@ class PluginIdentity(val packageName: String?, val pluginId: String, val mainCla
  * Reads a plugin's identity from its compiled (binary) manifest, the way Code on the Go's PluginLoader.getPluginMetadata
  * does: `plugin.id` from the application's meta-data, else the package name, and `plugin.main_class`, without which the
  * host does not load the plugin. PackageManager.getPackageArchiveInfo is not used: it refuses an APK whose minSdkVersion
- * is above the device's, so a plugin for a newer Android would be reported as unreadable instead of warned about (F50).
+ * is above the device's, so a plugin for a newer Android would be reported as unreadable instead of warned about.
  */
 object PluginManifest {
     private const val MANIFEST = "AndroidManifest.xml"

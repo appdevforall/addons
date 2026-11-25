@@ -270,7 +270,7 @@ object Session {
 
     /** Adds the file if the list stays valid with it; otherwise deletes it and returns why. */
     private suspend fun accept(label: String, fileName: String, file: File, source: String): String? {
-        // Read from the binary manifest, so a plugin for a newer Android than this device's is still identified (F50).
+        // Read from the binary manifest, so a plugin for a newer Android than this device's is still identified.
         val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginManifest.fromArchive(file)?.pluginId } else null
         if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE && !looksLikeZip(file)) {
             discard(file)
