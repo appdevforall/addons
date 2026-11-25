@@ -2,9 +2,9 @@ package org.appdevforall.customidebuilder.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeNoException
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -70,10 +70,16 @@ class StagingTest {
         val link = File(root, "link")
         try {
             java.nio.file.Files.createSymbolicLink(link.toPath(), outside.toPath())
-        } catch (e: Exception) {
-            return
+        } catch (e: UnsupportedOperationException) {
+            assumeNoException("this file system has no symbolic links", e)
+        } catch (e: java.nio.file.AccessDeniedException) {
+            assumeNoException("symbolic links are not permitted here", e)
+        } catch (e: java.nio.file.FileSystemException) {
+            // Windows without the privilege reports "not held"; anything else is a real setup error and fails the test.
+            val reason = e.reason.orEmpty().lowercase()
+            if ("not permitted" in reason || "privilege" in reason) assumeNoException("symbolic links are not permitted here", e)
+            throw e
         }
-        assertNotNull(link)
         assertFalse(Staging.isInside(root, File(link, "addon.cgp")))
     }
 }
