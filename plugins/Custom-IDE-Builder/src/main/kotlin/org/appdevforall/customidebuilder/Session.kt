@@ -31,6 +31,7 @@ import org.appdevforall.customidebuilder.core.KeyLoad
 import org.appdevforall.customidebuilder.core.KeystoreOpen
 import org.appdevforall.customidebuilder.core.Keystores
 import org.appdevforall.customidebuilder.core.MinSdk
+import org.appdevforall.customidebuilder.core.MinSdkWarning
 import org.appdevforall.customidebuilder.core.Naming
 import org.appdevforall.customidebuilder.core.PickedAddon
 import org.appdevforall.customidebuilder.core.PluginManifest
@@ -44,7 +45,11 @@ import java.io.File
 import java.security.cert.X509Certificate
 
 /** One add-on on the list. [source] is for the screen: where it came from. */
-class Chosen(val picked: PickedAddon, val source: String, val minSdk: MinSdk? = null)
+class Chosen(val picked: PickedAddon, val source: String, val minSdk: MinSdk? = null) {
+    /** The screen's min-SDK warning for this add-on, kept once [minSdkChecked] so a refresh does not work it out again. */
+    internal var minSdkWarning: MinSdkWarning? = null
+    internal var minSdkChecked = false
+}
 
 /** What a finished save reports: [actual] is the name the folder gave the file, null if it would not say. */
 private class Saved(val signer: String, val folder: String, val actual: String?, val styledSkipped: Int)

@@ -33,6 +33,7 @@ import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.Catalog
 import org.appdevforall.customidebuilder.core.IconVerdict
 import org.appdevforall.customidebuilder.core.MinSdkCheck
+import org.appdevforall.customidebuilder.core.MinSdkWarning
 import org.appdevforall.customidebuilder.core.NameVerdict
 
 /**
@@ -65,6 +66,7 @@ class BuilderFragment : Fragment() {
     private val removeButtons = ArrayList<Button>()
     private var shownAliases: List<String>? = null
     private var shownItemsVersion = -1
+    private var shownPreview: android.graphics.Bitmap? = null
     private var shownQuestion: NameQuestion? = null
     private var nameDialog: AlertDialog? = null
     private val listener: () -> Unit = { refresh() }
@@ -110,6 +112,7 @@ class BuilderFragment : Fragment() {
         removeButtons.clear()
         shownAliases = null
         shownItemsVersion = -1
+        shownPreview = null
         val column = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(24))
@@ -335,6 +338,8 @@ class BuilderFragment : Fragment() {
     /** Builds the add-on rows. Only when the list changed: it makes new views for every row. */
     private fun rebuildItems() {
         val ctx = requireContext()
+        // Read at most once per rebuild, and only if a row still needs its min-SDK check.
+        val host by lazy { hostOrNull() }
         itemsBox.removeAllViews()
         removeButtons.clear()
         if (Session.items.isEmpty()) {
@@ -351,12 +356,26 @@ class BuilderFragment : Fragment() {
             }
             removeButtons.add(remove)
             row.addView(remove)
-            val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk), Build.VERSION.SDK_INT).firstOrNull()
+            val warning = minSdkWarningOf(chosen) { host }
             if (warning != null) {
                 row.addView(text(ctx, "Warning: ${warning.message} Keep it, or tap Remove.", 14f).apply { withTooltip(this, Help.MINSDK) })
             }
             itemsBox.addView(row)
         }
+    }
+
+    /**
+     * The add-on's min-SDK warning, worked out the first time the row is built and kept on [chosen],
+     * since nothing it depends on changes. [host] is read only then; while the app's details cannot
+     * be read, nothing is flagged and nothing is kept, so a later rebuild tries again.
+     */
+    private fun minSdkWarningOf(chosen: Chosen, host: () -> HostInfo?): MinSdkWarning? {
+        if (chosen.minSdkChecked) return chosen.minSdkWarning
+        val hostMinSdk = host()?.minSdk ?: return null
+        val warning = MinSdkCheck.warnings(hostMinSdk, listOf(chosen.picked.label to chosen.minSdk), Build.VERSION.SDK_INT).firstOrNull()
+        chosen.minSdkWarning = warning
+        chosen.minSdkChecked = true
+        return warning
     }
 
     /**
@@ -403,7 +422,11 @@ class BuilderFragment : Fragment() {
             }
         val icon = Session.icon
         iconPreview.visibility = if (icon == null) View.GONE else View.VISIBLE
-        if (icon != null) iconPreview.setImageBitmap(icon.preview)
+        // Only when the picture changed: the full refresh runs on every state change.
+        if (icon?.preview !== shownPreview) {
+            shownPreview = icon?.preview
+            iconPreview.setImageBitmap(shownPreview)
+        }
         iconLabel.text = Session.iconName?.let { "Icon: $it" } ?: "No icon chosen yet."
         iconStatus.text =
             when (val v = Session.iconVerdict) {
@@ -425,9 +448,6 @@ class BuilderFragment : Fragment() {
         } catch (e: Exception) {
             null
         }
-
-    /** The lowest Android this copy installs on; 0 (so nothing is flagged) if the app's details cannot be read. */
-    private fun hostMinSdk(): Int = hostOrNull()?.minSdk ?: 0
 
     private fun confirmWebsite() {
         val dialog = AlertDialog.Builder(requireContext())
