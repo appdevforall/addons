@@ -169,6 +169,7 @@ object Session {
                         val references = IconImages.hostIcons(context, hostPackage, hostApk)
                         if (references.isEmpty()) IconVerdict.Unchecked("Code on the Go's icon could not be drawn.") else IconCheck.compare(prepared.hashPixels, references)
                     }
+                if (gen != generation) return@launch
                 clearIcon()
                 icon = prepared
                 iconName = name
@@ -201,6 +202,10 @@ object Session {
      * A stage that cannot be interrupted (signing, the copy loops between checks) may still finish
      * on the IO pool after this returns. It holds no Session state, and whatever it reports or
      * posts is dropped by the [generation] check.
+     *
+     * The icon preview is dropped, not recycled: the screen's ImageView may still hold it, and a
+     * frame already handed to the render thread may still draw it. Nothing refers to it afterwards,
+     * so it is freed with the screen.
      */
     fun end() {
         generation++
@@ -216,6 +221,12 @@ object Session {
         aliases = emptyList()
         fingerprints = emptyMap()
         selectedAlias = null
+        appName = ""
+        icon = null
+        iconName = null
+        iconVerdict = null
+        confirmedOwn = false
+        IconImages.release()
         offer = null
         message = ""
         stage = ""

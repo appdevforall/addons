@@ -78,6 +78,7 @@ object IconImages {
         // Reading the table takes a moment on an old phone, and the host does not change while the plugin runs.
         val key = "$hostPackage|${hostApk.path}|${hostApk.lastModified()}"
         cachedHostIcons?.let { if (it.first == key) return it.second }
+        val started = generation
         val out = ArrayList<PixelImage>()
         val resources =
             try {
@@ -104,12 +105,23 @@ object IconImages {
             }
         }
         for (bytes in HostIcons.rasterFiles(hostApk)) decodedForHash(bytes)?.let { out.add(it) }
-        if (out.isNotEmpty()) cachedHostIcons = key to out
+        // A draw that was still running when the plugin was disposed must not fill the cache again.
+        if (out.isNotEmpty() && started == generation) cachedHostIcons = key to out
         return out
     }
 
     @Volatile
     private var cachedHostIcons: Pair<String, List<PixelImage>>? = null
+
+    /** Bumped by [release], so a [hostIcons] call that began before it does not store its result. */
+    @Volatile
+    private var generation = 0
+
+    /** Drops the cached drawings of Code on the Go's own icon; called when the plugin is disposed. */
+    fun release() {
+        generation++
+        cachedHostIcons = null
+    }
 
     /** Resources drawn through the host's Resources, as type to name. */
     private val DRAWN = listOf("drawable" to "ic_launcher", "mipmap" to "ic_launcher", "mipmap" to "ic_launcher_round", "drawable" to "cogo_brand_mark")
