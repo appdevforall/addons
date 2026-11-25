@@ -86,6 +86,50 @@ class CatalogTest {
     }
 
     @Test
+    fun anEntryOverTheSizeCeilingIsSkipped() {
+        val parsed = Catalog.parse(
+            catalog(
+                entry("plugin", "atmax", "", size = AddonLimits.MAX_BYTES),
+                entry("plugin", "toobig", "", size = AddonLimits.MAX_BYTES + 1),
+                entry("template", "huge", "", size = Long.MAX_VALUE),
+            ),
+        )
+        assertEquals(listOf("atmax"), parsed.addons.map { it.slug })
+        assertEquals(2, parsed.skipped)
+    }
+
+    @Test
+    fun aDownloadIsRefusedBeforeAnyByteWhenTheDiskLacksRoom() {
+        val bytes = TestSupport.noise(1000)
+        val dir = File(tmp.newFolder(), "n")
+        var opened = false
+        val full = AddonDownloader({ opened = true; ByteArrayInputStream(bytes) }, usableSpace = { AddonLimits.SPACE_MARGIN + 999 })
+        try {
+            full.download(addonFor(bytes), dir)
+            org.junit.Assert.fail("expected the download to be refused")
+        } catch (e: DownloadException) {
+            assertTrue(e.message, e.message!!.contains("not enough free space"))
+        }
+        assertFalse("nothing was fetched", opened)
+        assertFalse("the folder it made is gone", dir.exists())
+        val enough = AddonDownloader({ ByteArrayInputStream(bytes) }, usableSpace = { AddonLimits.SPACE_MARGIN + 1000 })
+        assertEquals("dl.cgp", enough.download(addonFor(bytes), dir).name)
+    }
+
+    @Test
+    fun aDownloadOverTheCeilingIsRefusedEvenIfTheCatalogEntryGotThrough() {
+        val addon = CatalogAddon(AddonKind.PLUGIN, "big", "id.big", "Big", "1", "", "", "https://addons.appdevforall.org/dl/big.cgp", "a".repeat(64), AddonLimits.MAX_BYTES + 1)
+        var opened = false
+        try {
+            AddonDownloader({ opened = true; ByteArrayInputStream(ByteArray(0)) }, usableSpace = { Long.MAX_VALUE }).download(addon, tmp.newFolder())
+            org.junit.Assert.fail("expected the download to be refused")
+        } catch (e: DownloadException) {
+            assertTrue(e.message, e.message!!.contains("at most 512 MB"))
+        }
+        assertFalse(opened)
+    }
+
+    @Test
     fun aCatalogOfTheWrongShapeIsAnError() {
         for (bad in listOf("nope", """{"schemaVersion":1,"addons":[]}""", """{"schemaVersion":2}""")) {
             try {

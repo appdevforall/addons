@@ -68,7 +68,14 @@ internal fun resolveRedirect(current: String, location: String): String =
     }
 
 /** Downloads and verifies catalog add-ons. */
-class AddonDownloader(private val fetcher: Fetcher) {
+class AddonDownloader(
+    private val fetcher: Fetcher,
+    /** Free bytes where a file in the given folder would go; a parameter so a test can say a disk is full. */
+    private val usableSpace: (File) -> Long,
+) {
+    /** A separate constructor, not a default, so `AddonDownloader { ... }` still reads as the [Fetcher]. */
+    constructor(fetcher: Fetcher) : this(fetcher, { it.usableSpace })
+
     /** The catalog text, at most [MAX_CATALOG_BYTES]. [checkCancelled] is called between reads and may throw to stop. */
     fun fetchCatalog(url: String = Catalog.URL, checkCancelled: () -> Unit = {}): String =
         fetcher.open(url).use { input ->
@@ -84,12 +91,18 @@ class AddonDownloader(private val fetcher: Fetcher) {
     /**
      * Downloads [addon] into [dir] as `<slug>.cgp|cgt` and checks its size and SHA-256 against the
      * catalog; on any mismatch the file is deleted and the call throws. It reads no more than
-     * the promised size plus one byte, so a server cannot make it fill the disk.
+     * the promised size plus one byte, so a server cannot make it fill the disk, and it refuses
+     * before the first byte when the promised size is over [AddonLimits.MAX_BYTES] or [dir] lacks room for it.
      * [checkCancelled] is called between reads and before the check and the rename, and may throw to
      * stop; the partial file is deleted then too.
      */
     fun download(addon: CatalogAddon, dir: File, checkCancelled: () -> Unit = {}, onBytes: (Long) -> Unit = {}): File {
+        AddonLimits.sizeProblem(addon.name, addon.size)?.let { throw DownloadException(it) }
         dir.mkdirs()
+        AddonLimits.spaceProblem(addon.name, addon.size, usableSpace(dir))?.let {
+            dir.delete() // only if empty: the folder this call just made
+            throw DownloadException(it)
+        }
         val target = File(dir, addon.fileName)
         val partial = File(dir, addon.fileName + ".part")
         try {

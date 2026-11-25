@@ -26,6 +26,9 @@ object Help {
     const val STORE_PASSWORD = "customidebuilder.storepassword"
     const val KEY_PASSWORD = "customidebuilder.keypassword"
     const val KEY_ALIAS = "customidebuilder.keyalias"
+    const val STATUS = "customidebuilder.status"
+    const val RESULT = "customidebuilder.result"
+    const val SAME_KEY = "customidebuilder.samekey"
 
     private val more = listOf(PluginTooltipButton(description = "About Custom IDE Builder", uri = "index.html", order = 0))
 
@@ -101,7 +104,8 @@ object Help {
             BUILD,
             "Copy the app, add the add-ons, sign it and save it.",
             "<p>Runs in the background. The app is copied without recompressing, so it takes about as long as " +
-                "copying the file, plus the time to sign it.</p>",
+                "copying the file, plus the time to sign it. The keystore is read again for the build, and the " +
+                "build stops if the key in it is no longer the one whose fingerprint was shown.</p>",
             more,
         ),
         PluginTooltipEntry(
@@ -121,15 +125,17 @@ object Help {
         PluginTooltipEntry(
             STORE_PASSWORD,
             "The password that opens the keystore file.",
-            "<p>Used to read the keys and again for the build. It is never saved, and it is cleared when a build " +
-                "ends and when you leave this screen.</p>",
+            "<p>Used to read the keys and again for the build. It is never saved: the copy used for a task is " +
+                "erased when the task ends, however it ends, and the field is cleared when a build ends and " +
+                "when you leave this screen.</p>",
             more,
         ),
         PluginTooltipEntry(
             KEY_PASSWORD,
             "The password of the chosen key. Leave it blank if it is the store password.",
-            "<p>PKCS12 keystores usually use one password for both. It is never saved, and it is cleared when a " +
-                "build ends and when you leave this screen.</p>",
+            "<p>PKCS12 keystores usually use one password for both. It is never saved: the copy used for a task " +
+                "is erased when the task ends, however it ends, and the field is cleared when a build ends and " +
+                "when you leave this screen.</p>",
             more,
         ),
         PluginTooltipEntry(
@@ -154,6 +160,28 @@ object Help {
             "<p>The plugin asks for a newer Android than this copy of Code on the Go needs, or asks in a way this " +
                 "builder could not read. Keep it if everyone who will install the copy has a new enough device, " +
                 "or tap Remove. The warning names this device's Android when it is older too.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            STATUS,
+            "What the plugin is doing now, and how far along it is.",
+            "<p>Shows the current step of a download or a build, with a progress bar. Tap Cancel to stop it. " +
+                "Nothing is shown here when nothing is running.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            RESULT,
+            "The latest result or problem. Press and hold the text to copy it.",
+            "<p>Shows how the last task ended: where the finished APK was saved and the certificate it was " +
+                "signed with, or what went wrong and what to try. It is cleared when the next task starts.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            SAME_KEY,
+            "Why every build should be signed with the same key.",
+            "<p>Android installs an update only if it is signed with the same key as the version already " +
+                "installed. A device that has a build signed with another key must uninstall it first, and " +
+                "uninstalling Code on the Go erases the projects stored in its data.</p>",
             more,
         ),
     )
