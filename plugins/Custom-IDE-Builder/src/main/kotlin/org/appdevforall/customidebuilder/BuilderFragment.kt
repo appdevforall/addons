@@ -64,6 +64,8 @@ class BuilderFragment : Fragment() {
     private val actionButtons = ArrayList<Button>()
     private var shownAliases: List<String>? = null
     private var seenBuildsEnded = Session.buildsEnded
+    private var shownQuestion: NameQuestion? = null
+    private var nameDialog: AlertDialog? = null
     private val listener: () -> Unit = { refresh() }
 
     private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -244,6 +246,10 @@ class BuilderFragment : Fragment() {
 
     override fun onDestroyView() {
         Session.unlisten(listener)
+        // The question stays in Session; the next Fragment shows it again. Dismissing answers nothing.
+        nameDialog?.dismiss()
+        nameDialog = null
+        shownQuestion = null
         // Passwords live only in these fields. Clearing the text drops the plaintext with the screen.
         storePassword.text.clear()
         keyPassword.text.clear()
@@ -312,6 +318,53 @@ class BuilderFragment : Fragment() {
             Session.offer = null
             showOffer(offer)
         }
+
+        val question = Session.nameQuestion
+        if (question !== shownQuestion) {
+            // Answered, or the build ended: take the dialog down without answering again.
+            nameDialog?.dismiss()
+            nameDialog = null
+            shownQuestion = null
+        }
+        if (question != null && shownQuestion == null && isResumed) {
+            shownQuestion = question
+            showNameQuestion(question)
+        }
+    }
+
+    /**
+     * The output name is taken. The dialog cannot be dismissed any other way than its two buttons,
+     * so the build never waits on a question nobody can answer; Save stays open on a name with
+     * nothing usable in it.
+     */
+    private fun showNameQuestion(question: NameQuestion) {
+        val ctx = requireContext()
+        val field = EditText(ctx).apply {
+            setText(question.suggestion)
+            setSelection(text.length)
+            inputType = InputType.TYPE_CLASS_TEXT
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            // A text field keeps its own long-press (paste), so the tooltip does not consume it.
+            withTooltip(this, Help.NAME_FIELD, consume = false)
+        }
+        val box = LinearLayout(ctx).apply {
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(field, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(ctx)
+            .setTitle("Choose another name")
+            .setMessage(question.message)
+            .setView(box)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel the save") { _, _ -> Session.declineName(question) }
+            .setCancelable(false)
+            .show()
+        // Set after show(), so a refused name does not close the dialog.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (!Session.answerName(question, field.text.toString())) field.error = "Enter a file name."
+        }
+        tooltipOnDialog(dialog, Help.NAME_TAKEN)
+        nameDialog = dialog
     }
 
     private fun refreshBranding(busy: Boolean) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,6 +46,18 @@ import java.security.cert.X509Certificate
 /** One add-on on the list. [source] is for the screen: where it came from. */
 class Chosen(val picked: PickedAddon, val source: String, val minSdk: MinSdk? = null)
 
+/** What a finished save reports: [actual] is the name the folder gave the file, null if it would not say. */
+private class Saved(val signer: String, val folder: String, val actual: String?, val styledSkipped: Int)
+
+/**
+ * A question the running build is waiting on: the output name is taken in the folder. [message] says
+ * why, [suggestion] is a free name to prefill. The build resumes when [Session.answerName] gives a
+ * name or [Session.declineName] cancels the save.
+ */
+class NameQuestion internal constructor(val message: String, val suggestion: String) {
+    internal val answer = CompletableDeferred<String?>()
+}
+
 /**
  * What the screen shows, kept outside the Fragment because a build takes minutes and the Fragment
  * is rebuilt on rotation. Nothing secret is held here: passwords stay in the screen's text fields
@@ -80,6 +93,13 @@ object Session {
     var busy: Boolean = false
     var stage: String = ""
     var progress: Int = 0
+
+    /**
+     * Set while a build waits for the user to pick another output name. It lives here, not in the
+     * Fragment, so a rotation or leaving the screen does not lose it: the Fragment shows the dialog
+     * again from [changed]. [end] and a cancelled build clear it.
+     */
+    var nameQuestion: NameQuestion? = null
 
     /** How many builds have run to an end (done, failed or cancelled); the screen clears its password fields when it changes. */
     var buildsEnded: Int = 0
@@ -228,6 +248,8 @@ object Session {
         confirmedOwn = false
         IconImages.release()
         offer = null
+        nameQuestion?.answer?.cancel()
+        nameQuestion = null
         message = ""
         stage = ""
         progress = 0
@@ -423,11 +445,15 @@ object Session {
         }
         val branding = if (BrandingGate.isCustom(appName, prepared != null)) Branding(BrandingGate.nameToWrite(appName), prepared?.icons) else null
         launch("Building", listOf(storePassword, keyPassword)) { gen ->
-            val name = Naming.outputName(branding?.appName ?: host.label, host.versionName)
+            var name = Naming.outputName(branding?.appName ?: host.label, host.versionName)
             val out = File(dir, "out")
             var saved: Uri? = null
             var finished = false
             try {
+                // Before the minutes of work, so a taken name costs the user nothing.
+                val free = freeNameIn(context, tree, name, gen, "The folder already has a file named %s. Choose another name.")
+                    ?: return@launch report("Cancelled: nothing was built, because $name is already in the folder and no other name was chosen.", gen)
+                name = free
                 val result =
                     withContext(Dispatchers.IO) {
                         val job = kotlin.coroutines.coroutineContext[Job]
@@ -446,18 +472,29 @@ object Session {
                             Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding), check) { s, f ->
                                 post(gen) { setStage(s, f) }
                             }
+                        // A file can appear during the build, and the provider would rename ours without saying so.
+                        val chosen = freeNameIn(context, tree, name, gen, "While the app was being built, a file named %s appeared in the folder. Choose another name.")
+                            ?: return@withContext null
+                        name = chosen
                         post(gen) { stage = "Saving to your folder"; progress = 0; changed() }
                         val target = AndroidBits.createInTree(context, tree, name)
                         saved = target
                         AndroidBits.copyFileTo(context, built.apk, target, check) { got ->
                             post(gen) { progress = (got * 1000 / built.apk.length().coerceAtLeast(1)).toInt(); changed() }
                         }
-                        Triple(built.verify.signerSha256, AndroidBits.treeLabel(tree), built.rewrite.branding)
+                        // What the folder really called it: the provider renames a file whose name is taken.
+                        val actual = AndroidBits.displayName(context, target)
+                        Saved(built.verify.signerSha256, AndroidBits.treeLabel(tree), actual, built.rewrite.branding?.styledSkipped ?: 0)
                     }
+                if (result == null) {
+                    return@launch report("Cancelled: the APK was built but not saved, because a file named $name appeared in the folder and no other name was chosen. The built file was deleted.", gen)
+                }
                 finished = true
-                val skipped = result.third?.styledSkipped ?: 0
+                val skipped = result.styledSkipped
+                val note = Naming.savedNote(name, result.actual)
                 report(
-                    "Done. $name is in ${result.second}.\nSigned with certificate ${result.first}.\n" +
+                    "Done. ${result.actual ?: name} is in ${result.folder}.\n" + (if (note.isEmpty()) "" else "$note\n") +
+                        "Signed with certificate ${result.signer}.\n" +
                         (if (skipped > 0) "$skipped text${if (skipped == 1) "" else "s"} that name Code on the Go and carry formatting were left as they are.\n" else "") +
                         "\n" +
                         "It installs only after Code on the Go is uninstalled, because it is signed with a different key. " +
@@ -486,6 +523,69 @@ object Session {
         stage = s.label
         progress = (fraction * 1000).toInt()
         changed()
+    }
+
+    /**
+     * The answer to [nameQuestion]: [text] is cleaned like every output name and must end up
+     * non-empty. Returns false (the question stays) when nothing usable is left, so the dialog can
+     * stay open and say so.
+     */
+    fun answerName(question: NameQuestion, text: String): Boolean {
+        val name = Naming.fromEntry(text) ?: return false
+        if (nameQuestion === question) {
+            nameQuestion = null
+            question.answer.complete(name)
+            changed()
+        }
+        return true
+    }
+
+    /** Cancels the save: the question ends with no name, and the build deletes what it built. */
+    fun declineName(question: NameQuestion) {
+        if (nameQuestion === question) {
+            nameQuestion = null
+            question.answer.complete(null)
+            changed()
+        }
+    }
+
+    /**
+     * Asks the user for another name and waits. Returns null if they cancel the save. A cancelled
+     * build or [end] ends the wait with a cancellation, and the question is cleared either way.
+     */
+    private suspend fun askName(gen: Int, message: String, suggestion: String): String? {
+        val question = NameQuestion(message, suggestion)
+        withContext(Dispatchers.Main) {
+            if (gen != generation) throw kotlinx.coroutines.CancellationException("The plugin was disposed.")
+            nameQuestion = question
+            changed()
+        }
+        try {
+            return question.answer.await()
+        } finally {
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
+                if (nameQuestion === question) {
+                    nameQuestion = null
+                    changed()
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns [wanted] once the folder does not hold it, asking the user for another name each time
+     * it does ([firstReason] explains the first question). Returns null if they cancel. The folder
+     * is listed afresh on every round, since a file can appear while the dialog is open.
+     */
+    private suspend fun freeNameIn(context: Context, tree: Uri, wanted: String, gen: Int, firstReason: String): String? {
+        var name = wanted
+        var reason = firstReason
+        while (true) {
+            val taken = withContext(Dispatchers.IO) { AndroidBits.childNames(context, tree) }
+            if (!Naming.isTaken(name, taken)) return name
+            name = askName(gen, reason.replace("%s", name), Naming.freeName(name, taken)) ?: return null
+            reason = "The folder already has a file named %s. Choose another name."
+        }
     }
 
     /** A check for the running coroutine's Job, for the blocking copy loops, which `withContext` does not interrupt. */
