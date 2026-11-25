@@ -38,6 +38,7 @@ import org.appdevforall.customidebuilder.core.PluginMinSdk
 import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.SelectionResult
 import org.appdevforall.customidebuilder.core.Staging
+import org.appdevforall.customidebuilder.core.TemplateCheck
 import java.io.File
 import java.security.cert.X509Certificate
 
@@ -318,9 +319,12 @@ object Session {
     private suspend fun accept(label: String, fileName: String, file: File, source: String): String? {
         // Read from the binary manifest, so a plugin for a newer Android than this device's is still identified.
         val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginManifest.fromArchive(file)?.pluginId } else null
-        if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE && !looksLikeZip(file)) {
-            discard(file)
-            return "$label: not a template bundle (it is not a zip file)"
+        if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE) {
+            val problem = withContext(Dispatchers.IO) { TemplateCheck.problem(file) }
+            if (problem != null) {
+                discard(file)
+                return "$label: $problem"
+            }
         }
         val picked = PickedAddon(label, fileName, file, id)
         val minSdk = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginMinSdk.fromArchive(file) } else null
@@ -335,9 +339,6 @@ object Session {
             }
         }
     }
-
-    private fun looksLikeZip(file: File): Boolean =
-        file.inputStream().use { s -> ByteArray(4).also { s.read(it) }.contentEquals(byteArrayOf(0x50, 0x4B, 3, 4)) }
 
     /** Reads the keystore and lists the keys in it; the password is used here and not kept, and is zeroed on every path. */
     fun loadKeystore(context: Context, storePassword: CharArray) {
