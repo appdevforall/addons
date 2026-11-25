@@ -62,11 +62,13 @@ class BuilderFragment : Fragment() {
     private lateinit var messageLabel: TextView
     private lateinit var cancelButton: Button
     private val actionButtons = ArrayList<Button>()
+    private val removeButtons = ArrayList<Button>()
     private var shownAliases: List<String>? = null
-    private var seenBuildsEnded = Session.buildsEnded
+    private var shownItemsVersion = -1
     private var shownQuestion: NameQuestion? = null
     private var nameDialog: AlertDialog? = null
     private val listener: () -> Unit = { refresh() }
+    private val progressListener: () -> Unit = { showProgress() }
 
     private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) Session.addFromDevice(requireContext().applicationContext, uris)
@@ -105,7 +107,9 @@ class BuilderFragment : Fragment() {
         val ctx = requireContext()
         prefs = prefsOf()
         actionButtons.clear()
+        removeButtons.clear()
         shownAliases = null
+        shownItemsVersion = -1
         val column = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(24))
@@ -167,7 +171,8 @@ class BuilderFragment : Fragment() {
         keystoreLabel = text(ctx, "", 14f, tooltip = Help.KEYSTORE)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
-        storePassword = passwordField(ctx, "Store password", Help.STORE_PASSWORD)
+        storePassword = passwordField(ctx, Help.STORE_PASSWORD)
+        column.addView(fieldLabel(ctx, "Store password", Help.STORE_PASSWORD, storePassword))
         column.addView(storePassword)
         column.addView(action(ctx, "Read keys", Help.KEYSTORE) {
             val chars = charsOf(storePassword)
@@ -187,7 +192,8 @@ class BuilderFragment : Fragment() {
         column.addView(aliasSpinner)
         fingerprint = text(ctx, "", 12f, tooltip = Help.KEY_ALIAS)
         column.addView(fingerprint)
-        keyPassword = passwordField(ctx, "Key password (blank: same as store password)", Help.KEY_PASSWORD)
+        keyPassword = passwordField(ctx, Help.KEY_PASSWORD)
+        column.addView(fieldLabel(ctx, "Key password (leave blank if it is the same as the store password)", Help.KEY_PASSWORD, keyPassword))
         column.addView(keyPassword)
 
         column.addView(heading(ctx, "4. Output folder", Help.FOLDER))
@@ -223,6 +229,7 @@ class BuilderFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         Session.listen(listener)
+        Session.listenProgress(progressListener)
         refresh()
         if (!prefs.getBoolean(PREF_WARNED, false)) {
             val dialog = AlertDialog.Builder(requireContext())
@@ -246,6 +253,7 @@ class BuilderFragment : Fragment() {
 
     override fun onDestroyView() {
         Session.unlisten(listener)
+        Session.unlistenProgress(progressListener)
         // The question stays in Session; the next Fragment shows it again. Dismissing answers nothing.
         nameDialog?.dismiss()
         nameDialog = null
@@ -256,30 +264,22 @@ class BuilderFragment : Fragment() {
         super.onDestroyView()
     }
 
+    /** The full update, for a state change. Progress alone goes to [showProgress]. */
     private fun refresh() {
         if (view == null) return
         val busy = Session.busy
         refreshing = true
-        itemsBox.removeAllViews()
-        if (Session.items.isEmpty()) {
-            itemsBox.addView(text(requireContext(), "Nothing chosen: the copy will carry no add-ons.", 14f, tooltip = Help.ADDONS))
+        if (Session.passwordsToClear) {
+            // A build has ended, however it ended, maybe while this screen had no view: the passwords are not needed on screen any more.
+            storePassword.text.clear()
+            keyPassword.text.clear()
+            Session.passwordsCleared()
         }
-        for (chosen in Session.items) {
-            val kind = if (AddonKind.PLUGIN.extension == chosen.picked.fileName.substringAfterLast('.').lowercase()) "plugin" else "template"
-            val row = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4)) }
-            row.addView(text(requireContext(), "${chosen.picked.label} ($kind, from ${chosen.source})", 14f, tooltip = Help.ADDONS))
-            row.addView(Button(requireContext()).apply {
-                this.text = "Remove"
-                isEnabled = !busy
-                setOnClickListener { Session.remove(chosen) }
-                withTooltip(this, Help.REMOVE)
-            })
-            val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk), Build.VERSION.SDK_INT).firstOrNull()
-            if (warning != null) {
-                row.addView(text(requireContext(), "Warning: ${warning.message} Keep it, or tap Remove.", 14f).apply { withTooltip(this, Help.MINSDK) })
-            }
-            itemsBox.addView(row)
+        if (shownItemsVersion != Session.itemsVersion) {
+            shownItemsVersion = Session.itemsVersion
+            rebuildItems()
         }
+        removeButtons.forEach { it.isEnabled = !busy }
         refreshBranding(busy)
         keystoreLabel.text = Session.keystoreName?.let { "Keystore: $it" } ?: "No keystore chosen."
         val aliases = Session.aliases
@@ -293,12 +293,6 @@ class BuilderFragment : Fragment() {
         val index = aliases.indexOf(Session.selectedAlias)
         if (index >= 0 && aliasSpinner.selectedItemPosition != index) aliasSpinner.setSelection(index)
         fingerprint.text = Session.selectedAlias?.let { "Certificate SHA-256: ${Session.fingerprints[it].orEmpty()}" }.orEmpty()
-        if (seenBuildsEnded != Session.buildsEnded) {
-            // A build has ended, however it ended: the passwords are not needed on screen any more.
-            seenBuildsEnded = Session.buildsEnded
-            storePassword.text.clear()
-            keyPassword.text.clear()
-        }
         aliasSpinner.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
         fingerprint.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
         val tree = prefs.getString(PREF_TREE, null)?.let(Uri::parse)
@@ -306,9 +300,7 @@ class BuilderFragment : Fragment() {
         actionButtons.forEach { it.isEnabled = !busy }
         cancelButton.visibility = if (busy) View.VISIBLE else View.GONE
         progress.visibility = if (busy) View.VISIBLE else View.GONE
-        progress.progress = Session.progress
-        stageLabel.text = Session.stage
-        messageLabel.text = Session.message
+        showProgress()
 
         refreshing = false
 
@@ -329,6 +321,41 @@ class BuilderFragment : Fragment() {
         if (question != null && shownQuestion == null && isResumed) {
             shownQuestion = question
             showNameQuestion(question)
+        }
+    }
+
+    /** Cheap enough to run on every progress update: three views, nothing built. */
+    private fun showProgress() {
+        if (view == null) return
+        progress.progress = Session.progress
+        stageLabel.text = Session.stage
+        messageLabel.text = Session.message
+    }
+
+    /** Builds the add-on rows. Only when the list changed: it makes new views for every row. */
+    private fun rebuildItems() {
+        val ctx = requireContext()
+        itemsBox.removeAllViews()
+        removeButtons.clear()
+        if (Session.items.isEmpty()) {
+            itemsBox.addView(text(ctx, "Nothing chosen: the copy will carry no add-ons.", 14f, tooltip = Help.ADDONS))
+        }
+        for (chosen in Session.items) {
+            val kind = if (AddonKind.PLUGIN.extension == chosen.picked.fileName.substringAfterLast('.').lowercase()) "plugin" else "template"
+            val row = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4)) }
+            row.addView(text(ctx, "${chosen.picked.label} ($kind, from ${chosen.source})", 14f, tooltip = Help.ADDONS))
+            val remove = Button(ctx).apply {
+                this.text = "Remove"
+                setOnClickListener { Session.remove(chosen) }
+                withTooltip(this, Help.REMOVE)
+            }
+            removeButtons.add(remove)
+            row.addView(remove)
+            val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk), Build.VERSION.SDK_INT).firstOrNull()
+            if (warning != null) {
+                row.addView(text(ctx, "Warning: ${warning.message} Keep it, or tap Remove.", 14f).apply { withTooltip(this, Help.MINSDK) })
+            }
+            itemsBox.addView(row)
         }
     }
 
@@ -528,9 +555,20 @@ class BuilderFragment : Fragment() {
         }
     }
 
-    private fun passwordField(ctx: Context, hintText: String, tooltip: String) = EditText(ctx).apply {
+    /**
+     * A label that stays above a field, so a filled field is never read as anything else. It names
+     * [field] for accessibility, and long-press shows the field's tooltip.
+     */
+    private fun fieldLabel(ctx: Context, content: String, tooltip: String, field: View) =
+        text(ctx, content, 14f, tooltip = tooltip).apply {
+            setPadding(0, dp(8), 0, 0)
+            labelFor = field.id
+        }
+
+    /** The label is [fieldLabel], above it; the id lets the label name it for accessibility. */
+    private fun passwordField(ctx: Context, tooltip: String) = EditText(ctx).apply {
+        id = View.generateViewId()
         withTooltip(this, tooltip, consume = false)
-        hint = hintText
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
         // Never let the system put a password in saved instance state.
