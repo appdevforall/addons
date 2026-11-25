@@ -181,7 +181,7 @@ object ZipAlignment {
     fun misaligned(apk: File): List<String> =
         RawZipFile(apk).use { zip ->
             zip.entries
-                .filter { it.isStored && !it.isDirectory && it.compressedSize > 0 }
+                .filter { it.isStored && !it.isDirectory }
                 .filter { zip.dataOffset(it) % requiredFor(it.name) != 0L }
                 .map { it.name }
         }
@@ -233,8 +233,10 @@ class RawZipWriter(output: OutputStream) : Closeable {
     private fun begin(entry: RawZipEntry, flags: Int, writeData: (OutputStream) -> Unit) {
         if (!names.add(entry.name)) throw ZipFormatException("${entry.name} would be written twice")
         if (written.size >= 0xFFFE) throw ZipFormatException("too many zip entries")
+        requireZip32(entry.compressedSize, "${entry.name}'s size")
+        requireZip32(entry.size, "${entry.name}'s size")
         val padding =
-            if (entry.isStored && !entry.isDirectory && entry.compressedSize > 0) {
+            if (entry.isStored && !entry.isDirectory) {
                 val align = ZipAlignment.requiredFor(entry.name)
                 ((align - (offset + 30 + entry.nameBytes.size) % align) % align).toInt()
             } else {
@@ -254,6 +256,7 @@ class RawZipWriter(output: OutputStream) : Closeable {
         u16(padding)
         raw(entry.nameBytes)
         raw(ByteArray(padding))
+        checkRange()
         val dataStart = offset
         writeData(CountingSink())
         if (offset - dataStart != entry.compressedSize) {
@@ -262,9 +265,27 @@ class RawZipWriter(output: OutputStream) : Closeable {
         written.add(Written(entry, flags, headerOffset))
     }
 
-    /** Appends the central directory and the end record. The output stream is closed. */
+    /**
+     * Appends the central directory and the end record. The output stream is closed, also when this
+     * throws; the error that stopped the writing is the one that is thrown.
+     */
     override fun close() {
+        try {
+            finish()
+        } catch (e: Throwable) {
+            try {
+                out.close()
+            } catch (closing: Throwable) {
+                e.addSuppressed(closing)
+            }
+            throw e
+        }
+        out.close()
+    }
+
+    private fun finish() {
         val cdStart = offset
+        requireZip32(cdStart, "the central directory's offset")
         for (w in written) {
             val e = w.entry
             u32(SIG_CENTRAL)
@@ -287,6 +308,8 @@ class RawZipWriter(output: OutputStream) : Closeable {
             raw(e.nameBytes)
         }
         val cdSize = offset - cdStart
+        requireZip32(cdSize, "the central directory's size")
+        checkRange()
         u32(SIG_EOCD)
         u16(0)
         u16(0)
@@ -295,7 +318,6 @@ class RawZipWriter(output: OutputStream) : Closeable {
         u32(cdSize)
         u32(cdStart)
         u16(0)
-        out.close()
     }
 
     private inner class CountingSink : OutputStream() {
@@ -312,9 +334,8 @@ class RawZipWriter(output: OutputStream) : Closeable {
         }
     }
 
-    private fun checkRange() {
-        if (offset > 0xFFFFFFFFL) throw ZipFormatException("the zip would pass 4 GiB, which needs ZIP64")
-    }
+    /** The header, the padding and the data must all end below the reserved 0xFFFFFFFF, or later offsets no longer fit. */
+    private fun checkRange() = requireZip32(offset, "the zip's length")
 
     private fun u16(v: Int) {
         out.write(v and 0xFF)
@@ -351,6 +372,11 @@ fun digestOf(file: File, onBytes: (Int) -> Unit = {}): FileDigest {
     var size = 0L
     file.inputStream().use { input -> pump(input) { buf, n -> crc.update(buf, 0, n); sha.update(buf, 0, n); size += n; onBytes(n) } }
     return FileDigest(size, crc.value, sha.digest().joinToString("") { "%02x".format(it) })
+}
+
+/** A ZIP32 field holds 0 to 0xFFFFFFFE; 0xFFFFFFFF means "see the ZIP64 record". Throws when [value] does not fit. */
+internal fun requireZip32(value: Long, what: String) {
+    if (value < 0 || value >= 0xFFFFFFFFL) throw ZipFormatException("$what would pass 4 GiB, which needs ZIP64")
 }
 
 internal inline fun pump(input: InputStream, each: (ByteArray, Int) -> Unit) {
