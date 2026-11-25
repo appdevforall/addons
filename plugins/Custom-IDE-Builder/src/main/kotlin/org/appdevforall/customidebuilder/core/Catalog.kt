@@ -55,7 +55,8 @@ object Catalog {
      * Reads a v2 catalog (site/catalog.v2.schema.json in the addons repository). Snippets and code
      * actions are not bundled and are left out. An entry missing a required field, with a slug
      * that is not a file name or a digest that is not SHA-256, is skipped and counted: the
-     * download could not be verified, so it must not be offered.
+     * download could not be verified, so it must not be offered. So is one whose size is over
+     * [AddonLimits.MAX_BYTES], which no download is allowed to reach.
      */
     fun parse(json: String): ParsedCatalog {
         val root =
@@ -77,7 +78,7 @@ object Catalog {
             val size = download?.optLong("size", -1) ?: -1
             val url = download?.optString("url").orEmpty()
             val name = o.optString("name")
-            if (download == null || !SLUG.matches(slug) || !SHA256.matches(sha) || size < 0 || url.isEmpty() || name.isEmpty()) {
+            if (download == null || !SLUG.matches(slug) || !SHA256.matches(sha) || size < 0 || size > AddonLimits.MAX_BYTES || url.isEmpty() || name.isEmpty()) {
                 skipped++
                 continue
             }
