@@ -161,7 +161,7 @@ class BuilderFragment : Fragment() {
         keystoreLabel = text(ctx, "", 14f)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
-        storePassword = passwordField(ctx, "Store password")
+        storePassword = passwordField(ctx, "Store password", Help.STORE_PASSWORD)
         column.addView(storePassword)
         column.addView(action(ctx, "Read keys", Help.KEYSTORE) {
             val chars = charsOf(storePassword)
@@ -169,6 +169,7 @@ class BuilderFragment : Fragment() {
             refresh()
         })
         aliasSpinner = Spinner(ctx)
+        withTooltip(aliasSpinner, Help.KEY_ALIAS)
         aliasSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 Session.selectedAlias = Session.aliases.getOrNull(position)
@@ -180,7 +181,7 @@ class BuilderFragment : Fragment() {
         column.addView(aliasSpinner)
         fingerprint = text(ctx, "", 12f)
         column.addView(fingerprint)
-        keyPassword = passwordField(ctx, "Key password (blank: same as store password)")
+        keyPassword = passwordField(ctx, "Key password (blank: same as store password)", Help.KEY_PASSWORD)
         column.addView(keyPassword)
 
         column.addView(heading(ctx, "4. Output folder"))
@@ -197,6 +198,7 @@ class BuilderFragment : Fragment() {
         cancelButton = Button(ctx).apply {
             this.text = "Cancel"
             setOnClickListener { Session.cancel() }
+            withTooltip(this, Help.CANCEL)
         }
         column.addView(cancelButton)
         messageLabel = text(ctx, "", 14f).apply { setTextIsSelectable(true) }
@@ -255,6 +257,7 @@ class BuilderFragment : Fragment() {
                 this.text = "Remove"
                 isEnabled = !busy
                 setOnClickListener { Session.remove(chosen) }
+                withTooltip(this, Help.REMOVE)
             })
             val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk)).firstOrNull()
             if (warning != null) {
@@ -432,14 +435,23 @@ class BuilderFragment : Fragment() {
     private fun action(ctx: Context, label: String, tooltip: String, onClick: () -> Unit) = Button(ctx).apply {
         text = label
         setOnClickListener { onClick() }
-        setOnLongClickListener { v ->
-            CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tooltip)
-            true
-        }
+        withTooltip(this, tooltip)
         actionButtons.add(this)
     }
 
-    private fun passwordField(ctx: Context, hintText: String) = EditText(ctx).apply {
+    /**
+     * Long-press shows the tooltip. [consume] false lets the press carry on to the view's own
+     * long-press (a text field's paste menu).
+     */
+    private fun withTooltip(view: View, tag: String, consume: Boolean = true) {
+        view.setOnLongClickListener { v ->
+            CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tag)
+            consume
+        }
+    }
+
+    private fun passwordField(ctx: Context, hintText: String, tooltip: String) = EditText(ctx).apply {
+        withTooltip(this, tooltip, consume = false)
         hint = hintText
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)

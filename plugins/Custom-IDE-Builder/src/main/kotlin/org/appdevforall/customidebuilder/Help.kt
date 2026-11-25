@@ -19,6 +19,11 @@ object Help {
     const val CONFIRM = "customidebuilder.confirm"
     const val FOLDER = "customidebuilder.folder"
     const val BUILD = "customidebuilder.build"
+    const val REMOVE = "customidebuilder.remove"
+    const val CANCEL = "customidebuilder.cancel"
+    const val STORE_PASSWORD = "customidebuilder.storepassword"
+    const val KEY_PASSWORD = "customidebuilder.keypassword"
+    const val KEY_ALIAS = "customidebuilder.keyalias"
 
     private val more = listOf(PluginTooltipButton(description = "About Custom IDE Builder", uri = "index.html", order = 0))
 
@@ -94,6 +99,42 @@ object Help {
             "Copy the app, add the add-ons, sign it and save it.",
             "<p>Runs in the background. The app is copied without recompressing, so it takes about as long as " +
                 "copying the file, plus the time to sign it.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            REMOVE,
+            "Take this add-on off the list.",
+            "<p>Removes it from the copy you are about to build and deletes the copy this plugin made of the " +
+                "file. The original file is not touched.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            CANCEL,
+            "Stop the build or download in progress.",
+            "<p>Nothing is saved to your output folder from a cancelled build, and the temporary files are " +
+                "deleted. Your add-on list and keystore choice stay as they are.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            STORE_PASSWORD,
+            "The password that opens the keystore file.",
+            "<p>Used to read the keys and again for the build. It is never saved, and it is cleared when you " +
+                "leave this screen.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            KEY_PASSWORD,
+            "The password of the chosen key. Leave it blank if it is the store password.",
+            "<p>PKCS12 keystores usually use one password for both. It is never saved, and it is cleared when " +
+                "you leave this screen.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            KEY_ALIAS,
+            "Which key in the keystore signs the copy.",
+            "<p>Shown after you tap Read keys. The line below the list is the certificate fingerprint " +
+                "(SHA-256) of the chosen key, so you can check it is the key you used before. Use the same key " +
+                "for every build.</p>",
             more,
         ),
     )

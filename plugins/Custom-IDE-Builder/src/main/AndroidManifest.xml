@@ -35,10 +35,14 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.42: the release the other provenance-stamped plugins require. -->
+        <!-- 26.48: the current stable release; the range is what the review rubric (6.1) asks for. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.42" />
+            android:value="26.48" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="99" />
 
         <meta-data
             android:name="plugin.permissions"
