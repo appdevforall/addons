@@ -49,7 +49,7 @@ class EditApplier(
         val file = File(pathMapper.toLocal(wirePath))
         if (file.exists()) return file
         logger.warn("PairPlugin: remote edit for unavailable file '$wirePath' — flagging out of sync")
-        flagOutOfSync(wirePath)
+        flagOutOfSync(null)
         return null
     }
 
