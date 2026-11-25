@@ -527,6 +527,8 @@ object Session {
                             Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding), check) { s, f ->
                                 progressFrom(gen, s.label, (f * 1000).toInt())
                             }
+                        // The pipeline has verified the APK, so a signer is always there; checked before saving, so no file is written without one.
+                        val signer = built.verify.signerSha256 ?: throw BuildException("The finished APK carries no signer certificate.")
                         // A file can appear during the build, and the provider would rename ours without saying so.
                         val chosen = freeNameIn(context, tree, name, gen, "While the app was being built, a file named %s appeared in the folder. Choose another name.")
                             ?: return@withContext null
@@ -540,7 +542,7 @@ object Session {
                         }
                         // What the folder really called it: the provider renames a file whose name is taken.
                         val actual = AndroidBits.displayName(context, target)
-                        Saved(built.verify.signerSha256, AndroidBits.treeLabel(tree), actual, built.rewrite.branding?.styledSkipped ?: 0)
+                        Saved(signer, AndroidBits.treeLabel(tree), actual, built.rewrite.branding?.styledSkipped ?: 0)
                     }
                 if (result == null) {
                     return@launch report("Cancelled: the APK was built but not saved, because a file named $name appeared in the folder and no other name was chosen. The built file was deleted.", gen)
