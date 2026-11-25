@@ -48,8 +48,19 @@ class ApkRewriterTest {
         RawZipFile(source).use { src ->
             RawZipFile(output).use { out ->
                 val byName = out.entries.associateBy { it.name }
-                val kept = src.entries.filterNot { ApkRewriter.isDropped(it.name) }
-                assertTrue(kept.size > 5)
+                // Expected from the fixture and a written-out list, not from ApkRewriter.isDropped, so a wrongly
+                // dropped entry (the manifest, say) cannot hide in both sides.
+                val removed = setOf("assets/plugins/old.cgp", "assets/templates/old.cgt", "assets/bundled-addons.tsv", "META-INF/MANIFEST.MF", "META-INF/OLD.SF", "META-INF/OLD.RSA")
+                val fixture = src.entries.map { it.name }
+                assertTrue("the fixture should hold the removed names", fixture.containsAll(removed))
+                val expected = fixture.filterNot { it in removed }
+                assertEquals(
+                    setOf("AndroidManifest.xml", "classes.dex", "resources.arsc", "lib/arm64-v8a/libnative.so", "res/raw/data.bin", "assets/keep.txt", "META-INF/services/example.Service"),
+                    expected.toSet(),
+                )
+                val kept = src.entries.filter { it.name in expected }
+                assertEquals(expected.size, kept.size)
+                for (name in expected) assertTrue("$name is missing from the output", name in byName)
                 for (s in kept) {
                     val o = byName.getValue(s.name)
                     assertEquals("method of ${s.name}", s.method, o.method)
@@ -123,12 +134,42 @@ class ApkRewriterTest {
 
     @Test
     fun whichNamesAreDropped() {
-        for (name in listOf("assets/plugins/a.cgp", "assets/plugins/", "assets/templates/x/y.cgt", "assets/bundled-addons.tsv", "META-INF/MANIFEST.MF", "META-INF/CERT.SF", "META-INF/CERT.RSA", "META-INF/CERT.DSA", "META-INF/CERT.EC", "META-INF/cert.rsa")) {
+        for (name in listOf("assets/plugins/a.cgp", "assets/plugins/", "assets/templates/x/y.cgt", "assets/bundled-addons.tsv", "META-INF/SIG-OLD.SF", "META-INF/SIG-OLD.XYZ", "META-INF/sig-x.abc", "META-INF/MANIFEST.MF", "META-INF/CERT.SF", "META-INF/CERT.RSA", "META-INF/CERT.DSA", "META-INF/CERT.EC", "META-INF/cert.rsa")) {
             assertTrue(name, ApkRewriter.isDropped(name))
         }
-        for (name in listOf("assets/other/a.cgp", "assets/pluginsX", "classes.dex", "META-INF/services/a.SF", "META-INF/com/android/build/gradle/app-metadata.properties", "META-INF/CERT.TXT", "lib/x/libplugins.so")) {
+        for (name in listOf("META-INF/sub/SIG-X.ABC", "META-INF/SIGN.TXT", "assets/other/a.cgp", "assets/pluginsX", "classes.dex", "META-INF/services/a.SF", "META-INF/com/android/build/gradle/app-metadata.properties", "META-INF/CERT.TXT", "lib/x/libplugins.so")) {
             assertFalse(name, ApkRewriter.isDropped(name))
         }
+    }
+
+    @Test
+    fun aTopLevelSigFileLosesItsBlockToo() {
+        val source = tmp.newFile("sig.apk")
+        TestSupport.syntheticApk(
+            source,
+            mapOf(
+                "META-INF/SIG-OLD.SF" to (java.util.zip.ZipEntry.DEFLATED to "x".toByteArray()),
+                "META-INF/SIG-OLD.XYZ" to (java.util.zip.ZipEntry.DEFLATED to "y".toByteArray()),
+                "META-INF/sub/SIG-KEEP.XYZ" to (java.util.zip.ZipEntry.DEFLATED to "z".toByteArray()),
+            ),
+        )
+        val output = tmp.newFile("sig-out.apk")
+        ApkRewriter.rewrite(source, output, emptyList())
+        val names = RawZipFile(output).use { z -> z.entries.map { it.name } }
+        assertFalse("META-INF/SIG-OLD.SF" in names)
+        assertFalse("META-INF/SIG-OLD.XYZ" in names)
+        assertTrue("META-INF/sub/SIG-KEEP.XYZ" in names)
+    }
+
+    @Test
+    fun progressEndsAtExactlyOneOnlyAfterTheZipIsClosed() {
+        val source = tmp.newFile("p.apk")
+        TestSupport.syntheticApk(source)
+        val seen = ArrayList<Double>()
+        ApkRewriter.rewrite(source, tmp.newFile("p-out.apk"), twoAddons(), onProgress = { seen.add(it) })
+        assertTrue(seen.isNotEmpty())
+        assertEquals(1.0, seen.last(), 0.0)
+        assertTrue("1.0 is reported once, at the end", seen.dropLast(1).all { it < 1.0 })
     }
 
     @Test

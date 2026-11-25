@@ -30,13 +30,13 @@ object ApkRewriter {
         return isV1SignatureFile(name)
     }
 
-    /** `META-INF/MANIFEST.MF` and the `.SF`, `.RSA`, `.DSA` and `.EC` files directly in `META-INF/`. */
+    /** `META-INF/MANIFEST.MF`, the `.SF`, `.RSA`, `.DSA` and `.EC` files and the reserved `SIG-*` names, directly in `META-INF/`. */
     fun isV1SignatureFile(name: String): Boolean {
         val upper = name.uppercase()
         if (!upper.startsWith("META-INF/")) return false
         val rest = upper.removePrefix("META-INF/")
         if ('/' in rest) return false
-        return rest == "MANIFEST.MF" || rest.endsWith(".SF") || rest.endsWith(".RSA") || rest.endsWith(".DSA") || rest.endsWith(".EC")
+        return rest == "MANIFEST.MF" || rest.startsWith("SIG-") || rest.endsWith(".SF") || rest.endsWith(".RSA") || rest.endsWith(".DSA") || rest.endsWith(".EC")
     }
 
     /**
@@ -116,6 +116,8 @@ object ApkRewriter {
                 val crc = java.util.zip.CRC32().apply { update(indexBytes) }.value
                 writer.addStored(INDEX_APK_ENTRY, indexBytes.size.toLong(), crc) { sink -> sink.write(indexBytes) }
             }
+            // Only now: the writer has finished the central directory, so a failure there is not reported as done.
+            onProgress(1.0)
         }
         val added = addons.map { it.apkEntryName } + INDEX_APK_ENTRY + (if (branded != null) listOf(RESOURCE_TABLE) + extra.keys else emptyList())
         return RewriteReport(copied, dropped, added, index, branded?.report)

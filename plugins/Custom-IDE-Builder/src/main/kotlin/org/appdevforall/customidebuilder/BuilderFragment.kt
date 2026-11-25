@@ -62,6 +62,7 @@ class BuilderFragment : Fragment() {
     private lateinit var cancelButton: Button
     private val actionButtons = ArrayList<Button>()
     private var shownAliases: List<String>? = null
+    private var seenBuildsEnded = Session.buildsEnded
     private val listener: () -> Unit = { refresh() }
 
     private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -275,8 +276,16 @@ class BuilderFragment : Fragment() {
             aliasSpinner.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, aliases).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
-            val index = aliases.indexOf(Session.selectedAlias)
-            if (index >= 0) aliasSpinner.setSelection(index)
+        }
+        // Every refresh: Session.loadKeystore resets the selection even when the list is the same.
+        val index = aliases.indexOf(Session.selectedAlias)
+        if (index >= 0 && aliasSpinner.selectedItemPosition != index) aliasSpinner.setSelection(index)
+        fingerprint.text = Session.selectedAlias?.let { "Certificate SHA-256: ${Session.fingerprints[it].orEmpty()}" }.orEmpty()
+        if (seenBuildsEnded != Session.buildsEnded) {
+            // A build has ended, however it ended: the passwords are not needed on screen any more.
+            seenBuildsEnded = Session.buildsEnded
+            storePassword.text.clear()
+            keyPassword.text.clear()
         }
         aliasSpinner.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
         fingerprint.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
