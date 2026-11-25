@@ -113,6 +113,8 @@ data class AgentPromptConfig(
      *   terminal tool.
      * @property unappliedWrite the turn after a reply that tried to finish while a file change had
      *   failed and no later write to that file had succeeded.
+     * @property repeatedAfterSuccess the turn after a reply that re-issued the batch that had just
+     *   succeeded, asking the run to answer instead.
      * @property requiredTool the turn after a reply that answered before calling the tool the run
      *   had to call first, such as a web search before a code review.
      */
@@ -124,6 +126,7 @@ data class AgentPromptConfig(
         val afterFailure: PromptText,
         val unfinished: PromptText,
         val unappliedWrite: PromptText,
+        val repeatedAfterSuccess: PromptText,
         val requiredTool: PromptText,
     )
 

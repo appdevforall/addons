@@ -31,7 +31,7 @@
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,project.structure,native.code" />
+            android:value="filesystem.read,filesystem.write,project.structure,native.code" />
 
         <meta-data
             android:name="plugin.main_class"
