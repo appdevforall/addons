@@ -134,12 +134,33 @@ class ApkRewriterTest {
 
     @Test
     fun whichNamesAreDropped() {
-        for (name in listOf("assets/plugins/a.cgp", "assets/plugins/", "assets/templates/x/y.cgt", "assets/bundled-addons.tsv", "META-INF/SIG-OLD.SF", "META-INF/SIG-OLD.XYZ", "META-INF/sig-x.abc", "META-INF/MANIFEST.MF", "META-INF/CERT.SF", "META-INF/CERT.RSA", "META-INF/CERT.DSA", "META-INF/CERT.EC", "META-INF/cert.rsa")) {
+        for (name in listOf("assets/plugins/a.cgp", "assets/plugins/B.CGP", "assets/templates/t.cgt", "assets/templates/T.CGT", "assets/bundled-addons.tsv", "META-INF/SIG-OLD.SF", "META-INF/SIG-OLD.XYZ", "META-INF/sig-x.abc", "META-INF/MANIFEST.MF", "META-INF/CERT.SF", "META-INF/CERT.RSA", "META-INF/CERT.DSA", "META-INF/CERT.EC", "META-INF/cert.rsa")) {
             assertTrue(name, ApkRewriter.isDropped(name))
         }
-        for (name in listOf("META-INF/sub/SIG-X.ABC", "META-INF/SIGN.TXT", "assets/other/a.cgp", "assets/pluginsX", "classes.dex", "META-INF/services/a.SF", "META-INF/com/android/build/gradle/app-metadata.properties", "META-INF/CERT.TXT", "lib/x/libplugins.so")) {
+        for (name in listOf("assets/plugins/", "assets/templates/x/y.cgt", "assets/templates/xml/layout.xml", "assets/templates/core.cgt", "assets/templates/.hidden.cgt", "assets/templates/a.cgp", "assets/plugins/a.cgt", "assets/plugins/readme.txt", "META-INF/sub/SIG-X.ABC", "META-INF/SIGN.TXT", "assets/other/a.cgp", "assets/pluginsX", "classes.dex", "META-INF/services/a.SF", "META-INF/com/android/build/gradle/app-metadata.properties", "META-INF/CERT.TXT", "lib/x/libplugins.so")) {
             assertFalse(name, ApkRewriter.isDropped(name))
         }
+    }
+
+    @Test
+    fun theIdesOwnFilesInTheTemplatesFolderAreKept() {
+        val source = tmp.newFile("templates.apk")
+        val xml = "<layout/>".toByteArray()
+        TestSupport.syntheticApk(
+            source,
+            mapOf(
+                "assets/templates/xml/layout.xml" to (java.util.zip.ZipEntry.DEFLATED to xml),
+                "assets/templates/xml/menu.xml" to (java.util.zip.ZipEntry.DEFLATED to xml),
+                "assets/templates/old.cgt" to (java.util.zip.ZipEntry.STORED to "old".toByteArray()),
+            ),
+        )
+        val output = tmp.newFile("templates-out.apk")
+        val report = ApkRewriter.rewrite(source, output, emptyList())
+        val names = RawZipFile(output).use { z -> z.entries.map { it.name } }
+        assertTrue("assets/templates/xml/layout.xml" in names)
+        assertTrue("assets/templates/xml/menu.xml" in names)
+        assertFalse("assets/templates/old.cgt" in names)
+        assertEquals(emptyList<String>(), report.dropped.filter { it.startsWith("assets/templates/xml/") })
     }
 
     @Test
