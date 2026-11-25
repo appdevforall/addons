@@ -47,7 +47,6 @@ class BuilderFragment : Fragment() {
     private val removeButtons = ArrayList<Button>()
     private var shownAliases: List<String>? = null
     private var shownItemsVersion = -1
-    private var seenBuildsEnded = Session.buildsEnded
     private var shownQuestion: NameQuestion? = null
     private var nameDialog: AlertDialog? = null
     private val listener: () -> Unit = { refresh() }
@@ -196,6 +195,12 @@ class BuilderFragment : Fragment() {
     private fun refresh() {
         if (view == null) return
         val busy = Session.busy
+        if (Session.passwordsToClear) {
+            // A build has ended, however it ended, maybe while this screen had no view: the passwords are not needed on screen any more.
+            storePassword.text.clear()
+            keyPassword.text.clear()
+            Session.passwordsCleared()
+        }
         if (shownItemsVersion != Session.itemsVersion) {
             shownItemsVersion = Session.itemsVersion
             rebuildItems()
@@ -213,12 +218,6 @@ class BuilderFragment : Fragment() {
         val index = aliases.indexOf(Session.selectedAlias)
         if (index >= 0 && aliasSpinner.selectedItemPosition != index) aliasSpinner.setSelection(index)
         fingerprint.text = Session.selectedAlias?.let { "Certificate SHA-256: ${Session.fingerprints[it].orEmpty()}" }.orEmpty()
-        if (seenBuildsEnded != Session.buildsEnded) {
-            // A build has ended, however it ended: the passwords are not needed on screen any more.
-            seenBuildsEnded = Session.buildsEnded
-            storePassword.text.clear()
-            keyPassword.text.clear()
-        }
         aliasSpinner.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
         fingerprint.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
         val tree = prefs.getString(PREF_TREE, null)?.let(Uri::parse)

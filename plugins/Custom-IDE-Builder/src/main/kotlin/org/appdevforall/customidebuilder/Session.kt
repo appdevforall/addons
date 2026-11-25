@@ -79,8 +79,13 @@ object Session {
      */
     var nameQuestion: NameQuestion? = null
 
-    /** How many builds have run to an end (done, failed or cancelled); the screen clears its password fields when it changes. */
-    var buildsEnded: Int = 0
+    /**
+     * Set when a build ends, however it ends, and by [end]; the screen clears its password fields and
+     * calls [passwordsCleared]. It stays set while no screen has a view, so the next one clears its
+     * fields before the user sees them.
+     */
+    var passwordsToClear: Boolean = false
+        private set
 
     /** Moves on whenever [items] changes, so the screen rebuilds the rows only then. */
     var itemsVersion: Int = 0
@@ -110,6 +115,8 @@ object Session {
     fun listenProgress(l: () -> Unit) { progressListeners.add(l) }
 
     fun unlistenProgress(l: () -> Unit) { progressListeners.remove(l) }
+
+    fun passwordsCleared() { passwordsToClear = false }
 
     private fun changed() = listeners.toList().forEach { it() }
 
@@ -197,6 +204,8 @@ object Session {
         listeners.clear()
         progressListeners.clear()
         progressGate.reset("", 0)
+        // A screen still showing passwords clears them when it next refreshes.
+        passwordsToClear = true
         keystoreUri = null
         keystoreName = null
         aliases = emptyList()
@@ -390,7 +399,7 @@ object Session {
             storePassword.fill('\u0000'); keyPassword.fill('\u0000')
             return report("Choose a keystore and load its keys first.")
         }
-        launch("Building", listOf(storePassword, keyPassword)) { gen ->
+        launch("Building", listOf(storePassword, keyPassword), endsBuild = true) { gen ->
             var name = Naming.outputName(host.label, host.versionName)
             val out = File(dir, "out")
             var saved: Uri? = null
@@ -453,12 +462,14 @@ object Session {
             } finally {
                 storePassword.fill('\u0000')
                 keyPassword.fill('\u0000')
+                // Nothing may follow this in the finally: once the job is cancelled, withContext throws on
+                // its way back instead of returning, so a line after it never runs. The end of the build
+                // is signalled by launch (endsBuild).
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
                     out.deleteRecursively()
                     // A save that failed or was cancelled leaves no APK, not even a partial one, in the folder.
                     if (!finished) saved?.let { AndroidBits.deleteDocument(context, it) }
                 }
-                if (gen == generation) buildsEnded++
             }
         }
     }
@@ -538,8 +549,12 @@ object Session {
      * completes however it completes, including a cancellation before its first line runs (where no
      * `finally` inside [block] would ever execute), and at once if another job is running and
      * this one is refused. Returns false for that refusal.
+     *
+     * [endsBuild] sets [passwordsToClear] when the job completes. It is set here, in a finally with no
+     * suspension before it, because a line after a suspending call in [block]'s own finally is
+     * skipped once the job is cancelled.
      */
-    private fun launch(title: String, secrets: List<CharArray> = emptyList(), block: suspend (Int) -> Unit): Boolean {
+    private fun launch(title: String, secrets: List<CharArray> = emptyList(), endsBuild: Boolean = false, block: suspend (Int) -> Unit): Boolean {
         if (busy) {
             zero(secrets)
             return false
@@ -561,6 +576,7 @@ object Session {
                 report("$title failed: ${e.message ?: e.javaClass.simpleName}", gen)
             } finally {
                 if (gen == generation) {
+                    if (endsBuild) passwordsToClear = true
                     busy = false
                     stage = ""
                     progress = 0
