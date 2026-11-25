@@ -204,6 +204,15 @@ class BrandingTest {
         assertEquals("res/drawable/ic_launcher.xml", ArscSupport.strings(nameOnly, "drawable")["drawable/ic_launcher []"])
     }
 
+    @Test
+    fun applyRunsTheCheckOnTheBytesItReturns() {
+        var checked: ByteArray? = null
+        val result =
+            ResourceBranding.apply(ArscSupport.table(), Branding(name, icons(*all))) { bytes, _, _, _ -> checked = bytes }
+        assertTrue("apply() did not run the check after the edit", checked != null)
+        assertTrue("the check saw other bytes than apply() returned", checked!!.contentEquals(result.table))
+    }
+
     private fun failsVerification(edited: ByteArray, original: ByteArray, branding: Branding, files: Map<String, ByteArray>, expect: String) {
         try {
             ResourceBranding.verify(edited, ResourceBranding.fingerprint(ArscSupport.load(original)), branding, files)

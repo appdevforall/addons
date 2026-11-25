@@ -91,7 +91,12 @@ object ResourceBranding {
     /** `RES_TABLE_TYPE`, the first chunk type of a resources.arsc. */
     private const val RES_TABLE_TYPE = 0x0002
 
-    fun apply(arsc: ByteArray, branding: Branding): BrandedResources {
+    /** [checkEdit] is [verify]; a parameter only so a test can see that the check runs on the bytes returned. */
+    fun apply(
+        arsc: ByteArray,
+        branding: Branding,
+        checkEdit: (ByteArray, Map<String, String>, Branding, Map<String, ByteArray>) -> Unit = ::verify,
+    ): BrandedResources {
         // ARSCLib trusts the sizes in the header and allocates by them, so a file that is not a table is refused first.
         val header = java.nio.ByteBuffer.wrap(arsc).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         if (arsc.size < 12 || header.getShort(0).toInt() != RES_TABLE_TYPE || header.getInt(4) != arsc.size) {
@@ -153,7 +158,7 @@ object ResourceBranding {
         }
         table.refreshFull()
         val bytes = table.bytes
-        verify(bytes, before, branding, files)
+        checkEdit(bytes, before, branding, files)
         return BrandedResources(bytes, files, BrandingReport(appNameEntries, otherReplaced, styled, kept, repointed, notes))
     }
 
