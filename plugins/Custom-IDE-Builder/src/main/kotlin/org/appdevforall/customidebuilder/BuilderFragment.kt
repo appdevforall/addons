@@ -79,10 +79,10 @@ class BuilderFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(24))
         }
-        column.addView(text(ctx, "Custom IDE Builder", 22f, bold = true))
-        column.addView(text(ctx, "Makes a copy of the Code on the Go installed on this device with the add-ons you choose bundled inside, signed with your own key.", 14f))
+        column.addView(text(ctx, "Custom IDE Builder", 22f, bold = true, tooltip = Help.MENU))
+        column.addView(text(ctx, "Makes a copy of the Code on the Go installed on this device with the add-ons you choose bundled inside, signed with your own key.", 14f, tooltip = Help.MENU))
 
-        column.addView(heading(ctx, "1. Add-ons to bundle"))
+        column.addView(heading(ctx, "1. Add-ons to bundle", Help.ADDONS))
         itemsBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         column.addView(itemsBox)
         column.addView(action(ctx, "Add from this device", Help.ADDONS) {
@@ -90,8 +90,8 @@ class BuilderFragment : Fragment() {
         })
         column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
 
-        column.addView(heading(ctx, "2. Signing key"))
-        keystoreLabel = text(ctx, "", 14f)
+        column.addView(heading(ctx, "2. Signing key", Help.KEYSTORE))
+        keystoreLabel = text(ctx, "", 14f, tooltip = Help.KEYSTORE)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
         storePassword = passwordField(ctx, "Store password", Help.STORE_PASSWORD)
@@ -112,21 +112,24 @@ class BuilderFragment : Fragment() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
         column.addView(aliasSpinner)
-        fingerprint = text(ctx, "", 12f)
+        fingerprint = text(ctx, "", 12f, tooltip = Help.KEY_ALIAS)
         column.addView(fingerprint)
         keyPassword = passwordField(ctx, "Key password (blank: same as store password)", Help.KEY_PASSWORD)
         column.addView(keyPassword)
 
-        column.addView(heading(ctx, "3. Output folder"))
-        folderLabel = text(ctx, "", 14f)
+        column.addView(heading(ctx, "3. Output folder", Help.FOLDER))
+        folderLabel = text(ctx, "", 14f, tooltip = Help.FOLDER)
         column.addView(folderLabel)
         column.addView(action(ctx, "Choose folder", Help.FOLDER) { pickFolder.launch(null) })
 
-        column.addView(heading(ctx, "4. Build"))
+        column.addView(heading(ctx, "4. Build", Help.BUILD))
         column.addView(action(ctx, "Build APK", Help.BUILD) { startBuild() })
-        stageLabel = text(ctx, "", 14f)
+        stageLabel = text(ctx, "", 14f, tooltip = Help.STATUS)
         column.addView(stageLabel)
-        progress = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000 }
+        progress = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000
+            withTooltip(this, Help.STATUS)
+        }
         column.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         cancelButton = Button(ctx).apply {
             this.text = "Cancel"
@@ -134,7 +137,8 @@ class BuilderFragment : Fragment() {
             withTooltip(this, Help.CANCEL)
         }
         column.addView(cancelButton)
-        messageLabel = text(ctx, "", 14f).apply { setTextIsSelectable(true) }
+        // Selectable, so the long-press must also reach the text selection: consume = false.
+        messageLabel = text(ctx, "", 14f, tooltip = Help.RESULT, consume = false).apply { setTextIsSelectable(true) }
         column.addView(messageLabel)
 
         return ScrollView(ctx).apply {
@@ -148,7 +152,7 @@ class BuilderFragment : Fragment() {
         Session.listen(listener)
         refresh()
         if (!prefs.getBoolean(PREF_WARNED, false)) {
-            AlertDialog.Builder(requireContext())
+            val dialog = AlertDialog.Builder(requireContext())
                 .setTitle("Sign every build with the same key")
                 .setMessage(
                     "Android installs an update only if it is signed with the same key as the version already installed. " +
@@ -158,6 +162,7 @@ class BuilderFragment : Fragment() {
                 .setPositiveButton("I understand") { _, _ -> prefs.edit().putBoolean(PREF_WARNED, true).apply() }
                 .setCancelable(false)
                 .show()
+            tooltipOnDialog(dialog, Help.SAME_KEY)
         }
     }
 
@@ -179,12 +184,12 @@ class BuilderFragment : Fragment() {
         val busy = Session.busy
         itemsBox.removeAllViews()
         if (Session.items.isEmpty()) {
-            itemsBox.addView(text(requireContext(), "Nothing chosen: the copy will carry no add-ons.", 14f))
+            itemsBox.addView(text(requireContext(), "Nothing chosen: the copy will carry no add-ons.", 14f, tooltip = Help.ADDONS))
         }
         for (chosen in Session.items) {
             val kind = if (AddonKind.PLUGIN.extension == chosen.picked.fileName.substringAfterLast('.').lowercase()) "plugin" else "template"
             val row = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4)) }
-            row.addView(text(requireContext(), "${chosen.picked.label} ($kind, from ${chosen.source})", 14f))
+            row.addView(text(requireContext(), "${chosen.picked.label} ($kind, from ${chosen.source})", 14f, tooltip = Help.ADDONS))
             row.addView(Button(requireContext()).apply {
                 this.text = "Remove"
                 isEnabled = !busy
@@ -231,7 +236,7 @@ class BuilderFragment : Fragment() {
     }
 
     private fun confirmWebsite() {
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Download from the internet?")
             .setMessage(
                 "This reads the list of add-ons and downloads the ones you choose from addons.appdevforall.org, " +
@@ -240,6 +245,7 @@ class BuilderFragment : Fragment() {
             .setPositiveButton("Continue") { _, _ -> Session.fetchOffer(hostVersionName()) }
             .setNegativeButton("Cancel", null)
             .show()
+        tooltipOnDialog(dialog, Help.WEBSITE)
     }
 
     private fun hostVersionName(): String? =
@@ -261,7 +267,7 @@ class BuilderFragment : Fragment() {
             Session.message = "This app's version could not be read, so every add-on is listed."
             messageLabel.text = Session.message
         }
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Add-ons on the website")
             .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
             .setPositiveButton("Add") { _, _ ->
@@ -270,6 +276,7 @@ class BuilderFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+        tooltipOnDialog(dialog, Help.WEBSITE)
     }
 
     private fun startBuild() {
@@ -313,14 +320,16 @@ class BuilderFragment : Fragment() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private fun text(ctx: Context, content: String, sp: Float, bold: Boolean = false) = TextView(ctx).apply {
+    private fun text(ctx: Context, content: String, sp: Float, bold: Boolean = false, tooltip: String? = null, consume: Boolean = true) = TextView(ctx).apply {
         text = content
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         setPadding(0, dp(4), 0, dp(4))
+        if (tooltip != null) withTooltip(this, tooltip, consume)
     }
 
-    private fun heading(ctx: Context, content: String) = text(ctx, content, 18f, bold = true).apply { setPadding(0, dp(20), 0, dp(4)) }
+    private fun heading(ctx: Context, content: String, tooltip: String) =
+        text(ctx, content, 18f, bold = true, tooltip = tooltip).apply { setPadding(0, dp(20), 0, dp(4)) }
 
     private fun action(ctx: Context, label: String, tooltip: String, onClick: () -> Unit) = Button(ctx).apply {
         text = label
@@ -337,6 +346,18 @@ class BuilderFragment : Fragment() {
         view.setOnLongClickListener { v ->
             CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tag)
             consume
+        }
+    }
+
+    /**
+     * Long-press on a dialog's message (or on a row of its list) shows the tooltip. Call it after
+     * `show()`, when the dialog's views exist.
+     */
+    private fun tooltipOnDialog(dialog: AlertDialog, tag: String) {
+        dialog.findViewById<TextView>(android.R.id.message)?.let { withTooltip(it, tag) }
+        dialog.listView?.setOnItemLongClickListener { _, row, _, _ ->
+            CustomIdeBuilderPlugin.tooltips()?.showTooltip(row, Help.CATEGORY, tag)
+            true
         }
     }
 

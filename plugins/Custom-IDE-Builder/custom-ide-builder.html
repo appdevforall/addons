@@ -77,10 +77,11 @@
     <li>Files you pick are copied into this plugin's own private folder under a fixed name, whatever the file
       is called, before they are checked. Downloads from the website come only from
       <code>addons.appdevforall.org</code> over HTTPS and are checked against the size and SHA-256 the
-      website publishes.</li>
-    <li>Passwords are held only in the screen's fields and in the one running build. The build's copies are
-      zeroed, and the fields are emptied, when a build ends, however it ends; the fields are also emptied when
-      you leave the screen. The plugin asks for permission to read and write files and to use the network (for the website
+      website publishes. An add-on larger than 512 MB is refused, and so is one that does not fit in the free
+      space, before it is copied or downloaded.</li>
+    <li>Passwords are held only in the screen's fields and in the one running task that needs them (reading the
+      keys, or a build). That task's copies are zeroed when it ends, however it ends, and also if it never
+      starts; the fields are emptied when a build ends and when you leave the screen. The plugin asks for permission to read and write files and to use the network (for the website
       list only).</li>
   </ul>
 
@@ -127,8 +128,12 @@
   <ul>
     <li><b>Use the same key every time.</b> A device that has a build signed with one key cannot update to
       a build signed with another without being uninstalled first.</li>
-    <li><b>Passwords are never saved.</b> They are used for the build in front of you and cleared when
-      a build ends and when you leave the screen.</li>
+    <li><b>Passwords are never saved.</b> They are used for the task in front of you (reading the keys or
+      building) and cleared when it ends, and the fields are cleared when a build ends and when you leave the
+      screen.</li>
+    <li><b>The key is checked again at build time.</b> The keystore file is read again for the build; if the
+      key in it is no longer the one whose fingerprint you were shown, the build stops and asks you to read
+      the keys again.</li>
     <li><b>Each plugin must have its own plugin ID</b> and each template its own file name; the builder
       says which add-ons clash. <code>core.cgt</code> is never bundled, because Code on the Go installs it
       itself.</li>
