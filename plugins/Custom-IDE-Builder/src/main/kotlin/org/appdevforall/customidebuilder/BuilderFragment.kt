@@ -120,7 +120,7 @@ class BuilderFragment : Fragment() {
         column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
 
         column.addView(heading(ctx, "2. Name and icon (optional)", Help.NAME))
-        column.addView(text(ctx, "Leave both empty to keep the name and icon Code on the Go has. A name or icon you choose replaces them everywhere the app shows them.", 14f))
+        column.addView(text(ctx, "Leave both empty to keep the name and icon Code on the Go has. A name or icon you choose replaces them everywhere the app shows them.", 14f, tooltip = Help.NAME))
         nameField = EditText(ctx).apply {
             hint = "App name"
             withTooltip(this, Help.APP_NAME, consume = false)
