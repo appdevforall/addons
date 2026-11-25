@@ -122,7 +122,8 @@ object PluginManifest {
         val application = manifest.applicationElement ?: return null
         // As in the Bundle the platform fills: the last entry of a name wins, and only text values are strings.
         val meta = HashMap<String, String?>()
-        for (element in application.listElements("meta-data")) {
+        // getElements is what the deprecated listElements copied into a list; nothing here changes the tree while it runs.
+        for (element in application.getElements("meta-data")) {
             val name = text(element, ATTR_NAME, "name") ?: continue
             meta[name] = text(element, ATTR_VALUE, "value")
         }
