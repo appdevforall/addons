@@ -54,8 +54,7 @@ class SigningKey(val alias: String, val privateKey: PrivateKey, val chain: List<
     val certificate: X509Certificate get() = chain.first()
 
     /** SHA-256 of the signing certificate, `AA:BB:..`, to compare between builds. */
-    val fingerprint: String
-        get() = MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString(":") { "%02X".format(it) }
+    val fingerprint: String get() = Keystores.fingerprintOf(certificate)
 }
 
 sealed class KeyLoad {
@@ -119,6 +118,22 @@ object Keystores {
         if (chain.isEmpty()) return KeyLoad.Failed("\"$alias\" has no certificate, so it cannot sign.")
         return KeyLoad.Loaded(SigningKey(alias, key, chain))
     }
+
+    /** SHA-256 of [certificate], `AA:BB:..`: the one form the screen shows and the build compares. */
+    fun fingerprintOf(certificate: X509Certificate): String =
+        MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString(":") { "%02X".format(it) }
+
+    /**
+     * Null when [key] is the one whose fingerprint [shown] the user was shown, else why not. The
+     * keystore is read again for the build, so the file may have changed since the keys were listed.
+     */
+    fun shownKeyProblem(shown: String?, key: SigningKey): String? =
+        if (shown != null && shown == key.fingerprint) {
+            null
+        } else {
+            "The key \"${key.alias}\" in the keystore is no longer the one whose fingerprint was shown " +
+                "(the file changed after the keys were read). Tap Read keys again and check the fingerprint."
+        }
 
     private fun Throwable.chain(): Sequence<Throwable> = generateSequence(this) { it.cause }
 }

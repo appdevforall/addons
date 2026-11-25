@@ -75,6 +75,22 @@ class KeystoresTest {
     }
 
     @Test
+    fun theKeyTheBuildLoadsMustBeTheOneWhoseFingerprintWasShown() {
+        val shownStore = open(TestSupport.keystoreBytes("PKCS12", material, "pw"), "pw") as KeystoreOpen.Opened
+        val shown = Keystores.fingerprintOf(shownStore.store.getCertificate("key") as java.security.cert.X509Certificate)
+        val same = (Keystores.loadKey(shownStore, "key", CharArray(0), "pw".toCharArray()) as KeyLoad.Loaded).key
+        assertEquals(null, Keystores.shownKeyProblem(shown, same))
+
+        // The file is swapped for another key under the same alias after the keys were listed.
+        val swapped = open(TestSupport.keystoreBytes("PKCS12", TestSupport.material("Other"), "pw"), "pw") as KeystoreOpen.Opened
+        val other = (Keystores.loadKey(swapped, "key", CharArray(0), "pw".toCharArray()) as KeyLoad.Loaded).key
+        val problem = Keystores.shownKeyProblem(shown, other)
+        assertTrue(problem, problem != null && problem.contains("no longer the one whose fingerprint was shown"))
+        assertTrue("a missing fingerprint never matches", Keystores.shownKeyProblem(null, same) != null)
+        assertTrue("an empty fingerprint never matches", Keystores.shownKeyProblem("", same) != null)
+    }
+
+    @Test
     fun anUnknownAliasFails() {
         val opened = open(TestSupport.keystoreBytes("PKCS12", material, "pw"), "pw") as KeystoreOpen.Opened
         assertTrue(Keystores.loadKey(opened, "nope", CharArray(0), "pw".toCharArray()) is KeyLoad.Failed)
