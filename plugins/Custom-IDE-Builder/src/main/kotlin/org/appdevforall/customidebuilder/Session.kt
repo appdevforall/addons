@@ -24,6 +24,9 @@ import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.Catalog
 import org.appdevforall.customidebuilder.core.CatalogAddon
 import org.appdevforall.customidebuilder.core.CatalogException
+import org.appdevforall.customidebuilder.core.ContactField
+import org.appdevforall.customidebuilder.core.Contacts
+import org.appdevforall.customidebuilder.core.HostSupport
 import org.appdevforall.customidebuilder.core.HttpFetcher
 import org.appdevforall.customidebuilder.core.IconCheck
 import org.appdevforall.customidebuilder.core.IconVerdict
@@ -86,6 +89,15 @@ object Session {
     var icon: PreparedIcon? = null
     var iconName: String? = null
     var iconVerdict: IconVerdict? = null
+
+    /**
+     * The contact details typed for the copy, as typed; a blank field hides that row or button in the copy. The
+     * screen fills them from its preferences once per session ([contactsLoaded]) and saves each change there.
+     */
+    var contacts: Contacts = Contacts()
+        private set
+    var contactsLoaded: Boolean = false
+        private set
 
     /** The ownership checkbox. It is cleared whenever the name or picture changes, so it always covers what is on screen. */
     var confirmedOwn: Boolean = false
@@ -219,6 +231,18 @@ object Session {
         changed()
     }
 
+    /** The values the screen remembered from an earlier visit. Called once per session, before the screen shows them. */
+    fun loadContacts(remembered: Contacts) {
+        contacts = remembered
+        contactsLoaded = true
+    }
+
+    fun setContact(field: ContactField, value: String) {
+        if (contacts[field] == value) return
+        contacts = contacts.with(field, value)
+        changed()
+    }
+
     fun clearIcon() {
         // The preview is not recycled: the ImageView may still be drawing it.
         icon = null
@@ -300,6 +324,9 @@ object Session {
         iconName = null
         iconVerdict = null
         confirmedOwn = false
+        // The screen's preferences keep them; the next session reads them from there again.
+        contacts = Contacts()
+        contactsLoaded = false
         IconImages.release()
         offer = null
         nameQuestion?.answer?.cancel()
@@ -492,19 +519,23 @@ object Session {
             return report("Choose a keystore and load its keys first.")
         }
         val prepared = icon
-        val gate = BrandingGate.problems(appName, prepared != null, iconVerdict, confirmedOwn)
+        val chosenContacts = contacts.trimmed()
+        val gate = BrandingGate.problems(appName, prepared != null, iconVerdict, confirmedOwn, chosenContacts)
         // A missing icon is also in the gate's list, so the null test only narrows the type.
         if (prepared == null || gate.isNotEmpty()) {
             storePassword.fill('\u0000'); keyPassword.fill('\u0000')
             return report(gate.joinToString("\n"))
         }
-        val branding = Branding(BrandingGate.nameToWrite(appName), prepared.icons)
+        val branding = Branding(BrandingGate.nameToWrite(appName), prepared.icons, chosenContacts)
         launch("Building", listOf(storePassword, keyPassword), endsBuild = true) { gen ->
             var name = Naming.outputName(branding.appName, host.versionName)
             val out = File(dir, "out")
             var saved: Uri? = null
             var finished = false
             try {
+                // First of all: a Code on the Go that cannot carry the contact details is refused before any question or work.
+                val unsupported = withContext(Dispatchers.IO) { HostSupport.problem(host.apk, host.versionName) }
+                if (unsupported != null) return@launch report(unsupported, gen)
                 // Before the minutes of work, so a taken name costs the user nothing.
                 val free = freeNameIn(context, tree, name, gen, "The folder already has a file named %s. Choose another name.")
                     ?: return@launch report("Cancelled: nothing was built, because $name is already in the folder and no other name was chosen.", gen)
@@ -524,7 +555,7 @@ object Session {
                         Keystores.shownKeyProblem(shownFingerprint, key)?.let { throw BuildException(it) }
                         out.deleteRecursively()
                         val built =
-                            Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding), check) { s, f ->
+                            Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding, host.versionName), check) { s, f ->
                                 progressFrom(gen, s.label, (f * 1000).toInt())
                             }
                         // The pipeline has verified the APK, so a signer is always there; checked before saving, so no file is written without one.

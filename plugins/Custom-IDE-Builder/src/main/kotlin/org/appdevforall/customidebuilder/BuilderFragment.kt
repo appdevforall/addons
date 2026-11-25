@@ -31,6 +31,9 @@ import org.appdevforall.customidebuilder.core.AddonKind
 import org.appdevforall.customidebuilder.core.AppNameCheck
 import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.Catalog
+import org.appdevforall.customidebuilder.core.ContactCheck
+import org.appdevforall.customidebuilder.core.ContactField
+import org.appdevforall.customidebuilder.core.Contacts
 import org.appdevforall.customidebuilder.core.IconVerdict
 import org.appdevforall.customidebuilder.core.MinSdkCheck
 import org.appdevforall.customidebuilder.core.MinSdkWarning
@@ -51,6 +54,8 @@ class BuilderFragment : Fragment() {
     private lateinit var iconStatus: TextView
     private lateinit var clearIconButton: Button
     private lateinit var confirmBox: CheckBox
+    private val contactFields = LinkedHashMap<ContactField, EditText>()
+    private val contactStatus = LinkedHashMap<ContactField, TextView>()
     private var refreshing = false
     private lateinit var keystoreLabel: TextView
     private lateinit var storePassword: EditText
@@ -108,6 +113,11 @@ class BuilderFragment : Fragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
         prefs = prefsOf()
+        if (!Session.contactsLoaded) {
+            Session.loadContacts(ContactField.values().fold(Contacts()) { c, f -> c.with(f, prefs.getString(contactPref(f), null) ?: "") })
+        }
+        contactFields.clear()
+        contactStatus.clear()
         actionButtons.clear()
         removeButtons.clear()
         shownAliases = null
@@ -170,7 +180,27 @@ class BuilderFragment : Fragment() {
         }
         column.addView(confirmBox)
 
-        column.addView(heading(ctx, "3. Signing key", Help.KEYSTORE))
+        column.addView(heading(ctx, "3. Your contact details", Help.CONTACTS))
+        column.addView(
+            text(
+                ctx,
+                "These replace App Dev For All's links on the copy's About page and its feedback and crash-report emails. Leave a field blank to hide it.",
+                14f,
+                tooltip = Help.CONTACTS,
+            ),
+        )
+        for (f in ContactField.values()) {
+            val tag = Help.contactTag(f)
+            val field = contactField(ctx, f, tag)
+            column.addView(fieldLabel(ctx, contactLabel(f), tag, field))
+            column.addView(field)
+            val status = text(ctx, "", 14f, tooltip = tag)
+            column.addView(status)
+            contactFields[f] = field
+            contactStatus[f] = status
+        }
+
+        column.addView(heading(ctx, "4. Signing key", Help.KEYSTORE))
         keystoreLabel = text(ctx, "", 14f, tooltip = Help.KEYSTORE)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
@@ -199,12 +229,12 @@ class BuilderFragment : Fragment() {
         column.addView(fieldLabel(ctx, "Key password (leave blank if it is the same as the store password)", Help.KEY_PASSWORD, keyPassword))
         column.addView(keyPassword)
 
-        column.addView(heading(ctx, "4. Output folder", Help.FOLDER))
+        column.addView(heading(ctx, "5. Output folder", Help.FOLDER))
         folderLabel = text(ctx, "", 14f, tooltip = Help.FOLDER)
         column.addView(folderLabel)
         column.addView(action(ctx, "Choose folder", Help.FOLDER) { pickFolder.launch(null) })
 
-        column.addView(heading(ctx, "5. Build", Help.BUILD))
+        column.addView(heading(ctx, "6. Build", Help.BUILD))
         column.addView(action(ctx, "Build APK", Help.BUILD) { startBuild() })
         stageLabel = text(ctx, "", 14f, tooltip = Help.STATUS)
         column.addView(stageLabel)
@@ -284,6 +314,7 @@ class BuilderFragment : Fragment() {
         }
         removeButtons.forEach { it.isEnabled = !busy }
         refreshBranding(busy)
+        refreshContacts(busy)
         keystoreLabel.text = Session.keystoreName?.let { "Keystore: $it" } ?: "No keystore chosen."
         val aliases = Session.aliases
         if (aliases != shownAliases) {
@@ -442,6 +473,18 @@ class BuilderFragment : Fragment() {
         nameField.isEnabled = !busy
     }
 
+    private fun refreshContacts(busy: Boolean) {
+        val contacts = Session.contacts
+        for ((f, field) in contactFields) {
+            val value = contacts[f]
+            if (field.text.toString() != value) field.setText(value)
+            field.isEnabled = !busy
+            val status = contactStatus.getValue(f)
+            status.text = ContactCheck.problem(f, value)?.let { "${f.label}: $it" }.orEmpty()
+            status.visibility = if (status.text.isEmpty()) View.GONE else View.VISIBLE
+        }
+    }
+
     private fun hostOrNull(): HostInfo? =
         try {
             AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, requireContext())
@@ -595,8 +638,52 @@ class BuilderFragment : Fragment() {
         isSaveEnabled = false
     }
 
+    /** The label above a contact field: what it is and where the copy shows it. */
+    private fun contactLabel(f: ContactField): String =
+        when (f) {
+            ContactField.WEBSITE -> "Website (About page)"
+            ContactField.CONTACT_EMAIL -> "Contact email (About page)"
+            ContactField.FEEDBACK_EMAIL -> "Feedback email (feedback button and crash reports)"
+            ContactField.SUPPORT_URL -> "Support link (the About page's \"Support our work\" button)"
+            ContactField.FORUM_URL -> "Discussion forum (About page)"
+            ContactField.TELEGRAM_URL -> "Telegram channel (About page)"
+            ContactField.YOUTUBE_URL -> "YouTube channel (About page)"
+        }
+
+    /**
+     * A field for one contact detail. Its label is [fieldLabel], above it. The input type takes no line break, and
+     * horizontal scrolling is turned off after it, so a long link wraps onto more lines instead of running off the side.
+     * Each change goes to [Session] and to the preferences, so it is remembered across sessions.
+     */
+    private fun contactField(ctx: Context, f: ContactField, tooltip: String) = EditText(ctx).apply {
+        id = View.generateViewId()
+        withTooltip(this, tooltip, consume = false)
+        inputType = InputType.TYPE_CLASS_TEXT or (if (f.isEmail) InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS else InputType.TYPE_TEXT_VARIATION_URI)
+        setHorizontallyScrolling(false)
+        maxLines = Int.MAX_VALUE
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        hint = if (f.isEmail) "name@example.org (blank hides it)" else "https://example.org/ (blank hides it)"
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                if (refreshing) return
+                val value = s?.toString().orEmpty()
+                prefs.edit().putString(contactPref(f), value).apply()
+                Session.setContact(f, value)
+            }
+        })
+    }
+
+    private fun contactPref(f: ContactField): String = PREF_CONTACT_PREFIX + f.name.lowercase(java.util.Locale.ROOT)
+
     private companion object {
         const val PREF_WARNED = "warned_same_key"
         const val PREF_TREE = "output_tree_uri"
+
+        /** Contact details are not secret, so they are kept beside the output folder. */
+        const val PREF_CONTACT_PREFIX = "contact_"
     }
 }

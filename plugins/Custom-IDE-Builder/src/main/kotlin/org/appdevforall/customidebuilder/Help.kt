@@ -2,6 +2,8 @@ package org.appdevforall.customidebuilder
 
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
+import org.appdevforall.customidebuilder.core.ContactField
+import org.appdevforall.customidebuilder.core.HostSupport
 
 /**
  * Tooltips for Custom IDE Builder. The category is `plugin_` plus the plugin ID, exactly, and
@@ -31,10 +33,95 @@ object Help {
     const val SAME_KEY = "customidebuilder.samekey"
     const val NAME_TAKEN = "customidebuilder.nametaken"
     const val NAME_FIELD = "customidebuilder.namefield"
+    const val CONTACTS = "customidebuilder.contacts"
+    const val CONTACT_WEBSITE = "customidebuilder.contact.website"
+    const val CONTACT_EMAIL = "customidebuilder.contact.email"
+    const val CONTACT_FEEDBACK = "customidebuilder.contact.feedback"
+    const val CONTACT_SUPPORT = "customidebuilder.contact.support"
+    const val CONTACT_FORUM = "customidebuilder.contact.forum"
+    const val CONTACT_TELEGRAM = "customidebuilder.contact.telegram"
+    const val CONTACT_YOUTUBE = "customidebuilder.contact.youtube"
+
+    /** The tooltip of a contact field and its label. */
+    fun contactTag(field: ContactField): String =
+        when (field) {
+            ContactField.WEBSITE -> CONTACT_WEBSITE
+            ContactField.CONTACT_EMAIL -> CONTACT_EMAIL
+            ContactField.FEEDBACK_EMAIL -> CONTACT_FEEDBACK
+            ContactField.SUPPORT_URL -> CONTACT_SUPPORT
+            ContactField.FORUM_URL -> CONTACT_FORUM
+            ContactField.TELEGRAM_URL -> CONTACT_TELEGRAM
+            ContactField.YOUTUBE_URL -> CONTACT_YOUTUBE
+        }
+
+    private const val LINK_RULES =
+        "<p>A link must be a full address starting with <code>https://</code>, with no spaces and no user name or " +
+            "password in it. A <code>%</code> is allowed only as part of an escape such as <code>%20</code>. Leave it " +
+            "blank to hide it in the copy.</p>"
+
+    private const val EMAIL_RULES =
+        "<p>A plain address such as <code>name@example.org</code>: letters, digits and <code>. _ + -</code> before the " +
+            "<code>@</code>, a domain after it, and no spaces. Leave it blank to hide it in the copy.</p>"
+
+    private const val REMEMBERED = "<p>Remembered on this device for your next visit; it is not secret.</p>"
 
     private val more = listOf(PluginTooltipButton(description = "About Custom IDE Builder", uri = "index.html", order = 0))
 
     val entries = listOf(
+        PluginTooltipEntry(
+            CONTACTS,
+            "Your own links and emails for the copy's About page, feedback and crash reports. Blank hides one.",
+            "<p>The copy's About page, its <i>Support our work</i> button, its feedback button and its crash-report " +
+                "emails show App Dev For All's details unless you replace them here. A field left blank hides that row " +
+                "or button in the copy. The Bilibili video link is always removed.</p>" +
+                "<p>This needs Code on the Go ${HostSupport.MIN_IDE_VERSION} or newer, the first version that lets a copy " +
+                "replace these details; on an older one the build is refused before anything is done.</p>" +
+                "<p>What you type is remembered on this device for your next visit; none of it is secret.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_WEBSITE,
+            "The website link on the copy's About page. Blank hides it.",
+            "<p>Shown as the first row of the copy's About page, in place of App Dev For All's website.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_EMAIL,
+            "The email address on the copy's About page. Blank hides it.",
+            "<p>Shown on the copy's About page; tapping it starts an email to this address.</p>" + EMAIL_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_FEEDBACK,
+            "Where the copy's feedback and crash reports are emailed. Blank hides the feedback button.",
+            "<p>Used by the copy's feedback button, the feedback action in the editor sidebar and the crash report " +
+                "email. Blank hides the feedback button and action.</p>" + EMAIL_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_SUPPORT,
+            "Where the About page's \"Support our work\" button leads. Blank hides the button.",
+            "<p>For a donation or sponsorship page of your own.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_FORUM,
+            "The support and discussion forum on the copy's About page. Blank hides it.",
+            "<p>A forum, discussion board or help page where people using the copy can ask questions.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_TELEGRAM,
+            "The Telegram channel on the copy's About page. Blank hides it.",
+            "<p>A link such as <code>https://t.me/yourchannel</code>.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_YOUTUBE,
+            "The YouTube channel on the copy's About page. Blank hides it.",
+            "<p>A link such as <code>https://youtube.com/@yourchannel</code>.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
         PluginTooltipEntry(
             MENU,
             "Make a copy of Code on the Go with the add-ons you choose, signed with your own key.",
