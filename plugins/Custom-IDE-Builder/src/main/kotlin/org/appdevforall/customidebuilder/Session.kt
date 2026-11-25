@@ -32,6 +32,7 @@ import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.ProgressGate
 import org.appdevforall.customidebuilder.core.SelectionResult
 import org.appdevforall.customidebuilder.core.Staging
+import org.appdevforall.customidebuilder.core.TemplateCheck
 import org.appdevforall.customidebuilder.core.WorkDirs
 import java.io.File
 import java.security.cert.X509Certificate
@@ -348,9 +349,12 @@ object Session {
     /** Adds the file if the list stays valid with it; otherwise deletes it and returns why. */
     private suspend fun accept(context: Context, staging: File, label: String, fileName: String, file: File, source: String): String? {
         val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { AndroidBits.readPluginId(context, file) } else null
-        if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE && !looksLikeZip(file)) {
-            discard(staging, file)
-            return "$label: not a template bundle (it is not a zip file)"
+        if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE) {
+            val problem = withContext(Dispatchers.IO) { TemplateCheck.problem(file) }
+            if (problem != null) {
+                discard(staging, file)
+                return "$label: $problem"
+            }
         }
         val picked = PickedAddon(label, fileName, file, id)
         return when (val r = AddonSelection.validate(items.map { it.picked } + picked)) {
@@ -365,9 +369,6 @@ object Session {
             }
         }
     }
-
-    private fun looksLikeZip(file: File): Boolean =
-        file.inputStream().use { s -> ByteArray(4).also { s.read(it) }.contentEquals(byteArrayOf(0x50, 0x4B, 3, 4)) }
 
     /** Reads the keystore and lists the keys in it; the password is used here and not kept, and is zeroed on every path. */
     fun loadKeystore(context: Context, storePassword: CharArray) {
