@@ -338,12 +338,16 @@ class McpToolSource internal constructor(
     /**
      * The description the model and the approval dialog see. A SQLite debugger tool starts with
      * its application ID: every entry's tools say the same thing otherwise, and the model could
-     * not tell which app's database one reads. A hand-added server's text is passed through.
+     * not tell which app's database one reads. A hand-added server's text is passed through. While the
+     * settings switch keeps an entry's `execute` off, its `query` also says how writes get allowed
+     * ([ReadOnlyTrust.needsWriteSwitchHint]).
      */
     private fun describe(server: McpServer, tool: McpTool): String {
         if (!server.automatic) return tool.description
         val app = "${AutomaticServers.applicationIdOf(server.id)} (SQLite debugger)"
-        return if (tool.description.isBlank()) app else "$app: ${tool.description}"
+        val text = if (tool.description.isBlank()) app else "$app: ${tool.description}"
+        if (!ReadOnlyTrust.needsWriteSwitchHint(tool.name, server.knownTools, server.enabledTools)) return text
+        return "$text ${string(R.string.mcp_write_switch_hint, string(R.string.mcp_allow_database_writes))}"
     }
 
     /**

@@ -60,6 +60,19 @@ object ReadOnlyTrust {
     fun isReadOnly(tool: McpTool): Boolean = tool.readOnlyHint && tool.name !in WRITE_TOOLS
 
     /**
+     * Whether [toolName] of an SQLite debugger entry should tell the model how writes get allowed: it
+     * is `query`, whose own description says "Writes are refused: use execute", and the entry's server
+     * offers a [WRITE_TOOLS] tool that the settings switch keeps off. Told only to use a tool it does
+     * not have, the model looked for another way: on a Note 20 it asked to run `sqlite3` in the shell
+     * (ADFA-7300, 2026-11-25).
+     *
+     * @param knownTools every tool the server listed.
+     * @param enabledTools the tools offered now.
+     */
+    fun needsWriteSwitchHint(toolName: String, knownTools: Collection<String>, enabledTools: Collection<String>): Boolean =
+        toolName == "query" && WRITE_TOOLS.any { it in knownTools && it !in enabledTools }
+
+    /**
      * Reads the hint from one `tools/list` entry's `annotations`.
      *
      * Exactly boolean true counts. The string "true", 1, false, null and a missing key do not: an

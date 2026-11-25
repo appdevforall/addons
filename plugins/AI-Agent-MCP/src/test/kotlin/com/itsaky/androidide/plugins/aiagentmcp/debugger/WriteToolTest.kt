@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeMcpServer
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeMcpServer.Companion.tool
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
+import com.itsaky.androidide.plugins.aiagentmcp.testing.stringsXmlContext
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolSource
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
@@ -36,6 +37,7 @@ class WriteToolTest {
     fun setUp() {
         val context = mockk<PluginContext>(relaxed = true)
         every { context.getPluginSharedPreferences(any()) } returns FakeSharedPreferences()
+        every { context.androidContext } returns stringsXmlContext()
         plugin = McpPlugin().also { it.initialize(context) }
         mockkObject(McpServerStore)
         every { McpServerStore.token(any()) } returns KeystoreSecretStore.Stored.Absent
@@ -60,6 +62,11 @@ class WriteToolTest {
         AutomaticServers.install { listOf(AutomaticEndpoint(app, fake.port, "t1")) }
         McpToolCatalog.connect(AutomaticServers.servers().single())
     }
+
+    /** What `query` adds while the switch is off, as strings.xml words it. */
+    private val hint = "Changes to this app's databases are off. To make one, ask the user to switch on this setting on " +
+        "AI-Agent-MCP's MCP servers screen: Let the Agent change app databases. Don't change the databases any other " +
+        "way, for example through the shell."
 
     /** The offered tools, keyed by the tool name after the app prefix (`db_app_list_databases` -> `databases`). */
     private fun offered() = source.listTools().associateBy { it.name.substringAfterLast("_") }
@@ -118,5 +125,38 @@ class WriteToolTest {
         val spec = offered().values.single()
         assertTrue(spec.requiresApproval())
         assertFalse(spec.isReadOnly)
+    }
+
+    @Test
+    fun `with the switch off, query says how writes get allowed`() {
+        connect()
+        assertEquals("$app (SQLite debugger): query $hint", offered().getValue("query").description)
+        assertEquals("$app (SQLite debugger): list_databases", offered().getValue("databases").description)
+    }
+
+    @Test
+    fun `with the switch on, query has no hint`() {
+        connect()
+        McpServerStore.setAllowDatabaseWrites(true)
+        assertEquals("$app (SQLite debugger): query", offered().getValue("query").description)
+    }
+
+    @Test
+    fun `a debugger without execute gets no hint`() {
+        val fake = FakeMcpServer("t1", listOf(tool("list_databases", true), tool("query", true)))
+        server = fake
+        AutomaticServers.install { listOf(AutomaticEndpoint(app, fake.port, "t1")) }
+        McpToolCatalog.connect(AutomaticServers.servers().single())
+        assertEquals("$app (SQLite debugger): query", offered().getValue("query").description)
+    }
+
+    @Test
+    fun `a hand-added server's query is passed through, execute on or off`() {
+        val fake = FakeMcpServer("", listOf(tool("query", true), tool("execute", true)))
+        server = fake
+        val handAdded = McpServerStore.saveDetails(McpServerStore.newServer("Mine", "http://127.0.0.1:${fake.port}/mcp"))
+        McpToolCatalog.connect(handAdded)
+        McpServerStore.setToolEnabled(handAdded.id, "query", true)
+        assertEquals("query", offered().values.single().description)
     }
 }

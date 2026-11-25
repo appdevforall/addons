@@ -116,7 +116,12 @@ Servers you add yourself keep the name prefix taken from their label.
   offers "Always Allow" for it. A change is committed at once and cannot be
   undone. On a Room database the server refuses the first write until the Agent
   repeats it with `acknowledge_room: true` (ADFA-7299), so that call asks too.
-  With the switch on, each app offers five tools, in the order the server lists
+  While the switch is off, the entry's `query` description adds that the user
+  can switch writes on there and that the databases must not be changed any
+  other way (`ReadOnlyTrust.needsWriteSwitchHint`). Told only "use execute", a
+  tool it did not have, the model asked to run `sqlite3` in the shell instead
+  (a Note 20, 2026-11-25). The shell would not reach another app's private
+  files, but the user was never told about the switch. With the switch on, each app offers five tools, in the order the server lists
   them (today `list_databases`, `get_schema`, `query`, `execute`, `get_events`),
   so two apps take 10 of AI-Core's 12 slots, and in compact mode (4) AI-Core
   drops the first app's `get_events` and every later tool.

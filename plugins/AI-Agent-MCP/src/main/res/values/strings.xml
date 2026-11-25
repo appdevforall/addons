@@ -12,6 +12,9 @@
     <string name="mcp_add_server">Add server</string>
     <string name="mcp_allow_database_writes">Let the Agent change app databases</string>
     <string name="mcp_allow_database_writes_summary">Offers the SQLite debugger\'s execute tool for each app. The Agent asks before every change, and Always Allow is never offered for it. A change is saved at once and cannot be undone, and the app may show old data until it reads again.</string>
+    <!-- Added to an app's query tool description while the switch above is off; the model and the
+         approval dialog read it. %1$s is mcp_allow_database_writes. -->
+    <string name="mcp_write_switch_hint">Changes to this app\'s databases are off. To make one, ask the user to switch on this setting on AI-Agent-MCP\'s MCP servers screen: %1$s. Don\'t change the databases any other way, for example through the shell.</string>
     <string name="mcp_server_tools_summary">%1$d of %2$d tools enabled</string>
     <string name="mcp_server_url_cleartext">Not connecting: this http:// URL is not on this device. Tap to change it to https://.</string>
     <string name="mcp_cd_server_enabled">Use this server</string>
