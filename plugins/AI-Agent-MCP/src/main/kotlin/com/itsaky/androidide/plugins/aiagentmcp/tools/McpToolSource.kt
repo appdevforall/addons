@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.ReadOnlyTrust
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
@@ -92,7 +93,7 @@ class McpToolSource internal constructor(
             name = exposed.name,
             description = exposed.description,
             parametersSchema = exposed.tool.inputSchema,
-            preApproved = exposed.server.automatic && exposed.tool.readOnlyHint,
+            preApproved = exposed.server.automatic && ReadOnlyTrust.isReadOnly(exposed.tool),
         )
     }
 
@@ -351,7 +352,8 @@ class McpToolSource internal constructor(
      * Every remote tool declares that it requires approval and is not read-only: this plugin cannot
      * know what a server's tool does, and guessing on the permissive side is the one guess that
      * cannot be undone. The one exception is [preApproved]: a readOnlyHint tool of the automatic
-     * debugger entry, whose server Code on the Go itself installed, declares no approval needed.
+     * debugger entry, whose server Code on the Go itself installed, declares no approval needed. Its
+     * `execute`, which writes, never does, whatever hint it carries (`ReadOnlyTrust.isReadOnly`).
      * AI-Core overrides `requiresApproval` to true for every contributed tool
      * (`ContributedToolHandler`), so the Agent still asks. For a read-only tool, AI-Core 3.6.0 or
      * later offers "Always Allow" for the rest of the chat (ADFA-7147); an older AI-Core asks on each

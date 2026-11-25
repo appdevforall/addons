@@ -35,11 +35,29 @@ object ReadOnlyTrust {
     val CORE_TOOLS: Set<String> = linkedSetOf("list_databases", "get_schema", "query", "get_events")
 
     /**
-     * @param tools what `tools/list` returned.
-     * @return the names of the [CORE_TOOLS] that declared `annotations.readOnlyHint` as boolean true.
+     * The SQLite debugger's tools that change an app's database (ADFA-7300). Switched on only by the
+     * settings switch [com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore.allowDatabaseWrites],
+     * and never read-only, whatever hint the server sends: "Always Allow" must never cover a write.
      */
-    fun enabledTools(tools: List<McpTool>): Set<String> =
-        tools.filter { it.readOnlyHint && it.name in CORE_TOOLS }.mapTo(linkedSetOf()) { it.name }
+    val WRITE_TOOLS: Set<String> = linkedSetOf("execute")
+
+    /**
+     * @param tools what `tools/list` returned.
+     * @param allowWrites the user switched on database writes in this plugin's settings.
+     * @return the names of the [CORE_TOOLS] that declared `annotations.readOnlyHint` as boolean true,
+     *   then, when [allowWrites], the listed [WRITE_TOOLS].
+     */
+    fun enabledTools(tools: List<McpTool>, allowWrites: Boolean = false): Set<String> {
+        val on = tools.filter { isReadOnly(it) && it.name in CORE_TOOLS }.mapTo(linkedSetOf()) { it.name }
+        if (allowWrites) tools.filter { it.name in WRITE_TOOLS }.mapTo(on) { it.name }
+        return on
+    }
+
+    /**
+     * Whether this plugin declares [tool] of an SQLite debugger entry read-only to AI-Core, which then
+     * offers "Always Allow" for it. A [WRITE_TOOLS] tool never is, even if its server claims the hint.
+     */
+    fun isReadOnly(tool: McpTool): Boolean = tool.readOnlyHint && tool.name !in WRITE_TOOLS
 
     /**
      * Reads the hint from one `tools/list` entry's `annotations`.

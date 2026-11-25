@@ -105,6 +105,17 @@ class McpSettingsFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.servers.collect { servers -> renderServers(view, servers) }
         }
+
+        // The switch is set from the store before its listener goes on, so showing it writes nothing.
+        val writes = view.findViewById<SwitchMaterial>(R.id.mcpAllowDatabaseWrites)
+        wireTooltip(writes, McpPlugin.TOOLTIP_TAG_ALLOW_DATABASE_WRITES)
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.allowDatabaseWrites.collect { allow ->
+                writes.setOnCheckedChangeListener(null)
+                writes.isChecked = allow
+                writes.setOnCheckedChangeListener { _, isChecked -> viewModel.setAllowDatabaseWrites(isChecked) }
+            }
+        }
     }
 
     override fun onResume() {

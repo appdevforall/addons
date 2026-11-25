@@ -86,6 +86,14 @@
   <code>query</code> and <code>get_events</code>. Its other tools start off. This
   version does not show the entry on the MCP servers screen, so it has no switches
   there yet.</p>
+  <p>The one switch it has is <b>Let the Agent change app databases</b>, at the top
+  of the MCP servers screen, off at first. While it is on, every app's SQLite
+  debugger entry also offers <code>execute</code>, which runs one SQL statement that
+  changes data or the schema. The Agent asks for your approval before every
+  change, and "Always Allow" is never offered for it. A change is saved at once
+  and can't be undone. For an app that uses Room, the first change is refused
+  until the Agent asks you again, because Room doesn't notice it and the app can
+  show old data until it reads the database again.</p>
   <p>The Agent reads this list from memory, so tap <b>Connect</b> again after the
   server changes; a chat that is already open picks the new list up.</p>
 

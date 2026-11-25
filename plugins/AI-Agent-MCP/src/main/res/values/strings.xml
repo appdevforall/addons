@@ -10,6 +10,8 @@
     <string name="mcp_description">Connect the Agent to Model Context Protocol servers. Their tools appear alongside the Agent\'s own, and every one of them asks for your approval before it runs.</string>
     <string name="mcp_empty">No servers yet. Add one to give the Agent remote tools.</string>
     <string name="mcp_add_server">Add server</string>
+    <string name="mcp_allow_database_writes">Let the Agent change app databases</string>
+    <string name="mcp_allow_database_writes_summary">Offers the SQLite debugger\'s execute tool for each app. The Agent asks before every change, and Always Allow is never offered for it. A change is saved at once and cannot be undone, and the app may show old data until it reads again.</string>
     <string name="mcp_server_tools_summary">%1$d of %2$d tools enabled</string>
     <string name="mcp_server_url_cleartext">Not connecting: this http:// URL is not on this device. Tap to change it to https://.</string>
     <string name="mcp_cd_server_enabled">Use this server</string>

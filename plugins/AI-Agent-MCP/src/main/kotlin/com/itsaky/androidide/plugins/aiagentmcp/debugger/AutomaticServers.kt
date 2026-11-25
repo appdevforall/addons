@@ -253,18 +253,25 @@ object AutomaticServers {
         return changed
     }
 
-    /** The entries to offer, with their tool switches already decided by [ReadOnlyTrust]. */
-    fun servers(): List<McpServer> = states.map { (id, state) ->
+    /**
+     * The entries to offer, with their tool switches already decided by [ReadOnlyTrust] and the
+     * settings switch for database writes.
+     */
+    fun servers(): List<McpServer> {
+        val allowWrites = McpServerStore.allowDatabaseWrites()
+        return states.map { (id, state) -> server(id, state, allowWrites) }
+    }
+
+    private fun server(id: String, state: State, allowWrites: Boolean) =
         McpServer(
             id = id,
             name = "SQLite debugger (${state.endpoint.applicationId})",
             url = urlFor(state.endpoint),
             enabled = true,
             knownTools = state.tools.map { it.name },
-            enabledTools = ReadOnlyTrust.enabledTools(state.tools),
+            enabledTools = ReadOnlyTrust.enabledTools(state.tools, allowWrites),
             automatic = true,
         )
-    }
 
     fun isAutomatic(serverId: String): Boolean = serverId.startsWith(ID_PREFIX)
 

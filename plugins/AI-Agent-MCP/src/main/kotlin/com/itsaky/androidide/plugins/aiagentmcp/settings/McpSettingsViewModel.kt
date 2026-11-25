@@ -39,9 +39,23 @@ class McpSettingsViewModel(
     /** The configured servers, re-read after every change. */
     val servers: StateFlow<List<McpServer>> = _servers.asStateFlow()
 
+    private val _allowDatabaseWrites = MutableStateFlow(McpServerStore.allowDatabaseWrites())
+
+    /** The switch that lets the SQLite debugger entries offer their write tool (ADFA-7300). */
+    val allowDatabaseWrites: StateFlow<Boolean> = _allowDatabaseWrites.asStateFlow()
+
     /** Re-reads the stored servers, e.g. after returning to the screen. */
     fun reload() {
         _servers.value = McpServerStore.servers()
+        _allowDatabaseWrites.value = McpServerStore.allowDatabaseWrites()
+    }
+
+    /** Stores the database-writes switch off the main thread, then re-reads it. */
+    fun setAllowDatabaseWrites(allow: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { McpServerStore.setAllowDatabaseWrites(allow) }
+            reload()
+        }
     }
 
     /**

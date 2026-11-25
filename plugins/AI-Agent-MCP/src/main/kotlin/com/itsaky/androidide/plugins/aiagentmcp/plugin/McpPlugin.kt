@@ -146,6 +146,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_HEADER_VALUE = "mcp_header_value"
         const val TOOLTIP_TAG_HEADER_REMOVE = "mcp_header_remove"
         const val TOOLTIP_TAG_BACK = "mcp_back"
+        const val TOOLTIP_TAG_ALLOW_DATABASE_WRITES = "mcp_allow_database_writes"
 
         /**
          * Logs a failure that escaped a coroutine of [newScope]. Platform logging, not
@@ -648,10 +649,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 on.<br><br>The one exception is the SQLite debugger entry that CoGo adds
                 for an app you build with the SQLite debugger: four of its read-only tools
                 start on (list databases, get schema, query, and get events). This version
-                doesn't list that entry on the MCP servers screen.<br><br>The Agent asks for
-                your approval every time it uses a tool. For those four, you can choose
-                Always Allow, which lasts for the rest of the chat (needs AI Core 3.6.0 or
-                later).
+                doesn't list that entry on the MCP servers screen. Its tool that changes the
+                app's database, execute, stays off until you turn on <b>Let the Agent change
+                app databases</b> on that screen.<br><br>The Agent asks for your approval
+                every time it uses a tool. For those four, you can choose Always Allow,
+                which lasts for the rest of the chat (needs AI Core 3.6.0 or later). Never
+                for execute.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
@@ -687,6 +690,26 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 Each tool has its own switch. The tool list comes from the last time CoGo
                 connected to the server. If the list is empty, tap <b>Connect</b>. The
                 server may not have been reachable when CoGo started.
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Learn more",
+                    uri = "i/ai-addons-other.html#mcp",
+                    order = 0,
+                    directPath = true,
+                ),
+            ),
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_ALLOW_DATABASE_WRITES,
+            summary = "Lets the Agent change the databases of apps you build with the SQLite debugger. It asks you before every change.",
+            detail = """
+                When this is on, each app's SQLite debugger entry offers its execute tool,
+                which runs one SQL statement that changes data or the schema. The Agent asks
+                for your approval every time, and Always Allow is never offered for it.<br><br>
+                A change is saved at once and can't be undone. For an app that uses Room, the
+                first change asks you again, because Room doesn't notice it: the app can show
+                old data until it reads the database again.
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
