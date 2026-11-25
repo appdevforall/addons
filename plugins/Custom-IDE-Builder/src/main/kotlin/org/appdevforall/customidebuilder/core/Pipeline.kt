@@ -22,6 +22,8 @@ class BuildInput(
     val workDir: File,
     /** The final file's name, inside [workDir]. */
     val outputName: String,
+    /** The new name and icon, or null to leave both as the host has them. */
+    val branding: Branding? = null,
 )
 
 class BuildOutput(val apk: File, val rewrite: RewriteReport, val verify: VerifyReport)
@@ -64,7 +66,9 @@ object Pipeline {
         try {
             val report =
                 try {
-                    ApkRewriter.rewrite(input.hostApk, unsigned, input.addons, checkCancelled) { onProgress(BuildStage.REWRITING, it) }
+                    ApkRewriter.rewrite(input.hostApk, unsigned, input.addons, input.branding, checkCancelled) { onProgress(BuildStage.REWRITING, it) }
+                } catch (e: BrandingException) {
+                    throw BuildException("Changing the name or icon failed: ${e.message}", e)
                 } catch (e: java.io.IOException) {
                     throw BuildException("Copying the app failed: ${e.message}", e)
                 }

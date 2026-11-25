@@ -17,8 +17,8 @@ android {
         applicationId = "org.appdevforall.customidebuilder"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -41,7 +41,10 @@ android {
                 "META-INF/LICENSE",
                 "META-INF/LICENSE.txt",
                 "META-INF/NOTICE",
-                "META-INF/NOTICE.txt"
+                "META-INF/NOTICE.txt",
+                // ARSCLib carries Android's framework resource tables (2.4 MB) for its decoder. Only the table
+                // reader and writer are used here, never the decoder, so they stay out of the .cgp.
+                "frameworks/**"
             )
         }
     }
@@ -68,6 +71,11 @@ dependencies {
     // Gradle plugin in settings.gradle.kts, which publishes apksig beside itself on Google Maven.
     // Bundled into the .cgp: the host does not carry it.
     implementation("com.android.tools.build:apksig:9.3.1")
+
+    // Reads and rewrites the host's resources.arsc (app name, icons) and reads a plugin's minSdkVersion out of its
+    // binary manifest, with no platform parser. Apache-2.0, bundled into the .cgp. It also bundles three
+    // android.* / org.xmlpull.* interface shims that the platform already provides; see README.md.
+    implementation("io.github.reandroid:ARSCLib:1.4.0")
 
     // Tests run on a computer's Java. There Android's org.json is an empty stub, so they bring their own,
     // and BouncyCastle writes the BKS keystores that Android's built-in provider reads and makes the test certificates.
