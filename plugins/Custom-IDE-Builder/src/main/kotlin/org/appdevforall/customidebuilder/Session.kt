@@ -13,8 +13,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.appdevforall.customidebuilder.core.AddonDownloader
-import org.appdevforall.customidebuilder.core.AddonLimits
 import org.appdevforall.customidebuilder.core.AddonKind
+import org.appdevforall.customidebuilder.core.AddonLimits
 import org.appdevforall.customidebuilder.core.AddonSelection
 import org.appdevforall.customidebuilder.core.BuildException
 import org.appdevforall.customidebuilder.core.BuildInput
