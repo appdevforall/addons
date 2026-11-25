@@ -28,7 +28,7 @@ class CustomIdeBuilderPlugin : IPlugin, UIExtension, DocumentationExtension {
     override fun deactivate(): Boolean = true
 
     override fun dispose() {
-        Session.cancel()
+        Session.end()
         Session.clearItems()
         context = null
     }

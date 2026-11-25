@@ -28,6 +28,7 @@ import org.appdevforall.customidebuilder.core.Naming
 import org.appdevforall.customidebuilder.core.PickedAddon
 import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.SelectionResult
+import org.appdevforall.customidebuilder.core.Staging
 import java.io.File
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
@@ -60,7 +61,7 @@ object Session {
     var progress: Int = 0
 
     private val main = Handler(Looper.getMainLooper())
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var scope: CoroutineScope? = null
     private var job: Job? = null
     private var counter = 0
     private val listeners = ArrayList<() -> Unit>()
@@ -80,19 +81,36 @@ object Session {
         changed()
     }
 
+    /** Deletes [file] only if it is under the staging folder, so a bad path can never remove anything else. */
+    private fun discard(file: File) {
+        val staging = stagingDir() ?: return
+        if (Staging.isInside(staging, file)) file.delete()
+    }
+
     fun remove(chosen: Chosen) {
         items.remove(chosen)
-        chosen.picked.file.delete()
+        discard(chosen.picked.file)
         changed()
     }
 
     fun clearItems() {
-        items.toList().forEach { it.picked.file.delete() }
+        items.toList().forEach { discard(it.picked.file) }
         items.clear()
     }
 
+    /** Stops the running job (the Cancel button). The Session can start another afterwards. */
     fun cancel() {
         job?.cancel()
+    }
+
+    /** Called when the plugin is disposed: stops the job and the scope it ran in, and drops queued screen updates. */
+    fun end() {
+        job?.cancel()
+        job = null
+        scope?.cancel()
+        scope = null
+        main.removeCallbacksAndMessages(null)
+        busy = false
     }
 
     /** Copies the chosen files into the plugin's folder and adds each one that passes [AddonSelection.validate]. */
@@ -101,19 +119,21 @@ object Session {
         launch("Adding add-ons") {
             val problems = ArrayList<String>()
             for (uri in uris) {
+                // The reported name is untrusted: it is the label and the source of the entry name, never a path.
                 val name = AndroidBits.displayName(context, uri) ?: "add-on"
-                if (AddonSelection.kindOf(name) == null) {
-                    problems.add("$name: not a .cgp or .cgt file")
+                val label = Staging.label(name)
+                val file = Staging.stagedFile(staging, counter++, name)
+                if (file == null) {
+                    problems.add("$label: not a .cgp or .cgt file")
                     continue
                 }
-                val file = File(staging, "${counter++}/$name")
                 val added =
                     try {
                         withContext(Dispatchers.IO) { AndroidBits.copyToFile(context, uri, file) }
-                        accept(context, name, name, file, "this device")
+                        accept(context, label, name, file, "this device")
                     } catch (e: java.io.IOException) {
-                        file.delete()
-                        "$name: ${e.message}"
+                        discard(file)
+                        "$label: ${e.message}"
                     }
                 if (added != null) problems.add(added)
             }
@@ -147,10 +167,15 @@ object Session {
                 stage = "Downloading ${addon.name} (${i + 1} of ${wanted.size})"
                 progress = 0
                 changed()
+                val dir = File(staging, "${counter++}")
+                if (!Staging.isInside(staging, File(dir, addon.fileName))) {
+                    problems.add("${Staging.label(addon.name)}: its file name is not usable")
+                    continue
+                }
                 val file =
                     try {
                         withContext(Dispatchers.IO) {
-                            downloader.download(addon, File(staging, "${counter++}")) { got ->
+                            downloader.download(addon, dir) { got ->
                                 main.post { progress = (got * 1000 / addon.size.coerceAtLeast(1)).toInt(); changed() }
                             }
                         }
@@ -168,7 +193,7 @@ object Session {
     private suspend fun accept(context: Context, label: String, fileName: String, file: File, source: String): String? {
         val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { AndroidBits.readPluginId(context, file) } else null
         if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE && !looksLikeZip(file)) {
-            file.delete()
+            discard(file)
             return "$label: not a template bundle (it is not a zip file)"
         }
         val picked = PickedAddon(label, fileName, file, id)
@@ -178,7 +203,7 @@ object Session {
                 null
             }
             is SelectionResult.Invalid -> {
-                file.delete()
+                discard(file)
                 r.problems.firstOrNull { label in it } ?: r.problems.first()
             }
         }
@@ -304,7 +329,7 @@ object Session {
         progress = 0
         message = ""
         changed()
-        job = scope.launch {
+        job = (scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main).also { scope = it }).launch {
             try {
                 block()
             } finally {
