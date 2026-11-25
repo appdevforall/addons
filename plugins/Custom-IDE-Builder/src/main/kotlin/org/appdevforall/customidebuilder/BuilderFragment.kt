@@ -117,10 +117,11 @@ class BuilderFragment : Fragment() {
         })
         column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
 
-        column.addView(heading(ctx, "2. Name and icon (optional)").apply { help(Help.NAME) })
+        column.addView(heading(ctx, "2. Name and icon (optional)").apply { withTooltip(this, Help.NAME) })
         column.addView(text(ctx, "Leave both empty to keep the name and icon Code on the Go has. A name or icon you choose replaces them everywhere the app shows them.", 14f))
         nameField = EditText(ctx).apply {
             hint = "App name"
+            withTooltip(this, Help.APP_NAME, consume = false)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             addTextChangedListener(object : TextWatcher {
@@ -134,17 +135,18 @@ class BuilderFragment : Fragment() {
             })
         }
         column.addView(nameField)
-        nameStatus = text(ctx, "", 14f)
+        nameStatus = text(ctx, "", 14f).apply { withTooltip(this, Help.NAME) }
         column.addView(nameStatus)
         iconPreview = ImageView(ctx).apply {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = "Preview of the chosen icon"
+            withTooltip(this, Help.ICON)
         }
         column.addView(iconPreview, LinearLayout.LayoutParams(dp(96), dp(96)).apply { topMargin = dp(8) })
-        iconLabel = text(ctx, "", 14f)
+        iconLabel = text(ctx, "", 14f).apply { withTooltip(this, Help.ICON) }
         column.addView(iconLabel)
-        iconStatus = text(ctx, "", 14f)
+        iconStatus = text(ctx, "", 14f).apply { withTooltip(this, Help.ICON) }
         column.addView(iconStatus)
         column.addView(action(ctx, "Choose icon", Help.ICON) { pickIcon.launch(arrayOf("image/*")) })
         clearIconButton = action(ctx, "Remove icon", Help.ICON) { Session.clearIcon() }
@@ -153,7 +155,7 @@ class BuilderFragment : Fragment() {
             text = BrandingGate.CONFIRMATION
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setOnCheckedChangeListener { _, checked -> if (!refreshing) Session.confirmedOwn = checked }
-            help(Help.CONFIRM)
+            withTooltip(this, Help.CONFIRM)
         }
         column.addView(confirmBox)
 
@@ -261,7 +263,7 @@ class BuilderFragment : Fragment() {
             })
             val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk)).firstOrNull()
             if (warning != null) {
-                row.addView(text(requireContext(), "Warning: ${warning.message} Keep it, or tap Remove.", 14f))
+                row.addView(text(requireContext(), "Warning: ${warning.message} Keep it, or tap Remove.", 14f).apply { withTooltip(this, Help.MINSDK) })
             }
             itemsBox.addView(row)
         }
@@ -332,13 +334,6 @@ class BuilderFragment : Fragment() {
 
     /** The lowest Android this copy installs on; 0 (so nothing is flagged) if the app's details cannot be read. */
     private fun hostMinSdk(): Int = hostOrNull()?.minSdk ?: 0
-
-    private fun View.help(tooltip: String) {
-        setOnLongClickListener { v ->
-            CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tooltip)
-            true
-        }
-    }
 
     private fun confirmWebsite() {
         AlertDialog.Builder(requireContext())

@@ -17,6 +17,8 @@ object Help {
     const val NAME = "customidebuilder.name"
     const val ICON = "customidebuilder.icon"
     const val CONFIRM = "customidebuilder.confirm"
+    const val APP_NAME = "customidebuilder.appname"
+    const val MINSDK = "customidebuilder.minsdk"
     const val FOLDER = "customidebuilder.folder"
     const val BUILD = "customidebuilder.build"
     const val REMOVE = "customidebuilder.remove"
@@ -135,6 +137,22 @@ object Help {
             "<p>Shown after you tap Read keys. The line below the list is the certificate fingerprint " +
                 "(SHA-256) of the chosen key, so you can check it is the key you used before. Use the same key " +
                 "for every build.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            APP_NAME,
+            "The name the copy shows on the launcher. Leave it empty to keep Code on the Go's.",
+            "<p>At most 50 characters, and not close to <i>Code on the Go</i> or its short form. The line under " +
+                "the field says what is wrong with a name that is refused. Changing the name clears the " +
+                "confirmation box.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            MINSDK,
+            "This plugin may not work on every device the copy installs on.",
+            "<p>The plugin asks for a newer Android than this copy of Code on the Go needs, or asks in a way this " +
+                "builder could not read. Keep it if everyone who will install the copy has a new enough device, " +
+                "or tap Remove.</p>",
             more,
         ),
     )

@@ -18,7 +18,8 @@ sealed class MinSdk {
 
 object PluginMinSdk {
     private const val MANIFEST = "AndroidManifest.xml"
-    private const val MAX_MANIFEST = 4 * 1024 * 1024
+    /** A plugin's compiled manifest is a few KiB; anything this large is not one worth reading. */
+    const val MAX_MANIFEST = 1024 * 1024
 
     /** Reads the minimum from a compiled (binary) manifest, without the platform's parser. */
     fun fromManifest(bytes: ByteArray): MinSdk {
@@ -30,17 +31,37 @@ object PluginMinSdk {
         return MinSdk.Unknown(attribute.valueAsString)
     }
 
-    /** Reads it from a .cgp or .apk; null when the file has no readable manifest. */
+    /**
+     * Reads it from a .cgp or .apk; null when the file has no readable manifest. A manifest larger
+     * than [MAX_MANIFEST] is [MinSdk.Unknown]. The size the archive claims is not used: the bytes
+     * are counted as they are read, so an entry that understates its size cannot fill memory.
+     */
     fun fromArchive(file: File): MinSdk? =
         try {
             ZipFile(file).use { zip ->
                 val entry = zip.getEntry(MANIFEST) ?: return null
-                if (entry.size > MAX_MANIFEST) return null
-                fromManifest(zip.getInputStream(entry).use { it.readBytes() })
+                val bytes = zip.getInputStream(entry).use { readCapped(it, MAX_MANIFEST) } ?: return MinSdk.Unknown(null)
+                fromManifest(bytes)
             }
+        } catch (e: OutOfMemoryError) {
+            MinSdk.Unknown(null)
         } catch (e: Exception) {
             null
         }
+
+    /** All of [input], or null once it holds more than [cap] bytes. */
+    internal fun readCapped(input: java.io.InputStream, cap: Int): ByteArray? {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) return out.toByteArray()
+            total += n
+            if (total > cap) return null
+            out.write(buffer, 0, n)
+        }
+    }
 }
 
 /** A plugin the copy would carry on an Android older than the plugin supports. */

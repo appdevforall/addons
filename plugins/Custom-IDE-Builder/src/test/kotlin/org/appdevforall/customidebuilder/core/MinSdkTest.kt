@@ -53,6 +53,42 @@ class MinSdkTest {
         assertNull(PluginMinSdk.fromArchive(garbage))
     }
 
+    private fun archiveWithManifest(name: String, size: Int, claimed: Int?): java.io.File {
+        val f = tmp.newFile(name)
+        ZipOutputStream(f.outputStream()).use { z ->
+            z.putNextEntry(ZipEntry("AndroidManifest.xml")); z.write(ByteArray(size)); z.closeEntry()
+        }
+        if (claimed != null) {
+            // Central directory entry: signature 0x02014b50, uncompressed size at offset 24.
+            val b = f.readBytes()
+            var i = b.size - 4
+            while (!(b[i] == 0x50.toByte() && b[i + 1] == 0x4b.toByte() && b[i + 2] == 1.toByte() && b[i + 3] == 2.toByte())) i--
+            for (k in 0..3) b[i + 24 + k] = (claimed ushr (8 * k)).toByte()
+            f.writeBytes(b)
+        }
+        return f
+    }
+
+    @Test
+    fun aManifestOverTheCapIsUnknown() {
+        val m = PluginMinSdk.fromArchive(archiveWithManifest("big.cgp", PluginMinSdk.MAX_MANIFEST + 1, null))
+        assertTrue(m.toString(), m is MinSdk.Unknown)
+    }
+
+    @Test
+    fun aManifestThatClaimsASmallSizeButIsLargerIsUnknown() {
+        val f = archiveWithManifest("liar.cgp", 3 * PluginMinSdk.MAX_MANIFEST, 100)
+        java.util.zip.ZipFile(f).use { assertEquals(100L, it.getEntry("AndroidManifest.xml").size) }
+        val m = PluginMinSdk.fromArchive(f)
+        assertTrue(m.toString(), m is MinSdk.Unknown)
+    }
+
+    @Test
+    fun theCapCountsBytesNotTheHeader() {
+        assertEquals(10, PluginMinSdk.readCapped(java.io.ByteArrayInputStream(ByteArray(10)), 10)!!.size)
+        assertNull(PluginMinSdk.readCapped(java.io.ByteArrayInputStream(ByteArray(11)), 10))
+    }
+
     @Test
     fun warnsOnlyWhenThePluginNeedsANewerAndroidThanTheHost() {
         val w = MinSdkCheck.warnings(
