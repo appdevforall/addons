@@ -58,6 +58,10 @@
       before the file is saved.</li>
     <li><b>Your own name and icon.</b> Every copy carries a name and a launcher icon of your choosing
       instead of Code on the Go's, so it is not mistaken for the original. Both are required.</li>
+    <li><b>Your own contact details.</b> The links on the copy's About page (website, email, discussion forum,
+      Telegram, YouTube and the <i>Support our work</i> button) and the address its feedback button and crash
+      reports are emailed to come from the <b>Your contact details</b> section, not from App Dev For All. A field
+      left blank hides that row or button in the copy. The Bilibili video link is always removed.</li>
     <li><b>Checks before it is built.</b> The name, the picture and each plugin's requirements are checked,
       and you confirm the name and icon are yours.</li>
     <li><b>Output folder.</b> The finished APK is saved to a folder you choose, as
@@ -81,6 +85,12 @@
       the app carries. The picture is cropped to a square and drawn as the launcher icon, the splash-screen
       picture, the logo on the app's own screens (welcome, main screen, About and the editor sidebar) and a
       white-outline status-bar icon, at every screen density.</li>
+    <li>The contact details are written into the copy's text resources for every language it carries; a blank field
+      is written as empty text, which the copy reads as "hide this". A link must be a full <code>https://</code>
+      address with a host name and no spaces, and an email address a plain <code>name@example.org</code>. This needs
+      a Code on the Go that includes ADFA-7313; the plugin's minimum version is Code on the Go 26.48. The builder
+      looks for ADFA-7313's contact strings in the installed app before anything else and refuses to build on a Code
+      on the Go without them, naming the version it needs.</li>
     <li>The name is refused if it is empty, over 50 characters, or close to <i>Code on the Go</i> or its short
       form (look-alike letters and spaces do not fool the comparison). The picture is compared with Code on
       the Go's own icon as the launcher, older launchers and the app's own screens draw it, with and without its
@@ -127,6 +137,9 @@
       own name. Tick <b>This name and icon are my own, and not Code on the Go's</b>; the build will not
       start until you do. The builder refuses an empty name, a name over 50 characters, a name that is
       close to <i>Code on the Go</i>, and a picture that looks like Code on the Go's own icon.</li>
+    <li><b>Your contact details.</b> Fill in the links and email addresses people using the copy should reach you
+      at, or leave a field blank to hide it. A line under a field says what is wrong with it, and the build will
+      not start until it is fixed or cleared. What you type is remembered on this device for your next visit.</li>
     <li><b>Signing key.</b> Choose the keystore file, type the store password and tap <b>Read keys</b>,
       then pick the key. Leave the key password blank if it is the same as the store password.</li>
     <li><b>Output folder.</b> Choose it once; it is remembered.</li>
@@ -168,12 +181,17 @@
       naming the Android version the plugin needs (and this device's, when it is older too), and you decide
       whether to keep it or remove it. If the plugin's requirement cannot be read (or its manifest is too
       large to read), it says so with a softer warning.</li>
+    <li><b>The copy shows no App Dev For All contact details.</b> Each one is replaced by yours or hidden. Your
+      contact details are not secret, so they are remembered; passwords never are.</li>
+    <li><b>It needs a Code on the Go that includes ADFA-7313</b> (the plugin's minimum version is 26.48). An older Code on the Go keeps App Dev For All's
+      details where the builder cannot change them, so the build is refused with a message naming the version
+      needed and the one installed.</li>
     <li><b>Some text keeps the original name on purpose:</b> the credit line added to Git commits, the link to
       Code on the Go's download page and the invitation to contribute to the project. Text that carries
       formatting and names Code on the Go on an older version of the app is also left as it is; the screen
       reports how many.</li>
     <li><b>Check the result on a device.</b> Install the copy and look at the launcher, the splash screen, the
-      logo on the welcome and main screens and a notification. A picture with a clear shape on a plain or transparent background gives the best
+      logo on the welcome and main screens, a notification, the About page and the feedback button. A picture with a clear shape on a plain or transparent background gives the best
       status-bar icon.</li>
     <li><b>Nothing chosen</b> makes a copy that carries no add-ons.</li>
     <li>The copy is built from the APK of this installation. It does not work if Code on the Go was

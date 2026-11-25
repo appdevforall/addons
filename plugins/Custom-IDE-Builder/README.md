@@ -33,7 +33,10 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `IconCheck.kt` | Perceptual hash of a picture, trimming to content, and the "is this Code on the Go's own icon" decision |
 | `HostIcons.kt` | The raster files the host's icon resources resolve to, found through its `resources.arsc` |
 | `AppNameCheck.kt` | Name rules: empty, length, look-alike normalising, "cogo" / "codeonthego" |
-| `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked) before a build starts |
+| `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked, contact details valid) before a build starts |
+| `Contacts.kt` | The copy's contact details and `ContactCheck`: https links and plain email addresses, blank meaning "hide" |
+| `ContactBranding.kt` | Writes the contact details into their string resources in every config, and reads them back |
+| `HostSupport.kt` | Whether the installed Code on the Go has the contact strings (`about_website_url`), and the refusal when not |
 | `MinSdk.kt` | A plugin's `minSdkVersion`, `plugin.id` and `plugin.main_class` from its binary manifest, and the warning when the minimum is above the host's. The platform's `getPackageArchiveInfo` is not used: it refuses a plugin for a newer Android than the device's (F50) |
 
 The Android side (`BuilderFragment`, `Session`, `AndroidBits`, `IconImages`) is the screen, the file
@@ -94,6 +97,36 @@ do not change. New files are `res/custom-ide-builder/<role>-<density>.png`, stor
 
 The edited table is read back and compared with the original before it is used: every entry must still be there
 and every non-string value unchanged.
+
+## Contact details
+
+The copy's About page (website, email, discussion forum, Telegram, YouTube, the "Support our work" button) and its
+feedback button, editor-sidebar feedback action and crash-report email take their values from string resources in a
+Code on the Go that includes ADFA-7313, which hides a row or button whose string is empty (after trimming). The
+builder sets each of these in every config it has, the default and every language:
+
+| Field | Resource |
+|---|---|
+| Website | `about_website_url` |
+| Contact email | `adfa_email` (About > Email; its `mailto:` is built from it) |
+| Feedback email | `feedback_email` |
+| Support link | `github_sponsors_url` |
+| Discussion forum | `github_discussions_url` |
+| Telegram channel | `telegram_channel_url` |
+| YouTube channel | `youtube_channel_url` |
+| (none) | `bilibili_video_url`, always emptied |
+
+Every field is trimmed; a blank one is written as `""`. A link must be an absolute `https://` URL with a host, no
+user info, no whitespace or control characters, at most 2048 characters, and `%` only as a `%XX` escape. The app
+reads these strings with `getString(id)` and no format arguments, so a stored `%` is not a format marker, but a link
+still goes through `Uri.parse`. An email must match `[A-Za-z0-9._+-]+@label(.label)+`, because the app pastes it
+unescaped into `mailto:<address>?subject=...`. The values are not secret, so the screen remembers them in the same
+preferences as the output folder; `Session.end()` clears its copy.
+
+A Code on the Go without `about_website_url` keeps App Dev For All's details where no resource edit reaches, so
+`HostSupport` refuses the build before any work, naming `HostSupport.MIN_IDE_VERSION` and the installed version.
+That constant must equal `plugin.min_ide_version` in the manifest; `HostSupportTest` compares them. The manifest
+stays at 26.48 until ADFA-7313 ships in a release; raise both then.
 
 ## Resource editing dependency
 
