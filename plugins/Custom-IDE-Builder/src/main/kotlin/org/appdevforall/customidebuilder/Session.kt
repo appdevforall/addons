@@ -32,6 +32,7 @@ import org.appdevforall.customidebuilder.core.Keystores
 import org.appdevforall.customidebuilder.core.MinSdk
 import org.appdevforall.customidebuilder.core.Naming
 import org.appdevforall.customidebuilder.core.PickedAddon
+import org.appdevforall.customidebuilder.core.PluginManifest
 import org.appdevforall.customidebuilder.core.PluginMinSdk
 import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.SelectionResult
@@ -205,7 +206,7 @@ object Session {
                             val check = cancellationCheck()
                             AndroidBits.copyToFile(context, uri, file, checkCancelled = check)
                         }
-                        accept(context, label, name, file, "this device")
+                        accept(label, name, file, "this device")
                     } catch (e: java.io.IOException) {
                         discard(file)
                         "$label: ${e.message}"
@@ -261,15 +262,16 @@ object Session {
                         problems.add("${addon.name}: ${e.message}")
                         continue
                     }
-                accept(context, addon.name, addon.fileName, file, "the website")?.let { problems.add(it) }
+                accept(addon.name, addon.fileName, file, "the website")?.let { problems.add(it) }
             }
             report(if (problems.isEmpty()) "" else problems.joinToString("\n"))
         }
     }
 
     /** Adds the file if the list stays valid with it; otherwise deletes it and returns why. */
-    private suspend fun accept(context: Context, label: String, fileName: String, file: File, source: String): String? {
-        val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { AndroidBits.readPluginId(context, file) } else null
+    private suspend fun accept(label: String, fileName: String, file: File, source: String): String? {
+        // Read from the binary manifest, so a plugin for a newer Android than this device's is still identified (F50).
+        val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginManifest.fromArchive(file)?.pluginId } else null
         if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE && !looksLikeZip(file)) {
             discard(file)
             return "$label: not a template bundle (it is not a zip file)"

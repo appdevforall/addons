@@ -84,9 +84,10 @@
       form (look-alike letters and spaces do not fool the comparison). The picture is compared with Code on
       the Go's own icon as the launcher, older launchers and the app's own screens draw it, with and without its
       margins, and refused if it looks like any of them.</li>
-    <li>For each plugin the builder reads the lowest Android version it needs from the plugin's manifest,
-      reading at most 1 MiB of it, and compares it with the Android version this copy of Code on the Go
-      supports.</li>
+    <li>For each plugin the builder reads its plugin ID and the lowest Android version it needs from the
+      plugin's compiled manifest, reading at most 1 MiB of it, so a plugin made for a newer Android than this
+      device's is still recognised. It compares that version with the Android version this copy of Code on the
+      Go supports.</li>
     <li>The APK is signed with the Android signing library (<code>apksig</code>) and then verified with it,
       and its alignment is checked.</li>
     <li>Files you pick are copied into this plugin's own private folder under a fixed name, whatever the file
@@ -155,9 +156,9 @@
       says which add-ons clash. <code>core.cgt</code> is never bundled, because Code on the Go installs it
       itself.</li>
     <li><b>A plugin can need a newer Android</b> than this copy of Code on the Go does. The screen then warns,
-      naming the Android version the plugin needs, and you decide whether to keep it or remove it. If the
-      plugin's requirement cannot be read (or its manifest is too large to read), it says so with a softer
-      warning.</li>
+      naming the Android version the plugin needs (and this device's, when it is older too), and you decide
+      whether to keep it or remove it. If the plugin's requirement cannot be read (or its manifest is too
+      large to read), it says so with a softer warning.</li>
     <li><b>Some text keeps the original name on purpose:</b> the credit line added to Git commits, the link to
       Code on the Go's download page and the invitation to contribute to the project. Text that carries
       formatting and names Code on the Go on an older version of the app is also left as it is; the screen

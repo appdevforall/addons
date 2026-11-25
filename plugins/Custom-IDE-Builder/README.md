@@ -33,7 +33,7 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `HostIcons.kt` | The raster files the host's icon resources resolve to, found through its `resources.arsc` |
 | `AppNameCheck.kt` | Name rules: blank, length, look-alike normalising, "cogo" / "codeonthego" |
 | `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked) before a branded build starts |
-| `MinSdk.kt` | A plugin's `minSdkVersion` from its binary manifest, and the warning when it is above the host's |
+| `MinSdk.kt` | A plugin's `minSdkVersion`, `plugin.id` and `plugin.main_class` from its binary manifest, and the warning when the minimum is above the host's. The platform's `getPackageArchiveInfo` is not used: it refuses a plugin for a newer Android than the device's (F50) |
 
 The Android side (`BuilderFragment`, `Session`, `AndroidBits`, `IconImages`) is the screen, the file
 pickers, the Storage Access Framework output, and the bitmap work: decoding the chosen picture, scaling it

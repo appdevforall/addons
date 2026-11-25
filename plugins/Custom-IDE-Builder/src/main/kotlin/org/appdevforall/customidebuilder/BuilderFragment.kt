@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.util.TypedValue
@@ -262,7 +263,7 @@ class BuilderFragment : Fragment() {
                 setOnClickListener { Session.remove(chosen) }
                 withTooltip(this, Help.REMOVE)
             })
-            val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk)).firstOrNull()
+            val warning = MinSdkCheck.warnings(hostMinSdk(), listOf(chosen.picked.label to chosen.minSdk), Build.VERSION.SDK_INT).firstOrNull()
             if (warning != null) {
                 row.addView(text(requireContext(), "Warning: ${warning.message} Keep it, or tap Remove.", 14f).apply { withTooltip(this, Help.MINSDK) })
             }

@@ -1,9 +1,7 @@
 package org.appdevforall.customidebuilder
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import java.io.File
@@ -43,29 +41,6 @@ object AndroidBits {
             versionName = versionName,
             minSdk = info.minSdkVersion,
         )
-    }
-
-    /**
-     * The `plugin.id` in a .cgp's manifest, the way the host reads it (PluginLoader.getPluginMetadata):
-     * the meta-data entry, else the package name. Null when the file is not an APK or lacks
-     * `plugin.main_class`, which the host also requires.
-     */
-    fun readPluginId(context: Context, file: File): String? {
-        val pm = context.packageManager
-        val info =
-            try {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    pm.getPackageArchiveInfo(file.path, PackageManager.PackageInfoFlags.of(PackageManager.GET_META_DATA.toLong()))
-                } else {
-                    @Suppress("DEPRECATION")
-                    pm.getPackageArchiveInfo(file.path, PackageManager.GET_META_DATA)
-                }
-            } catch (e: Exception) {
-                null
-            } ?: return null
-        val meta = info.applicationInfo?.metaData ?: return null
-        if (meta.getString("plugin.main_class").isNullOrEmpty()) return null
-        return meta.getString("plugin.id") ?: info.packageName
     }
 
     fun displayName(context: Context, uri: Uri): String? =

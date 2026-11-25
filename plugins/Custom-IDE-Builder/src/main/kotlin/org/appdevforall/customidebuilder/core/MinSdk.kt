@@ -1,6 +1,8 @@
 package org.appdevforall.customidebuilder.core
 
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.chunk.xml.ResXmlElement
+import com.reandroid.arsc.value.ValueType
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.zip.ZipFile
@@ -64,13 +66,71 @@ object PluginMinSdk {
     }
 }
 
+/** What the host reads from a plugin's manifest to install it: the ID and the class it starts. */
+class PluginIdentity(val packageName: String?, val pluginId: String, val mainClass: String)
+
+/**
+ * Reads a plugin's identity from its compiled (binary) manifest, the way Code on the Go's PluginLoader.getPluginMetadata
+ * does: `plugin.id` from the application's meta-data, else the package name, and `plugin.main_class`, without which the
+ * host does not load the plugin. PackageManager.getPackageArchiveInfo is not used: it refuses an APK whose minSdkVersion
+ * is above the device's, so a plugin for a newer Android would be reported as unreadable instead of warned about (F50).
+ */
+object PluginManifest {
+    private const val MANIFEST = "AndroidManifest.xml"
+    private const val ATTR_NAME = 0x01010003
+    private const val ATTR_VALUE = 0x01010024
+
+    /** Null when the manifest has no application, no `plugin.main_class`, or neither a `plugin.id` nor a package name. */
+    fun identity(bytes: ByteArray): PluginIdentity? {
+        val manifest = AndroidManifestBlock.load(ByteArrayInputStream(bytes))
+        val application = manifest.applicationElement ?: return null
+        // As in the Bundle the platform fills: the last entry of a name wins, and only text values are strings.
+        val meta = HashMap<String, String?>()
+        for (element in application.listElements("meta-data")) {
+            val name = text(element, ATTR_NAME, "name") ?: continue
+            meta[name] = text(element, ATTR_VALUE, "value")
+        }
+        val mainClass = meta["plugin.main_class"]
+        if (mainClass.isNullOrEmpty()) return null
+        val packageName = manifest.packageName
+        val id = meta["plugin.id"] ?: packageName ?: return null
+        return PluginIdentity(packageName, id, mainClass)
+    }
+
+    /**
+     * Reads it from a .cgp; null when the file is not a zip, has no manifest, or the manifest is larger than
+     * [PluginMinSdk.MAX_MANIFEST] or not one ARSCLib can read.
+     */
+    fun fromArchive(file: File): PluginIdentity? =
+        try {
+            ZipFile(file).use { zip ->
+                val entry = zip.getEntry(MANIFEST) ?: return null
+                val bytes = zip.getInputStream(entry).use { PluginMinSdk.readCapped(it, PluginMinSdk.MAX_MANIFEST) } ?: return null
+                identity(bytes)
+            }
+        } catch (e: OutOfMemoryError) {
+            null
+        } catch (e: Exception) {
+            null
+        }
+
+    /** The attribute's text, found by its android resource ID or, in a manifest without IDs, by name; null if it is not text. */
+    private fun text(element: ResXmlElement, id: Int, name: String): String? {
+        val attribute = element.searchAttributeByResourceId(id) ?: element.searchAttributeByName(name) ?: return null
+        return if (attribute.valueType == ValueType.STRING) attribute.valueAsString else null
+    }
+}
+
 /** A plugin the copy would carry on an Android older than the plugin supports. */
 sealed class MinSdkWarning(val label: String, val message: String) {
-    class TooNew(label: String, val required: Int, val host: Int) :
+    /** [device] is the Android of the phone the builder runs on, named when it too is older than [required]. */
+    class TooNew(label: String, val required: Int, val host: Int, val device: Int? = null) :
         MinSdkWarning(
             label,
             "$label needs ${AndroidVersions.name(required)} or newer. This copy of Code on the Go installs on " +
-                "${AndroidVersions.name(host)} and newer, so on an older device $label will not work.",
+                "${AndroidVersions.name(host)} and newer, so on a device below ${AndroidVersions.name(required)} " +
+                "$label will not work." +
+                (if (device != null && device < required) " This device has ${AndroidVersions.name(device)}." else ""),
         )
 
     class Unknown(label: String, val raw: String?) :
@@ -78,11 +138,14 @@ sealed class MinSdkWarning(val label: String, val message: String) {
 }
 
 object MinSdkCheck {
-    /** One warning for each plugin whose minimum is above [hostMinSdk] or could not be read. A plugin with no minimum never warns. */
-    fun warnings(hostMinSdk: Int, plugins: List<Pair<String, MinSdk?>>): List<MinSdkWarning> =
+    /**
+     * One warning for each plugin whose minimum is above [hostMinSdk] or could not be read. A plugin with no minimum
+     * never warns. [deviceApi], the Android of this phone, is only named in the message.
+     */
+    fun warnings(hostMinSdk: Int, plugins: List<Pair<String, MinSdk?>>, deviceApi: Int? = null): List<MinSdkWarning> =
         plugins.mapNotNull { (label, min) ->
             when (min) {
-                is MinSdk.Known -> if (min.api > hostMinSdk) MinSdkWarning.TooNew(label, min.api, hostMinSdk) else null
+                is MinSdk.Known -> if (min.api > hostMinSdk) MinSdkWarning.TooNew(label, min.api, hostMinSdk, deviceApi) else null
                 is MinSdk.Unknown -> MinSdkWarning.Unknown(label, min.raw)
                 MinSdk.Unspecified, null -> null
             }

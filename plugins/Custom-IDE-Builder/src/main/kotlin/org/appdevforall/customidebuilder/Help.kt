@@ -153,7 +153,7 @@ object Help {
             "This plugin may not work on every device the copy installs on.",
             "<p>The plugin asks for a newer Android than this copy of Code on the Go needs, or asks in a way this " +
                 "builder could not read. Keep it if everyone who will install the copy has a new enough device, " +
-                "or tap Remove.</p>",
+                "or tap Remove. The warning names this device's Android when it is older too.</p>",
             more,
         ),
     )
