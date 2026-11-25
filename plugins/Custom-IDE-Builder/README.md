@@ -27,7 +27,7 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `Signing.kt` | apksig: signs v1, v2 and v3, then verifies |
 | `Catalog.kt`, `Download.kt` | The v2 catalog, `minAppVersion` filtering, verified downloads from `addons.appdevforall.org` only |
 | `Pipeline.kt` | Rewrite, sign, verify, check alignment |
-| `Branding.kt` | Edits the host's `resources.arsc` with ARSCLib: `app_name` and the other strings that name the app, and the files the three icon resources resolve to |
+| `Branding.kt` | Edits the host's `resources.arsc` with ARSCLib: `app_name` and the other strings that name the app, and the files the icon and logo resources resolve to |
 | `IconRaster.kt` | Densities and icon sizes, nearest-density choice, the white status-bar silhouette |
 | `IconCheck.kt` | Perceptual hash of a picture and the "is this Code on the Go's own icon" decision |
 | `AppNameCheck.kt` | Name rules: blank, length, look-alike normalising, "cogo" / "codeonthego" |
@@ -53,7 +53,8 @@ a rewrite could drop the spans. `CodeOnTheGo` without spaces (URLs) is never mat
 **Icon.** `ic_launcher` and `ic_launcher_round` (the whole icon, 48 dp), `ic_launcher_foreground` and
 `ic_launcher_fg_vector` (the picture in the central 66 dp of a transparent 108 dp canvas, which is the
 adaptive-icon safe zone and what the splash screen and the drawer header use), and `ic_cogo_notification`
-(a white silhouette, 24 dp) are repointed, in `drawable` and `mipmap`, in every config they have. Resource IDs
+(a white silhouette, 24 dp) and `cogo_brand_mark` (the logo on the welcome screen, the main screen, About and the
+editor sidebar header; the whole picture, 80 dp) are repointed, in `drawable` and `mipmap`, in every config they have. Resource IDs
 do not change. New files are `res/custom-ide-builder/<role>-<density>.png`, stored and 4-byte aligned like
 `resources.arsc`, which Android 11 and later require to be uncompressed.
 
@@ -62,6 +63,10 @@ do not change. New files are `res/custom-ide-builder/<role>-<density>.png`, stor
   launcher icon on API 26 and later; the launcher puts its own backing behind it.
 - **Density.** A config's density picks the nearest generated density. A config with no density, `anydpi` or
   `nodpi` gets the sharpest (xxxhdpi).
+- **Logo.** `cogo_brand_mark` is a vector with one entry and no density, so it gets the 320 px xxxhdpi file,
+  which Android reads as mdpi and scales by the screen density. Its layouts fit it into 44 to 200 dp boxes
+  (`fitCenter`), so a square picture shows square; in About's 48 x 89 dp box, sized for the tall phone
+  outline, it is 48 dp square.
 - **Status-bar icon.** The silhouette uses the picture's alpha. A picture with no transparency uses whatever
   differs from the colour of its corners.
 - **Look-alike check.** A 128-bit difference hash (9x8 horizontal and 8x9 vertical, brightness steps under 4

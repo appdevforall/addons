@@ -59,7 +59,8 @@ object Help {
             NAME,
             "Give the copy a name and an icon of your own, or leave both to keep Code on the Go's.",
             "<p>The name replaces <i>Code on the Go</i> on the launcher, in the app's own screens and in notifications. " +
-                "The icon replaces the launcher icon, the splash screen picture and the status-bar icon; the status-bar " +
+                "The icon replaces the launcher icon, the splash screen picture, the logo on the app's own screens and the " +
+                "status-bar icon; the status-bar " +
                 "icon is a white outline made from your picture, so a clear shape on a plain or transparent background " +
                 "works best. Text that must keep naming Code on the Go, such as the credit line added to Git commits, " +
                 "is left as it is.</p>" +
@@ -71,7 +72,7 @@ object Help {
             ICON,
             "Choose a picture for the icon. It is cropped to a square.",
             "<p>Any picture Android can open, up to 25 MB. The builder makes the launcher, splash and status-bar " +
-                "icons from it at every screen density. Nothing is uploaded.</p>",
+                "icons and the in-app logo from it at every screen density. Nothing is uploaded.</p>",
             more,
         ),
         PluginTooltipEntry(

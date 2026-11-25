@@ -36,6 +36,8 @@ object ArscSupport {
         p.getOrCreate("", "drawable", "ic_launcher_fg_vector").setValueAsString("res/drawable/ic_launcher_fg_vector.xml")
         p.getOrCreate("", "drawable", "ic_cogo_notification").setValueAsString("res/drawable/ic_cogo_notification.xml")
         p.getOrCreate("", "drawable", "ic_other").setValueAsString("res/drawable/ic_other.xml")
+        // The in-app logo: a vector with one entry and no density, as in Code on the Go.
+        p.getOrCreate("", "drawable", "cogo_brand_mark").setValueAsString("res/drawable/cogo_brand_mark.xml")
         for ((cfg, dir) in mapOf("mdpi" to "mipmap-mdpi-v4", "hdpi" to "mipmap-hdpi-v4", "xhdpi" to "mipmap-xhdpi-v4", "xxhdpi" to "mipmap-xxhdpi-v4", "xxxhdpi" to "mipmap-xxxhdpi-v4")) {
             p.getOrCreate(cfg, "mipmap", "ic_launcher").setValueAsString("res/$dir/ic_launcher.png")
             p.getOrCreate(cfg, "mipmap", "ic_launcher_round").setValueAsString("res/$dir/ic_launcher_round.png")

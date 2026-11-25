@@ -14,11 +14,14 @@ import java.io.ByteArrayInputStream
  * - [foreground]: the picture inside the central 66 dp of a 108 dp transparent canvas, for `ic_launcher_foreground`
  *   (the splash screen and the adaptive-icon layer) and `ic_launcher_fg_vector` (the navigation drawer header).
  * - [notification]: a white silhouette on transparent, 24 dp, for `ic_cogo_notification`.
+ * - [mark]: the whole picture, [IconSizes.MARK_DP] square, for `cogo_brand_mark`, the logo on the welcome screen,
+ *   the main screen, About and the editor sidebar header.
  */
 class BrandIcons(
     val launcher: Map<Density, ByteArray>,
     val foreground: Map<Density, ByteArray>,
     val notification: Map<Density, ByteArray>,
+    val mark: Map<Density, ByteArray>,
 )
 
 /** What the user chose: a new name, a new icon, or both. A null part is left as the host has it. */
@@ -71,20 +74,24 @@ object BrandingRules {
     /** Directory inside the APK for the new icon files. */
     const val ICON_DIR = "res/custom-ide-builder"
 
-    /** The `ic_launcher_fg_vector` name is the foreground used in the navigation drawer header. */
+    /**
+     * The `ic_launcher_fg_vector` name is the foreground used in the navigation drawer header. `cogo_brand_mark`
+     * is a vector in Code on the Go (one entry, no density) that the app's own screens show as its logo.
+     */
     enum class IconRole(val resources: Set<String>, val fileStem: String) {
         LAUNCHER(setOf("ic_launcher", "ic_launcher_round"), "launcher"),
         FOREGROUND(setOf("ic_launcher_foreground", "ic_launcher_fg_vector"), "foreground"),
         NOTIFICATION(setOf("ic_cogo_notification"), "notification"),
+        MARK(setOf("cogo_brand_mark"), "mark"),
     }
 
-    /** Resource types that hold those icons in Code on the Go: `drawable` (the manifest icon, splash, notification) and `mipmap`. */
+    /** Resource types that hold those icons in Code on the Go: `drawable` (the manifest icon, splash, notification, logo) and `mipmap`. */
     val ICON_TYPES = listOf("drawable", "mipmap")
 }
 
 /**
- * Edits the host's compiled resource table (`resources.arsc`): the app name, and the files three icon
- * resources resolve to. Resource IDs are untouched, so the manifest, the layouts and the code keep
+ * Edits the host's compiled resource table (`resources.arsc`): the app name, and the files the icon
+ * resources of [BrandingRules.IconRole] resolve to. Resource IDs are untouched, so the manifest, the layouts and the code keep
  * working with no change. The table is read and rebuilt with ARSCLib; nothing is parsed by hand.
  */
 object ResourceBranding {
@@ -170,6 +177,7 @@ object ResourceBranding {
                     BrandingRules.IconRole.LAUNCHER -> icons.launcher
                     BrandingRules.IconRole.FOREGROUND -> icons.foreground
                     BrandingRules.IconRole.NOTIFICATION -> icons.notification
+                    BrandingRules.IconRole.MARK -> icons.mark
                 }
             if (byDensity.isEmpty()) continue
             for (type in BrandingRules.ICON_TYPES) {

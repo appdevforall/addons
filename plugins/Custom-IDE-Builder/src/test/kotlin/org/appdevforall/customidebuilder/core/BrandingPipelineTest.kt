@@ -30,6 +30,7 @@ class BrandingPipelineTest {
         launcher = Density.values().associateWith { ArscSupport.png("L-${it.qualifier}") },
         foreground = Density.values().associateWith { ArscSupport.png("F-${it.qualifier}") },
         notification = Density.values().associateWith { ArscSupport.png("N-${it.qualifier}") },
+        mark = Density.values().associateWith { ArscSupport.png("M-${it.qualifier}") },
     )
 
     private fun run(branding: Branding?, hostFile: File = host()): BuildOutput {
@@ -58,6 +59,9 @@ class BrandingPipelineTest {
             assertEquals("res/custom-ide-builder/launcher-xxxhdpi.png", ArscSupport.strings(table, "drawable")["drawable/ic_launcher []"])
             assertArrayEquals(ArscSupport.png("L-xhdpi"), zip.getInputStream(zip.getEntry("res/custom-ide-builder/launcher-xhdpi.png")).readBytes())
             assertArrayEquals(ArscSupport.png("N-xxxhdpi"), zip.getInputStream(zip.getEntry("res/custom-ide-builder/notification-xxxhdpi.png")).readBytes())
+            // The in-app logo is the user's picture too, not Code on the Go's vector.
+            assertEquals("res/custom-ide-builder/mark-xxxhdpi.png", ArscSupport.strings(table, "drawable")["drawable/cogo_brand_mark []"])
+            assertArrayEquals(ArscSupport.png("M-xxxhdpi"), zip.getInputStream(zip.getEntry("res/custom-ide-builder/mark-xxxhdpi.png")).readBytes())
             assertArrayEquals("untouched entries come through", TestSupport.text(200_000), zip.getInputStream(zip.getEntry("classes.dex")).readBytes())
         }
         assertEquals(oldTable.size < out.apk.length(), true)

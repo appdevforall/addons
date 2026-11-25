@@ -15,6 +15,7 @@ class BrandingTest {
         launcher = densities.associateWith { ArscSupport.png("launcher-${it.qualifier}") },
         foreground = densities.associateWith { ArscSupport.png("foreground-${it.qualifier}") },
         notification = densities.associateWith { ArscSupport.png("notification-${it.qualifier}") },
+        mark = densities.associateWith { ArscSupport.png("mark-${it.qualifier}") },
     )
 
     private val all = Density.values()
@@ -154,7 +155,7 @@ class BrandingTest {
     }
 
     @Test
-    fun theThreeIconsAreRepointedInEveryConfigWithTheirIdsKept() {
+    fun theIconsAndTheLogoAreRepointedInEveryConfigWithTheirIdsKept() {
         val r = ResourceBranding.apply(ArscSupport.table(), Branding(null, icons(*all)))
         val after = ArscSupport.load(r.table)
         val dr = ArscSupport.strings(after, "drawable")
@@ -165,6 +166,7 @@ class BrandingTest {
         assertEquals("$d/foreground-xxxhdpi.png", dr["drawable/ic_launcher_fg_vector []"])
         assertEquals("$d/notification-xxxhdpi.png", dr["drawable/ic_cogo_notification []"])
         assertEquals("res/drawable/ic_other.xml", dr["drawable/ic_other []"])
+        assertEquals("$d/mark-xxxhdpi.png", dr["drawable/cogo_brand_mark []"])
         for (q in all.map { it.qualifier }) {
             assertEquals("$d/launcher-$q.png", mm["mipmap/ic_launcher [$q]"])
             assertEquals("$d/launcher-$q.png", mm["mipmap/ic_launcher_round [$q]"])
@@ -173,7 +175,7 @@ class BrandingTest {
         assertEquals("the adaptive config points straight at a PNG", "$d/launcher-xxxhdpi.png", mm["mipmap/ic_launcher [anydpi-v26]"])
         assertEquals("$d/launcher-xxxhdpi.png", mm["mipmap/ic_launcher_round [anydpi-v26]"])
         assertEquals(ArscSupport.ids(ArscSupport.load(ArscSupport.table())), ArscSupport.ids(after))
-        assertEquals(1 + 1 + 1 + 1 + 5 * 3 + 2, r.report.iconEntriesRepointed)
+        assertEquals(1 + 1 + 1 + 1 + 1 + 5 * 3 + 2, r.report.iconEntriesRepointed)
         // Every file an entry names is among the files to add, and nothing else is.
         val named = (dr.values + mm.values).filterNotNull().filter { it.startsWith("$d/") }.toSet()
         assertEquals(named, r.files.keys)
@@ -190,7 +192,7 @@ class BrandingTest {
         assertEquals("$d/launcher-xxxhdpi.png", mm["mipmap/ic_launcher [xxhdpi]"])
         assertEquals(
             "only the generated files an entry needs are added",
-            setOf("$d/launcher-xhdpi.png", "$d/launcher-xxxhdpi.png", "$d/foreground-xhdpi.png", "$d/foreground-xxxhdpi.png", "$d/notification-xxxhdpi.png"),
+            setOf("$d/launcher-xhdpi.png", "$d/launcher-xxxhdpi.png", "$d/foreground-xhdpi.png", "$d/foreground-xxxhdpi.png", "$d/notification-xxxhdpi.png", "$d/mark-xxxhdpi.png"),
             r.files.keys,
         )
     }

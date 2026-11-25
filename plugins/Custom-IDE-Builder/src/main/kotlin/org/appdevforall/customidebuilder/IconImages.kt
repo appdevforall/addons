@@ -17,7 +17,7 @@ import java.io.IOException
 
 /**
  * What the screen keeps of a chosen picture: a small preview, the pixels the look-alike check hashes, and the PNGs
- * for every density of the three icons (from [IconSizes]). Bitmaps are decoded and scaled here because that needs
+ * for every density of the icons and the in-app logo (from [IconSizes]). Bitmaps are decoded and scaled here because that needs
  * Android; the pixel logic (silhouette, hashing) is in `core` and tested on a JVM.
  */
 class PreparedIcon(
@@ -46,11 +46,13 @@ object IconImages {
             val mask = Bitmap.createBitmap(Density.XXXHDPI.px(IconSizes.NOTIFICATION_DP), Density.XXXHDPI.px(IconSizes.NOTIFICATION_DP), Bitmap.Config.ARGB_8888)
             mask.setPixels(silhouette.argb, 0, mask.width, 0, 0, mask.width, mask.height)
             val notification = Density.values().associateWith { png(scaled(mask, it.px(IconSizes.NOTIFICATION_DP))) }
+            // From the 512 px source, not the 192 px launcher: the logo is shown larger than the launcher icon.
+            val mark = Density.values().associateWith { png(scaled(source, it.px(IconSizes.MARK_DP))) }
 
             return PreparedIcon(
                 preview = scaled(source, PREVIEW_PX),
                 hashPixels = pixelsOf(scaled(source, HASH_PX)),
-                icons = BrandIcons(launcher, foreground, notification),
+                icons = BrandIcons(launcher, foreground, notification, mark),
                 silhouetteCoverage = silhouette.coverage,
             )
         } finally {

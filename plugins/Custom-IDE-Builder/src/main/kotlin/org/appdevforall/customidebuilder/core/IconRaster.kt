@@ -1,6 +1,6 @@
 package org.appdevforall.customidebuilder.core
 
-/** The densities the launcher, foreground and notification icons are made in, with their sizes. */
+/** The densities the launcher, foreground, notification and logo pictures are made in, with their sizes. */
 enum class Density(val qualifier: String, val dpi: Int) {
     MDPI("mdpi", 160),
     HDPI("hdpi", 240),
@@ -23,7 +23,7 @@ enum class Density(val qualifier: String, val dpi: Int) {
     }
 }
 
-/** Sizes in dp of the three pictures made from the user's image. */
+/** Sizes in dp of the pictures made from the user's image. */
 object IconSizes {
     /** Launcher icon: the whole square. */
     const val LAUNCHER_DP = 48
@@ -34,6 +34,13 @@ object IconSizes {
 
     /** Status-bar icon. */
     const val NOTIFICATION_DP = 24
+
+    /**
+     * The in-app logo (`cogo_brand_mark`). Code on the Go shows it at 44 to 200 dp from one entry with no density,
+     * which Android reads as mdpi and scales by the screen density. The xxxhdpi file, 320 px, is the one that
+     * entry gets: sharp at 150 dp on an xxhdpi screen, and 6.5 MB as a bitmap at most (1280 px on xxxhdpi).
+     */
+    const val MARK_DP = 80
 }
 
 /** Pure pixel work for the icons; the Android layer only decodes and scales bitmaps. */
