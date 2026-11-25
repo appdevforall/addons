@@ -19,7 +19,6 @@ import org.appdevforall.customidebuilder.core.AddonLimits
 import org.appdevforall.customidebuilder.core.AddonSelection
 import org.appdevforall.customidebuilder.core.BuildException
 import org.appdevforall.customidebuilder.core.BuildInput
-import org.appdevforall.customidebuilder.core.BuildStage
 import org.appdevforall.customidebuilder.core.Catalog
 import org.appdevforall.customidebuilder.core.CatalogAddon
 import org.appdevforall.customidebuilder.core.CatalogException
@@ -30,6 +29,7 @@ import org.appdevforall.customidebuilder.core.Keystores
 import org.appdevforall.customidebuilder.core.Naming
 import org.appdevforall.customidebuilder.core.PickedAddon
 import org.appdevforall.customidebuilder.core.Pipeline
+import org.appdevforall.customidebuilder.core.ProgressGate
 import org.appdevforall.customidebuilder.core.SelectionResult
 import org.appdevforall.customidebuilder.core.Staging
 import java.io.File
@@ -82,11 +82,17 @@ object Session {
     /** How many builds have run to an end (done, failed or cancelled); the screen clears its password fields when it changes. */
     var buildsEnded: Int = 0
 
+    /** Moves on whenever [items] changes, so the screen rebuilds the rows only then. */
+    var itemsVersion: Int = 0
+        private set
+
     private val main = Handler(Looper.getMainLooper())
     private var scope: CoroutineScope? = null
     private var job: Job? = null
     private var counter = 0
     private val listeners = ArrayList<() -> Unit>()
+    private val progressListeners = ArrayList<() -> Unit>()
+    private val progressGate = ProgressGate()
 
     /**
      * Bumped by [end]. A task remembers the value it started under, and what it reports or posts
@@ -95,11 +101,44 @@ object Session {
      */
     private var generation = 0
 
+    /** [l] runs on a state change: the list, busy, the keystore, a result, the name question. */
     fun listen(l: () -> Unit) { listeners.add(l) }
 
     fun unlisten(l: () -> Unit) { listeners.remove(l) }
 
+    /** [l] runs when only [stage] or [progress] moved, which happens many times a second during a task; it must be cheap. */
+    fun listenProgress(l: () -> Unit) { progressListeners.add(l) }
+
+    fun unlistenProgress(l: () -> Unit) { progressListeners.remove(l) }
+
     private fun changed() = listeners.toList().forEach { it() }
+
+    private fun progressChanged() = progressListeners.toList().forEach { it() }
+
+    /** Sets the progress from the main thread and tells the progress listeners. */
+    private fun showProgress(text: String, permille: Int) {
+        stage = text
+        progress = permille
+        progressGate.reset(text, permille)
+        progressChanged()
+    }
+
+    /**
+     * Progress from a worker, from any thread. At most one update is waiting for the main thread at a
+     * time, and it shows the latest values when it runs (see [ProgressGate]). An update from a task
+     * started under an older [gen] is dropped, as in [report].
+     */
+    private fun progressFrom(gen: Int, text: String, permille: Int) {
+        if (!progressGate.offer(text, permille)) return
+        main.post {
+            val latest = progressGate.take()
+            if (gen == generation) {
+                stage = latest.stage
+                progress = latest.permille
+                progressChanged()
+            }
+        }
+    }
 
     private fun workDir(): File? = CustomIdeBuilderPlugin.context?.getPluginFilesDir()?.let { File(it, "work") }
 
@@ -112,9 +151,7 @@ object Session {
         changed()
     }
 
-    private fun post(gen: Int, block: () -> Unit) {
-        main.post { if (gen == generation) block() }
-    }
+    private const val SAVING = "Saving to your folder"
 
     private fun zero(secrets: List<CharArray>) = secrets.forEach { it.fill('\u0000') }
 
@@ -125,7 +162,7 @@ object Session {
     }
 
     fun remove(chosen: Chosen) {
-        items.remove(chosen)
+        if (items.remove(chosen)) itemsVersion++
         discard(chosen.picked.file)
         changed()
     }
@@ -133,6 +170,7 @@ object Session {
     fun clearItems() {
         items.toList().forEach { discard(it.picked.file) }
         items.clear()
+        itemsVersion++
     }
 
     /** Stops the running job (the Cancel button). The Session can start another afterwards. */
@@ -157,6 +195,8 @@ object Session {
         main.removeCallbacksAndMessages(null)
         clearItems()
         listeners.clear()
+        progressListeners.clear()
+        progressGate.reset("", 0)
         keystoreUri = null
         keystoreName = null
         aliases = emptyList()
@@ -238,9 +278,8 @@ object Session {
             val downloader = AddonDownloader(HttpFetcher())
             val problems = ArrayList<String>()
             for ((i, addon) in wanted.withIndex()) {
-                stage = "Downloading ${addon.name} (${i + 1} of ${wanted.size})"
-                progress = 0
-                changed()
+                val label = "Downloading ${addon.name} (${i + 1} of ${wanted.size})"
+                showProgress(label, 0)
                 val dir = File(staging, "${counter++}")
                 if (!Staging.isInside(staging, File(dir, addon.fileName))) {
                     problems.add("${Staging.label(addon.name)}: its file name is not usable")
@@ -250,7 +289,7 @@ object Session {
                     try {
                         withContext(Dispatchers.IO) {
                             downloader.download(addon, dir, cancellationCheck()) { got ->
-                                post(gen) { progress = (got * 1000 / addon.size.coerceAtLeast(1)).toInt(); changed() }
+                                progressFrom(gen, label, (got * 1000 / addon.size.coerceAtLeast(1)).toInt())
                             }
                         }
                     } catch (e: java.io.IOException) {
@@ -274,6 +313,7 @@ object Session {
         return when (val r = AddonSelection.validate(items.map { it.picked } + picked)) {
             is SelectionResult.Valid -> {
                 items.add(Chosen(picked, source))
+                itemsVersion++
                 null
             }
             is SelectionResult.Invalid -> {
@@ -376,17 +416,18 @@ object Session {
                         out.deleteRecursively()
                         val built =
                             Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name), check) { s, f ->
-                                post(gen) { setStage(s, f) }
+                                progressFrom(gen, s.label, (f * 1000).toInt())
                             }
                         // A file can appear during the build, and the provider would rename ours without saying so.
                         val chosen = freeNameIn(context, tree, name, gen, "While the app was being built, a file named %s appeared in the folder. Choose another name.")
                             ?: return@withContext null
                         name = chosen
-                        post(gen) { stage = "Saving to your folder"; progress = 0; changed() }
+                        progressFrom(gen, SAVING, 0)
                         val target = AndroidBits.createInTree(context, tree, name)
                         saved = target
+                        val size = built.apk.length().coerceAtLeast(1)
                         AndroidBits.copyFileTo(context, built.apk, target, check) { got ->
-                            post(gen) { progress = (got * 1000 / built.apk.length().coerceAtLeast(1)).toInt(); changed() }
+                            progressFrom(gen, SAVING, (got * 1000 / size).toInt())
                         }
                         // What the folder really called it: the provider renames a file whose name is taken.
                         val actual = AndroidBits.displayName(context, target)
@@ -420,12 +461,6 @@ object Session {
                 if (gen == generation) buildsEnded++
             }
         }
-    }
-
-    private fun setStage(s: BuildStage, fraction: Double) {
-        stage = s.label
-        progress = (fraction * 1000).toInt()
-        changed()
     }
 
     /**
@@ -499,7 +534,7 @@ object Session {
 
     /**
      * Runs [block] as the one running job, with the busy state around it; [block] gets the
-     * generation it started under, for [report] and [post]. [secrets] are zeroed when the job
+     * generation it started under, for [report] and [progressFrom]. [secrets] are zeroed when the job
      * completes however it completes, including a cancellation before its first line runs (where no
      * `finally` inside [block] would ever execute), and at once if another job is running and
      * this one is refused. Returns false for that refusal.
@@ -512,6 +547,7 @@ object Session {
         busy = true
         stage = title
         progress = 0
+        progressGate.reset(title, 0)
         message = ""
         changed()
         val gen = generation
@@ -528,6 +564,7 @@ object Session {
                     busy = false
                     stage = ""
                     progress = 0
+                    progressGate.reset("", 0)
                     changed()
                 }
             }
