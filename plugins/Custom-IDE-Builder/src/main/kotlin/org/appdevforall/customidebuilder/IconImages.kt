@@ -14,6 +14,7 @@ import org.appdevforall.customidebuilder.core.Density
 import org.appdevforall.customidebuilder.core.HostIcons
 import org.appdevforall.customidebuilder.core.IconCheck
 import org.appdevforall.customidebuilder.core.IconSizes
+import org.appdevforall.customidebuilder.core.ImageSampling
 import org.appdevforall.customidebuilder.core.PixelImage
 import org.appdevforall.customidebuilder.core.Silhouette
 import java.io.ByteArrayOutputStream
@@ -171,8 +172,7 @@ object IconImages {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("That file is not a picture Android can read.")
-        var sample = 1
-        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= WORK_PX) sample *= 2
+        val sample = ImageSampling.sampleSize(bounds.outWidth, bounds.outHeight, WORK_PX)
         val options = BitmapFactory.Options().apply {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
