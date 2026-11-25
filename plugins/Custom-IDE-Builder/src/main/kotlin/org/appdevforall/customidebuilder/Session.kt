@@ -61,6 +61,9 @@ object Session {
     var stage: String = ""
     var progress: Int = 0
 
+    /** How many builds have run to an end (done, failed or cancelled); the screen clears its password fields when it changes. */
+    var buildsEnded: Int = 0
+
     private val main = Handler(Looper.getMainLooper())
     private var scope: CoroutineScope? = null
     private var job: Job? = null
@@ -130,11 +133,17 @@ object Session {
                 }
                 val added =
                     try {
-                        withContext(Dispatchers.IO) { AndroidBits.copyToFile(context, uri, file) }
+                        withContext(Dispatchers.IO) {
+                            val check = cancellationCheck()
+                            AndroidBits.copyToFile(context, uri, file, checkCancelled = check)
+                        }
                         accept(context, label, name, file, "this device")
                     } catch (e: java.io.IOException) {
                         discard(file)
                         "$label: ${e.message}"
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        discard(file)
+                        throw e
                     }
                 if (added != null) problems.add(added)
             }
@@ -146,7 +155,7 @@ object Session {
     fun fetchOffer(hostVersionName: String?) {
         launch("Reading the add-on list") {
             try {
-                val text = withContext(Dispatchers.IO) { AddonDownloader(HttpFetcher()).fetchCatalog() }
+                val text = withContext(Dispatchers.IO) { AddonDownloader(HttpFetcher()).fetchCatalog(checkCancelled = cancellationCheck()) }
                 val parsed = Catalog.parse(text)
                 offer = Catalog.offer(parsed.addons, hostVersionName)
                 report(if (parsed.skipped > 0) "${parsed.skipped} catalog entries were left out because their download could not be verified." else "")
@@ -176,7 +185,7 @@ object Session {
                 val file =
                     try {
                         withContext(Dispatchers.IO) {
-                            downloader.download(addon, dir) { got ->
+                            downloader.download(addon, dir, cancellationCheck()) { got ->
                                 main.post { progress = (got * 1000 / addon.size.coerceAtLeast(1)).toInt(); changed() }
                             }
                         }
@@ -274,6 +283,8 @@ object Session {
         launch("Building") {
             val name = Naming.outputName(host.label, host.versionName)
             val out = File(dir, "out")
+            var saved: Uri? = null
+            var finished = false
             try {
                 val result =
                     withContext(Dispatchers.IO) {
@@ -293,11 +304,13 @@ object Session {
                             }
                         main.post { stage = "Saving to your folder"; progress = 0; changed() }
                         val target = AndroidBits.createInTree(context, tree, name)
-                        AndroidBits.copyFileTo(context, built.apk, target) { got ->
+                        saved = target
+                        AndroidBits.copyFileTo(context, built.apk, target, check) { got ->
                             main.post { progress = (got * 1000 / built.apk.length().coerceAtLeast(1)).toInt(); changed() }
                         }
                         built.verify.signerSha256 to AndroidBits.treeLabel(tree)
                     }
+                finished = true
                 report(
                     "Done. $name is in ${result.second}.\nSigned with certificate ${result.first}.\n\n" +
                         "It installs only after Code on the Go is uninstalled, because it is signed with a different key. " +
@@ -311,7 +324,12 @@ object Session {
             } finally {
                 storePassword.fill('\u0000')
                 keyPassword.fill('\u0000')
-                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { out.deleteRecursively() }
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                    out.deleteRecursively()
+                    // A save that failed or was cancelled leaves no APK, not even a partial one, in the folder.
+                    if (!finished) saved?.let { AndroidBits.deleteDocument(context, it) }
+                }
+                buildsEnded++
             }
         }
     }
@@ -320,6 +338,12 @@ object Session {
         stage = s.label
         progress = (fraction * 1000).toInt()
         changed()
+    }
+
+    /** A check for the running coroutine's Job, for the blocking copy loops, which `withContext` does not interrupt. */
+    private suspend fun cancellationCheck(): () -> Unit {
+        val job = kotlin.coroutines.coroutineContext[Job]
+        return { job?.ensureActive() }
     }
 
     /** Runs [block] as the one running job, with the busy state around it. */
@@ -333,6 +357,11 @@ object Session {
         job = (scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main).also { scope = it }).launch {
             try {
                 block()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing else catches here, and an uncaught exception would take the whole IDE down with it.
+                report("$title failed: ${e.message ?: e.javaClass.simpleName}")
             } finally {
                 busy = false
                 stage = ""

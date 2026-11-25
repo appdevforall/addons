@@ -78,8 +78,9 @@
       is called, before they are checked. Downloads from the website come only from
       <code>addons.appdevforall.org</code> over HTTPS and are checked against the size and SHA-256 the
       website publishes.</li>
-    <li>Passwords are held only in the screen's fields and in the one running build, and are cleared when it
-      ends. The plugin asks for permission to read and write files and to use the network (for the website
+    <li>Passwords are held only in the screen's fields and in the one running build. The build's copies are
+      zeroed, and the fields are emptied, when a build ends, however it ends; the fields are also emptied when
+      you leave the screen. The plugin asks for permission to read and write files and to use the network (for the website
       list only).</li>
   </ul>
 
@@ -106,7 +107,9 @@
     <li><b>Signing key.</b> Choose the keystore file, type the store password and tap <b>Read keys</b>,
       then pick the key. Leave the key password blank if it is the same as the store password.</li>
     <li><b>Output folder.</b> Choose it once; it is remembered.</li>
-    <li>Tap <b>Build APK</b>. Tap <b>Cancel</b> to stop it; nothing is saved from a cancelled build.</li>
+    <li>Tap <b>Build APK</b>. Tap <b>Cancel</b> to stop it. A cancelled or failed
+      build saves nothing: if it had already begun writing the APK to your folder, that unfinished file is
+      deleted.</li>
   </ol>
   <p>Long-press any button or field on the screen for a short explanation.</p>
 
@@ -125,7 +128,7 @@
     <li><b>Use the same key every time.</b> A device that has a build signed with one key cannot update to
       a build signed with another without being uninstalled first.</li>
     <li><b>Passwords are never saved.</b> They are used for the build in front of you and cleared when
-      you leave the screen.</li>
+      a build ends and when you leave the screen.</li>
     <li><b>Each plugin must have its own plugin ID</b> and each template its own file name; the builder
       says which add-ons clash. <code>core.cgt</code> is never bundled, because Code on the Go installs it
       itself.</li>

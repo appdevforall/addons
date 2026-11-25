@@ -82,22 +82,22 @@ object Help {
         PluginTooltipEntry(
             CANCEL,
             "Stop the build or download in progress.",
-            "<p>Nothing is saved to your output folder from a cancelled build, and the temporary files are " +
-                "deleted. Your add-on list and keystore choice stay as they are.</p>",
+            "<p>A cancelled or failed build saves nothing to your output folder: an unfinished APK that was already " +
+                "being written there is deleted, and the temporary files are deleted too. Your add-on list and keystore choice stay as they are.</p>",
             more,
         ),
         PluginTooltipEntry(
             STORE_PASSWORD,
             "The password that opens the keystore file.",
-            "<p>Used to read the keys and again for the build. It is never saved, and it is cleared when you " +
-                "leave this screen.</p>",
+            "<p>Used to read the keys and again for the build. It is never saved, and it is cleared when a build " +
+                "ends and when you leave this screen.</p>",
             more,
         ),
         PluginTooltipEntry(
             KEY_PASSWORD,
             "The password of the chosen key. Leave it blank if it is the store password.",
-            "<p>PKCS12 keystores usually use one password for both. It is never saved, and it is cleared when " +
-                "you leave this screen.</p>",
+            "<p>PKCS12 keystores usually use one password for both. It is never saved, and it is cleared when a " +
+                "build ends and when you leave this screen.</p>",
             more,
         ),
         PluginTooltipEntry(

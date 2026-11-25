@@ -75,8 +75,11 @@ object AndroidBits {
             null
         }
 
-    /** Copies what [uri] holds into [target], stopping at [limit] bytes. */
-    fun copyToFile(context: Context, uri: Uri, target: File, limit: Long = Long.MAX_VALUE) {
+    /**
+     * Copies what [uri] holds into [target], stopping at [limit] bytes. [checkCancelled] is called
+     * between buffers and may throw to stop; [target] is then left partly written for the caller to delete.
+     */
+    fun copyToFile(context: Context, uri: Uri, target: File, limit: Long = Long.MAX_VALUE, checkCancelled: () -> Unit = {}) {
         target.parentFile?.mkdirs()
         val input = context.contentResolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
         input.use { source ->
@@ -84,6 +87,7 @@ object AndroidBits {
                 val buffer = ByteArray(64 * 1024)
                 var total = 0L
                 while (true) {
+                    checkCancelled()
                     val n = source.read(buffer)
                     if (n < 0) break
                     total += n
@@ -116,13 +120,18 @@ object AndroidBits {
             ?: throw IOException("The folder would not create $name. Choose the folder again.")
     }
 
-    fun copyFileTo(context: Context, source: File, target: Uri, onBytes: (Long) -> Unit) {
+    /**
+     * Copies [source] into the document [target]. [checkCancelled] is called between buffers and may
+     * throw to stop; [target] then holds a partial file, which the caller removes with [deleteDocument].
+     */
+    fun copyFileTo(context: Context, source: File, target: Uri, checkCancelled: () -> Unit = {}, onBytes: (Long) -> Unit) {
         val out = context.contentResolver.openOutputStream(target, "w") ?: throw IOException("Cannot write to the folder.")
         out.use { sink ->
             source.inputStream().use { input ->
                 val buffer = ByteArray(64 * 1024)
                 var total = 0L
                 while (true) {
+                    checkCancelled()
                     val n = input.read(buffer)
                     if (n < 0) break
                     sink.write(buffer, 0, n)
@@ -132,6 +141,14 @@ object AndroidBits {
             }
         }
     }
+
+    /** Removes the document [uri]; false if the provider would not (a failed cleanup is not worth a second error). */
+    fun deleteDocument(context: Context, uri: Uri): Boolean =
+        try {
+            DocumentsContract.deleteDocument(context.contentResolver, uri)
+        } catch (e: Exception) {
+            false
+        }
 
     /** A readable name for a tree URI, such as `Download/Builds`. */
     fun treeLabel(tree: Uri): String =
