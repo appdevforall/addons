@@ -53,6 +53,48 @@ class MinSdkTest {
         assertNull(PluginMinSdk.fromArchive(garbage))
     }
 
+    private fun refused(bytes: ByteArray, what: String) {
+        try {
+            PluginMinSdk.fromManifest(bytes)
+            org.junit.Assert.fail("$what was read")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message, e.message!!.startsWith("Not a readable compiled manifest"))
+        }
+        try {
+            PluginManifest.identity(bytes)
+            org.junit.Assert.fail("$what was read for its identity")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message, e.message!!.startsWith("Not a readable compiled manifest"))
+        }
+    }
+
+    private fun ByteArray.withInt(offset: Int, value: Int): ByteArray =
+        copyOf().also { for (k in 0..3) it[offset + k] = (value ushr (8 * k)).toByte() }
+
+    @Test
+    fun aManifestWhoseHeadersDisagreeWithItsLengthIsRefusedBeforeParsing() {
+        val good = ArscSupport.manifest(26)
+        assertNull(CompiledXml.problem(good))
+        refused(good + ByteArray(4), "a manifest with trailing bytes")
+        refused(good.copyOf(good.size - 4), "a truncated manifest")
+        refused(good.withInt(4, Int.MAX_VALUE), "a manifest claiming 2 GiB")
+        refused(good.withInt(0, 0x00080004), "a manifest with the wrong magic")
+        refused(good.withInt(12, good.size), "a manifest whose string pool is larger than the rest of the file")
+        refused(good.withInt(12, 4), "a manifest whose string pool is smaller than its own header")
+        refused(ByteArray(0), "an empty file")
+        refused(ByteArray(15), "a file shorter than two chunk headers")
+    }
+
+    @Test
+    fun anArchiveWhoseManifestHasTrailingBytesGivesNull() {
+        val f = tmp.newFile("trail.cgp")
+        ZipOutputStream(f.outputStream()).use { z ->
+            z.putNextEntry(ZipEntry("AndroidManifest.xml")); z.write(ArscSupport.manifest(30) + ByteArray(8)); z.closeEntry()
+        }
+        assertNull(PluginMinSdk.fromArchive(f))
+        assertNull(PluginManifest.fromArchive(f))
+    }
+
     private fun archiveWithManifest(name: String, size: Int, claimed: Int?): java.io.File {
         val f = tmp.newFile(name)
         ZipOutputStream(f.outputStream()).use { z ->

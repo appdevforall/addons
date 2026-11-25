@@ -14,7 +14,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * F50: on Android 9 a plugin with minSdk 33 was refused as "could not read the plugin ID", because
+ * On Android 9 a plugin with minSdk 33 was refused as "could not read the plugin ID", because
  * PackageManager.getPackageArchiveInfo will not parse an APK for a newer Android. The ID is now read from the
  * binary manifest, which does not depend on the device.
  */
