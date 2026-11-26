@@ -1,7 +1,7 @@
 # Custom IDE Builder
 
 Builds a copy of the installed Code on the Go with a chosen set of plugins (`.cgp`) and templates
-(`.cgt`) bundled inside, signed with the user's own key. Release builds only: the host reads the bundle
+(`.cgt`) bundled inside, signed with the user's own key, under the user's own app name and icon. Release builds only: the host reads the bundle
 from `assets/plugins/`, `assets/templates/` and `assets/bundled-addons.tsv` in its APK.
 
 ## Layout
@@ -28,11 +28,115 @@ Works with Code on the Go 26.48 and later (`plugin.min_ide_version` 26.48, `plug
 | `Signing.kt` | apksig: signs v1, v2 and v3, then verifies |
 | `Catalog.kt`, `Download.kt` | The v2 catalog, `minAppVersion` filtering, verified downloads from `addons.appdevforall.org` only |
 | `Pipeline.kt` | Rewrite, sign, verify, check alignment |
+| `Branding.kt` | Edits the host's `resources.arsc` with ARSCLib: `app_name` and the other strings that name the app, and the files the icon and logo resources resolve to |
+| `IconRaster.kt` | Densities and icon sizes, nearest-density choice, the white status-bar silhouette |
+| `IconCheck.kt` | Perceptual hash of a picture, trimming to content, and the "is this Code on the Go's own icon" decision |
+| `HostIcons.kt` | The raster files the host's icon resources resolve to, found through its `resources.arsc` |
+| `AppNameCheck.kt` | Name rules: empty, length, look-alike normalising, "cogo" / "codeonthego" |
+| `BrandingGate.kt` | What must be true (name ok, picture ok, ownership box ticked, contact details valid) before a build starts |
+| `Contacts.kt` | The copy's contact details and `ContactCheck`: https links and plain email addresses, blank meaning "hide" |
+| `ContactBranding.kt` | Writes the contact details into their string resources in every config, and reads them back |
+| `HostSupport.kt` | Whether the installed Code on the Go has the contact strings (`about_website_url`), and the refusal when not |
+| `MinSdk.kt` | A plugin's `minSdkVersion`, `plugin.id` and `plugin.main_class` from its binary manifest, and the warning when the minimum is above the host's. The platform's `getPackageArchiveInfo` is not used: it refuses a plugin for a newer Android than the device's (F50) |
 
-The Android side (`BuilderFragment`, `Session`, `AndroidBits`) is the screen, the file pickers and
-the Storage Access Framework output. A taken output name is a question held in `Session`
+The Android side (`BuilderFragment`, `Session`, `AndroidBits`, `IconImages`) is the screen, the file
+pickers, the Storage Access Framework output, and the bitmap work: decoding the chosen picture, scaling it
+to each density, and drawing the host's own icon every way it appears for the look-alike check. A taken output name is a question held in `Session`
 (`nameQuestion`, a `CompletableDeferred`) that the build coroutine waits on and the Fragment shows as a
 dialog, so it survives a rotation; it is asked when Build is tapped and again before saving.
+
+## Name and icon
+
+Every build needs both, and the box "This name and icon are my own, and not Code on the Go's" ticked
+(`BrandingGate`). There is no unbranded build: a name or icon that fails the checks below is refused, not
+replaced by Code on the Go's own. `Branding` therefore holds a name and an icon, never a null part; the
+rewrite and signing code (`Pipeline`, `ApkRewriter`) still accepts no `Branding` at all, which only their tests use.
+
+**Name.** `app_name` is replaced in every config (every locale). After ADFA-7237 every other display string
+takes its name from `app_name`, so that is normally all there is. For older hosts, every other string value
+that holds "Code on the Go" (any case, whitespace between the words) is rewritten too, except the keys in
+`BrandingRules.KEEP_LITERAL`, a copy of `KEEP_LITERAL` in Code on the Go's `AppNameInStringsTest.kt`
+(ADFA-7237): keep the two equal. A string with markup (spans) is skipped and counted, never rewritten, because
+a rewrite could drop the spans. `CodeOnTheGo` without spaces (URLs) is never matched.
+
+**Icon.** `ic_launcher` and `ic_launcher_round` (the whole icon, 48 dp), `ic_launcher_foreground` and
+`ic_launcher_fg_vector` (the picture in the central 66 dp of a transparent 108 dp canvas, which is the
+adaptive-icon safe zone and what the splash screen and the drawer header use), and `ic_cogo_notification`
+(a white silhouette, 24 dp) and `cogo_brand_mark` (the logo on the welcome screen, the main screen, About and the
+editor sidebar header; the whole picture, 80 dp) are repointed, in `drawable` and `mipmap`, in every config they have. Resource IDs
+do not change. New files are `res/custom-ide-builder/<role>-<density>.png`, stored and 4-byte aligned like
+`resources.arsc`, which Android 11 and later require to be uncompressed.
+
+- **Adaptive icon.** The `anydpi-v26` entries of `ic_launcher` and `ic_launcher_round` point straight at a
+  launcher PNG instead of at the adaptive XML (which would keep the old foreground). A PNG is a valid
+  launcher icon on API 26 and later; the launcher puts its own backing behind it.
+- **Density.** A config's density picks the nearest generated density. A config with no density, `anydpi` or
+  `nodpi` gets the sharpest (xxxhdpi).
+- **Logo.** `cogo_brand_mark` is a vector with one entry and no density, so it gets the 320 px xxxhdpi file,
+  which Android reads as mdpi and scales by the screen density. Its layouts fit it into 44 to 200 dp boxes
+  (`fitCenter`), so a square picture shows square; in About's 48 x 89 dp box, sized for the tall phone
+  outline, it is 48 dp square.
+- **Status-bar icon.** The silhouette uses the picture's alpha. A picture with no transparency uses whatever
+  differs from the colour of its corners.
+- **Look-alike check.** A 128-bit difference hash (9x8 horizontal and 8x9 vertical, brightness steps under 4
+  levels ignored) of the chosen picture is compared, flipped or not, with every drawing of the host's icon:
+  `drawable/ic_launcher` (a vector, full-bleed), `mipmap/ic_launcher` and `ic_launcher_round` as the device
+  resolves them (the masked adaptive icon, and its layers unmasked), `cogo_brand_mark`, and the raster files
+  those resources name in the APK (the legacy launcher PNGs). Each pair is compared as it is and trimmed to
+  what stands out from a background the corners agree on, so padding does not count; the closest is kept. At
+  most 14 differing bits is refused. Before trimming, the vector (the phone fills its height) and the legacy
+  PNG (the phone is two thirds of it) were about 45 bits apart, so the app's own PNG passed (F51).
+  `CogoIconCheckTest` measures it on the real PNGs: every density, crops and rescales within 9 bits, 300
+  unrelated pictures no closer than 18. The vector references are rebuilt there from the PNG at the vectors'
+  geometry, since a JVM cannot draw a vector drawable.
+- **Name check.** After case-folding, accent and width folding and look-alike mapping (0, 1, 3, 4, 5, 7, 9,
+  `@`, `$`, `!`, Cyrillic and Greek homoglyphs), with everything but letters and digits removed, a name is
+  refused if it contains `cogo` or `codeonthego` or has a substring within two edits of `codeonthego`. `cogo`
+  is matched exactly only: two edits from four letters reach "logo", "congo" and "cargo". "Taco Go" is refused
+  because spaces are ignored. Empty names, names over 50 characters, control characters and `%` are refused too.
+
+The edited table is read back and compared with the original before it is used: every entry must still be there
+and every non-string value unchanged.
+
+## Contact details
+
+The copy's About page (website, email, discussion forum, Telegram, YouTube, the "Support our work" button) and its
+feedback button, editor-sidebar feedback action and crash-report email take their values from string resources in a
+Code on the Go that includes ADFA-7313, which hides a row or button whose string is empty (after trimming). The
+builder sets each of these in every config it has, the default and every language:
+
+| Field | Resource |
+|---|---|
+| Website | `about_website_url` |
+| Contact email | `adfa_email` (About > Email; its `mailto:` is built from it) |
+| Feedback email | `feedback_email` |
+| Support link | `github_sponsors_url` |
+| Discussion forum | `github_discussions_url` |
+| Telegram channel | `telegram_channel_url` |
+| YouTube channel | `youtube_channel_url` |
+| (none) | `bilibili_video_url`, always emptied |
+
+Every field is trimmed; a blank one is written as `""`. A link must be an absolute `https://` URL with a host, no
+user info, no whitespace or control characters, at most 2048 characters, and `%` only as a `%XX` escape. The app
+reads these strings with `getString(id)` and no format arguments, so a stored `%` is not a format marker, but a link
+still goes through `Uri.parse`. An email must match `[A-Za-z0-9._+-]+@label(.label)+`, because the app pastes it
+unescaped into `mailto:<address>?subject=...`. The values are not secret, so the screen remembers them in the same
+preferences as the output folder; `Session.end()` clears its copy.
+
+A Code on the Go without `about_website_url` keeps App Dev For All's details where no resource edit reaches, so
+`HostSupport` refuses the build before any work, naming `HostSupport.MIN_IDE_VERSION` and the installed version.
+That constant must equal `plugin.min_ide_version` in the manifest; `HostSupportTest` compares them. The manifest
+stays at 26.48 until ADFA-7313 ships in a release; raise both then.
+
+## Resource editing dependency
+
+`io.github.reandroid:ARSCLib` 1.4.0 (Apache-2.0, compatible with this repository's GPL) reads and writes
+`resources.arsc` and reads a plugin's binary manifest without a platform parser. Its Android framework tables
+(`frameworks/**`, 2.4 MB) are excluded from packaging; the code here never touches them, and the tests pass with
+them removed from the classpath. The jar also contains `android.util.AttributeSet`,
+`android.content.res.XmlResourceParser` and `org.xmlpull.v1.*`, which the platform already provides. They are not
+excluded: dropping classes from a dependency needs a build transform that could not be tried here. If a device
+build reports duplicate classes, that is the place to look.
 
 ## Mirrors of Code on the Go
 

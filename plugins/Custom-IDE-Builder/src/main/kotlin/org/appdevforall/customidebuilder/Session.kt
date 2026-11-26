@@ -19,15 +19,26 @@ import org.appdevforall.customidebuilder.core.AddonLimits
 import org.appdevforall.customidebuilder.core.AddonSelection
 import org.appdevforall.customidebuilder.core.BuildException
 import org.appdevforall.customidebuilder.core.BuildInput
+import org.appdevforall.customidebuilder.core.Branding
+import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.Catalog
 import org.appdevforall.customidebuilder.core.CatalogAddon
 import org.appdevforall.customidebuilder.core.CatalogException
+import org.appdevforall.customidebuilder.core.ContactField
+import org.appdevforall.customidebuilder.core.Contacts
+import org.appdevforall.customidebuilder.core.HostSupport
 import org.appdevforall.customidebuilder.core.HttpFetcher
+import org.appdevforall.customidebuilder.core.IconCheck
+import org.appdevforall.customidebuilder.core.IconVerdict
 import org.appdevforall.customidebuilder.core.KeyLoad
 import org.appdevforall.customidebuilder.core.KeystoreOpen
 import org.appdevforall.customidebuilder.core.Keystores
+import org.appdevforall.customidebuilder.core.MinSdk
+import org.appdevforall.customidebuilder.core.MinSdkWarning
 import org.appdevforall.customidebuilder.core.Naming
 import org.appdevforall.customidebuilder.core.PickedAddon
+import org.appdevforall.customidebuilder.core.PluginManifest
+import org.appdevforall.customidebuilder.core.PluginMinSdk
 import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.ProgressGate
 import org.appdevforall.customidebuilder.core.SelectionResult
@@ -38,7 +49,14 @@ import java.io.File
 import java.security.cert.X509Certificate
 
 /** One add-on on the list. [source] is for the screen: where it came from. */
-class Chosen(val picked: PickedAddon, val source: String)
+class Chosen(val picked: PickedAddon, val source: String, val minSdk: MinSdk? = null) {
+    /** The screen's min-SDK warning for this add-on, kept once [minSdkChecked] so a refresh does not work it out again. */
+    internal var minSdkWarning: MinSdkWarning? = null
+    internal var minSdkChecked = false
+}
+
+/** What a finished save reports: [actual] is the name the folder gave the file, null if it would not say. */
+private class Saved(val signer: String, val folder: String, val actual: String?, val styledSkipped: Int)
 
 /**
  * A question the running build is waiting on: the output name is taken in the folder. [message] says
@@ -64,6 +82,26 @@ object Session {
     var aliases: List<String> = emptyList()
     var fingerprints: Map<String, String> = emptyMap()
     var selectedAlias: String? = null
+
+    /** The name typed for the copy. A build needs one that passes the name check. */
+    var appName: String = ""
+
+    /** The picture chosen for the icon, with its PNGs and the outcome of the look-alike check (null until that finishes). */
+    var icon: PreparedIcon? = null
+    var iconName: String? = null
+    var iconVerdict: IconVerdict? = null
+
+    /**
+     * The contact details typed for the copy, as typed; a blank field hides that row or button in the copy. The
+     * screen fills them from its preferences once per session ([contactsLoaded]) and saves each change there.
+     */
+    var contacts: Contacts = Contacts()
+        private set
+    var contactsLoaded: Boolean = false
+        private set
+
+    /** The ownership checkbox. It is cleared whenever the name or picture changes, so it always covers what is on screen. */
+    var confirmedOwn: Boolean = false
 
     /** The catalog entries just fetched, for the screen to show once and clear. */
     var offer: Catalog.Offer? = null
@@ -195,6 +233,71 @@ object Session {
         job?.cancel()
     }
 
+    fun setName(text: String) {
+        if (text == appName) return
+        appName = text
+        confirmedOwn = false
+        changed()
+    }
+
+    /** The values the screen remembered from an earlier visit. Called once per session, before the screen shows them. */
+    fun loadContacts(remembered: Contacts) {
+        contacts = remembered
+        contactsLoaded = true
+    }
+
+    fun setContact(field: ContactField, value: String) {
+        if (contacts[field] == value) return
+        contacts = contacts.with(field, value)
+        changed()
+    }
+
+    fun clearIcon() {
+        // The preview is not recycled: the ImageView may still be drawing it.
+        icon = null
+        iconName = null
+        iconVerdict = null
+        confirmedOwn = false
+        changed()
+    }
+
+    /** Decodes the picture, makes the icon files and compares it with Code on the Go's own icon. */
+    fun pickIcon(context: Context, uri: Uri, hostPackage: String, hostApk: File) {
+        launch("Reading the picture") { gen ->
+            val name = AndroidBits.displayName(context, uri) ?: "picture"
+            try {
+                val prepared = withContext(Dispatchers.IO) { IconImages.prepare(context, uri) }
+                val verdict =
+                    withContext(Dispatchers.IO) {
+                        val references = IconImages.hostIcons(context, hostPackage, hostApk)
+                        if (references.isEmpty()) IconVerdict.Unchecked("Code on the Go's icon could not be drawn.") else IconCheck.compare(prepared.hashPixels, references)
+                    }
+                if (gen != generation) return@launch
+                clearIcon()
+                icon = prepared
+                iconName = name
+                iconVerdict = verdict
+                report(
+                    when (verdict) {
+                        is IconVerdict.TooSimilar -> "$name is too close to Code on the Go's own icon. Choose a picture of your own."
+                        is IconVerdict.Unchecked -> "${verdict.reason} The picture was not compared with it."
+                        is IconVerdict.Different ->
+                            if (prepared.silhouetteCoverage < 0.02 || prepared.silhouetteCoverage > 0.9) {
+                                "The status-bar icon made from $name will be nearly empty or a solid block. A picture with a clear shape on a plain or transparent background works best."
+                            } else {
+                                ""
+                            }
+                    },
+                    gen,
+                )
+            } catch (e: java.io.IOException) {
+                report("$name: ${e.message}", gen)
+            } catch (e: OutOfMemoryError) {
+                report("$name is too large to read on this device. Choose a smaller picture.", gen)
+            }
+        }
+    }
+
     /** False while the host has the plugin disabled: nothing new starts, and [deactivate] stopped what was running. */
     @Volatile
     var active: Boolean = true
@@ -222,6 +325,10 @@ object Session {
      * A stage that cannot be interrupted (signing, the copy loops between checks) may still finish
      * on the IO pool after this returns. It holds no Session state, and whatever it reports or
      * posts is dropped by the [generation] check.
+     *
+     * The icon preview is dropped, not recycled: the screen's ImageView may still hold it, and a
+     * frame already handed to the render thread may still draw it. Nothing refers to it afterwards,
+     * so it is freed with the screen.
      */
     fun end() {
         generation++
@@ -241,6 +348,15 @@ object Session {
         aliases = emptyList()
         fingerprints = emptyMap()
         selectedAlias = null
+        appName = ""
+        icon = null
+        iconName = null
+        iconVerdict = null
+        confirmedOwn = false
+        // The screen's preferences keep them; the next session reads them from there again.
+        contacts = Contacts()
+        contactsLoaded = false
+        IconImages.release()
         offer = null
         nameQuestion?.answer?.cancel()
         nameQuestion = null
@@ -280,7 +396,7 @@ object Session {
                             val check = cancellationCheck()
                             AndroidBits.copyToFile(context, uri, file, limit = AddonLimits.MAX_BYTES, checkCancelled = check)
                         }
-                        accept(context, staging, label, name, file, "this device")
+                        accept(staging, label, name, file, "this device")
                     } catch (e: java.io.IOException) {
                         discard(staging, file)
                         "$label: ${e.message}"
@@ -334,7 +450,7 @@ object Session {
                                 progressFrom(gen, label, (got * 1000 / addon.size.coerceAtLeast(1)).toInt())
                             }
                         }
-                    val problem = accept(context, staging, addon.name, addon.fileName, file, "the website")
+                    val problem = accept(staging, addon.name, addon.fileName, file, "the website")
                     if (problem == null) adopted = true else problems.add(problem)
                 } catch (e: java.io.IOException) {
                     problems.add("${addon.name}: ${e.message}")
@@ -347,8 +463,9 @@ object Session {
     }
 
     /** Adds the file if the list stays valid with it; otherwise deletes it and returns why. */
-    private suspend fun accept(context: Context, staging: File, label: String, fileName: String, file: File, source: String): String? {
-        val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { AndroidBits.readPluginId(context, file) } else null
+    private suspend fun accept(staging: File, label: String, fileName: String, file: File, source: String): String? {
+        // Read from the binary manifest, so a plugin for a newer Android than this device's is still identified.
+        val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginManifest.fromArchive(file)?.pluginId } else null
         if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE) {
             val problem = withContext(Dispatchers.IO) { TemplateCheck.problem(file) }
             if (problem != null) {
@@ -357,9 +474,10 @@ object Session {
             }
         }
         val picked = PickedAddon(label, fileName, file, id)
+        val minSdk = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginMinSdk.fromArchive(file) } else null
         return when (val r = AddonSelection.validate(items.map { it.picked } + picked)) {
             is SelectionResult.Valid -> {
-                items.add(Chosen(picked, source))
+                items.add(Chosen(picked, source, minSdk))
                 itemsVersion++
                 null
             }
@@ -434,14 +552,26 @@ object Session {
             storePassword.fill('\u0000'); keyPassword.fill('\u0000')
             return report("Choose a keystore and load its keys first.")
         }
+        val prepared = icon
+        val chosenContacts = contacts.trimmed()
+        val gate = BrandingGate.problems(appName, prepared != null, iconVerdict, confirmedOwn, chosenContacts)
+        // A missing icon is also in the gate's list, so the null test only narrows the type.
+        if (prepared == null || gate.isNotEmpty()) {
+            storePassword.fill('\u0000'); keyPassword.fill('\u0000')
+            return report(gate.joinToString("\n"))
+        }
+        val branding = Branding(BrandingGate.nameToWrite(appName), prepared.icons, chosenContacts)
         launch("Building", listOf(storePassword, keyPassword), endsBuild = true) { gen ->
-            var name = Naming.outputName(host.label, host.versionName)
+            var name = Naming.outputName(branding.appName, host.versionName)
             // Its own folder: after end() a new build can start while this one is still cleaning up.
             val outName = WorkDirs.outDirName(counter++)
             val out = File(dir, outName)
             var saved: Uri? = null
             var finished = false
             try {
+                // First of all: a Code on the Go that cannot carry the contact details is refused before any question or work.
+                val unsupported = withContext(Dispatchers.IO) { HostSupport.problem(host.apk, host.versionName) }
+                if (unsupported != null) return@launch report(unsupported, gen)
                 // Before the minutes of work, so a taken name costs the user nothing.
                 val free = freeNameIn(context, tree, name, gen, "The folder already has a file named %s. Choose another name.")
                     ?: return@launch report("Cancelled: nothing was built, because $name is already in the folder and no other name was chosen.", gen)
@@ -462,7 +592,7 @@ object Session {
                         removeStaleOutDirs(dir, outName)
                         out.deleteRecursively()
                         val built =
-                            Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name), check) { s, f ->
+                            Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding, host.versionName), check) { s, f ->
                                 progressFrom(gen, s.label, (f * 1000).toInt())
                             }
                         // The pipeline has verified the APK, so a signer is always there; checked before saving, so no file is written without one.
@@ -480,16 +610,19 @@ object Session {
                         }
                         // What the folder really called it: the provider renames a file whose name is taken.
                         val actual = AndroidBits.displayName(context, target)
-                        Triple(signer, AndroidBits.treeLabel(tree), actual)
+                        Saved(signer, AndroidBits.treeLabel(tree), actual, built.rewrite.branding?.styledSkipped ?: 0)
                     }
                 if (result == null) {
                     return@launch report("Cancelled: the APK was built but not saved, because a file named $name appeared in the folder and no other name was chosen. The built file was deleted.", gen)
                 }
                 finished = true
-                val note = Naming.savedNote(name, result.third)
+                val skipped = result.styledSkipped
+                val note = Naming.savedNote(name, result.actual)
                 report(
-                    "Done. ${result.third ?: name} is in ${result.second}.\n" + (if (note.isEmpty()) "" else "$note\n") +
-                        "Signed with certificate ${result.first}.\n\n" +
+                    "Done. ${result.actual ?: name} is in ${result.folder}.\n" + (if (note.isEmpty()) "" else "$note\n") +
+                        "Signed with certificate ${result.signer}.\n" +
+                        (if (skipped > 0) "$skipped text${if (skipped == 1) "" else "s"} that name Code on the Go and carry formatting were left as they are.\n" else "") +
+                        "\n" +
                         "It installs only after Code on the Go is uninstalled, because it is signed with a different key. " +
                         "Uninstalling removes Code on the Go's app data, such as its project list and settings; your projects in CodeOnTheGoProjects stay.",
                     gen,

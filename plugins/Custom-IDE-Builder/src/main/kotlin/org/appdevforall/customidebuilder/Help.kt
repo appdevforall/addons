@@ -2,6 +2,8 @@ package org.appdevforall.customidebuilder
 
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
+import org.appdevforall.customidebuilder.core.ContactField
+import org.appdevforall.customidebuilder.core.HostSupport
 
 /**
  * Tooltips for Custom IDE Builder. The category is `plugin_` plus the plugin ID, exactly, and
@@ -14,6 +16,11 @@ object Help {
     const val ADDONS = "customidebuilder.addons"
     const val WEBSITE = "customidebuilder.website"
     const val KEYSTORE = "customidebuilder.keystore"
+    const val NAME = "customidebuilder.name"
+    const val ICON = "customidebuilder.icon"
+    const val CONFIRM = "customidebuilder.confirm"
+    const val APP_NAME = "customidebuilder.appname"
+    const val MINSDK = "customidebuilder.minsdk"
     const val FOLDER = "customidebuilder.folder"
     const val BUILD = "customidebuilder.build"
     const val REMOVE = "customidebuilder.remove"
@@ -26,10 +33,95 @@ object Help {
     const val SAME_KEY = "customidebuilder.samekey"
     const val NAME_TAKEN = "customidebuilder.nametaken"
     const val NAME_FIELD = "customidebuilder.namefield"
+    const val CONTACTS = "customidebuilder.contacts"
+    const val CONTACT_WEBSITE = "customidebuilder.contact.website"
+    const val CONTACT_EMAIL = "customidebuilder.contact.email"
+    const val CONTACT_FEEDBACK = "customidebuilder.contact.feedback"
+    const val CONTACT_SUPPORT = "customidebuilder.contact.support"
+    const val CONTACT_FORUM = "customidebuilder.contact.forum"
+    const val CONTACT_TELEGRAM = "customidebuilder.contact.telegram"
+    const val CONTACT_YOUTUBE = "customidebuilder.contact.youtube"
+
+    /** The tooltip of a contact field and its label. */
+    fun contactTag(field: ContactField): String =
+        when (field) {
+            ContactField.WEBSITE -> CONTACT_WEBSITE
+            ContactField.CONTACT_EMAIL -> CONTACT_EMAIL
+            ContactField.FEEDBACK_EMAIL -> CONTACT_FEEDBACK
+            ContactField.SUPPORT_URL -> CONTACT_SUPPORT
+            ContactField.FORUM_URL -> CONTACT_FORUM
+            ContactField.TELEGRAM_URL -> CONTACT_TELEGRAM
+            ContactField.YOUTUBE_URL -> CONTACT_YOUTUBE
+        }
+
+    private const val LINK_RULES =
+        "<p>A link must be a full address starting with <code>https://</code>, with no spaces and no user name or " +
+            "password in it. A <code>%</code> is allowed only as part of an escape such as <code>%20</code>. Leave it " +
+            "blank to hide it in the copy.</p>"
+
+    private const val EMAIL_RULES =
+        "<p>A plain address such as <code>name@example.org</code>: letters, digits and <code>. _ + -</code> before the " +
+            "<code>@</code>, a domain after it, and no spaces. Leave it blank to hide it in the copy.</p>"
+
+    private const val REMEMBERED = "<p>Remembered on this device for your next visit; it is not secret.</p>"
 
     private val more = listOf(PluginTooltipButton(description = "About Custom IDE Builder", uri = "index.html", order = 0))
 
     val entries = listOf(
+        PluginTooltipEntry(
+            CONTACTS,
+            "Your own links and emails for the copy's About page, feedback and crash reports. Blank hides one.",
+            "<p>The copy's About page, its <i>Support our work</i> button, its feedback button and its crash-report " +
+                "emails show App Dev For All's details unless you replace them here. A field left blank hides that row " +
+                "or button in the copy. The Bilibili video link is always removed.</p>" +
+                "<p>This needs Code on the Go ${HostSupport.MIN_IDE_VERSION} or newer, the first version that lets a copy " +
+                "replace these details; on an older one the build is refused before anything is done.</p>" +
+                "<p>What you type is remembered on this device for your next visit; none of it is secret.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_WEBSITE,
+            "The website link on the copy's About page. Blank hides it.",
+            "<p>Shown as the first row of the copy's About page, in place of App Dev For All's website.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_EMAIL,
+            "The email address on the copy's About page. Blank hides it.",
+            "<p>Shown on the copy's About page; tapping it starts an email to this address.</p>" + EMAIL_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_FEEDBACK,
+            "Where the copy's feedback and crash reports are emailed. Blank hides the feedback button.",
+            "<p>Used by the copy's feedback button, the feedback action in the editor sidebar and the crash report " +
+                "email. Blank hides the feedback button and action.</p>" + EMAIL_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_SUPPORT,
+            "Where the About page's \"Support our work\" button leads. Blank hides the button.",
+            "<p>For a donation or sponsorship page of your own.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_FORUM,
+            "The support and discussion forum on the copy's About page. Blank hides it.",
+            "<p>A forum, discussion board or help page where people using the copy can ask questions.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_TELEGRAM,
+            "The Telegram channel on the copy's About page. Blank hides it.",
+            "<p>A link such as <code>https://t.me/yourchannel</code>.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
+        PluginTooltipEntry(
+            CONTACT_YOUTUBE,
+            "The YouTube channel on the copy's About page. Blank hides it.",
+            "<p>A link such as <code>https://youtube.com/@yourchannel</code>.</p>" + LINK_RULES + REMEMBERED,
+            more,
+        ),
         PluginTooltipEntry(
             MENU,
             "Make a copy of Code on the Go with the add-ons you choose, signed with your own key.",
@@ -53,6 +145,34 @@ object Help {
             "<p>This is the only part of the plugin that uses the internet. You are asked first. The list shows " +
                 "the plugins and templates that work with this version of Code on the Go, and every download is " +
                 "checked against the size and SHA-256 the catalog publishes.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            NAME,
+            "Give the copy a name and an icon of your own. Both are required.",
+            "<p>The name replaces <i>Code on the Go</i> on the launcher, in the app's own screens and in notifications. " +
+                "The icon replaces the launcher icon, the splash screen picture, the logo on the app's own screens and the " +
+                "status-bar icon; the status-bar " +
+                "icon is a white outline made from your picture, so a clear shape on a plain or transparent background " +
+                "works best. Text that must keep naming Code on the Go, such as the credit line added to Git commits, " +
+                "is left as it is.</p>" +
+                "<p>A name close to <i>Code on the Go</i> or its short form, an empty name, or one over 50 characters is " +
+                "refused, and so is a picture that looks like Code on the Go's own icon. A build needs a name, an " +
+                "icon and the confirmation box ticked.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            ICON,
+            "Choose a picture for the icon (required). It is cropped to a square.",
+            "<p>Any picture Android can open, up to 25 MB. The builder makes the launcher, splash and status-bar " +
+                "icons and the in-app logo from it at every screen density. Nothing is uploaded.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            CONFIRM,
+            "Required for every build.",
+            "<p>Tick it to say the name and picture are yours to use and are not Code on the Go's. The box clears " +
+                "whenever you change the name or the picture.</p>",
             more,
         ),
         PluginTooltipEntry(
@@ -117,6 +237,22 @@ object Help {
             "<p>Shown after you tap Read keys. The line below the list is the certificate fingerprint " +
                 "(SHA-256) of the chosen key, so you can check it is the key you used before. Use the same key " +
                 "for every build.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            APP_NAME,
+            "The name the copy shows on the launcher. Required.",
+            "<p>Needed for every build. At most 50 characters, and not close to <i>Code on the Go</i> or its short form. The line under " +
+                "the field says what is wrong with a name that is refused. Changing the name clears the " +
+                "confirmation box.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            MINSDK,
+            "This plugin may not work on every device the copy installs on.",
+            "<p>The plugin asks for a newer Android than this copy of Code on the Go needs, or asks in a way this " +
+                "builder could not read. Keep it if everyone who will install the copy has a new enough device, " +
+                "or tap Remove. The warning names this device's Android when it is older too.</p>",
             more,
         ),
         PluginTooltipEntry(

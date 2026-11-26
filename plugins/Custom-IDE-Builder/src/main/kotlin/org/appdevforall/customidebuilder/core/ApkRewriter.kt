@@ -9,6 +9,8 @@ class RewriteReport(
     val dropped: List<String>,
     val added: List<String>,
     val index: String,
+    /** What the name and icon edit did; null when no name or icon was chosen. */
+    val branding: BrandingReport? = null,
 )
 
 /**
@@ -19,6 +21,8 @@ class RewriteReport(
  * IO and no CPU to speak of.
  */
 object ApkRewriter {
+    const val RESOURCE_TABLE = "resources.arsc"
+
     /** Entries that belong to the build being replaced: its add-ons, their index and its v1 signature. */
     fun isDropped(name: String): Boolean {
         if (isBundledAddon(name)) return true
@@ -57,6 +61,7 @@ object ApkRewriter {
         source: File,
         output: File,
         addons: List<StagedAddon>,
+        branding: Branding? = null,
         checkCancelled: () -> Unit = {},
         onProgress: (Double) -> Unit = {},
     ): RewriteReport {
@@ -70,11 +75,39 @@ object ApkRewriter {
         )
         val indexBytes = index.toByteArray(Charsets.UTF_8)
 
+        // The resource table is rewritten whole, so it is read (inflated if need be) and edited before the copy starts.
+        val branded =
+            if (branding == null) {
+                null
+            } else {
+                val arsc =
+                    java.util.zip.ZipFile(source).use { z ->
+                        val e = z.getEntry(RESOURCE_TABLE) ?: throw BrandingException("The app has no $RESOURCE_TABLE to rename or re-icon.")
+                        z.getInputStream(e).use { it.readBytes() }
+                    }
+                checkCancelled()
+                ResourceBranding.apply(arsc, branding)
+            }
+        val extra = branded?.files.orEmpty()
+
         val dropped = ArrayList<String>()
         var copied = 0
         RawZipFile(source).use { zip ->
-            val keep = zip.entries.filter { e -> if (isDropped(e.name)) { dropped.add(e.name); false } else true }
-            val total = (keep.sumOf { it.compressedSize } + addons.sumOf { digests.getValue(it).size } + indexBytes.size).coerceAtLeast(1)
+            val keep = zip.entries.filter { e ->
+                if (isDropped(e.name)) {
+                    dropped.add(e.name)
+                    false
+                } else {
+                    // Replaced below, STORED and aligned.
+                    !(branded != null && e.name == RESOURCE_TABLE)
+                }
+            }
+            val clashing = keep.firstOrNull { it.name in extra }
+            if (clashing != null) throw ZipFormatException("the app already has ${clashing.name}")
+            val total = (
+                keep.sumOf { it.compressedSize } + addons.sumOf { digests.getValue(it).size } + indexBytes.size +
+                    (branded?.table?.size ?: 0) + extra.values.sumOf { it.size }
+                ).coerceAtLeast(1)
             var done = 0L
             val advance = { n: Int -> done += n; checkCancelled(); onProgress(done.toDouble() / total) }
             RawZipWriter(FileOutputStream(output)).use { writer ->
@@ -88,12 +121,27 @@ object ApkRewriter {
                         addon.file.inputStream().use { input -> pump(input) { buf, n -> sink.write(buf, 0, n); advance(n) } }
                     }
                 }
+                if (branded != null) {
+                    // Android 11 and later refuse an app whose resources.arsc is compressed or not 4-byte aligned;
+                    // addStored does both (aligned to ZipAlignment.requiredFor).
+                    writeStored(writer, RESOURCE_TABLE, branded.table, advance)
+                    for ((path, bytes) in extra) writeStored(writer, path, bytes, advance)
+                }
                 val crc = java.util.zip.CRC32().apply { update(indexBytes) }.value
                 writer.addStored(INDEX_APK_ENTRY, indexBytes.size.toLong(), crc) { sink -> sink.write(indexBytes) }
             }
             // Only now: the writer has finished the central directory, so a failure there is not reported as done.
             onProgress(1.0)
         }
-        return RewriteReport(copied, dropped, addons.map { it.apkEntryName } + INDEX_APK_ENTRY, index)
+        val added = addons.map { it.apkEntryName } + INDEX_APK_ENTRY + (if (branded != null) listOf(RESOURCE_TABLE) + extra.keys else emptyList())
+        return RewriteReport(copied, dropped, added, index, branded?.report)
+    }
+
+    private fun writeStored(writer: RawZipWriter, name: String, bytes: ByteArray, advance: (Int) -> Unit) {
+        val crc = java.util.zip.CRC32().apply { update(bytes) }.value
+        writer.addStored(name, bytes.size.toLong(), crc) { sink ->
+            sink.write(bytes)
+            advance(bytes.size)
+        }
     }
 }

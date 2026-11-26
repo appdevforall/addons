@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.util.TypedValue
@@ -13,8 +14,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -23,7 +28,16 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import org.appdevforall.customidebuilder.core.AddonKind
+import org.appdevforall.customidebuilder.core.AppNameCheck
+import org.appdevforall.customidebuilder.core.BrandingGate
 import org.appdevforall.customidebuilder.core.Catalog
+import org.appdevforall.customidebuilder.core.ContactCheck
+import org.appdevforall.customidebuilder.core.ContactField
+import org.appdevforall.customidebuilder.core.Contacts
+import org.appdevforall.customidebuilder.core.IconVerdict
+import org.appdevforall.customidebuilder.core.MinSdkCheck
+import org.appdevforall.customidebuilder.core.MinSdkWarning
+import org.appdevforall.customidebuilder.core.NameVerdict
 
 /**
  * The Custom IDE Builder screen. Views are built in code, so there is no layout to inflate against the
@@ -33,6 +47,16 @@ import org.appdevforall.customidebuilder.core.Catalog
 class BuilderFragment : Fragment() {
     private lateinit var prefs: SharedPreferences
     private lateinit var itemsBox: LinearLayout
+    private lateinit var nameField: EditText
+    private lateinit var nameStatus: TextView
+    private lateinit var iconPreview: ImageView
+    private lateinit var iconLabel: TextView
+    private lateinit var iconStatus: TextView
+    private lateinit var clearIconButton: Button
+    private lateinit var confirmBox: CheckBox
+    private val contactFields = LinkedHashMap<ContactField, EditText>()
+    private val contactStatus = LinkedHashMap<ContactField, TextView>()
+    private var refreshing = false
     private lateinit var keystoreLabel: TextView
     private lateinit var storePassword: EditText
     private lateinit var keyPassword: EditText
@@ -47,6 +71,7 @@ class BuilderFragment : Fragment() {
     private val removeButtons = ArrayList<Button>()
     private var shownAliases: List<String>? = null
     private var shownItemsVersion = -1
+    private var shownPreview: android.graphics.Bitmap? = null
     private var shownQuestion: NameQuestion? = null
     private var nameDialog: AlertDialog? = null
     private val listener: () -> Unit = { refresh() }
@@ -54,6 +79,17 @@ class BuilderFragment : Fragment() {
 
     private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) Session.addFromDevice(requireContext().applicationContext, uris)
+    }
+    private val pickIcon = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val host = hostOrNull()
+            if (host == null) {
+                Session.message = "Could not read the installed app's details."
+                refresh()
+            } else {
+                Session.pickIcon(requireContext().applicationContext, uri, host.packageName, host.apk)
+            }
+        }
     }
     private val pickKeystore = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -77,10 +113,16 @@ class BuilderFragment : Fragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
         prefs = prefsOf()
+        if (!Session.contactsLoaded) {
+            Session.loadContacts(ContactField.values().fold(Contacts()) { c, f -> c.with(f, prefs.getString(contactPref(f), null) ?: "") })
+        }
+        contactFields.clear()
+        contactStatus.clear()
         actionButtons.clear()
         removeButtons.clear()
         shownAliases = null
         shownItemsVersion = -1
+        shownPreview = null
         val column = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(24))
@@ -96,7 +138,69 @@ class BuilderFragment : Fragment() {
         })
         column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
 
-        column.addView(heading(ctx, "2. Signing key", Help.KEYSTORE))
+        column.addView(heading(ctx, "2. Name and icon", Help.NAME))
+        column.addView(text(ctx, "Every copy needs its own name and its own icon. They replace Code on the Go's everywhere the app shows them.", 14f, tooltip = Help.NAME))
+        nameField = EditText(ctx).apply {
+            hint = "App name"
+            withTooltip(this, Help.APP_NAME, consume = false)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+                override fun afterTextChanged(s: Editable?) {
+                    if (!refreshing) Session.setName(s?.toString().orEmpty())
+                }
+            })
+        }
+        column.addView(nameField)
+        nameStatus = text(ctx, "", 14f).apply { withTooltip(this, Help.NAME) }
+        column.addView(nameStatus)
+        iconPreview = ImageView(ctx).apply {
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Preview of the chosen icon"
+            withTooltip(this, Help.ICON)
+        }
+        column.addView(iconPreview, LinearLayout.LayoutParams(dp(96), dp(96)).apply { topMargin = dp(8) })
+        iconLabel = text(ctx, "", 14f).apply { withTooltip(this, Help.ICON) }
+        column.addView(iconLabel)
+        iconStatus = text(ctx, "", 14f).apply { withTooltip(this, Help.ICON) }
+        column.addView(iconStatus)
+        column.addView(action(ctx, "Choose icon", Help.ICON) { pickIcon.launch(arrayOf("image/*")) })
+        clearIconButton = action(ctx, "Remove icon", Help.ICON) { Session.clearIcon() }
+        column.addView(clearIconButton)
+        confirmBox = CheckBox(ctx).apply {
+            text = BrandingGate.CONFIRMATION
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setOnCheckedChangeListener { _, checked -> if (!refreshing) Session.confirmedOwn = checked }
+            withTooltip(this, Help.CONFIRM)
+        }
+        column.addView(confirmBox)
+
+        column.addView(heading(ctx, "3. Your contact details", Help.CONTACTS))
+        column.addView(
+            text(
+                ctx,
+                "These replace App Dev For All's links on the copy's About page and its feedback and crash-report emails. Leave a field blank to hide it.",
+                14f,
+                tooltip = Help.CONTACTS,
+            ),
+        )
+        for (f in ContactField.values()) {
+            val tag = Help.contactTag(f)
+            val field = contactField(ctx, f, tag)
+            column.addView(fieldLabel(ctx, contactLabel(f), tag, field))
+            column.addView(field)
+            val status = text(ctx, "", 14f, tooltip = tag)
+            column.addView(status)
+            contactFields[f] = field
+            contactStatus[f] = status
+        }
+
+        column.addView(heading(ctx, "4. Signing key", Help.KEYSTORE))
         keystoreLabel = text(ctx, "", 14f, tooltip = Help.KEYSTORE)
         column.addView(keystoreLabel)
         column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
@@ -125,12 +229,12 @@ class BuilderFragment : Fragment() {
         column.addView(fieldLabel(ctx, "Key password (leave blank if it is the same as the store password)", Help.KEY_PASSWORD, keyPassword))
         column.addView(keyPassword)
 
-        column.addView(heading(ctx, "3. Output folder", Help.FOLDER))
+        column.addView(heading(ctx, "5. Output folder", Help.FOLDER))
         folderLabel = text(ctx, "", 14f, tooltip = Help.FOLDER)
         column.addView(folderLabel)
         column.addView(action(ctx, "Choose folder", Help.FOLDER) { pickFolder.launch(null) })
 
-        column.addView(heading(ctx, "4. Build", Help.BUILD))
+        column.addView(heading(ctx, "6. Build", Help.BUILD))
         column.addView(action(ctx, "Build APK", Help.BUILD) { startBuild() })
         stageLabel = text(ctx, "", 14f, tooltip = Help.STATUS)
         column.addView(stageLabel)
@@ -198,6 +302,7 @@ class BuilderFragment : Fragment() {
     private fun refresh() {
         if (view == null) return
         val busy = Session.busy
+        refreshing = true
         if (Session.passwordsToClear) {
             // A build has ended, however it ended, maybe while this screen had no view: the passwords are not needed on screen any more.
             storePassword.text.clear()
@@ -209,6 +314,8 @@ class BuilderFragment : Fragment() {
             rebuildItems()
         }
         removeButtons.forEach { it.isEnabled = !busy }
+        refreshBranding(busy)
+        refreshContacts(busy)
         // A build has already read the passwords and the key; changing them mid-build would only mislead.
         storePassword.isEnabled = !busy
         keyPassword.isEnabled = !busy
@@ -233,6 +340,8 @@ class BuilderFragment : Fragment() {
         cancelButton.visibility = if (busy) View.VISIBLE else View.GONE
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         showProgress()
+
+        refreshing = false
 
         // A dialog needs a visible screen: if the list arrives while the screen is away, onResume shows it.
         val offer = Session.offer
@@ -265,6 +374,8 @@ class BuilderFragment : Fragment() {
     /** Builds the add-on rows. Only when the list changed: it makes new views for every row. */
     private fun rebuildItems() {
         val ctx = requireContext()
+        // Read at most once per rebuild, and only if a row still needs its min-SDK check.
+        val host by lazy { hostOrNull() }
         itemsBox.removeAllViews()
         removeButtons.clear()
         if (Session.items.isEmpty()) {
@@ -281,8 +392,26 @@ class BuilderFragment : Fragment() {
             }
             removeButtons.add(remove)
             row.addView(remove)
+            val warning = minSdkWarningOf(chosen) { host }
+            if (warning != null) {
+                row.addView(text(ctx, "Warning: ${warning.message} Keep it, or tap Remove.", 14f).apply { withTooltip(this, Help.MINSDK) })
+            }
             itemsBox.addView(row)
         }
+    }
+
+    /**
+     * The add-on's min-SDK warning, worked out the first time the row is built and kept on [chosen],
+     * since nothing it depends on changes. [host] is read only then; while the app's details cannot
+     * be read, nothing is flagged and nothing is kept, so a later rebuild tries again.
+     */
+    private fun minSdkWarningOf(chosen: Chosen, host: () -> HostInfo?): MinSdkWarning? {
+        if (chosen.minSdkChecked) return chosen.minSdkWarning
+        val hostMinSdk = host()?.minSdk ?: return null
+        val warning = MinSdkCheck.warnings(hostMinSdk, listOf(chosen.picked.label to chosen.minSdk), Build.VERSION.SDK_INT).firstOrNull()
+        chosen.minSdkWarning = warning
+        chosen.minSdkChecked = true
+        return warning
     }
 
     /**
@@ -319,6 +448,54 @@ class BuilderFragment : Fragment() {
         tooltipOnDialog(dialog, Help.NAME_TAKEN)
         nameDialog = dialog
     }
+
+    private fun refreshBranding(busy: Boolean) {
+        if (nameField.text.toString() != Session.appName) nameField.setText(Session.appName)
+        nameStatus.text =
+            when (val v = AppNameCheck.check(Session.appName)) {
+                is NameVerdict.Ok -> "This name can be used."
+                is NameVerdict.Rejected -> if (Session.appName.isBlank()) "Enter a name for the copy." else v.reason
+            }
+        val icon = Session.icon
+        iconPreview.visibility = if (icon == null) View.GONE else View.VISIBLE
+        // Only when the picture changed: the full refresh runs on every state change.
+        if (icon?.preview !== shownPreview) {
+            shownPreview = icon?.preview
+            iconPreview.setImageBitmap(shownPreview)
+        }
+        iconLabel.text = Session.iconName?.let { "Icon: $it" } ?: "No icon chosen yet."
+        iconStatus.text =
+            when (val v = Session.iconVerdict) {
+                null -> if (icon != null) "Checking the picture." else ""
+                is IconVerdict.TooSimilar -> "Too close to Code on the Go's own icon. Choose a picture of your own."
+                is IconVerdict.Unchecked -> "Not compared with Code on the Go's icon: ${v.reason}"
+                is IconVerdict.Different -> "Different from Code on the Go's icon."
+            }
+        iconStatus.visibility = if (iconStatus.text.isEmpty()) View.GONE else View.VISIBLE
+        clearIconButton.visibility = if (icon == null) View.GONE else View.VISIBLE
+        confirmBox.isChecked = Session.confirmedOwn
+        confirmBox.isEnabled = !busy
+        nameField.isEnabled = !busy
+    }
+
+    private fun refreshContacts(busy: Boolean) {
+        val contacts = Session.contacts
+        for ((f, field) in contactFields) {
+            val value = contacts[f]
+            if (field.text.toString() != value) field.setText(value)
+            field.isEnabled = !busy
+            val status = contactStatus.getValue(f)
+            status.text = ContactCheck.problem(f, value)?.let { "${f.label}: $it" }.orEmpty()
+            status.visibility = if (status.text.isEmpty()) View.GONE else View.VISIBLE
+        }
+    }
+
+    private fun hostOrNull(): HostInfo? =
+        try {
+            AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, requireContext())
+        } catch (e: Exception) {
+            null
+        }
 
     private fun confirmWebsite() {
         val dialog = AlertDialog.Builder(requireContext())
@@ -466,8 +643,52 @@ class BuilderFragment : Fragment() {
         isSaveEnabled = false
     }
 
+    /** The label above a contact field: what it is and where the copy shows it. */
+    private fun contactLabel(f: ContactField): String =
+        when (f) {
+            ContactField.WEBSITE -> "Website (About page)"
+            ContactField.CONTACT_EMAIL -> "Contact email (About page)"
+            ContactField.FEEDBACK_EMAIL -> "Feedback email (feedback button and crash reports)"
+            ContactField.SUPPORT_URL -> "Support link (the About page's \"Support our work\" button)"
+            ContactField.FORUM_URL -> "Discussion forum (About page)"
+            ContactField.TELEGRAM_URL -> "Telegram channel (About page)"
+            ContactField.YOUTUBE_URL -> "YouTube channel (About page)"
+        }
+
+    /**
+     * A field for one contact detail. Its label is [fieldLabel], above it. The input type takes no line break, and
+     * horizontal scrolling is turned off after it, so a long link wraps onto more lines instead of running off the side.
+     * Each change goes to [Session] and to the preferences, so it is remembered across sessions.
+     */
+    private fun contactField(ctx: Context, f: ContactField, tooltip: String) = EditText(ctx).apply {
+        id = View.generateViewId()
+        withTooltip(this, tooltip, consume = false)
+        inputType = InputType.TYPE_CLASS_TEXT or (if (f.isEmail) InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS else InputType.TYPE_TEXT_VARIATION_URI)
+        setHorizontallyScrolling(false)
+        maxLines = Int.MAX_VALUE
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        hint = if (f.isEmail) "name@example.org (blank hides it)" else "https://example.org/ (blank hides it)"
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                if (refreshing) return
+                val value = s?.toString().orEmpty()
+                prefs.edit().putString(contactPref(f), value).apply()
+                Session.setContact(f, value)
+            }
+        })
+    }
+
+    private fun contactPref(f: ContactField): String = PREF_CONTACT_PREFIX + f.name.lowercase(java.util.Locale.ROOT)
+
     private companion object {
         const val PREF_WARNED = "warned_same_key"
         const val PREF_TREE = "output_tree_uri"
+
+        /** Contact details are not secret, so they are kept beside the output folder. */
+        const val PREF_CONTACT_PREFIX = "contact_"
     }
 }
