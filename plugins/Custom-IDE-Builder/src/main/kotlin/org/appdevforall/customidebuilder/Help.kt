@@ -210,7 +210,9 @@ object Help {
             CANCEL,
             "Stop the build or download in progress.",
             "<p>A cancelled or failed build saves nothing to your output folder: an unfinished APK that was already " +
-                "being written there is deleted, and the temporary files are deleted too. Your add-on list and keystore choice stay as they are.</p>",
+                "being written there is deleted, and the temporary files are deleted too. If the folder will not " +
+                "delete the unfinished file, the result names it so you can delete it by hand. Your add-on list and " +
+                "keystore choice stay as they are.</p>",
             more,
         ),
         PluginTooltipEntry(
@@ -278,9 +280,10 @@ object Help {
         PluginTooltipEntry(
             NAME_TAKEN,
             "The folder already has a file with this name. Choose another, or cancel the save.",
-            "<p>The plugin never lets the folder rename your APK on its own. It looks for the name when you tap " +
-                "Build, and again just before saving, because a file can appear while the app is being built. " +
-                "If the name is taken you are asked for another one; a free name is filled in for you.</p>" +
+            "<p>The plugin looks for the name when you tap Build, and again just before saving, because a file can " +
+                "appear while the app is being built. If the name is taken you are asked for another one; a free " +
+                "name is filled in for you. The folder can still change the name when it creates the file, so the " +
+                "finished message names the file as it was saved.</p>" +
                 "<p>Save keeps the name you typed (spaces and other odd characters become dashes, and " +
                 "<code>.apk</code> is added). Cancel stops: nothing is built, or the APK that was built is deleted. " +
                 "The build waits for your answer, also if you leave this screen and come back.</p>",

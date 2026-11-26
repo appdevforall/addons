@@ -67,4 +67,12 @@ class NamingTest {
         assertTrue(renamed, "X-custom.apk" in renamed && "X-custom (1).apk" in renamed)
         assertTrue(Naming.savedNote("X-custom.apk", null).isNotEmpty())
     }
+
+    @Test
+    fun partialLeftNoteNamesTheFileAndTheFolder() {
+        assertEquals(
+            "A partial file named X-custom (1).apk remains in Download/Builds and should be deleted by hand.",
+            Naming.partialLeftNote("X-custom (1).apk", "Download/Builds"),
+        )
+    }
 }

@@ -82,4 +82,42 @@ class StagingTest {
         }
         assertFalse(Staging.isInside(root, File(link, "addon.cgp")))
     }
+
+    @Test
+    fun discardDeletesTheFileAndItsEmptyFolderUnderTheRoot() {
+        val root = tmp.newFolder("staging4")
+        val file = File(root, "7/addon.cgp").also { it.parentFile.mkdirs(); it.writeText("x") }
+        assertTrue(Staging.discard(root, file))
+        assertFalse(file.exists())
+        assertFalse("the numbered folder it was in", File(root, "7").exists())
+        assertTrue("the root stays", root.isDirectory)
+    }
+
+    @Test
+    fun discardKeepsAFolderThatStillHoldsSomething() {
+        val root = tmp.newFolder("staging5")
+        val kept = File(root, "8/other.txt").also { it.parentFile.mkdirs(); it.writeText("x") }
+        val file = File(root, "8/addon.cgp").also { it.writeText("x") }
+        assertTrue(Staging.discard(root, file))
+        assertFalse(file.exists())
+        assertTrue(kept.exists())
+    }
+
+    @Test
+    fun discardOfAFileThatIsNotThereIsHarmless() {
+        val root = tmp.newFolder("staging6")
+        assertTrue(Staging.discard(root, File(root, "9/addon.cgp")))
+        assertTrue(root.isDirectory)
+    }
+
+    @Test
+    fun discardRefusesAnythingOutsideTheRoot() {
+        val root = tmp.newFolder("staging7")
+        val outside = tmp.newFile("outside.cgp")
+        assertFalse(Staging.discard(root, outside))
+        assertFalse(Staging.discard(root, File(root, "../outside.cgp")))
+        assertFalse(Staging.discard(root, root))
+        assertTrue(outside.exists())
+        assertTrue(root.isDirectory)
+    }
 }

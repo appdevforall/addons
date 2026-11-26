@@ -44,6 +44,7 @@ import org.appdevforall.customidebuilder.core.ProgressGate
 import org.appdevforall.customidebuilder.core.SelectionResult
 import org.appdevforall.customidebuilder.core.Staging
 import org.appdevforall.customidebuilder.core.TemplateCheck
+import org.appdevforall.customidebuilder.core.WorkDirs
 import java.io.File
 import java.security.cert.X509Certificate
 
@@ -204,7 +205,15 @@ object Session {
     /** Deletes [file] only if it is under the staging folder, so a bad path can never remove anything else. */
     private fun discard(file: File) {
         val staging = stagingDir() ?: return
-        if (Staging.isInside(staging, file)) file.delete()
+        discard(staging, file)
+    }
+
+    /**
+     * As [discard], against the [staging] folder a task captured when it started: the plugin's context is
+     * gone once [end] has run, and a task that is interrupted then still has to delete its own file.
+     */
+    private fun discard(staging: File, file: File) {
+        Staging.discard(staging, file)
     }
 
     fun remove(chosen: Chosen) {
@@ -367,12 +376,12 @@ object Session {
                             val check = cancellationCheck()
                             AndroidBits.copyToFile(context, uri, file, limit = AddonLimits.MAX_BYTES, checkCancelled = check)
                         }
-                        accept(label, name, file, "this device")
+                        accept(staging, label, name, file, "this device")
                     } catch (e: java.io.IOException) {
-                        discard(file)
+                        discard(staging, file)
                         "$label: ${e.message}"
                     } catch (e: kotlinx.coroutines.CancellationException) {
-                        discard(file)
+                        discard(staging, file)
                         throw e
                     }
                 if (added != null) problems.add(added)
@@ -411,31 +420,36 @@ object Session {
                     problems.add("${Staging.label(addon.name)}: its file name is not usable")
                     continue
                 }
-                val file =
-                    try {
+                // A cancellation can land after the download renamed the verified file but before withContext
+                // returns it, so the file is named here, not taken from the result.
+                var adopted = false
+                try {
+                    val file =
                         withContext(Dispatchers.IO) {
                             downloader.download(addon, dir, cancellationCheck()) { got ->
                                 progressFrom(gen, label, (got * 1000 / addon.size.coerceAtLeast(1)).toInt())
                             }
                         }
-                    } catch (e: java.io.IOException) {
-                        problems.add("${addon.name}: ${e.message}")
-                        continue
-                    }
-                accept(addon.name, addon.fileName, file, "the website")?.let { problems.add(it) }
+                    val problem = accept(staging, addon.name, addon.fileName, file, "the website")
+                    if (problem == null) adopted = true else problems.add(problem)
+                } catch (e: java.io.IOException) {
+                    problems.add("${addon.name}: ${e.message}")
+                } finally {
+                    if (!adopted) discard(staging, File(dir, addon.fileName))
+                }
             }
             report(if (problems.isEmpty()) "" else problems.joinToString("\n"), gen)
         }
     }
 
     /** Adds the file if the list stays valid with it; otherwise deletes it and returns why. */
-    private suspend fun accept(label: String, fileName: String, file: File, source: String): String? {
+    private suspend fun accept(staging: File, label: String, fileName: String, file: File, source: String): String? {
         // Read from the binary manifest, so a plugin for a newer Android than this device's is still identified.
         val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { PluginManifest.fromArchive(file)?.pluginId } else null
         if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE) {
             val problem = withContext(Dispatchers.IO) { TemplateCheck.problem(file) }
             if (problem != null) {
-                discard(file)
+                discard(staging, file)
                 return "$label: $problem"
             }
         }
@@ -448,7 +462,7 @@ object Session {
                 null
             }
             is SelectionResult.Invalid -> {
-                discard(file)
+                discard(staging, file)
                 r.problems.firstOrNull { label in it } ?: r.problems.first()
             }
         }
@@ -529,7 +543,9 @@ object Session {
         val branding = Branding(BrandingGate.nameToWrite(appName), prepared.icons, chosenContacts)
         launch("Building", listOf(storePassword, keyPassword), endsBuild = true) { gen ->
             var name = Naming.outputName(branding.appName, host.versionName)
-            val out = File(dir, "out")
+            // Its own folder: after end() a new build can start while this one is still cleaning up.
+            val outName = WorkDirs.outDirName(counter++)
+            val out = File(dir, outName)
             var saved: Uri? = null
             var finished = false
             try {
@@ -553,6 +569,7 @@ object Session {
                             }
                         // The file is read again here, so check it is still the key whose fingerprint the user saw.
                         Keystores.shownKeyProblem(shownFingerprint, key)?.let { throw BuildException(it) }
+                        removeStaleOutDirs(dir, outName)
                         out.deleteRecursively()
                         val built =
                             Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name, branding, host.versionName), check) { s, f ->
@@ -603,10 +620,29 @@ object Session {
                 // is signalled by launch (endsBuild).
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
                     out.deleteRecursively()
-                    // A save that failed or was cancelled leaves no APK, not even a partial one, in the folder.
-                    if (!finished) saved?.let { AndroidBits.deleteDocument(context, it) }
+                    // A save that failed or was cancelled removes its partial APK from the folder; if the
+                    // provider refuses, the result says which file to delete by hand.
+                    if (!finished) {
+                        saved?.let { target ->
+                            if (!AndroidBits.deleteDocument(context, target)) {
+                                val left = AndroidBits.displayName(context, target) ?: name
+                                val note = Naming.partialLeftNote(left, AndroidBits.treeLabel(tree))
+                                // Posted, not called: once the job is cancelled nothing can follow this block. It runs
+                                // before the job's own completion, so [message] is still this build's outcome.
+                                main.post { if (gen == generation) report("$message\n$note", gen) }
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    /** Deletes the output folders other builds left in [dir] (a killed process, or a cleanup that never ran), never [current]. */
+    private fun removeStaleOutDirs(dir: File, current: String) {
+        for (name in WorkDirs.staleOutDirs(dir.list()?.toList().orEmpty(), current)) {
+            val stale = File(dir, name)
+            if (Staging.isInside(dir, stale)) stale.deleteRecursively()
         }
     }
 
@@ -640,12 +676,13 @@ object Session {
      */
     private suspend fun askName(gen: Int, message: String, suggestion: String): String? {
         val question = NameQuestion(message, suggestion)
-        withContext(Dispatchers.Main) {
-            if (gen != generation) throw kotlinx.coroutines.CancellationException("The plugin was disposed.")
-            nameQuestion = question
-            changed()
-        }
+        // The try opens before the publication: a cancel between publishing and resuming must still reach the finally.
         try {
+            withContext(Dispatchers.Main) {
+                if (gen != generation) throw kotlinx.coroutines.CancellationException("The plugin was disposed.")
+                nameQuestion = question
+                changed()
+            }
             return question.answer.await()
         } finally {
             withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {

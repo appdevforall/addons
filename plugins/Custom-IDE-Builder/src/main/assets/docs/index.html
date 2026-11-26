@@ -65,8 +65,9 @@
     <li><b>Checks before it is built.</b> The name, the picture and each plugin's requirements are checked,
       and you confirm the name and icon are yours.</li>
     <li><b>Output folder.</b> The finished APK is saved to a folder you choose, as
-      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>. The plugin never lets the folder rename it: if
-      the folder already has a file with that name, you are asked for another one.</li>
+      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>. If the folder already has a file with that
+      name, you are asked for another one. The folder can still change the name when it creates the file,
+      so the finished message names the file as it was saved.</li>
     <li><b>Release builds only.</b> It is made for the release build of Code on the Go, which reads its
       bundled add-ons from <code>assets/plugins/</code> and <code>assets/templates/</code> in its APK.</li>
     <li><b>Installing the copy.</b> It installs only after Code on the Go is uninstalled, because it is signed
@@ -148,7 +149,9 @@
       built; the build waits for your answer. <b>Cancel the save</b> stops, and an APK that was already
       built is deleted. The finished message names the file the folder actually saved.</li>
     <li>Tap <b>Build APK</b>. Tap <b>Cancel</b> to stop it. A cancelled or failed build saves nothing: if it had
-      already begun writing the APK to your folder, that unfinished file is deleted. The file is saved as
+      already begun writing the APK to your folder, that unfinished file is deleted. If the folder will not
+      delete it, the result says that a partial file named <i>name</i> remains in <i>folder</i> and should be
+      deleted by hand. The file is saved as
       <code>&lt;your app name&gt;-&lt;version&gt;-custom.apk</code>.</li>
   </ol>
   <p>Long-press any button or field on the screen for a short explanation.</p>

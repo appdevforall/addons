@@ -57,6 +57,10 @@ object Naming {
                 "because a file with that name appeared in it at the same moment."
         }
 
+    /** What to add to the final message when a cancelled or failed save left the partial file [name] in [folder] and the provider would not delete it. */
+    fun partialLeftNote(name: String, folder: String): String =
+        "A partial file named $name remains in $folder and should be deleted by hand."
+
     private fun clean(text: String): String =
         text.replace(Regex("[^A-Za-z0-9._-]+"), "-").trim('-', '.')
 }
