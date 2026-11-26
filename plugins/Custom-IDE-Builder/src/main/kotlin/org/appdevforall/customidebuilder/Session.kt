@@ -32,6 +32,7 @@ import org.appdevforall.customidebuilder.core.Pipeline
 import org.appdevforall.customidebuilder.core.ProgressGate
 import org.appdevforall.customidebuilder.core.SelectionResult
 import org.appdevforall.customidebuilder.core.Staging
+import org.appdevforall.customidebuilder.core.WorkDirs
 import java.io.File
 import java.security.cert.X509Certificate
 
@@ -414,7 +415,9 @@ object Session {
         }
         launch("Building", listOf(storePassword, keyPassword), endsBuild = true) { gen ->
             var name = Naming.outputName(host.label, host.versionName)
-            val out = File(dir, "out")
+            // Its own folder: after end() a new build can start while this one is still cleaning up.
+            val outName = WorkDirs.outDirName(counter++)
+            val out = File(dir, outName)
             var saved: Uri? = null
             var finished = false
             try {
@@ -435,6 +438,7 @@ object Session {
                             }
                         // The file is read again here, so check it is still the key whose fingerprint the user saw.
                         Keystores.shownKeyProblem(shownFingerprint, key)?.let { throw BuildException(it) }
+                        removeStaleOutDirs(dir, outName)
                         out.deleteRecursively()
                         val built =
                             Pipeline.run(BuildInput(host.apk, host.splitDirs, staged, key, host.minSdk, out, name), check) { s, f ->
@@ -497,6 +501,14 @@ object Session {
                     }
                 }
             }
+        }
+    }
+
+    /** Deletes the output folders other builds left in [dir] (a killed process, or a cleanup that never ran), never [current]. */
+    private fun removeStaleOutDirs(dir: File, current: String) {
+        for (name in WorkDirs.staleOutDirs(dir.list()?.toList().orEmpty(), current)) {
+            val stale = File(dir, name)
+            if (Staging.isInside(dir, stale)) stale.deleteRecursively()
         }
     }
 
