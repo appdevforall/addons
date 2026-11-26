@@ -109,11 +109,46 @@ class AgentReplyRendererTest {
     }
 
     @Test
-    fun givenARespondCallAfterAFailedTool_whenRendered_thenTheFailureWinsOverTheClaim() {
-        // The model asserting success after a tool failed must not be relayed as success.
+    fun givenARespondCallAfterAFailedTool_whenRendered_thenTheAnswerIsShownUnderTheFailureNote() {
+        // ADFA-7318: the answer used to be replaced by the note, so a model explaining why a write
+        // was refused, and how to allow it, never reached the user.
+        val answer = "The query tool is read-only. Turn on \"Let the Agent change app databases\" to allow writes."
+        val text = render("x", respond("message" to answer), lastToolFailed = true)
+
+        assertEquals("*$FAILED*\n\n$answer", text)
+    }
+
+    @Test
+    fun givenAClaimOfSuccessAfterAFailedTool_whenRendered_thenTheFailureNoteComesFirst() {
+        // The model asserting success after a tool failed must not read as success on its own.
         val text = render("x", respond("message" to "Done!"), lastToolFailed = true)
 
-        assertEquals(FAILED, text)
+        assertTrue(text, text.startsWith("*$FAILED*"))
+    }
+
+    @Test
+    fun givenProseBesideAnEmptyRespondAfterAFailedTool_whenRendered_thenTheProseIsShownUnderTheNote() {
+        val raw = "The file does not exist, so I could not read it.\n<tool_call>{\"tool\":\"respond\",\"args\":{}}</tool_call>"
+
+        val text = render(raw, respond(), lastToolFailed = true)
+
+        assertEquals("*$FAILED*\n\nThe file does not exist, so I could not read it.", text)
+    }
+
+    @Test
+    fun givenAnEmptyRespondCallAfterAFailedTool_whenRendered_thenOnlyTheFailureNoteIsShown() {
+        val text = render("<tool_call>{\"tool\":\"respond\",\"args\":{}}</tool_call>", respond(), lastToolFailed = true)
+
+        assertEquals("*$FAILED*", text)
+    }
+
+    @Test
+    fun givenPlainProseAfterAFailedTool_whenRendered_thenTheProseIsShownUnchanged() {
+        // The note goes only where the replacement used to: a respond call. A prose reply was
+        // always shown as written, and the failed call's own message stays above it.
+        val prose = "It failed because the file is missing."
+
+        assertEquals(prose, render(prose, lastToolFailed = true))
     }
 
     @Test

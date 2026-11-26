@@ -63,7 +63,10 @@ object AgentReplyRenderer {
      * @param toolCalls the calls parsed out of it.
      * @param terminalTool the name of the answer-carrying pseudo-tool (`respond`).
      * @param lastToolFailed whether this run's most recent tool call failed.
-     * @param actionFailedText what to show when the model claims success after a failed tool.
+     * @param actionFailedText the note an answer after a failed tool is shown under, in italics.
+     *   The model's answer is never replaced by it: the answer often explains the failure. Read
+     *   together, the note and the failed call's details above stop an answer that claims success
+     *   from being taken as success.
      * @param noResponseText last-resort text when the turn carries nothing to show.
      * @param unparsedReplyText what to show for a reply that meant to call a tool and failed to.
      * @return the text to display for this turn.
@@ -78,13 +81,16 @@ object AgentReplyRenderer {
         unparsedReplyText: (ToolCallExtractor.UnparsedReply) -> String,
     ): String {
         val respondCall = toolCalls.firstOrNull { isTerminalToolName(it.name, terminalTool) }
+        // The answer wherever the model put it, then the prose beside an empty envelope.
+        val answer = respondCall?.let {
+            respondMessageOf(it.args) ?: ToolCallExtractor.proseOutsideToolCalls(rawText)
+        }
         return when {
-            respondCall != null && lastToolFailed -> actionFailedText
-            // The answer wherever the model put it, then the prose beside an empty envelope.
-            respondCall != null ->
-                respondMessageOf(respondCall.args)
-                    ?: ToolCallExtractor.proseOutsideToolCalls(rawText)
-                    ?: noResponseText
+            respondCall != null && lastToolFailed -> {
+                val note = "*$actionFailedText*"
+                answer?.let { "$note\n\n$it" } ?: note
+            }
+            respondCall != null -> answer ?: noResponseText
             // A call that failed to parse: say so, rather than pasting the raw envelope on screen.
             else -> ToolCallExtractor.diagnoseUnparsedReply(rawText)?.let(unparsedReplyText)
                 ?: rawText.ifBlank { noResponseText }
