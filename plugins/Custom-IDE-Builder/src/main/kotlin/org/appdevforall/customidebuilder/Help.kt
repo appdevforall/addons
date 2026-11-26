@@ -35,8 +35,8 @@ object Help {
             "Make a copy of Code on the Go with the add-ons you choose, signed with your own key.",
             "<p>Builds a copy of the Code on the Go installed on this device, with the plugins and templates " +
                 "you pick bundled inside, and signs it with your keystore.</p>" +
-                "<p>The copy installs only after Code on the Go is uninstalled, and uninstalling erases the " +
-                "projects stored in the app's data.</p>",
+                "<p>The copy installs only after Code on the Go is uninstalled. Uninstalling removes Code on the " +
+                "Go's app data, such as its project list and settings; your projects in CodeOnTheGoProjects stay.</p>",
             more,
         ),
         PluginTooltipEntry(
@@ -137,8 +137,9 @@ object Help {
             SAME_KEY,
             "Why every build should be signed with the same key.",
             "<p>Android installs an update only if it is signed with the same key as the version already " +
-                "installed. A device that has a build signed with another key must uninstall it first, and " +
-                "uninstalling Code on the Go erases the projects stored in its data.</p>",
+                "installed. A device that has a build signed with another key must uninstall it first. Uninstalling " +
+                "removes Code on the Go's app data, such as its project list and settings; your projects in " +
+                "CodeOnTheGoProjects stay.</p>",
             more,
         ),
         PluginTooltipEntry(

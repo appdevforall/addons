@@ -491,7 +491,7 @@ object Session {
                     "Done. ${result.third ?: name} is in ${result.second}.\n" + (if (note.isEmpty()) "" else "$note\n") +
                         "Signed with certificate ${result.first}.\n\n" +
                         "It installs only after Code on the Go is uninstalled, because it is signed with a different key. " +
-                        "Uninstalling erases the projects stored in the app's data, so copy them out first.",
+                        "Uninstalling removes Code on the Go's app data, such as its project list and settings; your projects in CodeOnTheGoProjects stay.",
                     gen,
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
