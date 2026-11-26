@@ -75,6 +75,28 @@ class ReadOnlyHintParsingTest {
     }
 
     @Test
+    fun `execute is off unless writes are allowed, whatever its hint`() {
+        val tools = listOf(McpTool("query", "", readOnlyHint = true), McpTool("execute", "", readOnlyHint = true))
+        assertEquals(setOf("query"), ReadOnlyTrust.enabledTools(tools))
+        assertEquals(setOf("query", "execute"), ReadOnlyTrust.enabledTools(tools, allowWrites = true))
+        assertEquals(setOf("execute"), ReadOnlyTrust.enabledTools(listOf(McpTool("execute", "")), allowWrites = true))
+    }
+
+    @Test
+    fun `allowing writes switches on no other tool`() {
+        val tools = listOf(McpTool("get_stats", "", readOnlyHint = true), McpTool("run_sql", ""))
+        assertEquals(emptySet<String>(), ReadOnlyTrust.enabledTools(tools, allowWrites = true))
+    }
+
+    @Test
+    fun `execute is never read-only, even claiming the hint`() {
+        assertFalse(ReadOnlyTrust.isReadOnly(McpTool("execute", "", readOnlyHint = true)))
+        assertTrue(ReadOnlyTrust.isReadOnly(McpTool("query", "", readOnlyHint = true)))
+        assertFalse(ReadOnlyTrust.isReadOnly(McpTool("query", "")))
+        assertEquals(setOf("execute"), ReadOnlyTrust.WRITE_TOOLS)
+    }
+
+    @Test
     fun `a query tool that is not read only stays off`() {
         val tools = listOf(McpTool("query", "", readOnlyHint = false), McpTool("list_databases", ""))
         assertEquals(emptySet<String>(), ReadOnlyTrust.enabledTools(tools))

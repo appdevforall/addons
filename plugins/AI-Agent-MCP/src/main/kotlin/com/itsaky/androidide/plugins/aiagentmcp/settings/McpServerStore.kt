@@ -31,6 +31,7 @@ object McpServerStore {
     private const val KEY_SERVERS = "servers"
     private const val KEY_TOKEN_PREFIX = "token_"
     private const val KEY_HEADERS_PREFIX = "headers_"
+    private const val KEY_ALLOW_DATABASE_WRITES = "allowDatabaseWrites"
 
     private const val FIELD_ID = "id"
     private const val FIELD_NAME = "name"
@@ -267,6 +268,32 @@ object McpServerStore {
             upsertLocked(server.copy(enabled = enabled))
         }
         fireChanged()
+    }
+
+    /**
+     * Whether the SQLite debugger entries offer their tools that change an app's database
+     * (`ReadOnlyTrust.WRITE_TOOLS`, ADFA-7300). Off unless the user switched it on; every call of
+     * such a tool still asks, and none is read-only, so "Always Allow" never covers one.
+     */
+    fun allowDatabaseWrites(): Boolean = prefs()?.getBoolean(KEY_ALLOW_DATABASE_WRITES, false) ?: false
+
+    /**
+     * Switches [allowDatabaseWrites], then tells the listeners, so the Agent's tool list follows.
+     *
+     * @return false when the value could not be stored, and the switch is then unchanged. A failed
+     *   commit still leaves the new value in SharedPreferences' memory, where it would hold until the
+     *   app restarts and then turn back, so it is put back to the stored one.
+     */
+    fun setAllowDatabaseWrites(allow: Boolean): Boolean {
+        val prefs = prefs() ?: return false
+        val stored = prefs.getBoolean(KEY_ALLOW_DATABASE_WRITES, false)
+        if (!prefs.edit().putBoolean(KEY_ALLOW_DATABASE_WRITES, allow).commit()) {
+            Log.w(TAG, "Could not store the database-writes switch")
+            prefs.edit().putBoolean(KEY_ALLOW_DATABASE_WRITES, stored).commit()
+            return false
+        }
+        fireChanged()
+        return true
     }
 
     /**

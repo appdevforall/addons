@@ -67,6 +67,25 @@
                 android:textColor="@color/plugin_text_muted"
                 android:textSize="14sp" />
 
+            <!-- ADFA-7300: lets the SQLite debugger entries offer execute. Off by default; the
+                 label is the switch's own text so a tap anywhere on it toggles, and it wraps at 2x font. -->
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/mcpAllowDatabaseWrites"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/mcp_allow_database_writes"
+                android:textColor="@color/plugin_on_surface"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/mcpAllowDatabaseWritesSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_allow_database_writes_summary"
+                android:textColor="@color/plugin_text_muted"
+                android:textSize="13sp" />
+
             <LinearLayout
                 android:id="@+id/mcpServerList"
                 android:layout_width="match_parent"

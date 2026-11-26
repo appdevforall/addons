@@ -15,11 +15,13 @@ import org.json.JSONObject
  *
  * @param tools the `tools/list` entries.
  * @param sessionId the `Mcp-Session-Id` to assign, or null for a server without sessions.
+ * @param failing tools whose `tools/call` answers `isError` with the mapped text, by tool name.
  */
 class FakeMcpServer(
     val token: String,
     private val tools: List<JSONObject>,
     private val sessionId: String? = null,
+    private val failing: Map<String, String> = emptyMap(),
 ) {
 
     /**
@@ -64,7 +66,11 @@ class FakeMcpServer(
                         .put("protocolVersion", "2025-03-26")
                         .put("serverInfo", JSONObject().put("name", "fake"))
                     "tools/list" -> JSONObject().put("tools", JSONArray(tools))
-                    "tools/call" -> JSONObject().put(
+                    "tools/call" -> failing[request.getJSONObject("params").optString("name")]?.let { error ->
+                        JSONObject()
+                            .put("content", JSONArray().put(JSONObject().put("type", "text").put("text", error)))
+                            .put("isError", true)
+                    } ?: JSONObject().put(
                         "content",
                         JSONArray().put(JSONObject().put("type", "text").put("text", "served by $port")),
                     )

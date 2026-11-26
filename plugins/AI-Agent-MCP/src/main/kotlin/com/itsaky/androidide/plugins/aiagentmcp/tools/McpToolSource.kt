@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.ReadOnlyTrust
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
@@ -92,7 +93,7 @@ class McpToolSource internal constructor(
             name = exposed.name,
             description = exposed.description,
             parametersSchema = exposed.tool.inputSchema,
-            preApproved = exposed.server.automatic && exposed.tool.readOnlyHint,
+            preApproved = exposed.server.automatic && ReadOnlyTrust.isReadOnly(exposed.tool),
         )
     }
 
@@ -227,7 +228,7 @@ class McpToolSource internal constructor(
             // or moved to another URL. Checked with the write, under the lock the removal takes, so
             // it cannot land between.
             McpServerHealth.available(server.id) { McpServers.isConfigured(server) }
-            Outcome(result.success, result.text, result.errorMessage)
+            Outcome(result.success, result.text, errorWithHint(server, tool, result.errorMessage))
         } catch (e: Throwable) {
             // Throwable, unlike the other host-facing catches in this plugin: this runs inside
             // CompletableFuture.supplyAsync, which catches every Throwable itself, so narrowing this
@@ -337,13 +338,34 @@ class McpToolSource internal constructor(
     /**
      * The description the model and the approval dialog see. A SQLite debugger tool starts with
      * its application ID: every entry's tools say the same thing otherwise, and the model could
-     * not tell which app's database one reads. A hand-added server's text is passed through.
+     * not tell which app's database one reads. A hand-added server's text is passed through. While the
+     * settings switch keeps an entry's `execute` off, its `query` also says how writes get allowed
+     * ([ReadOnlyTrust.needsWriteSwitchHint]).
      */
     private fun describe(server: McpServer, tool: McpTool): String {
         if (!server.automatic) return tool.description
         val app = "${AutomaticServers.applicationIdOf(server.id)} (SQLite debugger)"
-        return if (tool.description.isBlank()) app else "$app: ${tool.description}"
+        val text = if (tool.description.isBlank()) app else "$app: ${tool.description}"
+        if (!needsWriteSwitchHint(server, tool)) return text
+        return "$text ${writeSwitchHint()}"
     }
+
+    /**
+     * A failed call's text, with [writeSwitchHint] after it when SQLite refused a write through an
+     * app's `query` while the switch keeps `execute` off. AI-Core shows that text under the chat, so the
+     * user reads how to allow writes even when the Agent's own answer is not shown.
+     */
+    private fun errorWithHint(server: McpServer, tool: McpTool, error: String?): String? {
+        if (error == null || !needsWriteSwitchHint(server, tool) || !ReadOnlyTrust.isWriteRefusal(error)) return error
+        return "${error.trimEnd().trimEnd('.')}. ${writeSwitchHint()}"
+    }
+
+    private fun needsWriteSwitchHint(server: McpServer, tool: McpTool): Boolean =
+        server.automatic && ReadOnlyTrust.needsWriteSwitchHint(tool.name, server.knownTools, server.enabledTools)
+
+    /** How the user allows writes, naming the switch by its own label. */
+    private fun writeSwitchHint(): String =
+        string(R.string.mcp_write_switch_hint, string(R.string.mcp_allow_database_writes))
 
     /**
      * One tool, as the host contract describes it.
@@ -351,7 +373,8 @@ class McpToolSource internal constructor(
      * Every remote tool declares that it requires approval and is not read-only: this plugin cannot
      * know what a server's tool does, and guessing on the permissive side is the one guess that
      * cannot be undone. The one exception is [preApproved]: a readOnlyHint tool of the automatic
-     * debugger entry, whose server Code on the Go itself installed, declares no approval needed.
+     * debugger entry, whose server Code on the Go itself installed, declares no approval needed. Its
+     * `execute`, which writes, never does, whatever hint it carries (`ReadOnlyTrust.isReadOnly`).
      * AI-Core overrides `requiresApproval` to true for every contributed tool
      * (`ContributedToolHandler`), so the Agent still asks. For a read-only tool, AI-Core 3.6.0 or
      * later offers "Always Allow" for the rest of the chat (ADFA-7147); an older AI-Core asks on each

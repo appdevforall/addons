@@ -11,6 +11,7 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -104,6 +105,25 @@ class McpSettingsFragment : Fragment() {
         // viewLifecycleOwner, not the fragment: the collector captures views and must stop with them.
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.servers.collect { servers -> renderServers(view, servers) }
+        }
+
+        // The switch is set from the store before its listener goes on, so showing it writes nothing.
+        val writes = view.findViewById<SwitchMaterial>(R.id.mcpAllowDatabaseWrites)
+        wireTooltip(writes, McpPlugin.TOOLTIP_TAG_ALLOW_DATABASE_WRITES)
+        fun showWrites(allow: Boolean) {
+            writes.setOnCheckedChangeListener(null)
+            writes.isChecked = allow
+            writes.setOnCheckedChangeListener { _, isChecked -> viewModel.setAllowDatabaseWrites(isChecked) }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.allowDatabaseWrites.collect { showWrites(it) }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.writesNotSaved.collect {
+                showWrites(viewModel.allowDatabaseWrites.value)
+                val text = getString(R.string.mcp_allow_database_writes_not_saved)
+                Toast.makeText(requireContext(), text, Toast.LENGTH_LONG).show()
+            }
         }
     }
 

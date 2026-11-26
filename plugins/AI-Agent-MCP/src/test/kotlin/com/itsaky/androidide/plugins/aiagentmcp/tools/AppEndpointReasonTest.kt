@@ -1,8 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentmcp.tools
 
-import android.content.Context
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticEndpoint
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
@@ -10,21 +8,19 @@ import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
+import com.itsaky.androidide.plugins.aiagentmcp.testing.stringsXmlContext
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import io.mockk.every
 import io.mockk.mockk
-import java.io.File
 import java.io.IOException
 import java.net.ConnectException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.SocketTimeoutException
-import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
-import org.w3c.dom.Element
 
 /**
  * The reason the Agent tab shows when an app's SQLite debugger entry cannot be reached says what
@@ -140,21 +136,4 @@ class AppEndpointReasonTest {
     }
 
     private fun reason(server: McpServer): String? = McpServerHealth.of(server.id)?.message
-
-    /** A Context answering `getString` from this plugin's strings.xml, so the shipped words are checked. */
-    private fun stringsXmlContext(): Context {
-        val names = R.string::class.java.fields.associate { it.getInt(null) to it.name }
-        val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-            .parse(File("src/main/res/values/strings.xml"))
-            .getElementsByTagName("string")
-        val texts = (0 until nodes.length).map { nodes.item(it) as Element }
-            .associate { it.getAttribute("name") to it.textContent.replace("\\'", "'") }
-        val text = { id: Int -> texts.getValue(names.getValue(id)) }
-        return mockk(relaxed = true) {
-            every { getString(any()) } answers { text(firstArg()) }
-            every { getString(any(), *anyVararg()) } answers {
-                String.format(text(firstArg()), *secondArg<Array<out Any?>>())
-            }
-        }
-    }
 }
