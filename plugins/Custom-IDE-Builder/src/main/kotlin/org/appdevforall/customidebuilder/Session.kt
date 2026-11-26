@@ -542,12 +542,13 @@ object Session {
      */
     private suspend fun askName(gen: Int, message: String, suggestion: String): String? {
         val question = NameQuestion(message, suggestion)
-        withContext(Dispatchers.Main) {
-            if (gen != generation) throw kotlinx.coroutines.CancellationException("The plugin was disposed.")
-            nameQuestion = question
-            changed()
-        }
+        // The try opens before the publication: a cancel between publishing and resuming must still reach the finally.
         try {
+            withContext(Dispatchers.Main) {
+                if (gen != generation) throw kotlinx.coroutines.CancellationException("The plugin was disposed.")
+                nameQuestion = question
+                changed()
+            }
             return question.answer.await()
         } finally {
             withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
