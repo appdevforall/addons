@@ -108,6 +108,9 @@ class ShellHooksPlugin :
         }
 
     override fun activate(): Boolean {
+        // The host activates only a disabled plugin, but its enable and disable are not serialized.
+        // Keep at most one activation live, or each event would run its hooks once per activation.
+        if (scope != null) deactivate()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scope = it }
         wrapper = installWrapper()
         val warn: (String) -> Unit = { context.logger.warn(it) }

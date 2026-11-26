@@ -151,7 +151,9 @@ case $first in
 	case $interp in
 	/bin/* | /usr/bin/* | /usr/local/bin/*)
 		name=${interp##*/}
-		if [ "$name" = env ]; then
+		# With options, such as -S to split the rest into arguments, the Terminal's env runs it and
+		# applies them, as under termux-exec.
+		if [ "$name" = env ] && [ "${arg#-}" = "$arg" ]; then
 			name=${arg%%[' 	']*}
 			arg=$(trim "${arg#"$name"}")
 		fi

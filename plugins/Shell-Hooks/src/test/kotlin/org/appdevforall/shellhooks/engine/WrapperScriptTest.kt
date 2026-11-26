@@ -86,6 +86,16 @@ class WrapperScriptTest(
         assertEquals("interp=python3\n[${script.path}]\n[a b]\n", run(script, "a b"))
     }
 
+    // The Terminal's env gets "-S python3 -u" as one argument, as the kernel would give it. Taking "-S"
+    // for the program used to send the script to the kernel, and Android has no /usr/bin/env.
+    @Test
+    fun anEnvShebangWithOptionsRunsUnderPrefixEnv() {
+        interpreter("env")
+        val script = work.script("hook", "#!/usr/bin/env -S python3 -u\nprint(1)\n")
+
+        assertEquals("interp=env\n[-S python3 -u]\n[${script.path}]\n[a b]\n", run(script, "a b"))
+    }
+
     @Test
     fun anAbsoluteShebangWithAnArgumentIsMappedOntoPrefix() {
         interpreter("bash")

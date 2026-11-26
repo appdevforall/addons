@@ -370,6 +370,7 @@ class HookRunnerTest {
 
             val runs = log.runs.value.reversed()
             assertEquals(listOf(Outcome.NOT_STARTED, Outcome.SUCCEEDED), runs.map { it.outcome })
+            assertEquals("maximum of 3 concurrent commands", runs.first().output)
         }
 
     @Test
@@ -391,7 +392,29 @@ class HookRunnerTest {
 
             val runs = log.runs.value.reversed()
             assertEquals(listOf(Outcome.NOT_STARTED, Outcome.SUCCEEDED), runs.map { it.outcome })
-            assertEquals("executeCommand", runs.first().output)
+            assertEquals("NoSuchMethodError: executeCommand", runs.first().output)
+        }
+
+    // Rethrown, the Error would reach the thread's uncaught-exception handler, which ends the IDE.
+    @Test
+    fun runningOutOfMemoryInARunIsRecordedWithItsTypeAndTheQueueKeepsGoing() =
+        runTest {
+            var calls = 0
+            val runner =
+                runner(
+                    CommandRunner { _, _, _ ->
+                        if (calls++ == 0) throw OutOfMemoryError("Failed to allocate 8388624 bytes")
+                        success
+                    },
+                )
+
+            runner.submit(HookEvent.buildStarted(project))
+            runner.submit(HookEvent.buildSucceeded(project))
+            settle()
+
+            val runs = log.runs.value.reversed()
+            assertEquals(listOf(Outcome.NOT_STARTED, Outcome.SUCCEEDED), runs.map { it.outcome })
+            assertEquals("OutOfMemoryError: Failed to allocate 8388624 bytes", runs.first().output)
         }
 
     @Test

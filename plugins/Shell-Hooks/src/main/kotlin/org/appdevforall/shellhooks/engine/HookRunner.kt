@@ -205,9 +205,10 @@ class HookRunner(
                     throw e
                 } catch (e: Throwable) {
                     // A refused start: the concurrency limit, or a permission the plugin lacks. An
-                    // Error too (say a LinkageError from a host with another API): it must not end
-                    // the worker for the session.
-                    Triple(Outcome.NOT_STARTED, null, e.message ?: e.javaClass.simpleName)
+                    // Error too: a LinkageError from a host with another API, or running out of
+                    // memory while the IDE builds. Rethrown, it would reach the thread's
+                    // uncaught-exception handler and end Code on the Go, not just this run.
+                    Triple(Outcome.NOT_STARTED, null, notStarted(e))
                 }
             }
         log.record(
@@ -259,6 +260,15 @@ class HookRunner(
         output: String,
         limit: Long,
     ): String = listOf(output.trimEnd(), "Stopped after ${limit / 1000} s").filter { it.isNotBlank() }.joinToString("\n")
+
+    // A refused start's message is meant for the user. An Error's often is not ("executeCommand" for a
+    // NoSuchMethodError), so its type goes first.
+    private fun notStarted(e: Throwable): String =
+        when {
+            e !is Error -> e.message ?: e.javaClass.simpleName
+            e.message.isNullOrBlank() -> e.javaClass.simpleName
+            else -> "${e.javaClass.simpleName}: ${e.message}"
+        }
 
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 64

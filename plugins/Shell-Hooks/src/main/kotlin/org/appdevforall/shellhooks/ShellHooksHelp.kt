@@ -49,7 +49,7 @@ object ShellHooksHelp {
                 detail =
                     """
                     <p>For each hook, the script <code>&lt;hook&gt;</code> runs first, then every script in
-                    <code>&lt;hook&gt;.d/</code> in name order. Only executable files run
+                    <code>&lt;hook&gt;.d/</code> in byte order. Only executable files run
                     (<code>chmod +x</code>); <code>.sample</code> files never do.</p>
                     <p>Scripts in <code>actions/</code> appear as <b>Run &lt;name&gt;</b> on a file's menu.</p>
                     """.trimIndent(),

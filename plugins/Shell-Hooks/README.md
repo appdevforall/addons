@@ -46,8 +46,9 @@ and a trusted project script runs from a private copy the plugin marks executabl
   file from stdin, so `wc` does not print the name either.
 - **`cogo-hook-run.sh`** maps a shebang under `/bin`, `/usr/bin` or `/usr/local/bin` onto
   `$PREFIX/bin` the way termux-exec would, because the IDE's command service does not preload
-  termux-exec and Android has no `/usr/bin/env` or `/bin/bash`. Any other interpreter path
-  (`/system/bin/sh`, a virtualenv's python) runs as written. It also `cd`s to `COGO_PROJECT_DIR`:
+  termux-exec and Android has no `/usr/bin/env` or `/bin/bash`. An `env` given options
+  (`#!/usr/bin/env -S python3 -u`) runs as the Terminal's `env`, which applies them. Any other
+  interpreter path (`/system/bin/sh`, a virtualenv's python) runs as written. It also `cd`s to `COGO_PROJECT_DIR`:
   the host refuses a working directory outside the *open* project, which `project-closed` would hit.
   When that is empty or is no longer a folder it `cd`s to `HOME` (`/` without one): given no
   directory, the host uses its current project's root, which can be the last project opened even

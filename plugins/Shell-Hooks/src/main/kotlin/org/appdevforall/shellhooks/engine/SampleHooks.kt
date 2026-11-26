@@ -37,7 +37,7 @@ object SampleHooks {
         |# Sample Shell Hooks script for "${hook.id}" (${hook.title}).
         |# To use it, drop ".sample" from its name and make it executable:
         |#   cd ~/.config/codeonthego/hooks && mv ${hook.id}.sample ${hook.id} && chmod +x ${hook.id}
-        |# For several scripts on one hook, put them in ${hook.id}.d/ instead; they run in name order.
+        |# For several scripts on one hook, put them in ${hook.id}.d/ instead; they run in byte order.
         |#
         |# Arguments: ${hook.argsDoc}
         |# Environment:
