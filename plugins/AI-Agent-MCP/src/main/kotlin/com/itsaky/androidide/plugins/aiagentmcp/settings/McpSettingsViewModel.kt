@@ -16,8 +16,11 @@ import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpExchangeLog
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,11 +53,20 @@ class McpSettingsViewModel(
         _allowDatabaseWrites.value = McpServerStore.allowDatabaseWrites()
     }
 
+    private val _writesNotSaved = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /**
+     * Fires when the database-writes switch could not be stored. [allowDatabaseWrites] keeps the stored
+     * value, which may equal what it held, so the screen sets the switch back itself.
+     */
+    val writesNotSaved: SharedFlow<Unit> = _writesNotSaved.asSharedFlow()
+
     /** Stores the database-writes switch off the main thread, then re-reads it. */
     fun setAllowDatabaseWrites(allow: Boolean) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { McpServerStore.setAllowDatabaseWrites(allow) }
+            val stored = withContext(Dispatchers.IO) { McpServerStore.setAllowDatabaseWrites(allow) }
             reload()
+            if (!stored) _writesNotSaved.tryEmit(Unit)
         }
     }
 

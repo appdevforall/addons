@@ -277,13 +277,23 @@ object McpServerStore {
      */
     fun allowDatabaseWrites(): Boolean = prefs()?.getBoolean(KEY_ALLOW_DATABASE_WRITES, false) ?: false
 
-    /** Switches [allowDatabaseWrites], then tells the listeners, so the Agent's tool list follows. */
-    fun setAllowDatabaseWrites(allow: Boolean) {
-        val prefs = prefs() ?: return
+    /**
+     * Switches [allowDatabaseWrites], then tells the listeners, so the Agent's tool list follows.
+     *
+     * @return false when the value could not be stored, and the switch is then unchanged. A failed
+     *   commit still leaves the new value in SharedPreferences' memory, where it would hold until the
+     *   app restarts and then turn back, so it is put back to the stored one.
+     */
+    fun setAllowDatabaseWrites(allow: Boolean): Boolean {
+        val prefs = prefs() ?: return false
+        val stored = prefs.getBoolean(KEY_ALLOW_DATABASE_WRITES, false)
         if (!prefs.edit().putBoolean(KEY_ALLOW_DATABASE_WRITES, allow).commit()) {
             Log.w(TAG, "Could not store the database-writes switch")
+            prefs.edit().putBoolean(KEY_ALLOW_DATABASE_WRITES, stored).commit()
+            return false
         }
         fireChanged()
+        return true
     }
 
     /**

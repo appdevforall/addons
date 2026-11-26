@@ -82,6 +82,10 @@ object ReadOnlyTrust {
      * connection: "not authorized" from its authorizer, or "attempt to write a readonly database" from
      * `query_only`. On a Note 20 the model sent an INSERT through `query`, and that refusal was the last
      * thing the chat showed (ADFA-7300, 2026-11-25).
+     *
+     * It also matches a refused BEGIN, SAVEPOINT, ATTACH or setting PRAGMA, which `execute` refuses
+     * too, so the hint then names a switch that would not help. Accepted: the server reports every
+     * refusal as SQLite's plain "not authorized", and copying its authorizer's rules here would drift.
      */
     fun isWriteRefusal(message: String?): Boolean =
         message != null && (message.contains("not authorized", ignoreCase = true) ||

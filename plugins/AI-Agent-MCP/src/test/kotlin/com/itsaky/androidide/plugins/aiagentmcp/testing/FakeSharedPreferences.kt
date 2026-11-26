@@ -22,6 +22,13 @@ class FakeSharedPreferences : SharedPreferences {
     @Volatile
     var readDelayMillis: Long = 0
 
+    /**
+     * Makes every commit report failure, as a full disk or a storage error does. The values still change
+     * in memory, as Android's implementation keeps them there when its disk write fails.
+     */
+    @Volatile
+    var failCommits = false
+
     override fun getAll(): MutableMap<String, *> = HashMap(values)
 
     override fun getString(key: String, defValue: String?): String? {
@@ -108,7 +115,7 @@ class FakeSharedPreferences : SharedPreferences {
             if (cleared) values.clear()
             removals.forEach { values.remove(it) }
             values.putAll(puts)
-            return true
+            return !failCommits
         }
 
         override fun apply() {
