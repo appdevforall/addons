@@ -71,7 +71,7 @@ class ReadOnlyHintParsingTest {
 
     @Test
     fun `the core tools are exactly these four`() {
-        assertEquals(setOf("list_databases", "get_schema", "query", "get_events"), ReadOnlyTrust.CORE_TOOLS)
+        assertEquals(setOf("list_databases", "get_schema", "query", "get_events", "read_sql_template"), ReadOnlyTrust.CORE_TOOLS)
     }
 
     @Test

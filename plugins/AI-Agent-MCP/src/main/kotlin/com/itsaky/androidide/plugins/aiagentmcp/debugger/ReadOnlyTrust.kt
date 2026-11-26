@@ -21,6 +21,10 @@ object ReadOnlyTrust {
      * advertises them with `readOnlyHint: true`. Its other tools (today `list_connections`,
      * `explain_query_plan`, `get_stats` and `integrity_check`) stay known but off.
      *
+     * The fifth, `read_sql_template` (ADFA-7302), is this plugin's own, not the server's: it renders a
+     * template of the project through Code on the Go and returns the SQL without running it, so it reads
+     * only. Listed last, so in compact mode the four below keep their places and it is the one dropped.
+     *
      * Why four: AI-Core describes at most 12 contributed tools per message
      * (`PromptToolBudget.MAX_CONTRIBUTED_TOOLS`) and only 4 in compact mode
      * (`COMPACT_MAX_CONTRIBUTED_TOOLS`), counting them in order and dropping the rest. Every app
@@ -32,7 +36,8 @@ object ReadOnlyTrust {
      * Phase 2 adds the SQLite debugger entry to AI-Agent-MCP's settings, so a user can switch the
      * others on.
      */
-    val CORE_TOOLS: Set<String> = linkedSetOf("list_databases", "get_schema", "query", "get_events")
+    val CORE_TOOLS: Set<String> =
+        linkedSetOf("list_databases", "get_schema", "query", "get_events", SqlTemplateRead.TOOL_NAME)
 
     /**
      * The SQLite debugger's tools that change an app's database (ADFA-7300). Switched on only by the

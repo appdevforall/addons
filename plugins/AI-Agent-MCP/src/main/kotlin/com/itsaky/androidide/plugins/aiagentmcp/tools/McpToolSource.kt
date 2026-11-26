@@ -2,17 +2,20 @@ package com.itsaky.androidide.plugins.aiagentmcp.tools
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpCallHandle
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpCallResult
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.McpServers
 import com.itsaky.androidide.plugins.aiagentmcp.debugger.ReadOnlyTrust
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.SqlTemplateRead
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.services.CapabilityStatus
+import com.itsaky.androidide.plugins.services.SqlTemplateService
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import java.io.InterruptedIOException
 import java.util.concurrent.CompletableFuture
@@ -221,7 +224,13 @@ class McpToolSource internal constructor(
                 // there and reads the flag again before it sends anything.
                 // The session is ended after the call when it was not kept: a server removed
                 // meanwhile would otherwise keep the session this call's handshake opened.
-                McpConnections.withSession(target) { it.callTool(tool.name, arguments, call.handle) }
+                McpConnections.withSession(target) { session ->
+                    if (target.automatic && tool.name == SqlTemplateRead.TOOL_NAME) {
+                        readTemplate(arguments) { name, args -> session.callTool(name, args, call.handle) }
+                    } else {
+                        session.callTool(tool.name, arguments, call.handle)
+                    }
+                }
             }
             // A reply of any kind, a tool's own failure included, means the server is answering;
             // unless it was removed while the call ran, when recording it would bring back its row,
@@ -241,6 +250,19 @@ class McpToolSource internal constructor(
         } finally {
             calls.remove(callId, call)
         }
+    }
+
+    /**
+     * Runs [SqlTemplateRead] through the host's [SqlTemplateService], whose functions call the app's
+     * tools on this call's session and handle, so a cancel reaches them too.
+     */
+    private fun readTemplate(
+        arguments: Map<String, Any?>,
+        callTool: (String, Map<String, Any?>) -> McpCallResult,
+    ): McpCallResult {
+        val service = McpPlugin.getContext()?.services?.get(SqlTemplateService::class.java)
+            ?: return McpCallResult(false, "", string(R.string.mcp_error_templates_unavailable))
+        return SqlTemplateRead(service, callTool).run(arguments)
     }
 
     /**

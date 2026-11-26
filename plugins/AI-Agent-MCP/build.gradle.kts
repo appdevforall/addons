@@ -15,8 +15,8 @@ android {
         applicationId = "com.itsaky.androidide.plugins.aiagentmcp"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.1.0"
+        versionCode = 5
+        versionName = "3.0.0"
     }
 
     buildFeatures {

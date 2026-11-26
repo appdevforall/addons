@@ -37,7 +37,7 @@ Configuration → MCP servers**:
 1. **Add server** — name, endpoint URL, optional token.
 2. **Connect** — saves the server, performs the MCP handshake and lists the tools
    it offers, all in one step.
-3. Switch on the tools you want. **They start off** (except four read-only tools
+3. Switch on the tools you want. **They start off** (except five read-only tools
    of the automatic SQLite debugger entry, below): one popular GitHub server
    advertises around ninety tools, which would fill a phone-sized context window
    on its own.
@@ -52,6 +52,15 @@ debugger entry"). Remote tools run outside the Agent's own path containment, so
 the dialog is the only gate.
 
 ### The SQLite debugger entry
+
+`read_sql_template` (ADFA-7302) is this plugin's own tool on each entry whose server has `get_template_variables`:
+- **What it does.** It fetches those variables from the app, adds the project's Room schemas (`SqlTemplateService.getRoomSchemas`) and per database `schema_matches` and `room_schema`, and has Code on the Go render the template (`SqlTemplateService.render`). It returns the SQL without running it.
+- **Template functions.** `row_count`, `distinct_values`, `sample_rows`, `integrity`, `suggest_indexes` and `lint_foreign_keys` are tool calls to the same app, made on the call's session and handle, so a cancel reaches them.
+- **Start state and budget.** It starts switched on, last of the entry's five, so in compact mode it is the one AI-Core drops.
+- **Requirements.** It needs Code on the Go 26.48 or later.
+- **Limits.**
+  - The render's time limit (110 s) interrupts the render thread, but a function's HTTP read is not interruptible: it ends when the server answers, within its 50 s.
+  - Without a `template` argument it lists the project's `*.sql.peb` files.
 
 For an app built in Code on the Go with `cogo.sqliteDebugger=true`, the plugin
 adds a server entry on its own, named "SQLite debugger (<application ID>)", with
