@@ -469,8 +469,19 @@ object Session {
                 // is signalled by launch (endsBuild).
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
                     out.deleteRecursively()
-                    // A save that failed or was cancelled leaves no APK, not even a partial one, in the folder.
-                    if (!finished) saved?.let { AndroidBits.deleteDocument(context, it) }
+                    // A save that failed or was cancelled removes its partial APK from the folder; if the
+                    // provider refuses, the result says which file to delete by hand.
+                    if (!finished) {
+                        saved?.let { target ->
+                            if (!AndroidBits.deleteDocument(context, target)) {
+                                val left = AndroidBits.displayName(context, target) ?: name
+                                val note = Naming.partialLeftNote(left, AndroidBits.treeLabel(tree))
+                                // Posted, not called: once the job is cancelled nothing can follow this block. It runs
+                                // before the job's own completion, so [message] is still this build's outcome.
+                                main.post { if (gen == generation) report("$message\n$note", gen) }
+                            }
+                        }
+                    }
                 }
             }
         }
