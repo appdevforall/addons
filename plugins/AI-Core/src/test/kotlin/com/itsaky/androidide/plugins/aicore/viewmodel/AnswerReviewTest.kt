@@ -25,6 +25,13 @@ class AnswerReviewTest {
     }
 
     @Test
+    fun givenCodeAfterAFailedTool_whenChecked_thenItIsNotReviewed() {
+        // ADFA-7318: the bubble opens with the failure note, which a corrected draft could drop.
+        assertTrue(AnswerReview.reviews(draft, lastToolFailed = false))
+        assertFalse(AnswerReview.reviews("*The last action failed.*\n\n$draft", lastToolFailed = true))
+    }
+
+    @Test
     fun givenTheShippedConfig_whenBuildingTheSystemPrompt_thenItCarriesTheDateAndTheEndMarker() {
         val prompt = AnswerReview.systemPrompt(shippedConfig, "Tuesday, 29 September 2026, 10:00 (UTC, UTC+00:00)")
 
