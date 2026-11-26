@@ -194,6 +194,26 @@ object Session {
         job?.cancel()
     }
 
+    /** False while the host has the plugin disabled: nothing new starts, and [deactivate] stopped what was running. */
+    @Volatile
+    var active: Boolean = true
+        private set
+
+    /**
+     * Called when the host disables the plugin. A disable calls only deactivate, never dispose, so
+     * this is where a running job is stopped: it ends as a Cancel does, deleting any partial APK.
+     * The choices on screen are kept for when the plugin is enabled again.
+     */
+    fun deactivate() {
+        active = false
+        job?.cancel()
+    }
+
+    /** Called when the host enables the plugin again. */
+    fun activate() {
+        active = true
+    }
+
     /**
      * Called when the plugin is disposed: stops the job and the scope it ran in, drops queued
      * screen updates, deletes the staged files and empties everything the screen showed.
@@ -596,6 +616,12 @@ object Session {
     private fun launch(title: String, secrets: List<CharArray> = emptyList(), endsBuild: Boolean = false, block: suspend (Int) -> Unit): Boolean {
         if (busy) {
             zero(secrets)
+            return false
+        }
+        if (!active) {
+            zero(secrets)
+            message = "The plugin is disabled. Enable it in the Plugin Manager to use it."
+            changed()
             return false
         }
         busy = true
