@@ -34,11 +34,12 @@ class WriteToolTest {
     private var server: FakeMcpServer? = null
     private val source = McpToolSource()
     private lateinit var plugin: McpPlugin
+    private val prefs = FakeSharedPreferences()
 
     @Before
     fun setUp() {
         val context = mockk<PluginContext>(relaxed = true)
-        every { context.getPluginSharedPreferences(any()) } returns FakeSharedPreferences()
+        every { context.getPluginSharedPreferences(any()) } returns prefs
         every { context.androidContext } returns stringsXmlContext()
         plugin = McpPlugin().also { it.initialize(context) }
         mockkObject(McpServerStore)
@@ -115,6 +116,25 @@ class WriteToolTest {
         McpServerStore.setAllowDatabaseWrites(true)
         McpServerStore.setAllowDatabaseWrites(false)
         assertFalse("execute" in offered())
+    }
+
+    @Test
+    fun `a switch that cannot be stored stays as stored, in memory too, and tells no listener`() {
+        var calls = 0
+        val listener = { calls++; Unit }
+        McpServerStore.addChangeListener(listener)
+        try {
+            prefs.failCommits = true
+            assertFalse(McpServerStore.setAllowDatabaseWrites(true))
+            assertFalse("not on for this session only, to turn off again at restart", McpServerStore.allowDatabaseWrites())
+            assertEquals(0, calls)
+            prefs.failCommits = false
+            assertTrue(McpServerStore.setAllowDatabaseWrites(true))
+            assertTrue(McpServerStore.allowDatabaseWrites())
+            assertEquals(1, calls)
+        } finally {
+            McpServerStore.removeChangeListener(listener)
+        }
     }
 
     @Test
