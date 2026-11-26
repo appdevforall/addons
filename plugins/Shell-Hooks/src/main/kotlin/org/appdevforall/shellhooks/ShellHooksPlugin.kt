@@ -107,9 +107,12 @@ class ShellHooksPlugin :
             false
         }
 
+    // Synchronized with deactivate(): the host activates only a disabled plugin, but its enable and
+    // disable are not serialized. Keep at most one activation live, or each event would run its hooks
+    // once per activation. Neither holds the lock while waiting: closing the runner and cancelling the
+    // scope only signal them.
+    @Synchronized
     override fun activate(): Boolean {
-        // The host activates only a disabled plugin, but its enable and disable are not serialized.
-        // Keep at most one activation live, or each event would run its hooks once per activation.
         if (scope != null) deactivate()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scope = it }
         wrapper = installWrapper()
@@ -148,6 +151,7 @@ class ShellHooksPlugin :
         return true
     }
 
+    @Synchronized
     override fun deactivate(): Boolean {
         val workspace = workspaceHooks
         if (workspace != null) {
