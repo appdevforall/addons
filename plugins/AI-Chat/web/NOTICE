@@ -1,0 +1,30 @@
+AI Chat web front end
+Copyright 2026 App Dev for All
+
+This directory contains code from Jan (https://github.com/janhq/jan),
+Copyright 2025 Menlo Research, licensed under the Apache License, Version 2.0.
+A copy of that licence is in LICENSE-APACHE-2.0.txt beside this file.
+
+Files copied from Jan's web-app/src with no changes beyond import paths:
+  src/components/ui/button.tsx
+  src/components/ui/dialog.tsx
+  src/components/ui/dropdown-menu.tsx
+  src/components/ui/overlay-layer.ts
+  src/components/ui/textarea.tsx
+  src/components/ui/tooltip.tsx
+  src/styles/markdown.css
+
+Files adapted from Jan (each says at the top what was changed):
+  src/index.css               (Jan's fonts and toast styles removed; system fonts)
+  src/containers/BackendPicker.tsx
+  src/containers/ChatInput.tsx
+  src/containers/CopyButton.tsx
+  src/containers/MessageItem.tsx
+  src/containers/RenderMarkdown.tsx
+  src/containers/ThreadList.tsx
+  src/containers/TokenSpeedIndicator.tsx
+  src/lib/utils.ts            (cn and disableIndentedCodeBlockPlugin)
+
+Everything else in this plugin is App Dev for All's own work, licensed under
+AGPL-3.0-or-later like the rest of the addons repository. The Apache-2.0 terms
+continue to apply to the Jan-derived files listed above.

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Chat</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #2c5f8a;
+    --accent-light: #e8f0f8;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI Chat</h1>
+  <p class="subtitle">A chat with your AI model, in a Code on the Go editor tab</p>
+  <div class="meta">Version 0.1.0 &middot; Author: App Dev for All &middot; Package: <code>org.appdevforall.aichat</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#using">Using it</a></li>
+    <li><a href="#architecture">How it works</a></li>
+    <li><a href="#privacy">Privacy</a></li>
+    <li><a href="#credits">Credits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Overview</h2>
+  <p>
+    AI Chat adds a chat tab to Code on the Go. Ask a question, paste an error or have it
+    draft some code, and the reply streams in as formatted Markdown with highlighted code
+    blocks. Unlike the AI Core Agent, AI Chat never reads or changes your project: the model
+    sees only what you type.
+  </p>
+  <p>
+    It runs no model itself. It needs <b>AI Core</b> and at least one AI backend, such as
+    <b>AI Agent Local</b> to run a model on the device.
+  </p>
+</section>
+
+<section id="using">
+  <h2>2. Using it</h2>
+  <ul>
+    <li>Open <b>AI Chat</b> from the side menu.</li>
+    <li>Pick a backend under the message box. One that is not ready says why.</li>
+    <li>Send a message; tap stop to end a long reply. Copy a reply, or ask for it again.</li>
+    <li>Chats are kept in a list you can rename and delete from.</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>3. How it works</h2>
+  <table>
+    <thead><tr><th>Part</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>Chat screen</td><td>A React web app bundled in the addon and shown in a WebView. It is served from the addon itself and may not navigate anywhere else.</td></tr>
+      <tr><td>Bridge</td><td>The page's only way into the IDE: list backends, send, cancel, and load or save chats.</td></tr>
+      <tr><td>AI Core router</td><td>Every message goes through AI Core's router to the backend you picked, so AI Chat gets the same routing and "not ready" messages as the Agent.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="privacy">
+  <h2>4. Privacy</h2>
+  <p>
+    Chats are saved only on the device, in the addon's own storage, and are deleted when it
+    is uninstalled. With AI Agent Local nothing leaves the device. With a cloud backend, each
+    message and the earlier messages in that chat go to the provider. The chat page loads
+    nothing from the internet; links in a reply open in the browser only when tapped.
+  </p>
+</section>
+
+<section id="credits">
+  <h2>5. Credits</h2>
+  <p>
+    The chat screen is adapted from <a href="https://github.com/janhq/jan">Jan</a>,
+    Copyright 2025 Menlo Research, under the Apache License 2.0. The adapted files are listed
+    in <code>web/NOTICE</code>.
+  </p>
+</section>
+
+</body>
+</html>

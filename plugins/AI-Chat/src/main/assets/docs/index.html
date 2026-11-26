@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Chat</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  .note { border-left: 3px solid #999; padding: 0.25rem 0.75rem; margin: 1rem 0; background: #fafafa; }
+</style>
+</head>
+<body>
+  <h1>AI Chat</h1>
+
+  <p><b>AI Chat</b> is a plain chat with an AI model, in an editor tab. Use it to ask
+  questions, explain an error or draft some code. Unlike the AI Core <b>Agent</b>, it never
+  reads or changes your project: it only sees what you type.</p>
+
+  <h2>What you need</h2>
+  <ul>
+    <li><b>AI Core</b>, from the Addons Manager.</li>
+    <li>At least one AI backend: <b>AI Agent Local</b> runs a model on this device; a cloud
+    backend sends your messages to that provider.</li>
+  </ul>
+
+  <h2>Using it</h2>
+  <ul>
+    <li>Open it from the side menu: <b>AI Chat</b>.</li>
+    <li>Pick a backend in the menu under the message box. A backend that is not ready
+    says why, for example that no model is loaded.</li>
+    <li>Type a message and tap send. Tap the stop button to end a long reply.</li>
+    <li>Under each reply you can copy it or ask for it again. The speed shown is tokens per
+    second.</li>
+    <li>Your chats are listed beside the conversation on a wide screen, and behind the menu
+    button on a narrow one. You can rename and delete them there.</li>
+  </ul>
+
+  <h2>Privacy</h2>
+  <p>Chats are saved only on this device, in the addon's own storage. Uninstalling AI Chat
+  deletes them. With AI Agent Local, nothing you type leaves the device. With a cloud
+  backend, each message and the earlier messages of that chat go to the provider.</p>
+  <p>The chat page loads nothing from the internet. Links in a reply open in your browser
+  only when you tap them.</p>
+
+  <div class="note">The chat screen is adapted from Jan (janhq/jan), used under the Apache
+  License 2.0.</div>
+</body>
+</html>

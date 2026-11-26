@@ -1,0 +1,15 @@
+{
+  "summary": "Chat with an AI model in an editor tab. Requires the AI Core addon and one AI backend addon.",
+  "description": "Adds a chat tab with streaming, formatted replies, a list of saved chats and a choice of backend. It never reads or edits your project; the model sees only what you type. Messages stay on the device with AI Agent Local, and go to that provider's service with a cloud backend. The chat screen is adapted from Jan (Apache-2.0).",
+  "tags": [
+    "ai",
+    "chat",
+    "llm"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
