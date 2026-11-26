@@ -624,7 +624,7 @@ object Session {
                         (if (skipped > 0) "$skipped text${if (skipped == 1) "" else "s"} that name Code on the Go and carry formatting were left as they are.\n" else "") +
                         "\n" +
                         "It installs only after Code on the Go is uninstalled, because it is signed with a different key. " +
-                        "Uninstalling erases the projects stored in the app's data, so copy them out first.",
+                        "Uninstalling removes Code on the Go's app data, such as its project list and settings; your projects in CodeOnTheGoProjects stay.",
                     gen,
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {

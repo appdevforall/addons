@@ -270,7 +270,8 @@ class BuilderFragment : Fragment() {
                 .setMessage(
                     "Android installs an update only if it is signed with the same key as the version already installed. " +
                         "Every later build you make here must use this same key, or a device that has an earlier build " +
-                        "must uninstall it first, and uninstalling Code on the Go erases the projects stored in its data.",
+                        "must uninstall it first. Uninstalling removes Code on the Go's app data, such as its project list " +
+                        "and settings; your projects in CodeOnTheGoProjects stay.",
                 )
                 .setPositiveButton("I understand") { _, _ -> prefs.edit().putBoolean(PREF_WARNED, true).apply() }
                 .setCancelable(false)
