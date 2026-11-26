@@ -29,4 +29,16 @@ object Staging {
         } catch (e: java.io.IOException) {
             false
         }
+
+    /**
+     * Deletes [file] if it is strictly inside [root], and then its folder if that is now empty and also
+     * inside [root]. Returns false, touching nothing, for a path outside [root]. [root] is the caller's own
+     * copy of the staging folder, so a task that outlives the plugin can still clean up.
+     */
+    fun discard(root: File, file: File): Boolean {
+        if (!isInside(root, file)) return false
+        file.delete()
+        file.parentFile?.takeIf { isInside(root, it) }?.delete() // delete() leaves a folder that still holds something
+        return true
+    }
 }

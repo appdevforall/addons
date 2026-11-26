@@ -165,7 +165,15 @@ object Session {
     /** Deletes [file] only if it is under the staging folder, so a bad path can never remove anything else. */
     private fun discard(file: File) {
         val staging = stagingDir() ?: return
-        if (Staging.isInside(staging, file)) file.delete()
+        discard(staging, file)
+    }
+
+    /**
+     * As [discard], against the [staging] folder a task captured when it started: the plugin's context is
+     * gone once [end] has run, and a task that is interrupted then still has to delete its own file.
+     */
+    private fun discard(staging: File, file: File) {
+        Staging.discard(staging, file)
     }
 
     fun remove(chosen: Chosen) {
@@ -250,12 +258,12 @@ object Session {
                             val check = cancellationCheck()
                             AndroidBits.copyToFile(context, uri, file, limit = AddonLimits.MAX_BYTES, checkCancelled = check)
                         }
-                        accept(context, label, name, file, "this device")
+                        accept(context, staging, label, name, file, "this device")
                     } catch (e: java.io.IOException) {
-                        discard(file)
+                        discard(staging, file)
                         "$label: ${e.message}"
                     } catch (e: kotlinx.coroutines.CancellationException) {
-                        discard(file)
+                        discard(staging, file)
                         throw e
                     }
                 if (added != null) problems.add(added)
@@ -294,28 +302,33 @@ object Session {
                     problems.add("${Staging.label(addon.name)}: its file name is not usable")
                     continue
                 }
-                val file =
-                    try {
+                // A cancellation can land after the download renamed the verified file but before withContext
+                // returns it, so the file is named here, not taken from the result.
+                var adopted = false
+                try {
+                    val file =
                         withContext(Dispatchers.IO) {
                             downloader.download(addon, dir, cancellationCheck()) { got ->
                                 progressFrom(gen, label, (got * 1000 / addon.size.coerceAtLeast(1)).toInt())
                             }
                         }
-                    } catch (e: java.io.IOException) {
-                        problems.add("${addon.name}: ${e.message}")
-                        continue
-                    }
-                accept(context, addon.name, addon.fileName, file, "the website")?.let { problems.add(it) }
+                    val problem = accept(context, staging, addon.name, addon.fileName, file, "the website")
+                    if (problem == null) adopted = true else problems.add(problem)
+                } catch (e: java.io.IOException) {
+                    problems.add("${addon.name}: ${e.message}")
+                } finally {
+                    if (!adopted) discard(staging, File(dir, addon.fileName))
+                }
             }
             report(if (problems.isEmpty()) "" else problems.joinToString("\n"), gen)
         }
     }
 
     /** Adds the file if the list stays valid with it; otherwise deletes it and returns why. */
-    private suspend fun accept(context: Context, label: String, fileName: String, file: File, source: String): String? {
+    private suspend fun accept(context: Context, staging: File, label: String, fileName: String, file: File, source: String): String? {
         val id = if (AddonSelection.kindOf(fileName) == AddonKind.PLUGIN) withContext(Dispatchers.IO) { AndroidBits.readPluginId(context, file) } else null
         if (AddonSelection.kindOf(fileName) == AddonKind.TEMPLATE && !looksLikeZip(file)) {
-            discard(file)
+            discard(staging, file)
             return "$label: not a template bundle (it is not a zip file)"
         }
         val picked = PickedAddon(label, fileName, file, id)
@@ -326,7 +339,7 @@ object Session {
                 null
             }
             is SelectionResult.Invalid -> {
-                discard(file)
+                discard(staging, file)
                 r.problems.firstOrNull { label in it } ?: r.problems.first()
             }
         }
