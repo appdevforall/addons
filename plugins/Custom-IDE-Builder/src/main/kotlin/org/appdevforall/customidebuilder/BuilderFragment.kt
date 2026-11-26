@@ -315,6 +315,10 @@ class BuilderFragment : Fragment() {
         removeButtons.forEach { it.isEnabled = !busy }
         refreshBranding(busy)
         refreshContacts(busy)
+        // A build has already read the passwords and the key; changing them mid-build would only mislead.
+        storePassword.isEnabled = !busy
+        keyPassword.isEnabled = !busy
+        aliasSpinner.isEnabled = !busy
         keystoreLabel.text = Session.keystoreName?.let { "Keystore: $it" } ?: "No keystore chosen."
         val aliases = Session.aliases
         if (aliases != shownAliases) {

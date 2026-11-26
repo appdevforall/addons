@@ -23,9 +23,16 @@ class CustomIdeBuilderPlugin : IPlugin, UIExtension, DocumentationExtension {
         return true
     }
 
-    override fun activate(): Boolean = true
+    override fun activate(): Boolean {
+        Session.activate()
+        return true
+    }
 
-    override fun deactivate(): Boolean = true
+    // The host's disable calls only this, not dispose, so a running build must be stopped here.
+    override fun deactivate(): Boolean {
+        Session.deactivate()
+        return true
+    }
 
     override fun dispose() {
         // end() also deletes the staged files, so it runs while the context that locates them is still set.
