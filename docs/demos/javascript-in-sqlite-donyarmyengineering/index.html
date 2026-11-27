@@ -1210,12 +1210,12 @@ class MainActivity : AppCompatActivity() {
             binding.ruleStatus.setText(R.string.choose_first)
         }
         // The rule buttons are off until the first fees are shown, as during a reload.
-        setRuleButtonsEnabled(false)
+        startBusy()
         lifecycleScope.launch {
             try {
                 showFees()
             } finally {
-                setRuleButtonsEnabled(true)
+                endBusy()
             }
         }
     }
@@ -1240,8 +1240,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Reads the rule file again, and replaces the rule in the database if it works. The rule
-    // buttons stay off until the new fees are shown, so two reloads can't overlap and finish in
-    // the wrong order.
+    // buttons stay off until the new fees are shown and nothing else is running, so two reloads
+    // started from this screen can't overlap and finish in the wrong order. (A reload started
+    // before the screen turned isn't counted; its 2-second limit ends it soon.)
     private fun reloadRule() {
         val file = prefs.getString(KEY_RULE_FILE, null)?.let(Uri::parse)
         if (file == null) {
@@ -1249,7 +1250,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.ruleStatus.setText(R.string.working)
-        setRuleButtonsEnabled(false)
+        startBusy()
         lifecycleScope.launch {
             try {
                 val started = SystemClock.elapsedRealtime()
@@ -1270,9 +1271,23 @@ class MainActivity : AppCompatActivity() {
                 _binding?.ruleStatus?.text = getString(R.string.rule_loaded, displayName(file), ms)
                 showFees()
             } finally {
-                setRuleButtonsEnabled(true)
+                endBusy()
             }
         }
+    }
+
+    // How many loads of the fees or the rule are running. The rule buttons are off while any
+    // is. Only the main thread changes it.
+    private var busy = 0
+
+    private fun startBusy() {
+        busy++
+        setRuleButtonsEnabled(false)
+    }
+
+    private fun endBusy() {
+        busy--
+        if (busy == 0) setRuleButtonsEnabled(true)
     }
 
     private fun setRuleButtonsEnabled(enabled: Boolean) {
