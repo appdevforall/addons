@@ -43,7 +43,7 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.30" />
+            android:value="26.99" />
 
         <meta-data
             android:name="plugin.main_class"

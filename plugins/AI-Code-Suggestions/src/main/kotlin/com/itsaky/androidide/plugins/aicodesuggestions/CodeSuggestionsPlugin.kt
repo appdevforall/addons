@@ -133,14 +133,17 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
 
         // Extract the word/prefix being typed (most recent word)
         val prefix = extractPrefix(fileContent, cursorLine, cursorColumn)
+
+        // Every edit supersedes the pending request, including one that leaves no word to
+        // complete: otherwise typing "fun" and a space shows a suggestion for "fun" after the space.
+        debounceJob?.cancel()
         if (prefix.isEmpty() || prefix.length < 2) {
             // Too short to suggest
             editorService!!.dismissInlineSuggestion()
             return
         }
 
-        // Debounce: cancel previous job and start new one
-        debounceJob?.cancel()
+        // Debounce: start a new request once typing pauses
         debounceJob = scope.launch {
             delay(DEBOUNCE_MS)
 
