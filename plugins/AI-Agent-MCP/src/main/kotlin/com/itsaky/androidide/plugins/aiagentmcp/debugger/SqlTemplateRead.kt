@@ -9,6 +9,7 @@ import com.itsaky.androidide.plugins.services.SqlTemplateService
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The SQLite debugger's `.read` with a Pebble template (ADFA-7302): a tool this plugin adds to each debugger entry whose
@@ -105,6 +106,9 @@ class SqlTemplateRead(
      *
      * @return the SQL, or the template list, as the tool's text; a failure says what went wrong.
      * @throws InterruptedException if the calling thread is interrupted while the host renders.
+     * @throws Exception what a template function's tool call threw, such as an IOException when the app went
+     *   away, as the variables call's own failure does: the host would pass on only its message, so the
+     *   caller could neither retry the call on the app's new address nor word the failure.
      */
     fun run(arguments: Map<String, Any?>): McpCallResult {
         val template = (arguments["template"] as? String)?.takeIf { it.isNotBlank() }
@@ -144,25 +148,38 @@ class SqlTemplateRead(
         // Kept out of databases above: a template cannot tell a database that failed from one it did not ask for.
         all["database_errors"] = variables["errors"]
 
+        val callFailure = AtomicReference<Exception>()
         return try {
-            val sql = templates.render(template, all, functions(), timeoutMillis)
+            val sql = templates.render(template, all, functions(callFailure), timeoutMillis)
             McpCallResult(true, sql)
         } catch (e: SqlTemplateException) {
-            McpCallResult(false, "", e.message ?: "The template could not be rendered.")
+            failed(e, callFailure)
         } catch (e: IllegalArgumentException) {
-            McpCallResult(false, "", e.message ?: "The template could not be rendered.")
+            failed(e, callFailure)
         } catch (e: IllegalStateException) {
-            McpCallResult(false, "", e.message ?: "The template could not be rendered.")
+            failed(e, callFailure)
         }
     }
 
-    /** The template's functions: each one tool call to the app, made only when the template calls it. */
-    private fun functions(): Map<String, SqlTemplateFunction> =
+    private fun failed(
+        e: Exception,
+        callFailure: AtomicReference<Exception>,
+    ): McpCallResult {
+        callFailure.get()?.let { throw it }
+        return McpCallResult(false, "", e.message ?: "The template could not be rendered.")
+    }
+
+    /**
+     * The template's functions: each one tool call to the app, made only when the template calls it.
+     *
+     * @param callFailure gets the first exception a tool call throws (not a failed result), for [run] to rethrow.
+     */
+    private fun functions(callFailure: AtomicReference<Exception>): Map<String, SqlTemplateFunction> =
         mapOf(
             "row_count" to
                 SqlTemplateFunction { args ->
                     // count(*), not count(1): only count(*) gets SQLite's OP_Count fast path.
-                    val result = query(path(args, 0), "SELECT count(*) FROM ${table(args, 1)}", emptyList())
+                    val result = query(callFailure, path(args, 0), "SELECT count(*) FROM ${table(args, 1)}", emptyList())
                     firstCell(result)
                 },
             "distinct_values" to
@@ -170,6 +187,7 @@ class SqlTemplateRead(
                     val column = quoteIdentifier(string(args, 2, "column"))
                     val result =
                         queryUpTo(
+                            callFailure,
                             path(args, 0),
                             "SELECT DISTINCT $column FROM ${table(args, 1)} ORDER BY 1 LIMIT ?",
                             limit(args, 3),
@@ -178,35 +196,37 @@ class SqlTemplateRead(
                 },
             "sample_rows" to
                 SqlTemplateFunction { args ->
-                    val result = queryUpTo(path(args, 0), "SELECT * FROM ${table(args, 1)} LIMIT ?", limit(args, 2))
+                    val result = queryUpTo(callFailure, path(args, 0), "SELECT * FROM ${table(args, 1)} LIMIT ?", limit(args, 2))
                     @Suppress("UNCHECKED_CAST")
                     val columns = (result["columns"] as? List<String>).orEmpty()
                     whole(result).map { row -> columns.indices.associate { columns[it] to row.getOrNull(it) } }
                 },
-            "integrity" to SqlTemplateFunction { args -> tool("integrity_check", mapOf("database" to path(args, 0))) },
+            "integrity" to SqlTemplateFunction { args -> tool(callFailure, "integrity_check", mapOf("database" to path(args, 0))) },
             "suggest_indexes" to
                 SqlTemplateFunction { args ->
-                    tool("suggest_indexes", mapOf("database" to path(args, 0), "sql" to string(args, 1, "sql")))
+                    tool(callFailure, "suggest_indexes", mapOf("database" to path(args, 0), "sql" to string(args, 1, "sql")))
                 },
-            "lint_foreign_keys" to SqlTemplateFunction { args -> tool("lint_foreign_keys", mapOf("database" to path(args, 0))) },
+            "lint_foreign_keys" to SqlTemplateFunction { args -> tool(callFailure, "lint_foreign_keys", mapOf("database" to path(args, 0))) },
         )
 
     private fun query(
+        callFailure: AtomicReference<Exception>,
         database: String,
         sql: String,
         args: List<Any?>,
-    ): Map<String, Any?> = tool("query", mapOf("database" to database, "sql" to sql, "args" to JSONArray(args)))
+    ): Map<String, Any?> = tool(callFailure, "query", mapOf("database" to database, "sql" to sql, "args" to JSONArray(args)))
 
     /**
      * Runs [sql], whose one parameter is [limit], asking the server for that many rows: its own default is
      * 100, whatever LIMIT the SQL has.
      */
     private fun queryUpTo(
+        callFailure: AtomicReference<Exception>,
         database: String,
         sql: String,
         limit: Long,
     ): Map<String, Any?> =
-        tool("query", mapOf("database" to database, "sql" to sql, "args" to JSONArray(listOf(limit)), "max_rows" to limit))
+        tool(callFailure, "query", mapOf("database" to database, "sql" to sql, "args" to JSONArray(listOf(limit)), "max_rows" to limit))
 
     /**
      * [result]'s rows, which must be all of them and whole: a template that builds an IN list or a CASE from
@@ -222,13 +242,23 @@ class SqlTemplateRead(
         return rows
     }
 
-    /** Calls [name] and returns its structured result; a failure stops the render with the server's message. */
+    /**
+     * Calls [name] and returns its structured result; a failed result stops the render with the server's message.
+     * An exception from the call itself is kept in [callFailure] as well.
+     */
     @Suppress("UNCHECKED_CAST")
     private fun tool(
+        callFailure: AtomicReference<Exception>,
         name: String,
         arguments: Map<String, Any?>,
     ): Map<String, Any?> {
-        val result = callTool(name, arguments)
+        val result =
+            try {
+                callTool(name, arguments)
+            } catch (e: Exception) {
+                callFailure.compareAndSet(null, e)
+                throw e
+            }
         if (!result.success) throw IllegalStateException(result.errorMessage ?: "$name failed")
         return plain(JSONObject(result.text)) as Map<String, Any?>
     }

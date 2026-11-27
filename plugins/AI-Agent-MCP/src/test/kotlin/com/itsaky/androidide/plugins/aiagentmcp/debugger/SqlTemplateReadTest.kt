@@ -11,8 +11,11 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.ConnectException
 
 /** `.read` with a Pebble template (ADFA-7302): what the render is given, and what each function asks the app. */
 class SqlTemplateReadTest {
@@ -188,6 +191,18 @@ class SqlTemplateReadTest {
                 assertTrue(result.errorMessage, result.errorMessage!!.contains(words))
             }
         }
+    }
+
+    // The variables call's failures already reach the caller as exceptions, which EndpointRetry retries on the
+    // app's new address and McpErrorFormatter words; a function's must too, not arrive as the host's message.
+    @Test fun aFunctionsFailedCallReachesTheCallerAsItsOwnException() {
+        val host = FakeHost { _, functions -> functions.getValue("row_count").call(listOf("/data/app.db", "t")).toString() }
+        val lost = ConnectException("Connection refused")
+        val callTool: (String, Map<String, Any?>) -> McpCallResult = { name, args ->
+            if (name == "query") throw lost else app()(name, args)
+        }
+        val thrown = assertThrows(ConnectException::class.java) { SqlTemplateRead(host, callTool).run(mapOf("template" to "t.sql.peb")) }
+        assertSame(lost, thrown)
     }
 
     @Test fun withoutATemplateItListsThem() {
