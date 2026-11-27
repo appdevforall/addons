@@ -1,0 +1,10 @@
+grp      patients  mean_drop
+-------  --------  ---------
+drug     20        9.61     
+placebo  20        3.76     
+difference  t      df    p     
+----------  -----  ----  ------
+5.85        2.373  37.9  0.0228
+shuffled_p
+----------
+0.0234    

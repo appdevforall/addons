@@ -1,0 +1,19 @@
+id|name|key
+1|José Núñez|jose nunez
+2|Nunez, Jose|jose nunez
+3|JOSE  NUNEZ |jose nunez
+4|Ann Lee|ann lee
+5|Anne Lee|anne lee
+6|Lee, Ann|ann lee
+7|Grace O'Brien|grace obrien
+8|Grace OBrien|grace obrien
+9|Bob Stone|bob stone
+10|Robert Stone|robert stone
+id|same_as|score
+1|2|1.0
+1|3|1.0
+2|3|1.0
+4|5|0.88
+4|6|1.0
+5|6|0.88
+7|8|1.0

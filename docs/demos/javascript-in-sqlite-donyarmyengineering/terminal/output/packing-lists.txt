@@ -1,0 +1,5 @@
+Runtime error near line 100: Item 1: "bolt m12" is not a code like BOLT-M12-050.
+Runtime error near line 104: Item 2: 1.5 is not a whole number of 1 or more.
+Runtime error near line 109: The load is 1060.0 kg, over the limit of 900 kg.
+Runtime error near line 113: The packing list has no items.
+1|Van 1|2
