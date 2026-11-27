@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -77,6 +76,16 @@ fun HostSessionScreen(
                     style = styles.label.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                 )
             }
+
+            PluginButtonOutlined(
+                text = "STOP SESSION",
+                onClick = { onIntent(PairIntent.StopSession) },
+                contentColor = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = dimens.spaceXl)
+                    .longPressTooltip(PairTooltips.STOP_SESSION),
+            )
 
             Spacer(Modifier.height(dimens.spaceXl))
 
@@ -164,23 +173,6 @@ fun HostSessionScreen(
                     PeerListSection(peers = session.peers)
                 }
             }
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = dimens.spaceXl, vertical = dimens.spaceXl),
-        ) {
-            PluginButtonOutlined(
-                text = "STOP SESSION",
-                onClick = { onIntent(PairIntent.StopSession) },
-                contentColor = MaterialTheme.colorScheme.error,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .longPressTooltip(PairTooltips.STOP_SESSION),
-            )
         }
     }
 }

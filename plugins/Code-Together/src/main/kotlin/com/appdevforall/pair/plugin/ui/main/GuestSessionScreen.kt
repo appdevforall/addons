@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -70,6 +69,16 @@ fun GuestSessionScreen(
                 )
             }
 
+            PluginButtonOutlined(
+                text = "DISCONNECT",
+                onClick = { onIntent(PairIntent.Disconnect) },
+                contentColor = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = dimens.spaceXl)
+                    .longPressTooltip(PairTooltips.DISCONNECT),
+            )
+
             OutOfSyncBanner(
                 visible = session.outOfSync,
                 canResync = false,
@@ -109,23 +118,6 @@ fun GuestSessionScreen(
                     modifier = Modifier.padding(horizontal = dimens.spaceXl),
                 )
             }
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(dimens.spaceXl),
-        ) {
-            PluginButtonOutlined(
-                text = "DISCONNECT",
-                onClick = { onIntent(PairIntent.Disconnect) },
-                contentColor = MaterialTheme.colorScheme.error,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .longPressTooltip(PairTooltips.DISCONNECT),
-            )
         }
     }
 }
