@@ -140,26 +140,36 @@ class ChatBridge(
     fun cancel(requestId: String) {
         // The router cancels whatever is generating and may not call back, so answer here and
         // drop anything still in flight for this request.
-        if (active.compareAndSet(requestId, null)) {
+        // compareAndSet compares references, and this requestId is a new String from the JS
+        // bridge, not the object send() stored: match by value, then clear that stored object.
+        val current = active.get()
+        if (current != null && current == requestId && active.compareAndSet(current, null)) {
             runCatching { service()?.cancelGeneration() }
             emit(JSONObject().put("type", "error").put("requestId", requestId).put("message", "Stopped").put("kind", "CANCELLED"))
         }
     }
 
+    /**
+     * Chats live in this plugin's SharedPreferences, as AI Core keeps its Agent chats. Not in
+     * getPluginFilesDir(): the host deletes that folder whenever the plugin is updated, because
+     * Replace uninstalls the old version first.
+     */
+    private val prefs by lazy { context.getPluginSharedPreferences(PREFS_NAME) }
+
     @JavascriptInterface
-    fun loadThreads(): String = runCatching { threadsFile.takeIf { it.isFile }?.readText() }.getOrNull().orEmpty()
+    fun loadThreads(): String {
+        prefs.getString(KEY_THREADS, null)?.let { return it }
+        // One-time migration from 0.1.0 builds, which saved to threads.json.
+        val legacy = runCatching { threadsFile.takeIf { it.isFile }?.readText() }.getOrNull() ?: return ""
+        if (prefs.edit().putString(KEY_THREADS, legacy).commit()) runCatching { threadsFile.delete() }
+        return legacy
+    }
 
     @JavascriptInterface
     fun saveThreads(json: String) {
-        // Write beside, then rename: a crash mid-write must not lose every chat.
-        runCatching {
-            val tmp = File(threadsFile.parentFile, "$THREADS_FILE.tmp")
-            tmp.writeText(json)
-            if (!tmp.renameTo(threadsFile)) {
-                threadsFile.writeText(json)
-                tmp.delete()
-            }
-        }.onFailure { context.logger.error("AI Chat: could not save chats", it) }
+        // apply() swaps the whole file in atomically: a crash mid-write cannot lose every chat.
+        runCatching { prefs.edit().putString(KEY_THREADS, json).apply() }
+            .onFailure { context.logger.error("AI Chat: could not save chats", it) }
     }
 
     @JavascriptInterface
@@ -205,5 +215,7 @@ class ChatBridge(
     companion object {
         const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
         private const val THREADS_FILE = "threads.json"
+        private const val PREFS_NAME = "chats"
+        private const val KEY_THREADS = "threads_json"
     }
 }

@@ -115,7 +115,7 @@ class AiChatPlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExte
                 <b>AI Agent Local</b> keeps everything on the device; a cloud backend sends
                 your messages to that provider.</p>
                 <p>Needs <b>AI Core</b> and at least one AI backend from the Addons Manager.
-                Chats are saved on the device, in this plugin's storage.</p>
+                Chats are saved on the device and kept across updates.</p>
             """.trimIndent(),
             buttons = listOf(PluginTooltipButton(description = "About AI Chat", uri = "index.html", order = 0)),
         ),

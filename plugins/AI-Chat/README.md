@@ -16,7 +16,7 @@ Requires **AI Core** and at least one backend (for example **AI Agent Local**).
 | `web/src/stores/chat.ts` | Threads, streaming, stop and regenerate |
 | `src/main/kotlin/.../AiChatPlugin.kt` | Lifecycle, the editor tab, the side-menu entry, tooltips and Tier-3 help |
 | `src/main/kotlin/.../ChatFragment.kt` | WebView served by `WebViewAssetLoader` from `assets/web/`; navigation locked to the bundle; network loads blocked |
-| `src/main/kotlin/.../ChatBridge.kt` | `@JavascriptInterface` methods: backends, send/cancel (streamed back through `window.__cogoChatEvent`), chats saved to `threads.json` in the plugin's files dir |
+| `src/main/kotlin/.../ChatBridge.kt` | `@JavascriptInterface` methods: backends, send/cancel (streamed back through `window.__cogoChatEvent`), chats saved in the plugin's SharedPreferences (the host deletes `getPluginFilesDir()` on every update) |
 
 ## Building
 
