@@ -16,15 +16,13 @@ import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
 import io.requery.android.database.sqlite.SQLiteCustomExtension
 import io.requery.android.database.sqlite.SQLiteDatabase
 import io.requery.android.database.sqlite.SQLiteDatabaseConfiguration
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.appdevforall.sqlitejs.SqliteJs
 
 /** An order from the grocery client's shop. */
@@ -44,7 +42,8 @@ data class OrderWithFee(
     val subtotal: Double,
     @ColumnInfo(name = "distance_km") val distanceKm: Double,
     val weekend: Boolean,
-    val fee: Double,
+    // null when the rule gives no number for this order
+    val fee: Double?,
 )
 
 @Dao
@@ -138,14 +137,16 @@ abstract class OrderDatabase : RoomDatabase() {
             }
             withContext(Dispatchers.IO) {
                 // A connection keeps the rule it loaded when it opened, so close Room's
-                // connections. The next get() opens new ones, which load the new rule.
+                // connections, and store the rule before any new ones open: get() waits for this
+                // lock, then opens connections that load the new rule. A query already running on
+                // the old connections fails, so reload the rule when the app is not busy.
                 synchronized(this@Companion) {
                     instance?.close()
                     instance = null
-                }
-                withConnection(app, app.getDatabasePath(NAME).path) { db ->
-                    db.execute("SELECT js_init_table()")
-                    db.execute("SELECT js_create_scalar(?, ?)", RULE, code)
+                    withConnection(app, app.getDatabasePath(NAME).path) { db ->
+                        db.execute("SELECT js_init_table()")
+                        db.execute("SELECT js_create_scalar(?, ?)", RULE, code)
+                    }
                 }
             }
         }
@@ -168,43 +169,32 @@ abstract class OrderDatabase : RoomDatabase() {
         /**
          * Runs [query], which calls the rule, and stops the rule if it runs for longer than
          * RULE_TIME_LIMIT_MS: a rule with an endless loop must not freeze the app.
+         *
+         * Neither Room nor Android can stop a JavaScript function that never returns.
+         * SqliteJs.cancelAll() can, but it stops all the JavaScript running at that moment, in
+         * every query, so it is called only when the time is up. Cancelling the calling coroutine,
+         * for example when the screen turns, doesn't call it: the query then finishes by itself,
+         * and the caller waits for it.
          */
-        suspend fun <T> withTimeLimit(query: suspend () -> T): T =
-            try {
-                withTimeout(RULE_TIME_LIMIT_MS) { cancellable(query) }
-            } catch (e: TimeoutCancellationException) {
-                throw IllegalStateException(
-                    "The rule ran for more than ${RULE_TIME_LIMIT_MS / 1000} s, so it was stopped. " +
-                        "Does it loop forever?",
-                )
+        suspend fun <T> withTimeLimit(query: suspend () -> T): T = coroutineScope {
+            // The query's result or failure is kept, not thrown, so that a query stopped by
+            // cancelAll() is reported as too slow rather than as "interrupted".
+            val running = async(Dispatchers.IO) { runCatching { query() } }
+            val result = withTimeoutOrNull(RULE_TIME_LIMIT_MS) { running.await() }
+            if (result != null) return@coroutineScope result.getOrThrow()
+            // cancelAll() stops only JavaScript that has started, and the query may not have
+            // reached its JavaScript yet, so it is called again until the query ends.
+            withContext(NonCancellable) {
+                while (!running.isCompleted) {
+                    SqliteJs.cancelAll()
+                    delay(CANCEL_RETRY_MS)
+                }
             }
-    }
-}
-
-/**
- * Runs [query], which may run JavaScript, so that cancelling the calling coroutine also stops the
- * JavaScript. Neither Room nor Android can stop a JavaScript function that never returns;
- * SqliteJs.cancelAll() stops all the JavaScript running at that moment, which then fails with an
- * "interrupted" error. Until the cancelled query ends, usually within milliseconds, JavaScript in
- * other queries is stopped too. (From the JavaScript in SQLite template.)
- */
-suspend fun <T> cancellable(query: suspend () -> T): T = coroutineScope {
-    // The query's result or failure is kept, not thrown, so that a query stopped by the cancel
-    // ends this as cancelled rather than as failed. coroutineScope still waits for the query to
-    // stop, which frees its connection.
-    val running = async(Dispatchers.IO) { runCatching { query() } }
-    try {
-        running.await().getOrThrow()
-    } catch (e: CancellationException) {
-        // cancelAll() stops only JavaScript that has started, and the query may not have reached
-        // its JavaScript yet, so it is called again until the query ends.
-        withContext(NonCancellable) {
-            while (!running.isCompleted) {
-                SqliteJs.cancelAll()
-                delay(CANCEL_RETRY_MS)
-            }
+            throw IllegalStateException(
+                "The rule ran for more than ${RULE_TIME_LIMIT_MS / 1000} s, so it was stopped. " +
+                    "Does it loop forever?",
+            )
         }
-        throw e
     }
 }
 

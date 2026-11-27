@@ -107,11 +107,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // A fee the rule gave no number for shows as "?", not as 0.00.
     private fun table(rows: List<OrderWithFee>): String =
         rows.joinToString("\n", prefix = getString(R.string.table_header) + "\n") { o ->
             String.format(
-                Locale.US, "%-6s %7.2f %5.1f %-3s %6.2f",
-                o.customer, o.subtotal, o.distanceKm, if (o.weekend) "yes" else "no", o.fee,
+                Locale.US, "%-6s %7.2f %5.1f %-3s %6s",
+                o.customer, o.subtotal, o.distanceKm, if (o.weekend) "yes" else "no",
+                o.fee?.let { String.format(Locale.US, "%.2f", it) } ?: "?",
             )
         }
 
