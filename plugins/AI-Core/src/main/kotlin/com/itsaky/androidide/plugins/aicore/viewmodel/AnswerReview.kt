@@ -34,6 +34,16 @@ internal object AnswerReview {
     fun holdsCode(reply: String): Boolean = reply.contains(FENCE)
 
     /**
+     * Whether a turn's answer is reviewed. Not after a failed tool call: the bubble then opens with
+     * the failure note ([AgentReplyRenderer.render]), and the corrected draft replaces the whole
+     * bubble, so the note could be rewritten away.
+     * @param displayText the bubble's text.
+     * @param lastToolFailed whether this run's most recent tool call failed.
+     * @return true when the answer gets the second pass.
+     */
+    fun reviews(displayText: String, lastToolFailed: Boolean): Boolean = !lastToolFailed && holdsCode(displayText)
+
+    /**
      * @param config the loaded prompt config.
      * @param currentTime the device's date and time, as the prompt words it.
      * @return the request's system prompt.

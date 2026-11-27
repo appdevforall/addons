@@ -1854,7 +1854,7 @@ class ChatViewModel(
                     )
                     proseTurnShowedAnswer = toolCalls.isEmpty() &&
                         AgentReplyRenderer.showsAnswer(displayText, str(R.string.agent_no_response))
-                    if (AnswerReview.holdsCode(displayText)) {
+                    if (AnswerReview.reviews(displayText, lastToolFailed)) {
                         runCodeReply = CodeReply(agentMessageId, displayText, reply.historyText)
                     }
                     // An unreadable call usually parses on a second try, so its bubble carries Retry.
