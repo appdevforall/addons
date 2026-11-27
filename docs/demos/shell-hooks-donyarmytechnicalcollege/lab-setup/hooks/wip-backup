@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# CS 140 work-in-progress backup: when a project closes, copy it to the course server.
+#
+# Hook:      project-closed (install.sh puts it at project-closed.d/wip-backup)
+# Arguments: $1 = the project folder, which is also where the script runs.
+# Output:    what it pushed, or why it pushed nothing, in the Hooks tab.
+#
+# It snapshots every file in the project that git does not ignore, committed or not, and pushes
+# the snapshot to the branch wip/<branch> on the course server, replacing the last one. The
+# student's own branch, staged changes and files are left alone: the snapshot is built in a
+# separate index file inside .git and never checked out. So a lost or broken phone loses at most
+# what changed since the project was last closed.
+#
+# What an institution would change: the branch name, and whether to back up at all (some courses
+# would rather students commit and push by hand).
+
+cd "$1" || exit 1
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Not a git clone: nothing backed up."
+    exit 0
+fi
+if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "No course server (no 'origin' remote): nothing backed up."
+    exit 0
+fi
+branch=$(git symbolic-ref --short -q HEAD) || {
+    echo "Not on a branch: nothing backed up."
+    exit 0
+}
+
+# Build the snapshot in a separate index, starting from the last commit.
+index="$(git rev-parse --absolute-git-dir)/wip-backup-index"
+rm -f "$index"
+tree=$(export GIT_INDEX_FILE=$index; git read-tree HEAD && git add -A && git write-tree)
+status=$?
+rm -f "$index"
+if [ "$status" -ne 0 ]; then
+    echo "Could not take a snapshot." >&2
+    exit 1
+fi
+
+if [ "$tree" = "$(git rev-parse 'HEAD^{tree}')" ]; then
+    snapshot=$(git rev-parse HEAD)      # nothing changed since the last commit
+else
+    snapshot=$(git commit-tree "$tree" -p HEAD -m "Work in progress, $(date '+%F %T')") || exit 1
+fi
+
+# A time limit, so an unreachable server does not hold up the hooks after this one.
+if timeout 30 git push --quiet --force origin "$snapshot:refs/heads/wip/$branch"; then
+    echo "Backed up to wip/$branch on the course server ($(git rev-parse --short "$snapshot"))."
+else
+    echo "Backup failed: the course server did not answer. Your files are still on this phone."
+    exit 1
+fi

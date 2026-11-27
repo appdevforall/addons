@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shell Hooks at Don Yarmy Technical College</title>
+<!--
+  The scripts on this page are copies of the files in this folder (lab-setup/, starter-project/,
+  college-server/). Edit the files, then run sync-page.py to copy them in here again.
+-->
+<style>
+  body { background: #ffffff; color: #000000; font-family: sans-serif; line-height: 1.55;
+         margin: 0 auto; max-width: 52rem; padding: 1rem 1rem 4rem; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.2rem; border-bottom: 1px solid #cccccc; }
+  h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+  code, pre { font-family: monospace; background: #f2f2f2; }
+  pre { padding: 0.6rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; }
+  th, td { border: 1px solid #cccccc; padding: 0.35rem 0.5rem; text-align: left;
+           vertical-align: top; overflow-wrap: anywhere; }
+  .note { border-left: 4px solid #000000; padding-left: 0.6rem; }
+  .subtitle { margin-top: 0; }
+  figure { margin: 1rem 0; }
+  figure img { max-width: 100%; height: auto; border: 1px solid #cccccc; }
+  figcaption { font-size: 0.9rem; }
+  .script-head { margin-bottom: 0.2rem; }
+</style>
+</head>
+<body>
+
+<h1>Shell Hooks at Don Yarmy Technical College</h1>
+<p class="subtitle">How, when and why to connect Code on the Go to the way your institution
+already works, with shell scripts.</p>
+
+<p class="note">Don Yarmy Technical College, its course and its people are made up for this
+example. Shell Hooks is a Code on the Go plugin; this example needs Code on the Go 26.48 or
+later. A narrated video of the same story goes with this page.</p>
+
+<h2 id="contents">Contents</h2>
+<ol>
+  <li><a href="#why">Why use Shell Hooks</a></li>
+  <li><a href="#how">How Shell Hooks works</a></li>
+  <li><a href="#when">When: the course's hooks</a></li>
+  <li><a href="#story">The story, step by step</a></li>
+  <li><a href="#scripts">The scripts</a></li>
+  <li><a href="#writing">Before you write your own</a></li>
+  <li><a href="#not">When not to use Shell Hooks</a></li>
+  <li><a href="#server">Connecting to a real server</a></li>
+  <li><a href="#one-phone">Appendix: trying it on one phone</a></li>
+</ol>
+
+<h2 id="why">1. Why use Shell Hooks</h2>
+<p>Schools, colleges and companies that teach or build software already have a process: a git
+server, coding rules, a build record, a way to hand in work, backups. A development environment
+that cannot take part in that process stands to one side of it, and someone has to bridge the
+gap by hand.</p>
+<p>Shell Hooks lets the people who run that process bridge it themselves. It runs shell scripts
+at moments in Code on the Go: when the IDE starts, when a project opens or closes, when a file is
+saved, when a build starts or ends, and when you choose a script from a file's menu. IT staff,
+instructors and team leads already write such scripts for desktops and servers. With Shell
+Hooks they need no Android development and no plugin of their own.</p>
+<p>It works like git's own hooks: a script named after the moment, in a folder. This page follows
+one assignment in a made-up course, CS 140, from setting up a student's phone to handing in the
+work, and gives every script it uses.</p>
+
+<h2 id="how">2. How Shell Hooks works</h2>
+<ul>
+  <li><strong>Off until you turn it on:</strong> Preferences &gt; Shell Hooks &gt; <em>Run
+    hooks</em>.</li>
+  <li><strong>Your hooks</strong> live in <code>~/.config/codeonthego/hooks/</code> in the
+    Terminal's home folder. A script named after a hook (<code>file-saved</code>) runs, then
+    every script in a folder named after it with <code>.d</code> on the end
+    (<code>file-saved.d/</code>), in name order. Only executable files run:
+    <code>chmod +x</code>.</li>
+  <li><strong>Actions</strong> are scripts in <code>hooks/actions/</code>. Each appears as
+    <em>Run &lt;name&gt;</em> when you long-press a file in the file tree, and runs in the
+    Terminal, so you see what it prints.</li>
+  <li><strong>A project's own hooks</strong> live in <code>.codeonthego/hooks/</code> inside the
+    project, with the same layout. They run only after you turn on <em>Run hooks stored in
+    projects</em> and trust each script in the Hooks tab, because a script can arrive with a
+    project that someone else wrote. To be trusted, a project's script must be plain: printable
+    ASCII and newlines, no tabs, no line over 100 characters or ending in a space, at most
+    64 KB.</li>
+  <li><strong>What a script gets:</strong> the file or project in <code>$1</code>, and the
+    variables <code>COGO_HOOK</code>, <code>COGO_PROJECT_DIR</code>, <code>COGO_HOOKS_DIR</code>,
+    <code>COGO_HOOK_SCRIPT</code>, <code>COGO_HOOK_SOURCE</code> and
+    <code>COGO_IDE_VERSION</code>. It runs in the project folder, or in the home folder when
+    there is no project, with the Terminal's programs: bash, git, Java, coreutils and
+    more.</li>
+  <li><strong>One at a time:</strong> scripts run one after another, and one still running after
+    the timeout (60 seconds by default) is stopped. What a script prints appears in the
+    <em>Hooks</em> tab of the bottom panel when it ends.</li>
+  <li><strong>Hooks report, they don't decide.</strong> A script cannot stop a save or a
+    build.</li>
+</ul>
+<p>The plugin's own guide, which its in-app help links to, has the details.</p>
+
+<h3>The moments you can hook</h3>
+<table>
+  <tr><th>Hook</th><th>Runs when</th><th><code>$1</code></th></tr>
+  <tr><td><code>ide-started</code></td><td>once each time Code on the Go starts with hooks on
+    (your own hooks only)</td><td>none</td></tr>
+  <tr><td><code>project-opened</code></td><td>a project opens</td><td>the project folder</td></tr>
+  <tr><td><code>project-closed</code></td><td>a project closes</td><td>the project folder</td></tr>
+  <tr><td><code>file-opened</code>, <code>file-closed</code></td><td>a file opens in the editor,
+    or its tab closes</td><td>the file</td></tr>
+  <tr><td><code>file-activated</code></td><td>you switch tabs</td><td>the file, or empty</td></tr>
+  <tr><td><code>file-saved</code></td><td>a file is written to disk</td><td>the file</td></tr>
+  <tr><td><code>build-started</code>, <code>build-succeeded</code></td><td>a build starts or
+    succeeds; a project sync counts</td><td>none</td></tr>
+  <tr><td><code>build-failed</code></td><td>a build fails or is cancelled; a project sync
+    counts</td><td>the IDE's message, such as <code>BUILD FAILED in 12s</code></td></tr>
+  <tr><td>actions</td><td>you choose <em>Run &lt;name&gt;</em> on a file</td><td>the file</td></tr>
+</table>
+
+<h2 id="when">3. When: the course's hooks</h2>
+<p>CS 140's IT staff and instructor hooked six stages of the students' work. IT installs its
+scripts on each phone once; the instructor's scripts come with the assignment.</p>
+<table>
+  <tr><th>Stage</th><th>Hook</th><th>Script</th><th>From</th><th>What it does</th></tr>
+  <tr><td>Setup</td><td><code>ide-started</code></td><td><a href="#s-lab-check">lab-check</a></td>
+    <td>IT</td><td>Checks for git, Java and timeout, sets git's name and e-mail, and reports
+    "Ready for CS 140".</td></tr>
+  <tr><td>Start work</td><td><code>project-opened</code></td>
+    <td><a href="#s-project-opened">project-opened</a></td><td>the assignment</td><td>Shows the
+    branch, fetches from the course server, says whether the starter changed, prints the due
+    date.</td></tr>
+  <tr><td>Code</td><td><code>file-saved</code></td><td><a href="#s-file-saved">file-saved</a></td>
+    <td>the assignment</td><td>Checks the course's three rules on each saved source file.</td></tr>
+  <tr><td>Build</td><td><code>build-started</code>, <code>build-succeeded</code>,
+    <code>build-failed</code></td><td><a href="#s-journal">journal</a></td><td>IT</td><td>Adds a
+    line to a build journal on the phone.</td></tr>
+  <tr><td>Review and submit</td><td>actions</td><td><a href="#s-check-file">check-file</a>,
+    <a href="#s-submit">submit</a></td><td>IT</td><td>Check one file on demand; hand in the
+    work and get a receipt.</td></tr>
+  <tr><td>Wrap up</td><td><code>project-closed</code></td>
+    <td><a href="#s-wip-backup">wip-backup</a></td><td>IT</td><td>Pushes a snapshot of work not yet
+    committed to the server.</td></tr>
+</table>
+<p>On the server, git's own <a href="#s-post-receive">post-receive</a> hook files each
+submission's receipt in the instructor's inbox. It is a git hook, not a Shell Hooks one.</p>
+
+<h2 id="story">4. The story, step by step</h2>
+<p>Sam Rivera, student DY24-0173, does Assignment 3, a tip calculator. For this example the
+college's server is a folder on the same phone; <a href="#server">section 8</a> says what
+changes for a real one.</p>
+
+<h3>Setup</h3>
+<p>Sam turns on Shell Hooks, and <em>Run hooks stored in projects</em> too, because the course
+keeps two scripts in its assignments.</p>
+<figure>
+  <img src="images/s1-turn-on.png" alt="Shell Hooks settings with Run hooks turned on" width="360">
+  <figcaption>Shell Hooks is off until you turn it on.</figcaption>
+</figure>
+<p>IT keeps a small repository, <code>lab-setup</code>, on the course server. Sam clones it in
+the Terminal and runs its <a href="#s-install">install script</a> once:</p>
+<pre>git clone &lt;course server&gt;/lab-setup.git ~/lab-setup &amp;&amp; bash ~/lab-setup/install.sh</pre>
+<p>It asks for Sam's name and student ID, saves them in <code>~/.config/donyarmy/lab.conf</code>,
+and copies the college's scripts into the hooks folder. Each goes in a <code>.d</code> folder, so
+it never replaces a hook Sam wrote. It runs the lab check once straight away, which sets git up.
+Sam then clones the assignment from the course server, and from then on the lab check reports
+in the Hooks tab each time Code on the Go starts.</p>
+<figure>
+  <img src="images/s2-lab-check.png" alt="The Hooks tab showing lab-check's output: ok for git, java and timeout, git's name and e-mail, and Ready for CS 140" width="360">
+  <figcaption>The <code>ide-started</code> hook: ready for CS 140.</figcaption>
+</figure>
+
+<h3>Start work</h3>
+<p>The assignment carries two scripts of its own, in <code>.codeonthego/hooks/</code>. They came
+with the project, so they do not run on their own: the first time each one's moment comes, the
+Hooks tab lists it under "Project scripts waiting for your review" instead. Review shows every
+line, numbered. Trust approves exactly what Sam read; if the script changes, it waits for review
+again. Trusting a script does not run it; it runs the next time its moment comes.</p>
+<figure>
+  <img src="images/s3-review.png" alt="The review dialog for project-opened, showing numbered script lines" width="360">
+  <figcaption>A project's script runs only after you have read and trusted it.</figcaption>
+</figure>
+<p>When Sam opens the project again, <code>project-opened</code> shows the branch, whether the
+instructor has changed the starter, the last submission and the due date.</p>
+
+<h3>Code</h3>
+<p>Each save runs <code>file-saved</code>, which checks the course's three rules: a header with
+the student ID in the first five lines, no <code>TODO(submit)</code> marks left in, and nothing
+that looks like an API key or password. The first save lists <code>file-saved</code> for review,
+like <code>project-opened</code>; once Sam trusts it, every save runs it. The starter breaks the
+first two rules on purpose.</p>
+<figure>
+  <img src="images/s4-file-saved.png" alt="A failed file-saved run: no student ID header, and TODO(submit) still on line 5" width="360">
+  <figcaption>The hook reports which rules a file breaks, and where. It cannot stop the
+    save.</figcaption>
+</figure>
+
+<h3>Build</h3>
+<p>Every build, and every project sync, adds a line to <code>~/cs140/build-journal.tsv</code>:
+when, which project, the result, how long it took, and the APK's size or the IDE's message.</p>
+<figure>
+  <img src="images/s5-journal.png" alt="The journal's output after a passing build: ok in 27 s, app-debug.apk 5968 KB, and today's count with one failure" width="360">
+  <figcaption>One journal script, installed on three hooks.</figcaption>
+</figure>
+
+<h3>Review and submit</h3>
+<p>Long-pressing a file shows the college's two actions. <em>Run check-file</em> applies the
+rules to that file. <em>Run submit</em> checks every source file, asks, then commits, tags the
+commit <code>submit-1</code> and pushes it. The server answers with a receipt number.</p>
+<figure>
+  <img src="images/s6-actions-menu.png" alt="A file's long-press menu with Run check-file and Run submit" width="360">
+  <figcaption>Actions appear on every file's menu.</figcaption>
+</figure>
+<figure>
+  <img src="images/s7-submit.png" alt="The Terminal after Run submit, with the receipt from the server" width="360">
+  <figcaption>Submit runs in the Terminal, so it can ask first.</figcaption>
+</figure>
+<p>On the server, the post-receive hook filed the receipt in the instructor's inbox.</p>
+<figure>
+  <img src="images/s8-inbox.png" alt="The receipt in the instructor's inbox" width="360">
+  <figcaption>Who submitted, which commit, the build counts and the source files.</figcaption>
+</figure>
+
+<h3>Wrap up</h3>
+<p>When Sam closes the project, <code>wip-backup</code> pushes a snapshot of everything, committed
+or not, to the branch <code>wip/main</code> on the server, without touching Sam's own branch.</p>
+<figure>
+  <img src="images/s9-wip-backup.png" alt="wip-backup's output: backed up to wip/main on the course server" width="360">
+  <figcaption>The work outlives the phone.</figcaption>
+</figure>
+
+<h2 id="scripts">5. The scripts</h2>
+<p>Every script below ran on a phone to make the screenshots and the video. They are written for
+bash, which Code on the Go's Terminal has; <code>#!/usr/bin/env bash</code> finds it. Their
+comments say which hook runs them, what arrives in <code>$1</code>, what they print, and what an
+institution would change.</p>
+<table>
+  <tr><th>File in this example</th><th>Installed as</th><th>By</th></tr>
+  <tr><td><a href="#s-install">lab-setup/install.sh</a></td><td>run once in the Terminal</td>
+    <td>the student</td></tr>
+  <tr><td><a href="#s-lab-check">lab-setup/hooks/lab-check</a></td>
+    <td><code>~/.config/codeonthego/hooks/ide-started.d/lab-check</code></td><td>install.sh</td></tr>
+  <tr><td><a href="#s-journal">lab-setup/hooks/journal</a></td>
+    <td><code>build-started.d/journal</code>, <code>build-succeeded.d/journal</code>,
+    <code>build-failed.d/journal</code></td><td>install.sh</td></tr>
+  <tr><td><a href="#s-check-file">lab-setup/hooks/check-file</a></td>
+    <td><code>actions/check-file</code></td><td>install.sh</td></tr>
+  <tr><td><a href="#s-submit">lab-setup/hooks/submit</a></td><td><code>actions/submit</code></td>
+    <td>install.sh</td></tr>
+  <tr><td><a href="#s-wip-backup">lab-setup/hooks/wip-backup</a></td>
+    <td><code>project-closed.d/wip-backup</code></td><td>install.sh</td></tr>
+  <tr><td><a href="#s-project-opened">starter-project/.codeonthego/hooks/project-opened</a></td>
+    <td>the same path in the assignment's repository</td><td>the instructor</td></tr>
+  <tr><td><a href="#s-file-saved">starter-project/.codeonthego/hooks/file-saved</a></td>
+    <td>the same path in the assignment's repository</td><td>the instructor</td></tr>
+  <tr><td><a href="#s-post-receive">college-server/post-receive</a></td>
+    <td><code>hooks/post-receive</code> in each student repository on the server</td>
+    <td>the server's administrator</td></tr>
+</table>
+
+<h3 id="s-install">IT's install script: lab-setup/install.sh</h3>
+<pre class="script" data-file="lab-setup/install.sh"><code>#!/usr/bin/env bash
+# Don Yarmy Technical College: CS 140 lab setup for Code on the Go.
+#
+# IT keeps this folder (install.sh and hooks/) in a git repository on the course server. Each
+# student runs it once, in Code on the Go's Terminal:
+#
+#   git clone &lt;course server&gt;/lab-setup.git ~/lab-setup &amp;&amp; bash ~/lab-setup/install.sh
+#
+# It asks for the student's name and ID, saves them in ~/.config/donyarmy/lab.conf, and copies
+# the college's scripts into Shell Hooks' folder, ~/.config/codeonthego/hooks. Every hook goes in
+# a &lt;hook&gt;.d/ folder, so it never replaces a script the student wrote. Running it again updates
+# the scripts and keeps the answers.
+#
+# Shell Hooks itself must be on: Preferences &gt; Shell Hooks &gt; Run hooks.
+#
+# What an institution would change: the course name, the e-mail domain and the ID format below.
+
+set -eu
+
+course="CS 140"
+domain="students.donyarmytechnicalcollege.edu"
+id_format='^DY[0-9]{2}-[0-9]{4}$'   # as in DY24-0173
+
+kit=$(cd "$(dirname "$0")" &amp;&amp; pwd)
+conf="$HOME/.config/donyarmy/lab.conf"
+hooks="$HOME/.config/codeonthego/hooks"
+
+# The course server is wherever this folder was cloned from: &lt;server&gt;/lab-setup.git.
+origin=$(git -C "$kit" remote get-url origin 2&gt;/dev/null) || {
+    echo "Clone lab-setup from the course server first; see the top of this script." &gt;&amp;2
+    exit 1
+}
+server=${origin%/lab-setup.git}
+
+# The lab's config file uses git's config format, so any value is stored safely, with no quoting.
+setting() { git config --file "$conf" "$1" 2&gt;/dev/null || true; }
+
+ask() {   # ask &lt;question&gt; &lt;current answer&gt;
+    local answer
+    if [ -n "$2" ]; then
+        read -r -p "$1 [$2]: " answer
+        echo "${answer:-$2}"
+    else
+        read -r -p "$1: " answer
+        echo "$answer"
+    fi
+}
+
+echo "Don Yarmy Technical College: $course lab setup"
+name=$(ask "Your name" "$(setting student.name)")
+id=$(ask "Your student ID (DY..-....)" "$(setting student.id)")
+id=$(printf '%s' "$id" | tr '[:lower:]' '[:upper:]')
+if [ -z "$name" ] || ! printf '%s' "$id" | grep -Eq "$id_format"; then
+    echo "A name and a student ID such as DY24-0173 are needed. Nothing was changed." &gt;&amp;2
+    exit 1
+fi
+email="$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')@$domain"
+
+mkdir -p "$(dirname "$conf")"
+git config --file "$conf" student.name "$name"
+git config --file "$conf" student.id "$id"
+git config --file "$conf" student.email "$email"
+git config --file "$conf" course.name "$course"
+git config --file "$conf" course.server "$server"
+
+# place &lt;script in hooks/&gt; &lt;where it goes in the hooks folder&gt;
+place() {
+    mkdir -p "$hooks/$(dirname "$2")"
+    cp "$kit/hooks/$1" "$hooks/$2"
+    chmod 755 "$hooks/$2"   # Shell Hooks runs only executable files from this folder
+    echo "  $2"
+}
+echo "Installing the college's hooks in $hooks:"
+place lab-check ide-started.d/lab-check
+place journal build-started.d/journal
+place journal build-succeeded.d/journal
+place journal build-failed.d/journal
+place wip-backup project-closed.d/wip-backup
+place check-file actions/check-file
+place submit actions/submit
+
+# Run the lab check once now, so git is set up before the student clones the assignment. From
+# now on, Shell Hooks runs it each time Code on the Go starts.
+echo "Running the lab check:"
+bash "$hooks/ide-started.d/lab-check"
+</code></pre>
+
+<h3 id="s-lab-check">Setup: lab-check (ide-started)</h3>
+<pre class="script" data-file="lab-setup/hooks/lab-check"><code>#!/usr/bin/env bash
+# CS 140 lab check: is this phone ready for the course?
+#
+# Hook:      ide-started (install.sh puts it at ide-started.d/lab-check)
+# Runs:      once each time Code on the Go starts with Shell Hooks on
+# Arguments: none. There is no project yet: COGO_PROJECT_DIR is empty and the script runs in HOME.
+# Output:    one line per check, then "Ready for CS 140" or what is missing, in the Hooks tab.
+#
+# It also sets git's name and e-mail from the lab's config file each time, so every commit the
+# student makes carries the identity the course server expects, and lets git work in the
+# projects folder (see below).
+#
+# What an institution would change: the tools it checks for.
+
+conf="$HOME/.config/donyarmy/lab.conf"
+# Where Code on the Go keeps projects. Android shows shared storage as owned by another user, so
+# git refuses to work there ("detected dubious ownership") until the folder is marked safe. Mark
+# only this folder: the check protects against repositories someone else put on the phone.
+projects=/storage/emulated/0/CodeOnTheGoProjects
+problems=0
+
+for tool in git java timeout; do
+    if command -v "$tool" &gt;/dev/null 2&gt;&amp;1; then
+        echo "ok       $tool"
+    else
+        echo "MISSING  $tool"
+        problems=$((problems + 1))
+    fi
+done
+
+if [ ! -f "$conf" ]; then
+    echo "MISSING  lab config: run ~/lab-setup/install.sh in the Terminal"
+    exit 1
+fi
+name=$(git config --file "$conf" student.name)
+id=$(git config --file "$conf" student.id)
+email=$(git config --file "$conf" student.email)
+course=$(git config --file "$conf" course.name)
+
+if [ -n "$name" ] &amp;&amp; [ -n "$email" ]; then
+    git config --global user.name "$name"
+    git config --global user.email "$email"
+    echo "ok       git commits as $name &lt;$email&gt;"
+    if ! git config --global --get-all safe.directory | grep -qxF "$projects/*"; then
+        git config --global --add safe.directory "$projects/*"
+    fi
+    echo "ok       git works in $projects"
+else
+    echo "MISSING  name or e-mail in $conf: run ~/lab-setup/install.sh again"
+    problems=$((problems + 1))
+fi
+
+if [ "$problems" -gt 0 ]; then
+    echo "Not ready for $course: $problems problem(s) above. Ask the lab technician."
+    exit 1
+fi
+echo "Ready for $course ($name, $id)"
+</code></pre>
+
+<h3 id="s-project-opened">Start work: project-opened (stored in the project)</h3>
+<pre class="script" data-file="starter-project/.codeonthego/hooks/project-opened"><code>#!/usr/bin/env bash
+# CS 140: what to know when the assignment opens.
+#
+# Hook:      project-opened, stored in the starter project at .codeonthego/hooks/project-opened.
+#            It runs only after the student trusts it in the Hooks tab, so the first open shows
+#            it waiting for review instead.
+# Arguments: $1 = the project folder, which is also where the script runs.
+# Output:    the branch, whether the instructor has changed the starter since, the last
+#            submission, and the due date from ASSIGNMENT.md, in the Hooks tab.
+#
+# It calls git, which reads the clone's own .git/config. That file is the student's, made by
+# their own clone, but a project hook that runs tools from a project trusts what they read.
+
+cd "$1" || exit 1
+if ! git rev-parse --git-dir &gt;/dev/null 2&gt;&amp;1; then
+    echo "Not a git clone: clone your CS 140 repository from the course server."
+    exit 1
+fi
+echo "Branch: $(git symbolic-ref --short -q HEAD || echo '(none)')"
+
+# A time limit, so an unreachable server does not hold up the hooks after this one.
+if timeout 20 git fetch --quiet --tags origin 2&gt;/dev/null; then
+    behind=$(git rev-list --count 'HEAD..@{upstream}' 2&gt;/dev/null || echo 0)
+    if [ "$behind" -gt 0 ]; then
+        echo "The instructor changed the starter ($behind commit(s)). Get it with: git pull"
+    else
+        echo "Up to date with the course server."
+    fi
+else
+    echo "Course server not reachable: working offline."
+fi
+
+last=$(git tag --list 'submit-*' --sort=-version:refname | head -n 1)
+if [ -n "$last" ]; then
+    echo "Last submitted: $last, $(git log -1 --format=%cd --date=format:'%F %R' "$last")"
+fi
+
+due=$(sed -n 's/^Due: *//p' ASSIGNMENT.md 2&gt;/dev/null | head -n 1)
+if [ -n "$due" ]; then
+    days=$(( ($(date -d "$due" +%s) - $(date +%s)) / 86400 ))
+    if [ "$days" -ge 0 ]; then
+        echo "Due: $due ($days day(s) left)"
+    else
+        echo "Due: $due (past due)"
+    fi
+fi
+</code></pre>
+
+<h3 id="s-file-saved">Code: file-saved (stored in the project)</h3>
+<pre class="script" data-file="starter-project/.codeonthego/hooks/file-saved"><code>#!/usr/bin/env bash
+# CS 140 course rules, checked each time a file is saved.
+#
+# Hook:      file-saved, stored in the starter project at .codeonthego/hooks/file-saved, so it
+#            travels with the assignment. Code on the Go runs it only after the student turns on
+#            "Run hooks stored in projects" and trusts it in the Hooks tab.
+# Arguments: $1 = the saved file. The script runs in the IDE's current project folder.
+# Output:    the rules the file breaks, or that it follows them, in the Hooks tab. Exit status 1
+#            when a rule is broken, so the run shows as failed.
+#
+# It cannot stop the save: hooks report, and the course server decides. It has to be quick,
+# because hooks run one at a time and a slow one holds up every hook after it.
+#
+# Project hooks must be plain: ASCII, no tabs, no line over 100 characters. Code on the Go shows
+# every line before the student trusts it, and refuses anything it cannot show exactly.
+
+file=$1
+case $file in
+    *.java | *.kt) ;;
+    *) exit 0 ;;   # the rules are for source files only
+esac
+[ -f "$file" ] || exit 0
+shown=$(printf '%s' "${file##*/}" | LC_ALL=C tr -c ' -~' '?')
+
+broken=0
+rule() {
+    echo "$shown: $1"
+    broken=$((broken + 1))
+}
+
+# 1. A header with the student ID in the first five lines.
+if ! head -n 5 -- "$file" | grep -Eq 'Student ID: DY[0-9]{2}-[0-9]{4}'; then
+    rule "no header with your student ID in the first 5 lines (Student ID: DY..-....)"
+fi
+
+# 2. No TODO(submit) left: the starter marks with it what must be done before handing in.
+lines=$(grep -n -F 'TODO(submit)' -- "$file" | cut -d: -f1 | paste -sd, -)
+if [ -n "$lines" ]; then
+    rule "TODO(submit) still there, line $lines"
+fi
+
+# 3. Nothing that looks like an API key or password written into the code.
+secret='((api|secret)[_-]?key|password)[^=]*=[[:space:]]*"[^"]{8,}"|AIza[0-9A-Za-z_-]{35}'
+lines=$(grep -n -i -E -- "$secret" "$file" | cut -d: -f1 | paste -sd, -)
+if [ -n "$lines" ]; then
+    rule "what looks like a key or password in the code, line $lines"
+fi
+
+if [ "$broken" -gt 0 ]; then
+    exit 1
+fi
+echo "$shown follows the CS 140 rules."
+</code></pre>
+
+<h3 id="s-journal">Build: journal (build-started, build-succeeded, build-failed)</h3>
+<pre class="script" data-file="lab-setup/hooks/journal"><code>#!/usr/bin/env bash
+# CS 140 build journal: one line per build, kept on the phone.
+#
+# Hooks:     build-started, build-succeeded and build-failed. install.sh copies this one script
+#            into all three .d folders, and COGO_HOOK tells it which event this is.
+# Arguments: none, except build-failed: $1 is the IDE's message, such as "BUILD FAILED in 12s".
+# Runs:      in the IDE's current project folder (COGO_PROJECT_DIR).
+# Output:    build-started prints nothing. The others add a line to ~/cs140/build-journal.tsv
+#            (date, project, result, seconds, APK size or the IDE's message) and print it,
+#            with today's count, in the Hooks tab.
+#
+# A project sync counts as a build, so syncs appear in the journal too. The submit action puts a
+# count of builds and failures in each submission, which shows the instructor how the work went.
+#
+# What an institution would change: where the journal is kept, and what each line records.
+
+dir="$HOME/cs140"
+journal="$dir/build-journal.tsv"
+started="$dir/.build-started"   # when the current build started, written by build-started
+mkdir -p "$dir"
+
+case $COGO_HOOK in
+    build-started)
+        date +%s &gt; "$started"
+        exit 0
+        ;;
+    build-succeeded) result=ok ;;
+    build-failed) result=FAILED ;;
+    *)
+        echo "journal: installed on the wrong hook ($COGO_HOOK)" &gt;&amp;2
+        exit 1
+        ;;
+esac
+
+project=$(basename "${COGO_PROJECT_DIR:-unknown}")
+seconds=
+if [ -f "$started" ]; then
+    seconds=$(( $(date +%s) - $(cat "$started") ))
+fi
+
+if [ "$result" = ok ]; then
+    # An APK this build made; a sync makes none. Code on the Go builds a project that is on
+    # shared storage in a private folder of its own, no_backup/gradle-build/&lt;project&gt;-&lt;key&gt;
+    # beside the Terminal's files, so look there as well as in the project's build folders.
+    builds="$HOME/../../no_backup/gradle-build"
+    apk=$(find "$COGO_PROJECT_DIR" "$builds/$project"-* -path '*/outputs/apk/*' -name '*.apk' \
+        -newer "$started" 2&gt;/dev/null | head -n 1)
+    if [ -n "$apk" ]; then
+        detail="$(basename "$apk") $(du -k "$apk" | cut -f1) KB"
+    else
+        detail="no APK (a sync)"
+    fi
+else
+    # One line in the journal, so tabs and newlines in the message become spaces.
+    detail=$(printf '%s' "${1:-cancelled}" | tr '\t\n' '  ')
+fi
+
+printf '%s\t%s\t%s\t%s\t%s\n' "$(date '+%F %T')" "$project" "$result" "$seconds" "$detail" \
+    &gt;&gt; "$journal"
+
+today=$(grep -c "^$(date +%F)" "$journal")
+failed=$(grep "^$(date +%F)" "$journal" | cut -f3 | grep -c FAILED)
+echo "$project: $result in ${seconds:-?} s, $detail"
+echo "Today: $today build(s), $failed failed. Journal: $journal"
+</code></pre>
+
+<h3 id="s-check-file">Review: the check-file action</h3>
+<pre class="script" data-file="lab-setup/hooks/check-file"><code>#!/usr/bin/env bash
+# "Run check-file": the CS 140 rules for one file, on demand.
+#
+# Action:    install.sh puts it at actions/check-file, so long-pressing a file in the file tree
+#            or an editor tab offers "Run check-file".
+# Arguments: $1 = the file.
+# Runs:      in the Terminal, in the IDE's current project folder, so the student sees the output.
+# Output:    each rule the file breaks, with line numbers, or that it follows them all. The exit
+#            status is 1 when a rule is broken, so the submit action can use this script too.
+#
+# The rules are the three the starter project's file-saved hook checks. That hook travels with
+# the project, and a project's hooks should not depend on anything outside it, so the rules are
+# written in both places.
+#
+# It never prints the file's name as it is: a name can hold control codes, which the Terminal
+# would act on rather than show. Every character outside printable ASCII is shown as '?'.
+#
+# What an institution would change: the rules.
+
+file=$1
+shown=$(printf '%s' "${file##*/}" | LC_ALL=C tr -c ' -~' '?')
+
+case $file in
+    *.java | *.kt) ;;
+    *)
+        echo "$shown: CS 140 has rules for .java and .kt files only."
+        exit 0
+        ;;
+esac
+if [ ! -r "$file" ]; then
+    echo "$shown: cannot read the file." &gt;&amp;2
+    exit 1
+fi
+
+broken=0
+rule() {
+    echo "  - $1"
+    broken=$((broken + 1))
+}
+echo "$shown:"
+
+# 1. A header with the student ID in the first five lines.
+if ! head -n 5 -- "$file" | grep -Eq 'Student ID: DY[0-9]{2}-[0-9]{4}'; then
+    rule "no header with your student ID in the first 5 lines (Student ID: DY..-....)"
+fi
+
+# 2. No TODO(submit) left: the starter marks with it what must be done before handing in.
+lines=$(grep -n -F 'TODO(submit)' -- "$file" | cut -d: -f1 | paste -sd, -)
+if [ -n "$lines" ]; then
+    rule "TODO(submit) still there, line $lines"
+fi
+
+# 3. Nothing that looks like an API key or password written into the code.
+secret='((api|secret)[_-]?key|password)[^=]*=[[:space:]]*"[^"]{8,}"|AIza[0-9A-Za-z_-]{35}'
+lines=$(grep -n -i -E -- "$secret" "$file" | cut -d: -f1 | paste -sd, -)
+if [ -n "$lines" ]; then
+    rule "what looks like a key or password in the code, line $lines"
+fi
+
+if [ "$broken" -gt 0 ]; then
+    exit 1
+fi
+echo "  follows the CS 140 rules"
+</code></pre>
+
+<h3 id="s-submit">Submit: the submit action</h3>
+<pre class="script" data-file="lab-setup/hooks/submit"><code>#!/usr/bin/env bash
+# "Run submit": hand in the assignment.
+#
+# Action:    install.sh puts it at actions/submit. Long-press any file of the project and choose
+#            "Run submit".
+# Arguments: $1 = the long-pressed file. Only its folder matters: it says which project to submit.
+# Runs:      in the Terminal, so it can ask before it submits.
+# Output:    the rule check for every .java and .kt file, the push, and a receipt.
+#
+# It commits everything git does not ignore, tags the commit submit-&lt;n&gt; with the student's name,
+# ID and build counts, and pushes the branch and the tag to the course server. The server's
+# post-receive hook files a receipt in the instructor's inbox and sends its number back; git
+# prints it here as "remote: Receipt ...".
+#
+# Hooks report, they don't enforce: a student could skip this and push by hand. Deadlines and
+# rules are enforced on the server, which is the only place that can.
+#
+# What an institution would change: the tag names, and what goes in the tag's message.
+
+conf="$HOME/.config/donyarmy/lab.conf"
+journal="$HOME/cs140/build-journal.tsv"
+# Run with bash, not by its #! line: Android has no /usr/bin/env, and Shell Hooks maps the #! line
+# only for the script it starts itself.
+check_file="$(dirname "$0")/check-file"
+
+top=$(git -C "$(dirname -- "$1")" rev-parse --show-toplevel 2&gt;/dev/null) || {
+    echo "This file is not in a git clone of your CS 140 repository." &gt;&amp;2
+    exit 1
+}
+cd "$top" || exit 1
+branch=$(git symbolic-ref --short -q HEAD) || {
+    echo "Not on a branch: check out your branch first (git switch main)." &gt;&amp;2
+    exit 1
+}
+name=$(git config --file "$conf" student.name)
+id=$(git config --file "$conf" student.id)
+course=$(git config --file "$conf" course.name)
+if [ -z "$id" ]; then
+    echo "No student ID: run ~/lab-setup/install.sh first." &gt;&amp;2
+    exit 1
+fi
+assignment=$(sed -n 's/^# //p' ASSIGNMENT.md 2&gt;/dev/null | head -n 1)
+
+echo "$course, ${assignment:-this assignment}"
+echo
+echo "Checking the course rules:"
+broken=0
+while IFS= read -r -d '' source; do
+    bash "$check_file" "$source" || broken=$((broken + 1))
+done &lt; &lt;(git ls-files -z --cached --others --exclude-standard -- '*.java' '*.kt')
+if [ "$broken" -gt 0 ]; then
+    echo "$broken file(s) break a rule. You can still submit; your instructor sees the same check."
+fi
+echo
+
+read -r -p "Submit branch $branch as $name ($id)? [y/N] " answer
+case $answer in
+    [yY]*) ;;
+    *)
+        echo "Not submitted."
+        exit 0
+        ;;
+esac
+
+git add -A
+if ! git diff --cached --quiet; then
+    git commit --quiet -m "$course submission" || exit 1
+fi
+
+# Number this submission after the ones the server already has.
+timeout 30 git fetch --quiet --tags origin 2&gt;/dev/null
+n=$(( $(git tag --list 'submit-*' | wc -l) + 1 ))
+tag="submit-$n"
+
+project=$(basename "$top")
+builds=$(awk -F '\t' -v p="$project" '$2 == p { n++; if ($3 == "FAILED") f++ }
+    END { printf "%d builds, %d failed", n, f }' "$journal" 2&gt;/dev/null)
+git tag -a "$tag" -m "$course, ${assignment:-assignment}
+Student: $name ($id)
+Builds on this phone: ${builds:-none recorded}" || exit 1
+
+echo "Sending $tag to the course server..."
+if ! timeout 60 git push origin "HEAD:refs/heads/$branch" "refs/tags/$tag"; then
+    git tag -d "$tag" &gt;/dev/null   # so the next try uses the same number
+    echo "Not submitted: the course server did not take it. Try again later." &gt;&amp;2
+    exit 1
+fi
+echo
+echo "Submitted $tag, commit $(git rev-parse --short HEAD), at $(date '+%F %T')."
+echo "Keep the receipt number above (remote: Receipt ...)."
+</code></pre>
+
+<h3 id="s-wip-backup">Wrap up: wip-backup (project-closed)</h3>
+<pre class="script" data-file="lab-setup/hooks/wip-backup"><code>#!/usr/bin/env bash
+# CS 140 work-in-progress backup: when a project closes, copy it to the course server.
+#
+# Hook:      project-closed (install.sh puts it at project-closed.d/wip-backup)
+# Arguments: $1 = the project folder, which is also where the script runs.
+# Output:    what it pushed, or why it pushed nothing, in the Hooks tab.
+#
+# It snapshots every file in the project that git does not ignore, committed or not, and pushes
+# the snapshot to the branch wip/&lt;branch&gt; on the course server, replacing the last one. The
+# student's own branch, staged changes and files are left alone: the snapshot is built in a
+# separate index file inside .git and never checked out. So a lost or broken phone loses at most
+# what changed since the project was last closed.
+#
+# What an institution would change: the branch name, and whether to back up at all (some courses
+# would rather students commit and push by hand).
+
+cd "$1" || exit 1
+if ! git rev-parse --git-dir &gt;/dev/null 2&gt;&amp;1; then
+    echo "Not a git clone: nothing backed up."
+    exit 0
+fi
+if ! git remote get-url origin &gt;/dev/null 2&gt;&amp;1; then
+    echo "No course server (no 'origin' remote): nothing backed up."
+    exit 0
+fi
+branch=$(git symbolic-ref --short -q HEAD) || {
+    echo "Not on a branch: nothing backed up."
+    exit 0
+}
+
+# Build the snapshot in a separate index, starting from the last commit.
+index="$(git rev-parse --absolute-git-dir)/wip-backup-index"
+rm -f "$index"
+tree=$(export GIT_INDEX_FILE=$index; git read-tree HEAD &amp;&amp; git add -A &amp;&amp; git write-tree)
+status=$?
+rm -f "$index"
+if [ "$status" -ne 0 ]; then
+    echo "Could not take a snapshot." &gt;&amp;2
+    exit 1
+fi
+
+if [ "$tree" = "$(git rev-parse 'HEAD^{tree}')" ]; then
+    snapshot=$(git rev-parse HEAD)      # nothing changed since the last commit
+else
+    snapshot=$(git commit-tree "$tree" -p HEAD -m "Work in progress, $(date '+%F %T')") || exit 1
+fi
+
+# A time limit, so an unreachable server does not hold up the hooks after this one.
+if timeout 30 git push --quiet --force origin "$snapshot:refs/heads/wip/$branch"; then
+    echo "Backed up to wip/$branch on the course server ($(git rev-parse --short "$snapshot"))."
+else
+    echo "Backup failed: the course server did not answer. Your files are still on this phone."
+    exit 1
+fi
+</code></pre>
+
+<h3 id="s-post-receive">On the server: post-receive (a git hook)</h3>
+<pre class="script" data-file="college-server/post-receive"><code>#!/bin/sh
+# CS 140 course server: file a receipt for each submission.
+#
+# Hook:   git's post-receive, on the course server, not on the phone. Put it in each student
+#         repository's hooks/ folder and make it executable.
+# Input:  one line per updated ref on standard input: &lt;old id&gt; &lt;new id&gt; &lt;ref name&gt;.
+# Runs:   in the bare repository, after git has accepted the push.
+# Output: for each new tag submit-&lt;n&gt;, a receipt file in the instructor's inbox; for each push to
+#         a wip/ branch, a line in the inbox's backups.log. What it prints, the student's git
+#         shows as "remote: ...".
+#
+# This is where a course enforces rules, if it wants to: a pre-receive hook gets the same input
+# before the push is accepted, and can refuse a late submission. This one only records.
+# The inbox folder is the repository's git config value cs140.inbox.
+
+inbox=$(git config cs140.inbox) || inbox=/srv/cs140/instructor-inbox
+mkdir -p "$inbox" || exit 1
+student=$(basename "$PWD" .git)
+
+while read -r _old new ref; do
+    case $new in
+        *[!0]*) ;;
+        *) continue ;;   # all zeros: the ref was deleted
+    esac
+    case $ref in
+        refs/tags/submit-*)
+            tag=${ref#refs/tags/}
+            commit=$(git rev-parse "$new^{commit}") || continue
+            # Ref names may hold '/', so the file name keeps only safe characters.
+            receipt=$(printf 'CS140-%s-%s-%s' "$(date +%Y%m%d-%H%M%S)" "$student" "$tag" |
+                tr -c 'A-Za-z0-9._-' '_')
+            {
+                echo "Receipt:  $receipt"
+                echo "Received: $(date '+%F %T %Z')"
+                echo "Student:  $student"
+                echo "Tag:      $tag"
+                echo "Commit:   $commit"
+                echo
+                git for-each-ref --format='%(contents)' "$ref"
+                echo "Source files:"
+                git ls-tree -r --name-only "$commit" | grep -E '\.(java|kt)$' | sed 's/^/  /'
+            } &gt; "$inbox/$receipt.txt"
+            echo "Receipt $receipt: $tag received."
+            ;;
+        refs/heads/wip/*)
+            echo "$(date '+%F %T') $student ${ref#refs/heads/} $new" &gt;&gt; "$inbox/backups.log"
+            ;;
+    esac
+done
+</code></pre>
+
+<h3 id="s-assignment">The assignment file: starter-project/ASSIGNMENT.md</h3>
+<pre class="script" data-file="starter-project/ASSIGNMENT.md"><code># Assignment 3: Tip Calculator
+
+Due: 2026-12-11 23:59
+
+Build an app that takes a bill amount and a tip percentage and shows the tip and the total.
+
+Before you submit:
+
+- Put the header with your student ID at the top of every .java and .kt file.
+- Do everything marked TODO(submit), then remove the marks.
+- Keep keys and passwords out of the code.
+- Long-press any file of the project and choose "Run submit".
+</code></pre>
+
+<h2 id="writing">6. Before you write your own</h2>
+<ul>
+  <li><strong>Hooks report; the server decides.</strong> A student can turn Shell Hooks off, or
+    edit the scripts in their own hooks folder. Deadlines and rules that matter belong on the
+    server, for example in a git <code>pre-receive</code> hook, which can refuse a push.</li>
+  <li><strong>Keep <code>file-saved</code> quick.</strong> Scripts run one at a time, so a slow
+    one holds up every hook after it. Each of this example's scripts that reaches the server
+    puts its own time limit on git (<code>timeout 20 git fetch</code>), so a server that does
+    not answer costs seconds, not the whole timeout. Start a long job in the background:
+    <code>nohup long-job &gt;/dev/null 2&gt;&amp;1 &amp;</code>.</li>
+  <li><strong>A project's scripts must be plain,</strong> and trust covers only their own text.
+    Programs they run from the project, such as <code>./gradlew</code>, are not reviewed, and
+    neither are settings that tools read for themselves: git reads the project's
+    <code>.git/config</code>. Keep project scripts self-contained. That is why the course's three
+    rules are written twice, in <code>file-saved</code> and in <code>check-file</code>.</li>
+  <li><strong>Run other scripts with <code>bash script</code>, not by their name alone.</strong>
+    Android has no <code>/usr/bin/env</code>, and Shell Hooks maps a <code>#!</code> line such as
+    <code>#!/usr/bin/env bash</code> only for the script it starts. That is why
+    <code>submit</code> runs <code>bash check-file</code>.</li>
+  <li><strong>Use <code>$1</code> where a hook gives one.</strong> For file and build hooks,
+    <code>COGO_PROJECT_DIR</code> is the IDE's current project, which can be the last one opened
+    even after it has closed.</li>
+  <li><strong>Quote <code>"$1"</code>, and don't print file names into the Terminal as they
+    are.</strong> A file name can hold control codes, which the Terminal acts on.
+    <code>check-file</code> shows every character outside printable ASCII as
+    <code>?</code>.</li>
+  <li><strong>A project sync counts as a build,</strong> so build hooks run when a project opens
+    too.</li>
+  <li><strong>Git and shared storage.</strong> Code on the Go keeps projects in
+    <code>/storage/emulated/0/CodeOnTheGoProjects</code>, which Android shows as owned by another
+    user, so git refuses to work there ("detected dubious ownership") until the folder is marked
+    safe. <code>lab-check</code> marks that one folder, with
+    <code>git config --global --add safe.directory</code>; it does not turn the check off
+    everywhere.</li>
+  <li><strong>Output appears when a script ends,</strong> in the Hooks tab. Actions are the
+    exception: they run in the Terminal, where they can also ask questions.</li>
+  <li><strong>Tell people what your scripts record.</strong> A <code>file-saved</code> hook sees
+    every file a student saves. This example's journal records every build, the submit action
+    sends the build counts to the instructor, and the backup copies unfinished work to the
+    server. Say so in the course's materials.</li>
+</ul>
+
+<h2 id="not">7. When not to use Shell Hooks</h2>
+<ul>
+  <li><strong>To enforce anything.</strong> Use the server, which the student does not
+    control.</li>
+  <li><strong>When every event must count.</strong> Up to 64 events wait their turn and the oldest
+    are dropped after that, and events can arrive in a slightly different order from the one in
+    which they happened. A journal is fine; billing is not.</li>
+  <li><strong>For grading or anything that must be believed.</strong> The phone's report is only
+    as trustworthy as the phone. The receipt in this example comes from the server, not the
+    phone.</li>
+  <li><strong>For work inside the IDE.</strong> A script cannot add a screen, change the editor or
+    stop a build. That is a job for a plugin.</li>
+</ul>
+
+<h2 id="server">8. Connecting to a real server</h2>
+<ul>
+  <li><strong>Git over HTTPS.</strong> Code on the Go's Terminal has git with HTTPS support and
+    no SSH client, so the course server is a git host reached over HTTPS. Students sign in with
+    a password or token, which git's credential helper can keep
+    (<code>git config --global credential.helper store</code> keeps it in a plain file in the
+    home folder; weigh that against typing it each time).</li>
+  <li><strong>Where the server's address comes from.</strong> <code>install.sh</code> takes it
+    from the address the student cloned <code>lab-setup</code> from, so IT gives students one
+    command and nothing else to type.</li>
+  <li><strong>The receipts.</strong> On a server you run yourself, put
+    <code>post-receive</code> in each student repository's <code>hooks/</code> folder, or in
+    one folder named by git's <code>core.hooksPath</code> setting, and set
+    <code>git config cs140.inbox &lt;folder&gt;</code>. Hosted services such as GitHub or GitLab
+    do not run your hooks; use their webhooks instead, which send each push to a web service
+    you run.</li>
+  <li><strong>Enforcement.</strong> A <code>pre-receive</code> hook gets the same input as
+    <code>post-receive</code> but runs before git accepts the push, and refusing is a matter of
+    exiting with an error: for example, refusing a <code>submit-*</code> tag after the due
+    date.</li>
+  <li><strong>A real backup.</strong> In this example the server is on the phone, so the
+    work-in-progress backup protects nothing if the phone is lost. With a real server, a lost
+    phone loses at most what changed since the project was last closed.</li>
+</ul>
+
+<h2 id="one-phone">9. Appendix: trying it on one phone</h2>
+<p>The story above ran on one phone, with a stand-in for the college's server made by
+<code>college-server/stand-in.sh</code>. To try it yourself:</p>
+<ol>
+  <li>Copy this folder to the phone, for example to <code>Download/shell-hooks-demo</code>.</li>
+  <li>In Code on the Go, make a new project. It becomes the assignment's starter; the script copies
+    it and leaves it as it is.</li>
+  <li>In the Terminal:
+    <pre>bash /sdcard/Download/shell-hooks-demo/college-server/stand-in.sh &lt;the new project's folder&gt; DY24-0173</pre>
+    It makes <code>~/college-server</code> with IT's repository, the student's repository and the
+    instructor's inbox, and prints the two <code>git clone</code> commands to run next.</li>
+  <li>Turn on Shell Hooks, run the commands, and follow <a href="#story">the story</a>.</li>
+</ol>
+<p>To remove it all afterwards: turn Shell Hooks off, and delete
+<code>~/college-server</code>, <code>~/lab-setup</code>, <code>~/cs140</code>,
+<code>~/.config/donyarmy</code>, the scripts <code>install.sh</code> put in
+<code>~/.config/codeonthego/hooks</code>, and the cloned project. The lab check also set
+git's name and e-mail in <code>~/.gitconfig</code>. Revoke the project's trust in Preferences &gt;
+Shell Hooks.</p>
+<pre class="script" data-file="college-server/stand-in.sh"><code>#!/usr/bin/env bash
+# A stand-in for the college's server, so the whole demo runs on one phone. Not part of the
+# story: a real course server is a git host the phones reach over the network.
+#
+# Usage, in Code on the Go's Terminal:
+#
+#   bash college-server/stand-in.sh &lt;project folder&gt; &lt;student ID&gt;
+#
+# &lt;project folder&gt; is a new Code on the Go project that becomes the assignment's starter. It is
+# copied, never changed. The script makes, in ~/college-server:
+#
+#   lab-setup.git           IT's repository, from this demo's lab-setup/ folder
+#   students/&lt;id&gt;.git       the student's repository: the starter project, plus ASSIGNMENT.md,
+#                           the project hooks and a header in each source file, with this
+#                           folder's post-receive hook installed
+#   instructor-inbox/       where post-receive files the receipts
+#
+# and prints the commands the student runs next.
+
+set -eu
+
+if [ $# -ne 2 ]; then
+    echo "Usage: bash stand-in.sh &lt;project folder&gt; &lt;student ID&gt;" &gt;&amp;2
+    exit 2
+fi
+demo=$(cd "$(dirname "$0")/.." &amp;&amp; pwd)
+project=$(cd "$1" &amp;&amp; pwd)
+id=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
+server="$HOME/college-server"
+student_repo="$server/students/$id.git"
+
+if [ -e "$server" ]; then
+    echo "$server already exists. Move it away to start again." &gt;&amp;2
+    exit 1
+fi
+mkdir -p "$server/students" "$server/instructor-inbox"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+as_staff() {
+    git -c user.name="CS 140 staff" -c user.email="cs140@donyarmytechnicalcollege.edu" "$@"
+}
+
+# IT's repository.
+git init --quiet --bare --initial-branch=main "$server/lab-setup.git"
+cp -R "$demo/lab-setup" "$work/lab-setup"
+git -C "$work/lab-setup" init --quiet --initial-branch=main
+git -C "$work/lab-setup" add -A
+as_staff -C "$work/lab-setup" commit --quiet -m "CS 140 lab setup"
+git -C "$work/lab-setup" push --quiet "$server/lab-setup.git" main
+
+# The starter: a copy of the project, without what a build or the IDE made.
+cp -R "$project" "$work/starter"
+cd "$work/starter"
+rm -rf .git .gradle .cg .androidide build ./*/build
+# The template's example tests are not part of the assignment.
+rm -rf app/src/test app/src/androidTest
+cp "$demo/starter-project/ASSIGNMENT.md" .
+mkdir -p .codeonthego/hooks
+cp "$demo/starter-project/.codeonthego/hooks/"* .codeonthego/hooks/
+for ignored in .gradle/ build/ .cg/ local.properties; do
+    grep -qxF "$ignored" .gitignore 2&gt;/dev/null || echo "$ignored" &gt;&gt; .gitignore
+done
+find . -path ./.codeonthego -prune -o -type f \( -name '*.java' -o -name '*.kt' \) -print |
+    while IFS= read -r source; do
+        {
+            echo "/*"
+            echo " * CS 140, Assignment 3: Tip Calculator"
+            echo " * Student ID: (yours here, as in DY24-0173)"
+            echo " */"
+            echo "// TODO(submit): replace the sample screen with the tip calculator."
+            cat "$source"
+        } &gt; "$source.new"
+        mv "$source.new" "$source"
+    done
+git init --quiet --initial-branch=main
+git add -A
+as_staff commit --quiet -m "Assignment 3 starter"
+
+git init --quiet --bare --initial-branch=main "$student_repo"
+git push --quiet "$student_repo" main
+git -C "$student_repo" config cs140.inbox "$server/instructor-inbox"
+
+# On the phone, /bin/sh does not exist and git runs hooks without Shell Hooks' wrapper, so the
+# hook's first line names the Terminal's own sh.
+hook="$student_repo/hooks/post-receive"
+if [ -n "${PREFIX:-}" ]; then
+    sed "1s|^#!/bin/sh\$|#!$PREFIX/bin/sh|" "$demo/college-server/post-receive" &gt; "$hook"
+else
+    cp "$demo/college-server/post-receive" "$hook"
+fi
+chmod 755 "$hook"
+
+echo "Stand-in course server ready in $server. Next, in the Terminal:"
+echo "  git clone $server/lab-setup.git ~/lab-setup &amp;&amp; bash ~/lab-setup/install.sh"
+echo "  git clone $student_repo &lt;your projects folder&gt;/Assignment3"
+</code></pre>
+
+</body>
+</html>

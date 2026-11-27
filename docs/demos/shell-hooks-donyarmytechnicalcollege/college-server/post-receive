@@ -1,0 +1,49 @@
+#!/bin/sh
+# CS 140 course server: file a receipt for each submission.
+#
+# Hook:   git's post-receive, on the course server, not on the phone. Put it in each student
+#         repository's hooks/ folder and make it executable.
+# Input:  one line per updated ref on standard input: <old id> <new id> <ref name>.
+# Runs:   in the bare repository, after git has accepted the push.
+# Output: for each new tag submit-<n>, a receipt file in the instructor's inbox; for each push to
+#         a wip/ branch, a line in the inbox's backups.log. What it prints, the student's git
+#         shows as "remote: ...".
+#
+# This is where a course enforces rules, if it wants to: a pre-receive hook gets the same input
+# before the push is accepted, and can refuse a late submission. This one only records.
+# The inbox folder is the repository's git config value cs140.inbox.
+
+inbox=$(git config cs140.inbox) || inbox=/srv/cs140/instructor-inbox
+mkdir -p "$inbox" || exit 1
+student=$(basename "$PWD" .git)
+
+while read -r _old new ref; do
+    case $new in
+        *[!0]*) ;;
+        *) continue ;;   # all zeros: the ref was deleted
+    esac
+    case $ref in
+        refs/tags/submit-*)
+            tag=${ref#refs/tags/}
+            commit=$(git rev-parse "$new^{commit}") || continue
+            # Ref names may hold '/', so the file name keeps only safe characters.
+            receipt=$(printf 'CS140-%s-%s-%s' "$(date +%Y%m%d-%H%M%S)" "$student" "$tag" |
+                tr -c 'A-Za-z0-9._-' '_')
+            {
+                echo "Receipt:  $receipt"
+                echo "Received: $(date '+%F %T %Z')"
+                echo "Student:  $student"
+                echo "Tag:      $tag"
+                echo "Commit:   $commit"
+                echo
+                git for-each-ref --format='%(contents)' "$ref"
+                echo "Source files:"
+                git ls-tree -r --name-only "$commit" | grep -E '\.(java|kt)$' | sed 's/^/  /'
+            } > "$inbox/$receipt.txt"
+            echo "Receipt $receipt: $tag received."
+            ;;
+        refs/heads/wip/*)
+            echo "$(date '+%F %T') $student ${ref#refs/heads/} $new" >> "$inbox/backups.log"
+            ;;
+    esac
+done

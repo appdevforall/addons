@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# CS 140 build journal: one line per build, kept on the phone.
+#
+# Hooks:     build-started, build-succeeded and build-failed. install.sh copies this one script
+#            into all three .d folders, and COGO_HOOK tells it which event this is.
+# Arguments: none, except build-failed: $1 is the IDE's message, such as "BUILD FAILED in 12s".
+# Runs:      in the IDE's current project folder (COGO_PROJECT_DIR).
+# Output:    build-started prints nothing. The others add a line to ~/cs140/build-journal.tsv
+#            (date, project, result, seconds, APK size or the IDE's message) and print it,
+#            with today's count, in the Hooks tab.
+#
+# A project sync counts as a build, so syncs appear in the journal too. The submit action puts a
+# count of builds and failures in each submission, which shows the instructor how the work went.
+#
+# What an institution would change: where the journal is kept, and what each line records.
+
+dir="$HOME/cs140"
+journal="$dir/build-journal.tsv"
+started="$dir/.build-started"   # when the current build started, written by build-started
+mkdir -p "$dir"
+
+case $COGO_HOOK in
+    build-started)
+        date +%s > "$started"
+        exit 0
+        ;;
+    build-succeeded) result=ok ;;
+    build-failed) result=FAILED ;;
+    *)
+        echo "journal: installed on the wrong hook ($COGO_HOOK)" >&2
+        exit 1
+        ;;
+esac
+
+project=$(basename "${COGO_PROJECT_DIR:-unknown}")
+seconds=
+if [ -f "$started" ]; then
+    seconds=$(( $(date +%s) - $(cat "$started") ))
+fi
+
+if [ "$result" = ok ]; then
+    # An APK this build made; a sync makes none. Code on the Go builds a project that is on
+    # shared storage in a private folder of its own, no_backup/gradle-build/<project>-<key>
+    # beside the Terminal's files, so look there as well as in the project's build folders.
+    builds="$HOME/../../no_backup/gradle-build"
+    apk=$(find "$COGO_PROJECT_DIR" "$builds/$project"-* -path '*/outputs/apk/*' -name '*.apk' \
+        -newer "$started" 2>/dev/null | head -n 1)
+    if [ -n "$apk" ]; then
+        detail="$(basename "$apk") $(du -k "$apk" | cut -f1) KB"
+    else
+        detail="no APK (a sync)"
+    fi
+else
+    # One line in the journal, so tabs and newlines in the message become spaces.
+    detail=$(printf '%s' "${1:-cancelled}" | tr '\t\n' '  ')
+fi
+
+printf '%s\t%s\t%s\t%s\t%s\n' "$(date '+%F %T')" "$project" "$result" "$seconds" "$detail" \
+    >> "$journal"
+
+today=$(grep -c "^$(date +%F)" "$journal")
+failed=$(grep "^$(date +%F)" "$journal" | cut -f3 | grep -c FAILED)
+echo "$project: $result in ${seconds:-?} s, $detail"
+echo "Today: $today build(s), $failed failed. Journal: $journal"

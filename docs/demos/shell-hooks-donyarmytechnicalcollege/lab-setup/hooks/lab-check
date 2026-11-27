@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# CS 140 lab check: is this phone ready for the course?
+#
+# Hook:      ide-started (install.sh puts it at ide-started.d/lab-check)
+# Runs:      once each time Code on the Go starts with Shell Hooks on
+# Arguments: none. There is no project yet: COGO_PROJECT_DIR is empty and the script runs in HOME.
+# Output:    one line per check, then "Ready for CS 140" or what is missing, in the Hooks tab.
+#
+# It also sets git's name and e-mail from the lab's config file each time, so every commit the
+# student makes carries the identity the course server expects, and lets git work in the
+# projects folder (see below).
+#
+# What an institution would change: the tools it checks for.
+
+conf="$HOME/.config/donyarmy/lab.conf"
+# Where Code on the Go keeps projects. Android shows shared storage as owned by another user, so
+# git refuses to work there ("detected dubious ownership") until the folder is marked safe. Mark
+# only this folder: the check protects against repositories someone else put on the phone.
+projects=/storage/emulated/0/CodeOnTheGoProjects
+problems=0
+
+for tool in git java timeout; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        echo "ok       $tool"
+    else
+        echo "MISSING  $tool"
+        problems=$((problems + 1))
+    fi
+done
+
+if [ ! -f "$conf" ]; then
+    echo "MISSING  lab config: run ~/lab-setup/install.sh in the Terminal"
+    exit 1
+fi
+name=$(git config --file "$conf" student.name)
+id=$(git config --file "$conf" student.id)
+email=$(git config --file "$conf" student.email)
+course=$(git config --file "$conf" course.name)
+
+if [ -n "$name" ] && [ -n "$email" ]; then
+    git config --global user.name "$name"
+    git config --global user.email "$email"
+    echo "ok       git commits as $name <$email>"
+    if ! git config --global --get-all safe.directory | grep -qxF "$projects/*"; then
+        git config --global --add safe.directory "$projects/*"
+    fi
+    echo "ok       git works in $projects"
+else
+    echo "MISSING  name or e-mail in $conf: run ~/lab-setup/install.sh again"
+    problems=$((problems + 1))
+fi
+
+if [ "$problems" -gt 0 ]; then
+    echo "Not ready for $course: $problems problem(s) above. Ask the lab technician."
+    exit 1
+fi
+echo "Ready for $course ($name, $id)"

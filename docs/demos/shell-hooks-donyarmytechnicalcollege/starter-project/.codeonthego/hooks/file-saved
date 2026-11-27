@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# CS 140 course rules, checked each time a file is saved.
+#
+# Hook:      file-saved, stored in the starter project at .codeonthego/hooks/file-saved, so it
+#            travels with the assignment. Code on the Go runs it only after the student turns on
+#            "Run hooks stored in projects" and trusts it in the Hooks tab.
+# Arguments: $1 = the saved file. The script runs in the IDE's current project folder.
+# Output:    the rules the file breaks, or that it follows them, in the Hooks tab. Exit status 1
+#            when a rule is broken, so the run shows as failed.
+#
+# It cannot stop the save: hooks report, and the course server decides. It has to be quick,
+# because hooks run one at a time and a slow one holds up every hook after it.
+#
+# Project hooks must be plain: ASCII, no tabs, no line over 100 characters. Code on the Go shows
+# every line before the student trusts it, and refuses anything it cannot show exactly.
+
+file=$1
+case $file in
+    *.java | *.kt) ;;
+    *) exit 0 ;;   # the rules are for source files only
+esac
+[ -f "$file" ] || exit 0
+shown=$(printf '%s' "${file##*/}" | LC_ALL=C tr -c ' -~' '?')
+
+broken=0
+rule() {
+    echo "$shown: $1"
+    broken=$((broken + 1))
+}
+
+# 1. A header with the student ID in the first five lines.
+if ! head -n 5 -- "$file" | grep -Eq 'Student ID: DY[0-9]{2}-[0-9]{4}'; then
+    rule "no header with your student ID in the first 5 lines (Student ID: DY..-....)"
+fi
+
+# 2. No TODO(submit) left: the starter marks with it what must be done before handing in.
+lines=$(grep -n -F 'TODO(submit)' -- "$file" | cut -d: -f1 | paste -sd, -)
+if [ -n "$lines" ]; then
+    rule "TODO(submit) still there, line $lines"
+fi
+
+# 3. Nothing that looks like an API key or password written into the code.
+secret='((api|secret)[_-]?key|password)[^=]*=[[:space:]]*"[^"]{8,}"|AIza[0-9A-Za-z_-]{35}'
+lines=$(grep -n -i -E -- "$secret" "$file" | cut -d: -f1 | paste -sd, -)
+if [ -n "$lines" ]; then
+    rule "what looks like a key or password in the code, line $lines"
+fi
+
+if [ "$broken" -gt 0 ]; then
+    exit 1
+fi
+echo "$shown follows the CS 140 rules."

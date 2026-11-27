@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# CS 140: what to know when the assignment opens.
+#
+# Hook:      project-opened, stored in the starter project at .codeonthego/hooks/project-opened.
+#            It runs only after the student trusts it in the Hooks tab, so the first open shows
+#            it waiting for review instead.
+# Arguments: $1 = the project folder, which is also where the script runs.
+# Output:    the branch, whether the instructor has changed the starter since, the last
+#            submission, and the due date from ASSIGNMENT.md, in the Hooks tab.
+#
+# It calls git, which reads the clone's own .git/config. That file is the student's, made by
+# their own clone, but a project hook that runs tools from a project trusts what they read.
+
+cd "$1" || exit 1
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Not a git clone: clone your CS 140 repository from the course server."
+    exit 1
+fi
+echo "Branch: $(git symbolic-ref --short -q HEAD || echo '(none)')"
+
+# A time limit, so an unreachable server does not hold up the hooks after this one.
+if timeout 20 git fetch --quiet --tags origin 2>/dev/null; then
+    behind=$(git rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo 0)
+    if [ "$behind" -gt 0 ]; then
+        echo "The instructor changed the starter ($behind commit(s)). Get it with: git pull"
+    else
+        echo "Up to date with the course server."
+    fi
+else
+    echo "Course server not reachable: working offline."
+fi
+
+last=$(git tag --list 'submit-*' --sort=-version:refname | head -n 1)
+if [ -n "$last" ]; then
+    echo "Last submitted: $last, $(git log -1 --format=%cd --date=format:'%F %R' "$last")"
+fi
+
+due=$(sed -n 's/^Due: *//p' ASSIGNMENT.md 2>/dev/null | head -n 1)
+if [ -n "$due" ]; then
+    days=$(( ($(date -d "$due" +%s) - $(date +%s)) / 86400 ))
+    if [ "$days" -ge 0 ]; then
+        echo "Due: $due ($days day(s) left)"
+    else
+        echo "Due: $due (past due)"
+    fi
+fi
