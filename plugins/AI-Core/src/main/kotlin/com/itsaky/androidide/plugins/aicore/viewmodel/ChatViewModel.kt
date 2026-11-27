@@ -229,6 +229,7 @@ class ChatViewModel(
         terminalTool = RESPOND_TOOL,
         unfinishedTurn = toolResultsPrompt::unfinished,
         repeatedAfterSuccessTurn = toolResultsPrompt::repeatedAfterSuccess,
+        bareCallTurn = toolResultsPrompt::bareCall,
         requiredToolTurn = toolResultsPrompt::requiredTool,
         unappliedWriteTurn = toolResultsPrompt::unappliedWrite,
     )

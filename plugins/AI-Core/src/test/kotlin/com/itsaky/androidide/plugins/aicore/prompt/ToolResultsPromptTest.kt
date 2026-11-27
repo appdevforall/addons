@@ -228,4 +228,32 @@ class ToolResultsPromptTest {
 
         assertTrue(turn.contains("still pinging\n</tool_response>"))
     }
+
+    @Test
+    fun givenABareNativeReply_whenWorded_thenEachCallAndItsArgumentsArePlainWordsNotAnEnvelope() {
+        val text =
+            ToolResultsPrompt.renderBareCall(
+                shippedConfig,
+                listOf(
+                    ToolCall("db_p2check_read_sql_template", mapOf("template" to "sqlite/example.sql.peb")),
+                    ToolCall("list_files", emptyMap()),
+                ),
+            )
+
+        assertEquals("Calling db_p2check_read_sql_template with template=sqlite/example.sql.peb; list_files.", text)
+        assertFalse(text.contains("<tool_call>"))
+    }
+
+    @Test
+    fun givenABareCallWithALongArgument_whenWorded_thenTheValueIsCutToOneShortLine() {
+        val text =
+            ToolResultsPrompt.renderBareCall(
+                shippedConfig,
+                listOf(ToolCall("create_file", mapOf("path" to "A.kt", "content" to "line\n".repeat(100)))),
+            )
+
+        assertTrue(text, text.startsWith("Calling create_file with path=A.kt, content=line line "))
+        assertFalse(text.contains("\n"))
+        assertTrue(text, text.length < 140)
+    }
 }

@@ -77,6 +77,7 @@ object AgentPromptConfigParser : PromptConfigParser<AgentPromptConfig> {
                         unappliedWrite = text("unapplied_write"),
                         repeatedAfterSuccess = text("repeated_after_success"),
                         requiredTool = text("required_tool"),
+                        bareCall = text("bare_call"),
                     )
                 },
                 approval = obj("approval").read {

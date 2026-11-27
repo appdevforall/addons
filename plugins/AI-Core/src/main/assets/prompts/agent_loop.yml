@@ -46,6 +46,12 @@ agent_loop:
     Your previous tool call(s) already succeeded and were not run again; their results are above.
     If those results are enough, answer the user now: write the answer, or call the
     "{{TERMINAL_TOOL}}" tool with it. Otherwise make a different call, not the same one again.
+  # Stored as the model's own turn when a natively calling backend's model calls tools and writes
+  # nothing. The provider is sent no tool_use block, so without it the model never sees its call:
+  # the results reach it as user text after its own request, and it asks for the same call again
+  # (ADFA-7340). CALLS names each call and its arguments in plain words; never a <tool_call>
+  # envelope, which would invite the model to write its next call as text.
+  bare_call: "Calling {{CALLS}}."
   # Sent once when a run that had to check the web first answered without searching; TOOL is the
   # search tool. A backend that forces the call never sends it (see VerificationPolicy).
   required_tool: >-
