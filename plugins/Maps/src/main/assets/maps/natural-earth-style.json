@@ -1,0 +1,31 @@
+{
+  "version": 8,
+  "name": "Natural Earth (Z0-Z4)",
+  "metadata": {
+    "description": "Bundled Natural Earth raster basemap for the bbox-picker map background. Single raster source pointing at the asset-bundled PMTiles file. Used by Phase 1a of ADFA-2436."
+  },
+  "sources": {
+    "ne": {
+      "type": "raster",
+      "url": "pmtiles://asset:///maps/natural-earth-z0-z4.pmtiles",
+      "tileSize": 512,
+      "minzoom": 0,
+      "maxzoom": 4,
+      "attribution": "Natural Earth, public domain"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#a8c5d3" }
+    },
+    {
+      "id": "ne-raster",
+      "type": "raster",
+      "source": "ne",
+      "minzoom": 0,
+      "maxzoom": 6
+    }
+  ]
+}

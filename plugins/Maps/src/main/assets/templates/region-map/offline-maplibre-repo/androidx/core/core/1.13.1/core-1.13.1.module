@@ -1,0 +1,208 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.core",
+    "module": "core",
+    "version": "1.13.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.7-rc-1"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.6.0"
+          }
+        },
+        {
+          "group": "androidx.annotation",
+          "module": "annotation-experimental",
+          "version": {
+            "requires": "1.4.0"
+          }
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.6.2"
+          }
+        },
+        {
+          "group": "androidx.versionedparcelable",
+          "module": "versionedparcelable",
+          "version": {
+            "requires": "1.1.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.22"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-1.13.1.aar",
+          "url": "core-1.13.1.aar",
+          "size": 1270406,
+          "sha512": "8c58991e430c38ab83af902704af32f4e2ae3bd0b023595ad8488516c45ba4e3313ec9077dbc944da802a673566864cadeb2025b3240eae8adc7b8c8b405e890",
+          "sha256": "2c27de199535675005553066597a4b20fa1eea7c228ab4ef6b32b5fe39ca1f59",
+          "sha1": "4606d420282fe1e5c8d5c4e647ec188e1045b7be",
+          "md5": "d26a9b2b5889b0f8f85f01c103ad627f"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.6.0"
+          }
+        },
+        {
+          "group": "androidx.annotation",
+          "module": "annotation-experimental",
+          "version": {
+            "requires": "1.4.0"
+          }
+        },
+        {
+          "group": "androidx.collection",
+          "module": "collection",
+          "version": {
+            "requires": "1.0.0"
+          }
+        },
+        {
+          "group": "androidx.concurrent",
+          "module": "concurrent-futures",
+          "version": {
+            "requires": "1.0.0"
+          }
+        },
+        {
+          "group": "androidx.interpolator",
+          "module": "interpolator",
+          "version": {
+            "requires": "1.0.0"
+          }
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.6.2"
+          }
+        },
+        {
+          "group": "androidx.versionedparcelable",
+          "module": "versionedparcelable",
+          "version": {
+            "requires": "1.1.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.22"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.core",
+          "module": "core-ktx",
+          "version": {
+            "requires": "1.13.1"
+          }
+        },
+        {
+          "group": "androidx.core",
+          "module": "core-testing",
+          "version": {
+            "requires": "1.13.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-1.13.1.aar",
+          "url": "core-1.13.1.aar",
+          "size": 1270406,
+          "sha512": "8c58991e430c38ab83af902704af32f4e2ae3bd0b023595ad8488516c45ba4e3313ec9077dbc944da802a673566864cadeb2025b3240eae8adc7b8c8b405e890",
+          "sha256": "2c27de199535675005553066597a4b20fa1eea7c228ab4ef6b32b5fe39ca1f59",
+          "sha1": "4606d420282fe1e5c8d5c4e647ec188e1045b7be",
+          "md5": "d26a9b2b5889b0f8f85f01c103ad627f"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "core-1.13.1-sources.jar",
+          "url": "core-1.13.1-sources.jar",
+          "size": 932053,
+          "sha512": "09159f3cb588e43562ec977092e3b63e35517128101384ed67574655fc0413c7ba73a8a832252b8ddcf8e39f246685b0ad72e81ee523d430a19ea34dd38ea521",
+          "sha256": "947cc4b95df57d5d2ed16149458f4d3757da63a019d2d55a740db625bb3efcd6",
+          "sha1": "b0c9edc0bc9e5113630fbaca0967ef604097ba6f",
+          "md5": "817b8a2104b2fe85f9c8f3375b9491d8"
+        }
+      ]
+    },
+    {
+      "name": "libraryVersionMetadata",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.usage": "library-version-metadata"
+      },
+      "files": [
+        {
+          "name": "core-1.13.1-versionMetadata.json",
+          "url": "core-1.13.1-versionMetadata.json",
+          "size": 260636,
+          "sha512": "b4c11fcf1a3d5c5afdc099c0cb0d26c35ddd7e0cedcfee7fee3be53004cacc5ece0f96c40acabf17830395eb173fc9c5c650d29fb326cad38a1837151c994b27",
+          "sha256": "e52403aa2798f1aedb109468a097ab924bfebbc8347c9d10579c8d7d3278768a",
+          "sha1": "4824f3ca0660163d7edd5aaefa93633b4549d6a9",
+          "md5": "d591ab9c3e5a6cf1212d38ce9a360796"
+        }
+      ]
+    }
+  ]
+}
