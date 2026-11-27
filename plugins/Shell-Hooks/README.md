@@ -39,11 +39,14 @@ and a trusted project script runs from a private copy the plugin marks executabl
 
 - **Values travel as argv.** Headless hooks run as
   `ShellCommand("sh", [cogo-hook-run.sh, script, args...])`; no value is ever part of a shell
-  string. Only actions go through a command line (the Terminal takes one), built with
-  `ShellQuote`: every value single-quoted, with control characters written as bash `$'\xHH'`
-  bytes, because the Terminal prints the line before running it and a raw escape sequence in a
-  file name would reach the terminal (OSC 52 can set the clipboard). The sample action reads its
-  file from stdin, so `wc` does not print the name either.
+  string. Only actions go through a command line (the Terminal takes one, and prints it before
+  running it). `ActionLauncher` writes the action's variables and paths to a one-use launcher in
+  the plugin's data folder (`run/`), POSIX single-quoted, so the printed line is only `sh` and the
+  launcher's path, quoted by `ShellQuote` (ADFA-7334). The launcher deletes itself, prints "Run
+  <action> on <file>" with control characters as `?`, and execs the runner. A raw escape sequence
+  in a file name would otherwise reach the terminal (OSC 52 can set the clipboard). Leftover
+  launchers are deleted on activation. The sample action reads its file from stdin, so `wc` does
+  not print the name either.
 - **`cogo-hook-run.sh`** maps a shebang under `/bin`, `/usr/bin` or `/usr/local/bin` onto
   `$PREFIX/bin` the way termux-exec would, because the IDE's command service does not preload
   termux-exec and Android has no `/usr/bin/env` or `/bin/bash`. An `env` given options

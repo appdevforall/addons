@@ -45,3 +45,14 @@ val HOSTILE_NAMES =
         "glob*?[x].kt",
         "",
     )
+
+/** Names with terminal control codes: an OSC 52 clipboard write, a CR, a tab, DEL, C1 CSI. */
+val CONTROL_NAMES =
+    listOf(
+        "x\u001b]52;c;ZWNobyBwd25lZA==\u0007.txt",
+        "car\rriage.kt",
+        "tab\t.kt",
+        "del\u007f.kt",
+        "csi\u009b31m.kt",
+        "quote'\u001b'mixed.kt",
+    )
