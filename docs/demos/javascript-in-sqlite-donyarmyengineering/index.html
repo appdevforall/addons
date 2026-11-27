@@ -460,11 +460,18 @@ SELECT js_create_scalar('chain_length', '(function (args) {
   let a = span * span / (8 * sag);
   for (let i = 0; i &lt; 1000; i++) {
     const x = half / a;
-    const error = a * (Math.cosh(x) - 1) - sag;
-    const slope = Math.cosh(x) - 1 - x * Math.sinh(x);
+    // cosh(x) - 1, written so that it stays exact when x is small
+    const coshm1 = 2 * Math.sinh(x / 2) ** 2;
+    const error = a * coshm1 - sag;
+    const slope = coshm1 - x * Math.sinh(x);
     const next = a - error / slope;
     if (!Number.isFinite(next)) break;
-    if (Math.abs(next - a) &lt; 1e-12 * a) return 2 * next * Math.sinh(half / next);
+    if (Math.abs(next - a) &lt; 1e-12 * a) {
+      const length = 2 * next * Math.sinh(half / next);
+      // A chain is never longer than down to the sag and back up.
+      if (length &lt; span + 2 * sag) return length;
+      break;
+    }
     a = next;
   }
   throw new Error("no answer found for this span and sag");
@@ -1202,7 +1209,15 @@ class MainActivity : AppCompatActivity() {
         if (prefs.getString(KEY_RULE_FILE, null) == null) {
             binding.ruleStatus.setText(R.string.choose_first)
         }
-        lifecycleScope.launch { showFees() }
+        // The rule buttons are off until the first fees are shown, as during a reload.
+        setRuleButtonsEnabled(false)
+        lifecycleScope.launch {
+            try {
+                showFees()
+            } finally {
+                setRuleButtonsEnabled(true)
+            }
+        }
     }
 
     // Lists the orders with the fee from the rule stored in the database.

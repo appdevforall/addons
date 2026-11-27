@@ -56,7 +56,15 @@ class MainActivity : AppCompatActivity() {
         if (prefs.getString(KEY_RULE_FILE, null) == null) {
             binding.ruleStatus.setText(R.string.choose_first)
         }
-        lifecycleScope.launch { showFees() }
+        // The rule buttons are off until the first fees are shown, as during a reload.
+        setRuleButtonsEnabled(false)
+        lifecycleScope.launch {
+            try {
+                showFees()
+            } finally {
+                setRuleButtonsEnabled(true)
+            }
+        }
     }
 
     // Lists the orders with the fee from the rule stored in the database.
