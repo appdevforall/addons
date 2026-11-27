@@ -9,11 +9,11 @@
 // stores it in its database, without being rebuilt.
 (function (args) {
   const [subtotal, km, weekend] = args;
-  // Free delivery for orders of $50 or more.
+  // Orders of at least this much get free delivery.
   if (subtotal >= 50) return 0;
   // $3.99, plus 50 cents a km after the first 3 km.
   let fee = 3.99 + 0.5 * Math.max(0, km - 3);
-  // Weekend deliveries cost $2 more.
+  // Weekend deliveries cost extra.
   if (weekend) fee += 2;
   return Math.round(fee * 100) / 100;
 })
