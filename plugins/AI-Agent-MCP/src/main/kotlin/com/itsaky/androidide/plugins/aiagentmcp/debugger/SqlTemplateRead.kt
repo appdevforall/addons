@@ -54,7 +54,9 @@ class SqlTemplateRead(
                         "that version; and room_schema), db (the database named by database, or the only one), " +
                         "room_schemas, project and render_time, and can call row_count(db, table), " +
                         "distinct_values(db, table, column, limit), sample_rows(db, table, n), integrity(db), " +
-                        "suggest_indexes(db, sql) and lint_foreign_keys(db). Run the SQL with query or execute, " +
+                        "suggest_indexes(db, sql) and lint_foreign_keys(db). distinct_values and sample_rows fail " +
+                        "rather than return a value the server cuts (text over 4096 bytes, a BLOB over 1024), and " +
+                        "sample_rows reads every column. Run the SQL with query or execute, " +
                         "one statement at a time, binding the values the user gives as args.",
                 inputSchema =
                     mapOf(

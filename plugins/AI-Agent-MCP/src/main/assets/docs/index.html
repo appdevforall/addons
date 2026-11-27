@@ -129,7 +129,8 @@ SELECT * FROM ${{ "orders" | sql_ident }} WHERE customer_id = :id;</pre>
   <code>suggest_indexes(db, sql)</code> and <code>lint_foreign_keys(db)</code>.
   <code>distinct_values</code> and <code>sample_rows</code> return at most 1000
   rows, and stop the template rather than give it part of the rows or a cut
-  value.</p>
+  value. <code>sample_rows</code> reads every column, so one long value in any
+  of them stops it: text over 4,096 bytes, or a BLOB over 1,024 bytes.</p>
 
   <h2>Approval</h2>
   <p>Every remote tool asks for your approval before it runs, showing the
