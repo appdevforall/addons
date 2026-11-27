@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.appdevforall.shellhooks.engine.ActionLauncher
 import org.appdevforall.shellhooks.engine.Coalescer
 import org.appdevforall.shellhooks.engine.Hook
 import org.appdevforall.shellhooks.engine.HookDiscovery
@@ -40,7 +41,6 @@ import org.appdevforall.shellhooks.engine.LaunchGate
 import org.appdevforall.shellhooks.engine.Outcome
 import org.appdevforall.shellhooks.engine.SampleHooks
 import org.appdevforall.shellhooks.engine.ScriptSource
-import org.appdevforall.shellhooks.engine.ShellQuote
 import org.appdevforall.shellhooks.engine.TrustStore
 import org.appdevforall.shellhooks.engine.VerifiedCopies
 import org.appdevforall.shellhooks.ui.HooksPanelFragment
@@ -121,6 +121,8 @@ class ShellHooksPlugin :
         // Before the runner exists, so no copy is staged while this deletes.
         runCatching { VerifiedCopies.prune(verifiedDir, trust.trustedShas()) }
             .onFailure { context.logger.warn("Shell Hooks: cannot prune old trusted copies", it) }
+        runCatching { ActionLauncher.sweep(File(context.getPluginDataDir(), ActionLauncher.DIR)) }
+            .onFailure { context.logger.warn("Shell Hooks: cannot remove old action launchers", it) }
         runner =
             HookRunners.create(
                 scope = scope,
@@ -288,23 +290,31 @@ class ShellHooksPlugin :
                 // The class itself is missing: plugins got a Terminal service in Code on the Go 26.42.
                 return failed("This IDE has no Terminal service for plugins; Code on the Go 26.42 or later is needed")
             } ?: return failed("The IDE's Terminal is not available")
-        // The Terminal takes a command line, so every value is quoted as one word.
-        val command =
-            try {
-                ShellQuote.command(
-                    HookInvocation.actionEnvironment(action, paths.actions, currentProjectDir(), ideVersion()),
-                    listOf("sh", runnerScript.path, action.path, file.path),
-                )
-            } catch (e: IllegalArgumentException) {
-                return failed(e.message ?: "The command line could not be built")
-            }
+        val environment = HookInvocation.actionEnvironment(action, paths.actions, currentProjectDir(), ideVersion())
+        val launchers = File(context.getPluginDataDir(), ActionLauncher.DIR)
         scope.launch {
+            // The Terminal prints the command line it runs, so the variables and paths go in a
+            // one-use launcher and the line is only `sh '<launcher>'` (ADFA-7334).
+            val launcher =
+                try {
+                    ActionLauncher.write(launchers, runnerScript, action, file, environment)
+                } catch (e: IllegalArgumentException) {
+                    return@launch failed(e.message ?: "The action's launcher could not be built")
+                } catch (e: IOException) {
+                    return@launch failed("The action's launcher could not be written: ${e.message}")
+                }
+            // Once the Terminal runs it, the launcher deletes itself; otherwise it goes here.
             try {
-                val result = terminal.runInTerminal(command)
-                if (result is TerminalCommandResult.NotStarted) failed(result.reason)
+                val result = terminal.runInTerminal(ActionLauncher.command(launcher))
+                if (result is TerminalCommandResult.NotStarted) {
+                    launcher.delete()
+                    failed(result.reason)
+                }
             } catch (e: CancellationException) {
+                launcher.delete()
                 throw e
             } catch (e: Exception) {
+                launcher.delete()
                 failed(e.message ?: e.javaClass.simpleName)
             }
         }

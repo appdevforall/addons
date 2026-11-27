@@ -91,7 +91,7 @@
 <header>
   <h1>Shell Hooks</h1>
   <p class="subtitle">Run your own shell scripts when Code on the Go opens a project, saves a file, or finishes a build</p>
-  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.shellhooks</code> &middot; Needs Code on the Go 26.48 or later</div>
+  <div class="meta">Version 1.0.1 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.shellhooks</code> &middot; Needs Code on the Go 26.48 or later</div>
 </header>
 
 <nav>
@@ -183,7 +183,9 @@
     Executable scripts in <code>hooks/actions/</code> appear as <strong>Run &lt;name&gt;</strong>
     when you long-press a file (not a folder) in the file tree, or tap the tab of the file you're
     viewing. They run in the visible Terminal, with the file in <code>$1</code>, so you see what
-    they print. An action that cannot start is listed in the Hooks tab with the reason.
+    they print. Above the output, the Terminal shows the <code>sh</code> command that started the
+    action and a line naming the action and the file. An action that cannot start is listed in
+    the Hooks tab with the reason.
   </p>
 
   <h3>Hooks tab</h3>
@@ -263,11 +265,13 @@
         swapped between the check and the run.</li>
     <li>File names and other values reach hook scripts as separate arguments, never through a
         shell command line, so a file named <code>$(rm -rf ~)</code> is just a name. Actions are the
-        exception: the Terminal takes a command line, so an action's command is built with every
-        value in single quotes, which the shell never expands. Control characters in a value are
-        written as escapes, so a file name cannot send terminal control codes to the Terminal
-        when it prints the command. What your action prints is up to it: the sample reads its file
-        from stdin, so it never prints the name.</li>
+        exception: the Terminal takes a command line and prints it before running it. An action's
+        values go in a one-use launcher in the plugin's own folder, each in single quotes, which
+        the shell never expands, and the printed line holds only <code>sh</code> and the
+        launcher's path. The launcher deletes itself and names the action and the file with
+        control characters shown as <code>?</code>, so a file name cannot send terminal control
+        codes to the Terminal. What your action prints is up to it: the sample reads its file from
+        stdin, so it never prints the name.</li>
     <li><strong>What review does not cover.</strong> A plugin that can run commands, or one that
         writes files from inside the IDE, can already change your own hooks folder or the record of
         what you trusted. Install only plugins you trust. Trust also covers only the hook's own
@@ -306,7 +310,8 @@ HookLog -> Hooks tab</div>
     <tr><td><code>engine/HookResolver</code></td><td>Turns an event into scripts; enforces the switches and project trust.</td></tr>
     <tr><td><code>engine/HookDiscovery</code></td><td>The git-hooks layout: <code>&lt;hook&gt;</code>, then <code>&lt;hook&gt;.d/*</code>.</td></tr>
     <tr><td><code>engine/TrustStore</code></td><td>Approvals keyed on project, path and SHA-256.</td></tr>
-    <tr><td><code>engine/ShellQuote</code></td><td>Quoting for the Terminal, which takes a command line.</td></tr>
+    <tr><td><code>engine/ActionLauncher</code></td><td>The one-use launcher an action runs from, so the command line the Terminal prints holds no values.</td></tr>
+    <tr><td><code>engine/ShellQuote</code></td><td>Quoting for the Terminal's command line and for the launcher.</td></tr>
     <tr><td><code>assets/cogo-hook-run.sh</code></td><td>Maps a <code>/bin</code> or <code>/usr/bin</code> shebang onto <code>$PREFIX/bin</code>, changes to the event's project folder (to <code>HOME</code> with none, or when it is gone), and runs the script under <code>timeout</code> so a timeout stops the whole process group. Under <code>timeout</code> it keeps the script's output in deleted files and prints it when the script ends, so a job left running in the background does not hold the run open.</td></tr>
     <tr><td><code>WorkspaceHooks</code></td><td>The 26.48 project and save listeners, kept apart so an older IDE runs the other hooks.</td></tr>
   </table>
@@ -369,7 +374,7 @@ HookLog -> Hooks tab</div>
 </section>
 
 <footer>
-  Shell Hooks Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.shellhooks
+  Shell Hooks Plugin Documentation &middot; Version 1.0.1 &middot; org.appdevforall.shellhooks
 </footer>
 
 </body>
