@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Delivery Fees</string>
+    <string name="intro">The delivery fee for each order comes from a rule written in JavaScript, in rules/delivery-fee.js. Edit that file in Code on the Go, save it, and tap Reload rule: the app uses the new rule without being rebuilt.</string>
+    <!-- In quotes, so Android keeps the spaces that line the columns up -->
+    <string name="table_header">"Order   Amount    km Wkd    Fee"</string>
+    <string name="reload_rule">Reload rule</string>
+    <string name="choose_rule">Choose rule file</string>
+    <string name="choose_first">No rule file chosen yet. Tap Choose rule file and pick rules/delivery-fee.js in this project\'s folder.</string>
+    <string name="rule_loaded">Loaded %1$s in %2$d ms.</string>
+    <string name="rule_rejected">The rule was not changed. %1$s</string>
+    <string name="no_rule">There is no delivery-fee rule yet. Tap Choose rule file.</string>
+    <string name="working">Working…</string>
+    <string name="error">Error: %1$s</string>
+    <string name="notices">Open source notices</string>
+</resources>
