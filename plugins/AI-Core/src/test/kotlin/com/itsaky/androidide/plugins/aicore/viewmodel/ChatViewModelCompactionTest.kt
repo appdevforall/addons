@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -340,7 +341,7 @@ class ChatViewModelCompactionTest {
         val turns = sentHistories.size
         viewModel.retryLastRun()
         awaitCondition { sentHistories.size == turns + 1 && viewModel.agentState.value !is AgentState.Processing }
-        awaitCondition { viewModel.canChangePrompts.value || viewModel.agentState.value is AgentState.Error }
+        awaitRunUnwound(viewModel)
     }
 
     /** Sends [text] and waits for its run to finish. */
@@ -348,7 +349,18 @@ class ChatViewModelCompactionTest {
         val turns = sentHistories.size
         awaitCondition { viewModel.sendMessage(text) }
         awaitCondition { sentHistories.size == turns + 1 && viewModel.agentState.value !is AgentState.Processing }
-        awaitCondition { viewModel.canChangePrompts.value || viewModel.agentState.value is AgentState.Error }
+        awaitRunUnwound(viewModel)
+    }
+
+    /**
+     * Waits for the run to finish, `finally` included: [ChatViewModel.canChangePrompts] turns true
+     * before the run has closed its activity line and saved, so it cannot say the run is done. A
+     * failed run ends in [AgentState.Error], which is why this does not check for Idle. Stopping at
+     * the error state instead let the next step read before the message existed, or call
+     * [ChatViewModel.retryLastRun] while the run was still in flight, which ignores it.
+     */
+    private fun awaitRunUnwound(viewModel: ChatViewModel) {
+        runBlocking { withTimeout(WAIT_MS) { viewModel.awaitRun() } }
     }
 
     /**

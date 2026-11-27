@@ -255,7 +255,10 @@ class ChatViewModelTitleQueueTest {
         assertTrue(viewModel.requestTitleIfUntitled(llmService, "add a dark mode toggle"))
 
         assertTrue(SESSION_ID in viewModel.titlePending.value)
-        verify { llmService.generateCompletion(match { it.contains("add a dark mode toggle") }, any()) }
+        // The request runs on Dispatchers.IO, so the call can land after this line is reached.
+        verify(timeout = WAIT_MS) {
+            llmService.generateCompletion(match { it.contains("add a dark mode toggle") }, any())
+        }
     }
 
     @Test
@@ -264,7 +267,8 @@ class ChatViewModelTitleQueueTest {
 
         assertTrue(viewModel.requestTitleIfUntitled(llmService, "  add a dark mode toggle \n"))
 
-        verify {
+        // The request runs on Dispatchers.IO, so the call can land after this line is reached.
+        verify(timeout = WAIT_MS) {
             llmService.generateCompletion(
                 any(),
                 match { it.extraParams?.get(ChatTitle.EXTRA_PARAM_SOURCE) == "add a dark mode toggle" },
