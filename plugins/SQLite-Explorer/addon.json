@@ -1,0 +1,15 @@
+{
+  "summary": "Browse and query the databases of the app you are building.",
+  "description": "Reads the SQLite databases of the open project's app while its debug build runs, through the database debugger Code on the Go adds to debug builds. Lists the databases, tables and their schema, pages through rows, runs read-only queries, and shows query plans, sizes and integrity checks. It never changes the app's data.",
+  "tags": [
+    "sqlite",
+    "database",
+    "debugging"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

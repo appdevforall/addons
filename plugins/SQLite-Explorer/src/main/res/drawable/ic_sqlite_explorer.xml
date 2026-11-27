@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A database cylinder, after Material Icons (Apache-2.0). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:tint="?android:attr/colorControlNormal"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,3C7.58,3 4,4.79 4,7v10c0,2.21 3.59,4 8,4s8,-1.79 8,-4V7c0,-2.21 -3.58,-4 -8,-4zM18,17c0,0.5 -2.13,2 -6,2s-6,-1.5 -6,-2v-2.23c1.61,0.78 3.72,1.23 6,1.23s4.39,-0.45 6,-1.23V17zM18,12.45c-1.3,0.95 -3.58,1.55 -6,1.55s-4.7,-0.6 -6,-1.55V9.64c1.47,0.83 3.61,1.36 6,1.36s4.53,-0.53 6,-1.36v2.81zM12,9C8.13,9 6,7.5 6,7s2.13,-2 6,-2 6,1.5 6,2 -2.13,2 -6,2z" />
+</vector>

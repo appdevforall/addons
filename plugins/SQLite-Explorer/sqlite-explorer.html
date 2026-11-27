@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQLite Explorer</title>
+<style>
+  :root { --bg: #fdfdfd; --fg: #1a1a1a; --accent: #0f766e; --border: #d0d7de; --code-bg: #f4f6f8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121212; --fg: #e6e6e6; --accent: #5ed6c6; --border: #3a3f44; --code-bg: #1e2327; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: var(--fg); background: var(--bg); line-height: 1.55; max-width: 760px; }
+  h1 { color: var(--accent); font-size: 1.6em; margin: 0 0 8px; }
+  h2 { font-size: 1.2em; margin: 24px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; font-size: 0.95em; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>SQLite Explorer</h1>
+<p>Browse and query the SQLite databases of the app you are building, while its debug build runs on this phone.
+SQLite Explorer only reads: nothing it does changes the app's data.</p>
+
+<h2>What you need</h2>
+<ul>
+  <li>The app's project open in Code on the Go's editor.</li>
+  <li>The project's <code>gradle.properties</code> has <code>cogo.sqliteDebugger=true</code>. New projects from a template
+      that has a database include it. Code on the Go's build then adds its database debugger to the app's debug build.</li>
+  <li>The app's debug build running. When it starts, it tells Code on the Go the port and token of its debugger.</li>
+</ul>
+
+<h2>Using it</h2>
+<ul>
+  <li><b>Connect</b> finds the app. A project with several apps asks which one, and remembers the choice.</li>
+  <li><b>Databases</b> lists the databases the app has open. Tap one to open it.</li>
+  <li><b>Tables and views</b>: tap one to see its rows, 100 at a time, with <b>Previous</b> and <b>Next</b>.
+      <b>SQL</b> shows the statement that created it.</li>
+  <li><b>Query</b> runs one SQL statement you type, and <b>Query plan</b> shows how SQLite would run it.</li>
+  <li><b>Stats</b> shows the database's size and each table's row count. <b>Quick</b> and <b>Full integrity check</b>
+      look for corruption; the full check also compares indexes with their tables and takes longer.</li>
+  <li>Tap a value to see all of it. Under each column name is its declared type. NULL is in italics.</li>
+  <li>Long-press anything on the screen for help about it.</li>
+</ul>
+
+<h2>Limits</h2>
+<ul>
+  <li><b>Read-only.</b> The app's debugger refuses any statement that writes, and more than one statement at a time.</li>
+  <li><b>Open databases only.</b> A database the app has not opened, or opened through Android's own SQLite, is shown as
+      not available. Reading it from a second copy of SQLite could corrupt it.</li>
+  <li><b>Long values are cut.</b> The debugger sends at most 4 KiB of a text value and 1 KiB of a BLOB, and about 4 MiB per
+      page. A cut value ends in an ellipsis.</li>
+  <li><b>Pages can shift.</b> Each page runs the statement again, so a later page can differ if the data changed.</li>
+  <li><b>The app's own functions are missing.</b> Functions the app adds to its own connections, such as stored JavaScript
+      functions, do not exist in the debugger's connections.</li>
+  <li><b>A restarted app has a new port and token.</b> If the app was stopped or restarted, choose <b>Reconnect</b>.</li>
+  <li><b>Slow statements stop.</b> On a database that is not in WAL mode, a statement is stopped after about 1.5 s, so the
+      app's own writes are not held up.</li>
+</ul>
+
+<h2>Privacy</h2>
+<p>SQLite Explorer talks only to the app on this phone, at <code>127.0.0.1</code>. It sends nothing off the device and
+stores only which app you chose last.</p>
+
+</body>
+</html>

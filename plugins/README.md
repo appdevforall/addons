@@ -148,7 +148,8 @@ A plugin is an Android *application* module (despite installing as a library) wi
 
 Available permission strings (declared comma-separated in `plugin.permissions`):
 `filesystem.read`, `filesystem.write`, `network.access`, `system.commands`, `ide.settings`,
-`project.structure`.
+`project.structure`, `debugger.endpoints` (the open project's SQLite debugger ports and tokens,
+through `DebuggerEndpointService`).
 
 ---
 

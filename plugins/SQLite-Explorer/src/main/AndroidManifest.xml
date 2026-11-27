@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- HTTP to the app's database debugger, which listens on 127.0.0.1 only. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="SQLite Explorer">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.sqliteexplorer" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="SQLite Explorer" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <!-- Build provenance (ADFA-5256): the commit and commit-date this .cgp was built from. -->
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Browse and query the databases of the app you are building, while its debug build runs. Read-only." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <!-- To be raised to the first release that carries ADFA-7139 and ADFA-7297 when it is known. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.48" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="99" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="debugger.endpoints,network.access" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.sqliteexplorer.SqliteExplorerPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>
