@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JavaScript in SQLite at Don Yarmy Engineering</title>
+<!--
+  The scripts, outputs and app files on this page are copies of the files in this folder
+  (terminal/, terminal/output/, app/). Edit the files, then run sync-page.py to copy them in here
+  again; sync-page.py --check tells whether the page matches them.
+-->
+<style>
+  body { background: #ffffff; color: #000000; font-family: sans-serif; line-height: 1.55;
+         margin: 0 auto; max-width: 52rem; padding: 1rem 1rem 4rem; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.2rem; border-bottom: 1px solid #cccccc; }
+  h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+  code, pre { font-family: monospace; background: #f2f2f2; }
+  :not(pre) > code { overflow-wrap: anywhere; }
+  pre { padding: 0.6rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; }
+  th, td { border: 1px solid #cccccc; padding: 0.35rem 0.5rem; text-align: left;
+           vertical-align: top; overflow-wrap: anywhere; }
+  .note { border-left: 4px solid #000000; padding-left: 0.6rem; }
+  .subtitle { margin-top: 0; }
+  figure { margin: 1rem 0; }
+  figure img { max-width: 100%; width: 22rem; height: auto; border: 1px solid #cccccc; }
+  figcaption { font-size: 0.9rem; }
+  .script-head { margin-bottom: 0.2rem; }
+</style>
+</head>
+<body>
+
+<h1>JavaScript in SQLite at Don Yarmy Engineering</h1>
+<p class="subtitle">Six jobs that show what JavaScript functions in SQLite can do for an app
+developer, and how they get you to Done! faster.</p>
+
+<p class="note">Don Yarmy Engineering is made up for this demo. Its app team builds apps on
+phones, with Code on the Go, for the firm's clients. The clients have no names. The cities and
+airports in the flight-routes job are real places. The trial data is made up.</p>
+
+<p>With sqlite-js, you write a small function in JavaScript, give it a name, and call it from
+SQL like any built-in function. It works in the <code>sqlite3</code> command in Code on the Go's
+Terminal, and in the SQLite database of an app you build with Code on the Go. A narrated video of
+the same demo goes with this page.</p>
+
+<h2 id="contents">Contents</h2>
+<ol>
+  <li><a href="#why">Why use JavaScript in SQLite</a></li>
+  <li><a href="#how">How it works</a></li>
+  <li><a href="#when">When: the six jobs</a></li>
+  <li><a href="#terminal">Jobs 1 to 5, in Terminal</a></li>
+  <li><a href="#app">Job 6: a delivery fee that changes without a rebuild</a></li>
+  <li><a href="#rules">Before you write your own</a></li>
+  <li><a href="#not">When not to use it</a></li>
+  <li><a href="#measured">What was measured, and on what</a></li>
+</ol>
+
+<h2 id="why">1. Why use JavaScript in SQLite</h2>
+<p>To get to Done! faster, in three ways:</p>
+<ul>
+  <li><strong>Logic that changes often changes without a rebuild.</strong> In job 6, an app
+    reloads its delivery-fee rule, written in JavaScript, in about a fifth of a second. Rebuilding
+    the same app after a one-line Kotlin change took from 82 seconds to 4 minutes 21 seconds on
+    the same phone, before it could even be installed.</li>
+  <li><strong>A rule lives next to the data it protects.</strong> In job 2, a trigger checks every
+    packing list that any program writes, and a program without the check can't write at
+    all.</li>
+  <li><strong>More than SQL's built-in functions, in a few lines.</strong> SQLite has
+    <code>lower()</code>, <code>sinh()</code>, <code>avg()</code> and <code>median()</code>.
+    JavaScript adds Unicode, regular expressions, JSON, loops that run until an answer is good
+    enough, and anything else you can write.</li>
+</ul>
+<p>Everything runs on the phone. It needs no server, and after installing, no Internet.</p>
+
+<h2 id="how">2. How it works</h2>
+<h3>In Terminal</h3>
+<p>Install the <code>sqlite</code> package, which is the <code>sqlite3</code> command, and
+<code>sqlite-js</code>. This needs an Internet connection.</p>
+<pre><code>apt update
+apt install sqlite sqlite-js</code></pre>
+<p>Then open a database, load sqlite-js, and make a function. A scalar function returns one
+value for each row. It gets its SQL arguments in an array.</p>
+<pre><code>sqlite3 demo.db
+.load sqlite-js
+SELECT js_create_scalar('slugify', '(function (args) {
+  return args[0].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+})');
+SELECT slugify('Hello, World!');</code></pre>
+<figure>
+  <img src="screenshots/1-install-and-load.png" alt="Terminal after apt install sqlite sqlite-js, then sqlite3, .load sqlite-js and SELECT js_version(), which prints 1.4.4">
+  <figcaption>Installing and loading sqlite-js on the phone.</figcaption>
+</figure>
+<p>There are four kinds of function: a <strong>scalar</strong> (<code>js_create_scalar</code>),
+an <strong>aggregate</strong> that turns many rows into one value
+(<code>js_create_aggregate</code>), a <strong>window</strong> function, and a
+<strong>collation</strong> that decides how text sorts. A function lasts for the session. To keep
+functions in the database, call <code>SELECT js_init_table();</code> before creating them: they
+are stored in a table named <code>js_functions</code>, and a later session gets them back with
+<code>SELECT js_init_table(1);</code>.</p>
+
+<h3>In an app</h3>
+<p>Create a project from the <strong>JavaScript in SQLite</strong> template. It has sqlite-js,
+an SQLite that can load it (requery's <code>sqlite-android</code>), Room, and a sample app that
+already works. Job 6 is built from it.</p>
+
+<p>Code on the Go's Help has the details: <em>JavaScript in SQLite (sqlite-js)</em> for Terminal,
+with the reference of every function, and <em>JavaScript in SQLite for apps</em>.</p>
+
+<h2 id="when">3. When: the six jobs</h2>
+<table>
+  <tr><th>Job</th><th>The client's problem</th><th>Where</th><th>What JavaScript adds</th></tr>
+  <tr><td>1. Duplicate customers</td><td>The same person, typed in by hand three ways.</td>
+    <td>Terminal</td><td>Removes accents, turns "Last, First" around, and scores how alike two
+    names are (edit distance). Two scalar functions.</td></tr>
+  <tr><td>2. Packing lists</td><td>Each van's packing list is JSON, and has rules.</td>
+    <td>Terminal</td><td>A trigger calls a function that reads the list and refuses a bad one,
+    with a message that says what's wrong.</td></tr>
+  <tr><td>3. Chain for a footbridge</td><td>How much chain to buy.</td><td>Terminal</td>
+    <td>Solves the hanging chain's curve with Newton's method: a loop until the answer stops
+    changing.</td></tr>
+  <tr><td>4. A drug trial</td><td>Does the drug work, or was it chance?</td><td>Terminal</td>
+    <td>Welch's t-test as an aggregate, and a permutation test that shuffles the groups
+    10,000 times.</td></tr>
+  <tr><td>5. Flight routes</td><td>Fuel estimates for an airline's routes.</td><td>Terminal</td>
+    <td>Great-circle and constant-heading distances, and points along the route for a
+    map.</td></tr>
+  <tr><td>6. Delivery fees</td><td>A grocery client changes its fee every few weeks.</td>
+    <td>App</td><td>The fee rule is JavaScript stored in the app's database, changed without
+    rebuilding the app.</td></tr>
+</table>
+
+<h2 id="terminal">4. Jobs 1 to 5, in Terminal</h2>
+<p>Each job is one script. Copy it to the phone and run it in Terminal with
+<code>sqlite3 demo.db &lt; <em>script</em>.sql</code>. Each script starts with
+<code>.load sqlite-js</code>, creates its functions and table, and prints its results. The output
+shown under each script is from a real run on the phone.</p>
+
+<h3 id="duplicates">Job 1: duplicate customers</h3>
+<p>A client's customer list was typed in by hand, so one person appears as "José Núñez", as
+"Nunez, Jose", and in capitals. SQLite's <code>lower()</code> changes only A to Z, and SQLite has
+no way to remove accents or to say how alike two names are.</p>
+<pre class="script" data-file="terminal/duplicates.sql"><code>-- Don Yarmy Engineering: find customers who were typed in twice.
+--
+-- A client's customer list was typed in by hand, so one person can appear
+-- as "José Núñez", "Nunez, Jose" and "JOSE  NUNEZ". SQLite's lower() changes
+-- only A to Z, and SQLite has no way to remove accents or to say how alike
+-- two names are. Two JavaScript functions do both.
+--
+-- Run it in Terminal:  sqlite3 demo.db &lt; duplicates.sql
+-- To use your own list, replace the INSERT with your names.
+
+.load sqlite-js
+.headers on
+
+-- Creating a function prints 0. Hide that.
+.output /dev/null
+
+-- name_key('Núñez, José ') returns 'jose nunez': no accents, no
+-- apostrophes, lower case, "Last, First" turned around, and the words
+-- sorted, so their order doesn't matter.
+SELECT js_create_scalar('name_key', '(function (args) {
+  let s = String(args[0]).normalize("NFD").replace(/[̀-ͯ]/g, "");
+  s = s.replace(/[''’]/g, "").toLowerCase();
+  const comma = s.indexOf(",");
+  if (comma &gt;= 0) s = s.slice(comma + 1) + " " + s.slice(0, comma);
+  return s.replace(/[^a-z]+/g, " ").trim().split(" ").sort().join(" ");
+})');
+
+-- similarity(a, b) is 1 for the same text and less for each letter that
+-- must be added, removed or changed to turn one into the other (the edit
+-- distance), down to 0.
+SELECT js_create_scalar('similarity', '(function (args) {
+  const [a, b] = args;
+  const row = Array.from({ length: b.length + 1 }, (_, j) =&gt; j);
+  for (let i = 1; i &lt;= a.length; i++) {
+    let diagonal = row[0];
+    row[0] = i;
+    for (let j = 1; j &lt;= b.length; j++) {
+      const above = row[j];
+      const change = a[i - 1] === b[j - 1] ? 0 : 1;
+      row[j] = Math.min(above + 1, row[j - 1] + 1, diagonal + change);
+      diagonal = above;
+    }
+  }
+  return 1 - row[b.length] / Math.max(a.length, b.length, 1);
+})');
+
+.output stdout
+
+DROP TABLE IF EXISTS customers;
+CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO customers (name) VALUES
+  ('José Núñez'), ('Nunez, Jose'), ('JOSE  NUNEZ '),
+  ('Ann Lee'), ('Anne Lee'), ('Lee, Ann'),
+  ('Grace O''Brien'), ('Grace OBrien'),
+  ('Bob Stone'), ('Robert Stone');
+
+-- Each name and its key.
+SELECT id, name, name_key(name) AS key FROM customers;
+
+-- Pairs whose keys are at least 85% alike: probably the same person.
+WITH k AS (SELECT id, name_key(name) AS key FROM customers)
+SELECT a.id AS id, b.id AS same_as,
+       round(similarity(a.key, b.key), 2) AS score
+FROM k AS a JOIN k AS b ON a.id &lt; b.id
+WHERE similarity(a.key, b.key) &gt;= 0.85
+ORDER BY a.id, b.id;
+</code></pre>
+<p class="script-head">Output:</p>
+<pre class="script" data-file="terminal/output/duplicates.txt"><code>id|name|key
+1|José Núñez|jose nunez
+2|Nunez, Jose|jose nunez
+3|JOSE  NUNEZ |jose nunez
+4|Ann Lee|ann lee
+5|Anne Lee|anne lee
+6|Lee, Ann|ann lee
+7|Grace O'Brien|grace obrien
+8|Grace OBrien|grace obrien
+9|Bob Stone|bob stone
+10|Robert Stone|robert stone
+id|same_as|score
+1|2|1.0
+1|3|1.0
+2|3|1.0
+4|5|0.88
+4|6|1.0
+5|6|0.88
+7|8|1.0
+</code></pre>
+<p>Seven pairs come out as likely duplicates. Bob Stone and Robert Stone don't: a nickname needs a
+list of nicknames, not a formula.</p>
+<figure>
+  <img src="screenshots/2-duplicates.png" alt="Terminal showing each name's key and the seven pairs">
+  <figcaption>Job 1 on the phone.</figcaption>
+</figure>
+
+<h3 id="packing">Job 2: packing lists</h3>
+<p>A warehouse client stores each van's packing list as JSON. Every item needs a code like
+BOLT-M12-050, a whole number of 1 or more, and a weight, and the load must stay under the van's
+limit. A CHECK constraint can't read a list like that. A trigger that calls a JavaScript function
+can.</p>
+<pre class="script" data-file="terminal/packing-lists.sql"><code>-- Don Yarmy Engineering: refuse a packing list that breaks the rules.
+--
+-- A warehouse client stores each van's packing list as JSON. Every item
+-- needs a code like BOLT-M12-050, a whole number of 1 or more, and a weight,
+-- and the load must stay under the van's limit. A CHECK constraint can't
+-- read a JSON list like that. A trigger that calls a JavaScript function
+-- can, and its error message says exactly what is wrong.
+--
+-- Run it in Terminal:  sqlite3 demo.db &lt; packing-lists.sql
+
+.load sqlite-js
+
+-- The sqlite3 command doesn't let a trigger stored in a database call an
+-- extension's functions, because opening a database you got from someone
+-- else would run its triggers. This database is your own, so allow it.
+-- Every later session that writes to the shipments table needs this line,
+-- .load sqlite-js and SELECT js_init_table(1); see the end of this file.
+PRAGMA trusted_schema = ON;
+
+.output /dev/null
+
+-- Keep the functions in the database's js_functions table, so a later
+-- session gets them back with SELECT js_init_table(1).
+SELECT js_init_table();
+
+-- check_packing_list(items, limit_kg) returns 1 for a good list. For a bad
+-- one it throws an error, which stops the INSERT or UPDATE.
+SELECT js_create_scalar('check_packing_list', '(function (args) {
+  const [json, limitKg] = args;
+  let items;
+  try {
+    items = JSON.parse(json);
+  } catch (e) {
+    throw new Error("The packing list is not valid JSON.");
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("The packing list has no items.");
+  }
+  let total = 0;
+  items.forEach((item, n) =&gt; {
+    const where = `Item ${n + 1}`;
+    if (!/^[A-Z]{3,5}-[A-Z0-9]{2,4}-[0-9]{3}$/.test(item.code)) {
+      throw new Error(`${where}: "${item.code}" is not a code like BOLT-M12-050.`);
+    }
+    if (!Number.isInteger(item.qty) || item.qty &lt; 1) {
+      throw new Error(`${where}: ${item.qty} is not a whole number of 1 or more.`);
+    }
+    if (!(item.kg &gt; 0)) {
+      throw new Error(`${where}: the weight must be more than 0 kg.`);
+    }
+    total += item.qty * item.kg;
+  });
+  if (total &gt; limitKg) {
+    throw new Error(`The load is ${total.toFixed(1)} kg, over the limit of ${limitKg} kg.`);
+  }
+  return 1;
+})');
+
+.output stdout
+
+DROP TABLE IF EXISTS shipments;
+CREATE TABLE shipments (
+  id INTEGER PRIMARY KEY,
+  van TEXT NOT NULL,
+  limit_kg REAL NOT NULL,
+  items TEXT NOT NULL
+);
+
+CREATE TRIGGER shipments_check_insert BEFORE INSERT ON shipments
+BEGIN
+  SELECT check_packing_list(NEW.items, NEW.limit_kg);
+END;
+
+CREATE TRIGGER shipments_check_update
+BEFORE UPDATE OF items, limit_kg ON shipments
+BEGIN
+  SELECT check_packing_list(NEW.items, NEW.limit_kg);
+END;
+
+-- A good list: 200 bolts and 4 brackets, 13.0 kg.
+INSERT INTO shipments (van, limit_kg, items) VALUES ('Van 1', 900,
+  '[{"code": "BOLT-M12-050", "qty": 200, "kg": 0.045},
+    {"code": "BRKT-L90-200", "qty": 4, "kg": 1.0}]');
+
+-- A code in the wrong form.
+INSERT INTO shipments (van, limit_kg, items) VALUES ('Van 2', 900,
+  '[{"code": "bolt m12", "qty": 10, "kg": 0.045}]');
+
+-- Half a bracket.
+INSERT INTO shipments (van, limit_kg, items) VALUES ('Van 2', 900,
+  '[{"code": "BOLT-M12-050", "qty": 10, "kg": 0.045},
+    {"code": "BRKT-L90-200", "qty": 1.5, "kg": 1.0}]');
+
+-- 40 steel beams for a small van.
+INSERT INTO shipments (van, limit_kg, items) VALUES ('Van 3', 900,
+  '[{"code": "BEAM-I20-600", "qty": 40, "kg": 26.5}]');
+
+-- Changing a stored list is checked too.
+UPDATE shipments SET items = '[]' WHERE van = 'Van 1';
+
+-- Only the good list was stored.
+SELECT id, van, json_array_length(items) AS items FROM shipments;
+
+-- In a later session, load the stored function before writing:
+--   .load sqlite-js
+--   PRAGMA trusted_schema = ON;
+--   SELECT js_init_table(1);
+-- Without them, every INSERT into shipments fails with
+-- "no such function: check_packing_list", so a program without sqlite-js
+-- can't slip in a bad list.
+</code></pre>
+<p class="script-head">Output: four lists refused, one stored.</p>
+<pre class="script" data-file="terminal/output/packing-lists.txt"><code>Runtime error near line 86: Item 1: "bolt m12" is not a code like BOLT-M12-050.
+Runtime error near line 90: Item 2: 1.5 is not a whole number of 1 or more.
+Runtime error near line 95: The load is 1060.0 kg, over the limit of 900 kg.
+Runtime error near line 99: The packing list has no items.
+1|Van 1|2
+</code></pre>
+<figure>
+  <img src="screenshots/3-packing-lists.png" alt="Terminal showing the function, four refusals with their messages, and one stored list">
+  <figcaption>Job 2 on the phone.</figcaption>
+</figure>
+<p>The trigger is stored in the database, so it runs for every program that writes to
+<code>shipments</code>. These are three later sessions on the same database, run on the
+phone:</p>
+<table>
+  <tr><th>Session</th><th>Result</th></tr>
+  <tr><td>Plain <code>sqlite3</code>, no sqlite-js</td>
+    <td><code>Error: in prepare, no such function: check_packing_list</code>: nothing can be
+    written.</td></tr>
+  <tr><td><code>.load sqlite-js</code> and <code>SELECT js_init_table(1);</code>, without
+    <code>PRAGMA trusted_schema = ON</code></td>
+    <td><code>unsafe use of check_packing_list()</code>: still nothing can be written.</td></tr>
+  <tr><td>All three lines</td><td>The function is back and checks the list:
+    <code>The packing list has no items.</code></td></tr>
+</table>
+<p class="note">The <code>sqlite3</code> command turns <code>trusted_schema</code> off when it
+opens a database, so that a database you got from someone else can't run code in its triggers or
+views. Turn it on only for databases you made yourself. In an app, the database is the app's own,
+and it opens it with <code>SqliteJs.ENTRY_POINT_FOR_TRUSTED_DATABASE</code>; see
+<a href="#rules">Before you write your own</a>.</p>
+
+<h3 id="chain">Job 3: chain for a footbridge</h3>
+<p>A client is building a footbridge whose deck hangs from two chains. A hanging chain forms a
+curve called a catenary, and the length of chain depends on a number that no formula gives
+directly. The function finds it the way an engineer would: guess, correct the guess, and repeat
+until it stops changing. SQLite has <code>cosh()</code> and <code>sinh()</code>, but in SQL that
+loop takes a recursive query that is hard to read.</p>
+<pre class="script" data-file="terminal/chain.sql"><code>-- Don Yarmy Engineering: how much chain to buy for a footbridge.
+--
+-- A client is building a footbridge whose deck hangs from two chains. A
+-- chain hangs in a curve called a catenary, y = a * cosh(x / a). The chain's
+-- length is 2 * a * sinh(span / (2 * a)), but first a has to be found from
+-- the span and the sag, the drop at the middle:
+--   sag = a * (cosh(span / (2 * a)) - 1)
+-- That equation has no formula for a, so the function below solves it with
+-- Newton's method: guess, correct the guess, and repeat until it stops
+-- changing. SQLite has cosh() and sinh(), but in SQL that loop takes a
+-- recursive query that is hard to read. In JavaScript it's a plain loop.
+--
+-- Run it in Terminal:  sqlite3 demo.db &lt; chain.sql
+-- To price your own bridge, change the rows in the INSERT and the price.
+
+.load sqlite-js
+.headers on
+.mode column
+
+.output /dev/null
+
+-- chain_length(span, sag): the length of chain, in the units of its
+-- arguments, that hangs across span and drops sag at the middle.
+SELECT js_create_scalar('chain_length', '(function (args) {
+  const [span, sag] = args;
+  if (!(span &gt; 0 &amp;&amp; sag &gt; 0)) throw new Error("span and sag must be more than 0");
+  const half = span / 2;
+  // A parabola is close to a catenary, so its a is a good first guess.
+  let a = span * span / (8 * sag);
+  for (let i = 0; i &lt; 100; i++) {
+    const x = half / a;
+    const error = a * (Math.cosh(x) - 1) - sag;
+    const slope = Math.cosh(x) - 1 - x * Math.sinh(x);
+    const next = a - error / slope;
+    const done = Math.abs(next - a) &lt; 1e-12 * a;
+    a = next;
+    if (done) break;
+  }
+  return 2 * a * Math.sinh(half / a);
+})');
+
+.output stdout
+
+DROP TABLE IF EXISTS bridge_options;
+CREATE TABLE bridge_options (span_m REAL, sag_m REAL);
+-- One 40 m span, three possible sags. More sag needs more chain but pulls
+-- less on the anchors.
+INSERT INTO bridge_options VALUES (40, 2), (40, 3), (40, 4);
+
+-- Two chains, 5% spare for the fittings, sold in whole metres at 38.50 a
+-- metre.
+SELECT sag_m,
+       round(chain_length(span_m, sag_m), 3) AS one_chain_m,
+       CAST(ceil(2 * chain_length(span_m, sag_m) * 1.05) AS INTEGER) AS buy_m,
+       printf('%.2f', ceil(2 * chain_length(span_m, sag_m) * 1.05) * 38.50)
+         AS cost
+FROM bridge_options;
+</code></pre>
+<p class="script-head">Output:</p>
+<pre class="script" data-file="terminal/output/chain.txt"><code>sag_m  one_chain_m  buy_m  cost   
+-----  -----------  -----  -------
+2.0    40.265       85     3272.50
+3.0    40.594       86     3311.00
+4.0    41.047       87     3349.50
+</code></pre>
+<p>For a 40 metre span with 3 metres of sag, each chain is 40.59 metres long. With two chains and
+5% spare, buy 86 metres. A separate calculation, by bisection instead of Newton's method, gives
+the same lengths.</p>
+<figure>
+  <img src="screenshots/4-chain.png" alt="Terminal showing chain_length and the table for sags of 2, 3 and 4 metres">
+  <figcaption>Job 3 on the phone.</figcaption>
+</figure>
+
+<h3 id="trial">Job 4: a drug trial</h3>
+<p>A clinical-research client gave 20 patients a new blood-pressure drug and 20 a placebo, and
+measured how far each patient's pressure fell. The numbers are made up. The drug group's fell
+5.85 mmHg more on average. Could chance alone do that? SQLite can average each group, and has no
+test for that question.</p>
+<pre class="script" data-file="terminal/drug-trial.sql"><code>-- Don Yarmy Engineering: does the drug work, or was it chance?
+--
+-- A clinical-research client gave 20 patients a new blood-pressure drug and
+-- 20 a placebo, and measured how far each patient's systolic pressure fell
+-- after 8 weeks, in mmHg. (The numbers are made up.) The drug group fell
+-- further on average, but small groups vary a lot, so the question is
+-- whether a difference this large could easily happen by chance.
+--
+-- SQLite can average each group, and has no test for that question. Three
+-- JavaScript functions answer it two ways:
+-- - welch_test, an aggregate, computes Welch's t-test: how many standard
+--   errors apart the two averages are (t), and the test's degrees of
+--   freedom (df).
+-- - t_p_value turns t and df into a p-value: the chance of a difference at
+--   least this large if the drug did nothing.
+-- - permutation_p checks the same thing by brute force. It shuffles the
+--   drug and placebo labels 10,000 times and counts how often the shuffled
+--   groups differ as much as the real ones. A fixed seed makes the shuffles
+--   the same on every run.
+--
+-- Run it in Terminal:  sqlite3 demo.db &lt; drug-trial.sql
+-- To test your own groups, replace the INSERT. The group names must be
+-- 'drug' and 'placebo'.
+
+.load sqlite-js
+.headers on
+.mode column
+
+.output /dev/null
+
+-- welch_test(group, value) returns JSON: {"difference", "t", "df"}.
+SELECT js_create_aggregate('welch_test',
+  'const groups = { drug: [], placebo: [] };',
+  '(function (args) {
+    const [group, value] = args;
+    if (!(group in groups)) throw new Error(`unknown group ${group}`);
+    groups[group].push(value);
+  })',
+  '(function () {
+    const describe = (xs) =&gt; {
+      const n = xs.length;
+      const mean = xs.reduce((sum, x) =&gt; sum + x, 0) / n;
+      const variance = xs.reduce((sum, x) =&gt; sum + (x - mean) ** 2, 0) / (n - 1);
+      return { n, mean, se2: variance / n };
+    };
+    const d = describe(groups.drug);
+    const p = describe(groups.placebo);
+    const se2 = d.se2 + p.se2;
+    return JSON.stringify({
+      difference: d.mean - p.mean,
+      t: (d.mean - p.mean) / Math.sqrt(se2),
+      df: se2 ** 2 / (d.se2 ** 2 / (d.n - 1) + p.se2 ** 2 / (p.n - 1)),
+    });
+  })');
+
+-- t_p_value(t, df): the two-sided p-value of Student's t distribution,
+-- from the regularized incomplete beta function, as in Numerical Recipes.
+SELECT js_create_scalar('t_p_value', '(function (args) {
+  const [t, df] = args;
+  const logGamma = (z) =&gt; {
+    const c = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+      -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+    let y = z;
+    let series = 1.000000000190015;
+    for (const k of c) series += k / ++y;
+    const tmp = z + 5.5 - (z + 0.5) * Math.log(z + 5.5);
+    return -tmp + Math.log(2.5066282746310005 * series / z);
+  };
+  const fraction = (a, b, x) =&gt; {
+    const tiny = 1e-300;
+    const fix = (v) =&gt; (Math.abs(v) &lt; tiny ? tiny : v);
+    let c = 1;
+    let d = 1 / fix(1 - (a + b) * x / (a + 1));
+    let h = d;
+    for (let m = 1; m &lt;= 300; m++) {
+      const m2 = 2 * m;
+      let aa = m * (b - m) * x / ((a + m2 - 1) * (a + m2));
+      d = 1 / fix(1 + aa * d);
+      c = fix(1 + aa / c);
+      h *= d * c;
+      aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1));
+      d = 1 / fix(1 + aa * d);
+      c = fix(1 + aa / c);
+      h *= d * c;
+      if (Math.abs(d * c - 1) &lt; 1e-15) break;
+    }
+    return h;
+  };
+  const a = df / 2;
+  const b = 0.5;
+  const x = df / (df + t * t);
+  if (x &gt;= 1) return 1;
+  const front = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b)
+    + a * Math.log(x) + b * Math.log(1 - x));
+  return x &lt; (a + 1) / (a + b + 2)
+    ? front * fraction(a, b, x) / a
+    : 1 - front * fraction(b, a, 1 - x) / b;
+})');
+
+-- permutation_p(group, value, shuffles, seed): the share of shuffles whose
+-- difference is at least as large as the real one.
+SELECT js_create_aggregate('permutation_p',
+  'const values = []; const isDrug = []; let shuffles = 0; let seed = 0;',
+  '(function (args) {
+    isDrug.push(args[0] === "drug");
+    values.push(args[1]);
+    shuffles = args[2];
+    seed = args[3];
+  })',
+  '(function () {
+    // mulberry32: a small random number generator that repeats its
+    // numbers for the same seed, which Math.random() does not.
+    let s = seed &gt;&gt;&gt; 0;
+    const random = () =&gt; {
+      s = (s + 0x6d2b79f5) &gt;&gt;&gt; 0;
+      let r = Math.imul(s ^ (s &gt;&gt;&gt; 15), 1 | s);
+      r = (r + Math.imul(r ^ (r &gt;&gt;&gt; 7), 61 | r)) ^ r;
+      return ((r ^ (r &gt;&gt;&gt; 14)) &gt;&gt;&gt; 0) / 4294967296;
+    };
+    const difference = (labels) =&gt; {
+      let drug = 0, nDrug = 0, placebo = 0, nPlacebo = 0;
+      labels.forEach((d, i) =&gt; {
+        if (d) { drug += values[i]; nDrug++; } else { placebo += values[i]; nPlacebo++; }
+      });
+      return drug / nDrug - placebo / nPlacebo;
+    };
+    const observed = Math.abs(difference(isDrug));
+    const labels = isDrug.slice();
+    let asLarge = 0;
+    for (let k = 0; k &lt; shuffles; k++) {
+      for (let i = labels.length - 1; i &gt; 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [labels[i], labels[j]] = [labels[j], labels[i]];
+      }
+      if (Math.abs(difference(labels)) &gt;= observed - 1e-9) asLarge++;
+    }
+    return (asLarge + 1) / (shuffles + 1);
+  })');
+
+.output stdout
+
+DROP TABLE IF EXISTS trial;
+CREATE TABLE trial (
+  patient INTEGER PRIMARY KEY,
+  grp TEXT NOT NULL CHECK (grp IN ('drug', 'placebo')),
+  drop_mmhg REAL NOT NULL
+);
+INSERT INTO trial (grp, drop_mmhg) VALUES
+  ('drug', 5.5), ('drug', 14.8), ('drug', 13.7), ('drug', 17.4),
+  ('drug', 0.0), ('drug', 5.4), ('drug', 11.8), ('drug', 16.0),
+  ('drug', 10.7), ('drug', 28.3), ('drug', 14.7), ('drug', 0.3),
+  ('drug', 6.4), ('drug', 10.9), ('drug', 0.4), ('drug', 19.2),
+  ('drug', 2.6), ('drug', 5.2), ('drug', -1.0), ('drug', 9.9),
+  ('placebo', 1.5), ('placebo', 9.5), ('placebo', 7.6), ('placebo', 15.8),
+  ('placebo', 7.8), ('placebo', -14.7), ('placebo', 6.0), ('placebo', -1.8),
+  ('placebo', 17.3), ('placebo', 9.6), ('placebo', -2.1), ('placebo', -10.9),
+  ('placebo', -3.8), ('placebo', 8.8), ('placebo', 5.8), ('placebo', -0.3),
+  ('placebo', 7.4), ('placebo', 6.3), ('placebo', -0.5), ('placebo', 5.8);
+
+-- The two groups.
+SELECT grp, count(*) AS patients, round(avg(drop_mmhg), 2) AS mean_drop
+FROM trial GROUP BY grp;
+
+-- Welch's t-test.
+WITH test AS (SELECT welch_test(grp, drop_mmhg) AS r FROM trial)
+SELECT round(json_extract(r, '$.difference'), 2) AS difference,
+       round(json_extract(r, '$.t'), 3) AS t,
+       round(json_extract(r, '$.df'), 1) AS df,
+       round(t_p_value(json_extract(r, '$.t'), json_extract(r, '$.df')), 4)
+         AS p
+FROM test;
+
+-- The same question by shuffling.
+SELECT round(permutation_p(grp, drop_mmhg, 10000, 7329), 4) AS shuffled_p
+FROM trial;
+</code></pre>
+<p class="script-head">Output:</p>
+<pre class="script" data-file="terminal/output/drug-trial.txt"><code>grp      patients  mean_drop
+-------  --------  ---------
+drug     20        9.61     
+placebo  20        3.76     
+difference  t      df    p     
+----------  -----  ----  ------
+5.85        2.373  37.9  0.0228
+shuffled_p
+----------
+0.0234    
+</code></pre>
+<p>p is 0.023: a difference this large would turn up by chance about 2 times in 100. Shuffling
+the labels 10,000 times agrees. SciPy's Welch t-test gives the same t, degrees of freedom and p
+for this data. On the phone used here, a Galaxy J7 from 2018, the 10,000 shuffles take about 6
+seconds; the other scripts take less than a fifth of a second.</p>
+<figure>
+  <img src="screenshots/5-drug-trial.png" alt="Terminal showing the group averages, the t-test and the shuffled p-value">
+  <figcaption>Job 4 on the phone.</figcaption>
+</figure>
+
+<h3 id="routes">Job 5: flight routes</h3>
+<p>A charter airline client wants fuel estimates. The shortest way between two airports is the
+great circle, which looks curved on a flat map. One compass heading the whole way (a rhumb line)
+looks straight on the usual map, and is longer.</p>
+<pre class="script" data-file="terminal/routes.sql"><code>-- Don Yarmy Engineering: how much fuel does the great circle save?
+--
+-- A charter airline client wants fuel estimates for its routes. The
+-- shortest way between two airports is the great circle, which bends
+-- toward the pole on a flat map. The line that looks straight on the usual
+-- (Mercator) map is a rhumb line: one compass heading all the way, and a
+-- longer trip. Three JavaScript functions compare them:
+-- - gc_km: the great-circle distance (the haversine formula).
+-- - rhumb_km: the distance along a constant heading.
+-- - gc_point: a point part of the way along the great circle, for drawing
+--   the route on a map.
+-- Both distances treat the Earth as a sphere, which is within about 0.5% of
+-- its real shape. SQLite has sin(), cos() and atan2(), so one formula could
+-- be written in SQL. As named functions, they read like the formulas and
+-- every query can reuse them.
+--
+-- Run it in Terminal:  sqlite3 demo.db &lt; routes.sql
+-- To use your own routes, change the airports, the routes and the burn
+-- rate. The fuel figures are estimates for comparison, not flight plans.
+
+.load sqlite-js
+.headers on
+.mode column
+
+.output /dev/null
+
+SELECT js_create_scalar('gc_km', '(function (args) {
+  const [lat1, lon1, lat2, lon2] = args.map((d) =&gt; d * Math.PI / 180);
+  const h = Math.sin((lat2 - lat1) / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin((lon2 - lon1) / 2) ** 2;
+  return 2 * 6371.0088 * Math.asin(Math.sqrt(h));
+})');
+
+SELECT js_create_scalar('rhumb_km', '(function (args) {
+  const [lat1, lon1, lat2, lon2] = args.map((d) =&gt; d * Math.PI / 180);
+  const dLat = lat2 - lat1;
+  // The short way around: across the date line when that is shorter.
+  let dLon = lon2 - lon1;
+  if (Math.abs(dLon) &gt; Math.PI) dLon -= Math.sign(dLon) * 2 * Math.PI;
+  const stretch = Math.log(Math.tan(Math.PI / 4 + lat2 / 2)
+    / Math.tan(Math.PI / 4 + lat1 / 2));
+  const q = Math.abs(stretch) &gt; 1e-12 ? dLat / stretch : Math.cos(lat1);
+  return 6371.0088 * Math.sqrt(dLat * dLat + q * q * dLon * dLon);
+})');
+
+-- gc_point(lat1, lon1, lat2, lon2, f) returns 'lat, lon' at fraction f of
+-- the way from the first point to the second.
+SELECT js_create_scalar('gc_point', '(function (args) {
+  const f = args[4];
+  const [lat1, lon1, lat2, lon2] = args.slice(0, 4).map((d) =&gt; d * Math.PI / 180);
+  const toXyz = (lat, lon) =&gt;
+    [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+  const p = toXyz(lat1, lon1);
+  const q = toXyz(lat2, lon2);
+  const angle = Math.acos(Math.min(1, p[0] * q[0] + p[1] * q[1] + p[2] * q[2]));
+  const a = Math.sin((1 - f) * angle) / Math.sin(angle);
+  const b = Math.sin(f * angle) / Math.sin(angle);
+  const [x, y, z] = [0, 1, 2].map((i) =&gt; a * p[i] + b * q[i]);
+  const lat = Math.atan2(z, Math.hypot(x, y)) * 180 / Math.PI;
+  const lon = Math.atan2(y, x) * 180 / Math.PI;
+  return `${lat.toFixed(1)}, ${lon.toFixed(1)}`;
+})');
+
+.output stdout
+
+DROP TABLE IF EXISTS airports;
+CREATE TABLE airports (code TEXT PRIMARY KEY, city TEXT, lat REAL, lon REAL);
+-- Coordinates from OurAirports (ourairports.com), in degrees.
+INSERT INTO airports VALUES
+  ('SFO', 'San Francisco', 37.6198, -122.3748),
+  ('JFK', 'New York', 40.6394, -73.7793),
+  ('LHR', 'London', 51.4707, -0.4599),
+  ('NRT', 'Tokyo', 35.7686, 140.3887),
+  ('SYD', 'Sydney', -33.9461, 151.1770),
+  ('GRU', 'São Paulo', -23.4313, -46.4700),
+  ('JNB', 'Johannesburg', -26.1401, 28.2468);
+
+DROP TABLE IF EXISTS routes;
+CREATE TABLE routes (origin TEXT, destination TEXT);
+INSERT INTO routes VALUES
+  ('SFO', 'JFK'), ('JFK', 'LHR'), ('SFO', 'NRT'),
+  ('LHR', 'NRT'), ('SYD', 'SFO'), ('GRU', 'JNB');
+
+-- The client's jet burns about 1.8 kg of fuel per km (a made-up figure).
+DROP VIEW IF EXISTS legs;
+CREATE TEMP VIEW legs AS
+SELECT r.origin || '-' || r.destination AS route,
+       gc_km(a.lat, a.lon, b.lat, b.lon) AS gc,
+       rhumb_km(a.lat, a.lon, b.lat, b.lon) AS rhumb
+FROM routes AS r
+JOIN airports AS a ON a.code = r.origin
+JOIN airports AS b ON b.code = r.destination;
+
+SELECT route,
+       CAST(round(gc) AS INTEGER) AS great_circle_km,
+       CAST(round(rhumb) AS INTEGER) AS rhumb_km,
+       CAST(round((rhumb - gc) * 1.8) AS INTEGER) AS fuel_saved_kg
+FROM legs ORDER BY rhumb - gc DESC;
+
+-- Where the great circle from San Francisco to Tokyo goes: north, close
+-- to Alaska, though both cities are near 36 degrees north.
+WITH RECURSIVE steps(f) AS (SELECT 0.0 UNION ALL SELECT f + 0.25 FROM steps WHERE f &lt; 1)
+SELECT CAST(f * 100 AS INTEGER) || '%' AS part_of_trip,
+       gc_point(a.lat, a.lon, b.lat, b.lon, f) AS lat_lon
+FROM steps, airports AS a, airports AS b
+WHERE a.code = 'SFO' AND b.code = 'NRT';
+</code></pre>
+<p class="script-head">Output:</p>
+<pre class="script" data-file="terminal/output/routes.txt"><code>route    great_circle_km  rhumb_km  fuel_saved_kg
+-------  ---------------  --------  -------------
+LHR-NRT  9591             11372     3206         
+SFO-NRT  8227             8671      800          
+JFK-LHR  5540             5758      393          
+GRU-JNB  7439             7548      196          
+SFO-JFK  4152             4204      94           
+SYD-SFO  11950            11983     60           
+part_of_trip  lat_lon     
+------------  ------------
+0%            37.6, -122.4
+25%           45.7, -144.8
+50%           48.4, -171.8
+75%           44.6, 161.8 
+100%          35.8, 140.4 
+</code></pre>
+<p>London to Tokyo saves about 3,200 kg of fuel on the great circle. San Francisco to Tokyo swings
+north, near Alaska. The functions treat the Earth as a sphere: on these routes, GeographicLib's
+distances on the real shape of the Earth differ by at most 0.3%. A separate calculation on the
+same sphere gives the same distances. The fuel figures are estimates for comparing routes, not flight plans.</p>
+<figure>
+  <img src="screenshots/6-routes.png" alt="Terminal showing the routes table and the points along San Francisco to Tokyo">
+  <figcaption>Job 5 on the phone.</figcaption>
+</figure>
+
+<h2 id="app">5. Job 6: a delivery fee that changes without a rebuild</h2>
+<p>A grocery client changes its delivery fee every few weeks. In the Delivery Fees app, the fee
+rule is JavaScript in a file, <code>rules/delivery-fee.js</code>, which the app stores in its
+database and calls from its SQL query. To change the rule, edit the file in Code on the Go, save
+it, and tap <strong>Reload rule</strong> in the app.</p>
+<figure>
+  <img src="screenshots/7-app-before.png" alt="The Delivery Fees app listing five orders and their fees">
+  <figcaption>The app with the first rule: free delivery from $50, $2 more at weekends.</figcaption>
+</figure>
+<figure>
+  <img src="screenshots/7-rule-edited.png" alt="Code on the Go's editor showing delivery-fee.js with 40 and 3">
+  <figcaption>The rule changed in Code on the Go's editor: free delivery from $40, $3 more at
+  weekends.</figcaption>
+</figure>
+<figure>
+  <img src="screenshots/8-app-after-reload.png" alt="The app after Reload rule, with new fees and Loaded delivery-fee.js in 216 ms">
+  <figcaption>After Reload rule: new fees, with no rebuild.</figcaption>
+</figure>
+
+<h3>What Reload rule does</h3>
+<ol>
+  <li>Reads the file the app was given through Android's file picker.</li>
+  <li>Tries the rule on the sample orders in a scratch database, with a 2-second limit. A rule
+    that doesn't load, throws, runs too long or returns something other than a fee of 0 or more
+    is refused, and the old rule stays.</li>
+  <li>Closes the app's database connections, stores the rule in the database's
+    <code>js_functions</code> table, and opens the database again. A connection keeps the version
+    of a function it loaded when it opened, so the new rule needs new connections.</li>
+</ol>
+<figure>
+  <img src="screenshots/10-rule-refused.png" alt="The app saying: The rule was not changed. The rule ran for more than 2 s, so it was stopped. Does it loop forever?">
+  <figcaption>A rule with an endless loop, refused. The old fees stay.</figcaption>
+</figure>
+<figure>
+  <img src="screenshots/9-rebuild.png" alt="Code on the Go after a rebuild: BUILD SUCCESSFUL in 1m 15s">
+  <figcaption>For comparison: rebuilding the app after a one-line Kotlin change.</figcaption>
+</figure>
+
+<h3>Make the app</h3>
+<ol>
+  <li>In Code on the Go, create a project from the <strong>JavaScript in SQLite</strong>
+    template, named <code>Delivery Fees</code>, with the package name
+    <code>com.donyarmyengineering.deliveryfees</code>.</li>
+  <li>Delete <code>ProductDatabase.kt</code>. Replace <code>MainActivity.kt</code>,
+    <code>activity_main.xml</code> and <code>strings.xml</code> with the files below, and add
+    <code>OrderDatabase.kt</code> and <code>rules/delivery-fee.js</code>. The other files stay as
+    the template made them.</li>
+  <li>Build and run the app. Tap <strong>Choose rule file</strong> and pick
+    <code>rules/delivery-fee.js</code> in the project's folder, in CodeOnTheGoProjects. On some
+    phones the picker shows internal storage only after you choose <strong>Show internal
+    storage</strong> in its menu. The app remembers the file.</li>
+</ol>
+<figure>
+  <img src="screenshots/picker-show-internal-storage.png" alt="Android's file picker listing Galaxy J7 after Show internal storage">
+  <figcaption>Android 9's file picker, after Show internal storage.</figcaption>
+</figure>
+
+<p class="script-head"><code>rules/delivery-fee.js</code>, at the top of the project:</p>
+<pre class="script" data-file="app/rules/delivery-fee.js"><code>// Don Yarmy Engineering: the delivery fee for a grocery client's orders.
+//
+// The Delivery Fees app calls this function for each order, from its SQL
+// query, as delivery_fee(subtotal, distance_km, weekend). weekend is 1 for
+// Saturday and Sunday and 0 otherwise. It returns the fee in dollars.
+//
+// To change the rule, edit this file, save it, and tap Reload rule in the
+// app. The app reads the file, tries the rule on its sample orders, and
+// stores it in its database, without being rebuilt.
+(function (args) {
+  const [subtotal, km, weekend] = args;
+  // Orders of at least this much get free delivery.
+  if (subtotal &gt;= 50) return 0;
+  // $3.99, plus 50 cents a km after the first 3 km.
+  let fee = 3.99 + 0.5 * Math.max(0, km - 3);
+  // Weekend deliveries cost extra.
+  if (weekend) fee += 2;
+  return Math.round(fee * 100) / 100;
+})
+</code></pre>
+<p class="script-head"><code>app/src/main/java/com/donyarmyengineering/deliveryfees/OrderDatabase.kt</code>:</p>
+<pre class="script" data-file="app/app/src/main/java/com/donyarmyengineering/deliveryfees/OrderDatabase.kt"><code>package com.donyarmyengineering.deliveryfees
+
+import android.content.Context
+import android.database.Cursor
+import androidx.room.ColumnInfo
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.SkipQueryVerification
+import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
+import io.requery.android.database.sqlite.SQLiteCustomExtension
+import io.requery.android.database.sqlite.SQLiteDatabase
+import io.requery.android.database.sqlite.SQLiteDatabaseConfiguration
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import org.appdevforall.sqlitejs.SqliteJs
+
+/** An order from the grocery client's shop. */
+@Entity(tableName = "orders")
+data class Order(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val customer: String,
+    val subtotal: Double,
+    @ColumnInfo(name = "distance_km") val distanceKm: Double,
+    val weekend: Boolean,
+)
+
+/** An order and the delivery fee that the JavaScript rule gives it. */
+data class OrderWithFee(
+    val id: Long,
+    val customer: String,
+    val subtotal: Double,
+    @ColumnInfo(name = "distance_km") val distanceKm: Double,
+    val weekend: Boolean,
+    val fee: Double,
+)
+
+@Dao
+interface OrderDao {
+    @Insert
+    suspend fun insert(orders: List&lt;Order&gt;)
+
+    @Query("SELECT count(*) FROM orders")
+    suspend fun count(): Int
+
+    // Room checks each query against its own SQLite when it builds the app, and that SQLite has
+    // no JavaScript functions, so @SkipQueryVerification turns the check off for this query.
+    /** Every order with its fee, from the JavaScript function delivery_fee. */
+    @SkipQueryVerification
+    @Query("SELECT *, delivery_fee(subtotal, distance_km, weekend) AS fee FROM orders ORDER BY id")
+    suspend fun withFees(): List&lt;OrderWithFee&gt;
+}
+
+@Database(entities = [Order::class], version = 1, exportSchema = false)
+abstract class OrderDatabase : RoomDatabase() {
+    abstract fun orders(): OrderDao
+
+    companion object {
+        private const val NAME = "orders.db"
+        private const val RULE = "delivery_fee"
+        private const val RULE_TIME_LIMIT_MS = 2_000L
+
+        @Volatile
+        private var instance: OrderDatabase? = null
+
+        /**
+         * The app's database, opened with sqlite-js on every connection, so its queries can call
+         * the delivery-fee rule stored in it. The first call does disk work, so call it off the
+         * main thread.
+         */
+        fun get(context: Context): OrderDatabase =
+            instance ?: synchronized(this) {
+                instance ?: open(context.applicationContext).also { instance = it }
+            }
+
+        private fun open(context: Context): OrderDatabase {
+            // Creates the js_functions table, where the rule is stored, before Room opens.
+            withConnection(context, context.getDatabasePath(NAME).path) { db -&gt;
+                db.execute("SELECT js_init_table()")
+            }
+            val factory = RequerySQLiteOpenHelperFactory(
+                listOf(
+                    RequerySQLiteOpenHelperFactory.ConfigurationOptions { config -&gt;
+                        // Loads the rule stored in the database when each connection opens,
+                        // which runs its code: only for a database the app made itself.
+                        config.customExtensions.add(
+                            SQLiteCustomExtension(
+                                SqliteJs.libraryPath(context),
+                                SqliteJs.ENTRY_POINT_FOR_TRUSTED_DATABASE,
+                            ),
+                        )
+                        config
+                    },
+                ),
+            )
+            return Room.databaseBuilder(context, OrderDatabase::class.java, NAME)
+                .openHelperFactory(factory)
+                .build()
+        }
+
+        /**
+         * Replaces the delivery-fee rule with [code], the text of rules/delivery-fee.js, while the
+         * app runs. It first tries the rule on [samples] in a scratch database, so a rule that
+         * doesn't load, throws, takes too long or returns something other than a fee never
+         * reaches the app's database: the old rule stays, and the exception says why.
+         */
+        suspend fun replaceRule(context: Context, code: String, samples: List&lt;Order&gt;) {
+            val app = context.applicationContext
+            withTimeLimit {
+                withConnection(app, ":memory:") { db -&gt;
+                    db.execute("SELECT js_create_scalar(?, ?)", RULE, code)
+                    samples.forEach { order -&gt;
+                        val args = arrayOf&lt;Any&gt;(order.subtotal, order.distanceKm, if (order.weekend) 1 else 0)
+                        db.rawQuery("SELECT $RULE(?, ?, ?)", args).use { c -&gt;
+                            c.moveToFirst()
+                            val isNumber = c.getType(0) == Cursor.FIELD_TYPE_INTEGER ||
+                                c.getType(0) == Cursor.FIELD_TYPE_FLOAT
+                            val fee = if (isNumber) c.getDouble(0) else Double.NaN
+                            require(fee.isFinite() &amp;&amp; fee &gt;= 0) {
+                                "For ${order.customer}'s order it returned ${c.getString(0)}, " +
+                                    "not a fee of 0 or more."
+                            }
+                        }
+                    }
+                }
+            }
+            withContext(Dispatchers.IO) {
+                // A connection keeps the rule it loaded when it opened, so close Room's
+                // connections. The next get() opens new ones, which load the new rule.
+                synchronized(this@Companion) {
+                    instance?.close()
+                    instance = null
+                }
+                withConnection(app, app.getDatabasePath(NAME).path) { db -&gt;
+                    db.execute("SELECT js_init_table()")
+                    db.execute("SELECT js_create_scalar(?, ?)", RULE, code)
+                }
+            }
+        }
+
+        // A connection with sqlite-js that runs none of the functions stored in the database
+        // (SqliteJs.ENTRY_POINT), so it can store a new version of one.
+        private fun &lt;T&gt; withConnection(context: Context, path: String, block: (SQLiteDatabase) -&gt; T): T {
+            val flags = SQLiteDatabase.CREATE_IF_NECESSARY or SQLiteDatabase.OPEN_READWRITE
+            val config = SQLiteDatabaseConfiguration(path, flags)
+            config.customExtensions.add(
+                SQLiteCustomExtension(SqliteJs.libraryPath(context), SqliteJs.ENTRY_POINT),
+            )
+            return SQLiteDatabase.openDatabase(config, null, null).use(block)
+        }
+
+        private fun SQLiteDatabase.execute(sql: String, vararg args: Any) {
+            rawQuery(sql, args).use { it.moveToFirst() }
+        }
+
+        /**
+         * Runs [query], which calls the rule, and stops the rule if it runs for longer than
+         * RULE_TIME_LIMIT_MS: a rule with an endless loop must not freeze the app.
+         */
+        suspend fun &lt;T&gt; withTimeLimit(query: suspend () -&gt; T): T =
+            try {
+                withTimeout(RULE_TIME_LIMIT_MS) { cancellable(query) }
+            } catch (e: TimeoutCancellationException) {
+                throw IllegalStateException(
+                    "The rule ran for more than ${RULE_TIME_LIMIT_MS / 1000} s, so it was stopped. " +
+                        "Does it loop forever?",
+                )
+            }
+    }
+}
+
+/**
+ * Runs [query], which may run JavaScript, so that cancelling the calling coroutine also stops the
+ * JavaScript. Neither Room nor Android can stop a JavaScript function that never returns;
+ * SqliteJs.cancelAll() stops all the JavaScript running at that moment, which then fails with an
+ * "interrupted" error. Until the cancelled query ends, usually within milliseconds, JavaScript in
+ * other queries is stopped too. (From the JavaScript in SQLite template.)
+ */
+suspend fun &lt;T&gt; cancellable(query: suspend () -&gt; T): T = coroutineScope {
+    // The query's result or failure is kept, not thrown, so that a query stopped by the cancel
+    // ends this as cancelled rather than as failed. coroutineScope still waits for the query to
+    // stop, which frees its connection.
+    val running = async(Dispatchers.IO) { runCatching { query() } }
+    try {
+        running.await().getOrThrow()
+    } catch (e: CancellationException) {
+        // cancelAll() stops only JavaScript that has started, and the query may not have reached
+        // its JavaScript yet, so it is called again until the query ends.
+        withContext(NonCancellable) {
+            while (!running.isCompleted) {
+                SqliteJs.cancelAll()
+                delay(CANCEL_RETRY_MS)
+            }
+        }
+        throw e
+    }
+}
+
+private const val CANCEL_RETRY_MS = 10L
+</code></pre>
+<p class="script-head"><code>app/src/main/java/com/donyarmyengineering/deliveryfees/MainActivity.kt</code>:</p>
+<pre class="script" data-file="app/app/src/main/java/com/donyarmyengineering/deliveryfees/MainActivity.kt"><code>package com.donyarmyengineering.deliveryfees
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.os.SystemClock
+import android.provider.OpenableColumns
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import com.donyarmyengineering.deliveryfees.databinding.ActivityMainBinding
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
+
+class MainActivity : AppCompatActivity() {
+
+    private var _binding: ActivityMainBinding? = null
+    private val binding: ActivityMainBinding
+        get() = checkNotNull(_binding) { "Activity has been destroyed" }
+
+    private val prefs by lazy { getSharedPreferences("rule", MODE_PRIVATE) }
+
+    // Android's file picker. The app keeps permission to read the chosen file, so Reload rule
+    // reads it again without asking.
+    private val chooseRule = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -&gt;
+        if (uri != null) {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            prefs.edit().putString(KEY_RULE_FILE, uri.toString()).apply()
+            reloadRule()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        _binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Keep content clear of the system bars (edge-to-edge is enforced on API 35+)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets -&gt;
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+
+        binding.chooseRule.setOnClickListener { chooseRule.launch(arrayOf("*/*")) }
+        binding.reloadRule.setOnClickListener { reloadRule() }
+        binding.showNotices.setOnClickListener { showNotices() }
+        if (prefs.getString(KEY_RULE_FILE, null) == null) {
+            binding.ruleStatus.setText(R.string.choose_first)
+        }
+        showFees()
+    }
+
+    // Lists the orders with the fee from the rule stored in the database.
+    private fun showFees() {
+        binding.results.setText(R.string.working)
+        lifecycleScope.launch {
+            try {
+                val rows = withContext(Dispatchers.IO) {
+                    val orders = OrderDatabase.get(applicationContext).orders()
+                    if (orders.count() == 0) orders.insert(SAMPLE_ORDERS)
+                    OrderDatabase.withTimeLimit { orders.withFees() }
+                }
+                _binding?.results?.text = table(rows)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val noRule = e.message.orEmpty().contains("no such function")
+                _binding?.results?.text =
+                    if (noRule) getString(R.string.no_rule) else getString(R.string.error, e.message)
+            }
+        }
+    }
+
+    // Reads the rule file again, and replaces the rule in the database if it works.
+    private fun reloadRule() {
+        val file = prefs.getString(KEY_RULE_FILE, null)?.let(Uri::parse)
+        if (file == null) {
+            binding.ruleStatus.setText(R.string.choose_first)
+            return
+        }
+        binding.ruleStatus.setText(R.string.working)
+        lifecycleScope.launch {
+            val started = SystemClock.elapsedRealtime()
+            try {
+                val code = withContext(Dispatchers.IO) {
+                    checkNotNull(contentResolver.openInputStream(file)) { "Can't open $file" }
+                        .bufferedReader().use { it.readText() }
+                }
+                OrderDatabase.replaceRule(applicationContext, code, SAMPLE_ORDERS)
+                val ms = SystemClock.elapsedRealtime() - started
+                _binding?.ruleStatus?.text = getString(R.string.rule_loaded, displayName(file), ms)
+                showFees()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _binding?.ruleStatus?.text = getString(R.string.rule_rejected, e.message)
+            }
+        }
+    }
+
+    private fun table(rows: List&lt;OrderWithFee&gt;): String =
+        rows.joinToString("\n", prefix = getString(R.string.table_header) + "\n") { o -&gt;
+            String.format(
+                Locale.US, "%-6s %7.2f %5.1f %-3s %6.2f",
+                o.customer, o.subtotal, o.distanceKm, if (o.weekend) "yes" else "no", o.fee,
+            )
+        }
+
+    private fun displayName(file: Uri): String =
+        contentResolver.query(file, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -&gt; if (c.moveToFirst()) c.getString(0) else null }
+            ?: file.lastPathSegment.orEmpty()
+
+    private fun showNotices() {
+        val text = assets.open("NOTICES.txt").bufferedReader().use { it.readText() }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.notices)
+            .setMessage(text)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
+    }
+
+    companion object {
+        private const val KEY_RULE_FILE = "rule_file"
+
+        private val SAMPLE_ORDERS = listOf(
+            Order(customer = "Ana", subtotal = 32.50, distanceKm = 8.0, weekend = false),
+            Order(customer = "Ben", subtotal = 54.20, distanceKm = 3.0, weekend = true),
+            Order(customer = "Chloe", subtotal = 18.75, distanceKm = 12.5, weekend = true),
+            Order(customer = "Dev", subtotal = 47.10, distanceKm = 2.0, weekend = false),
+            Order(customer = "Eli", subtotal = 41.00, distanceKm = 6.0, weekend = true),
+        )
+    }
+}
+</code></pre>
+<p class="script-head"><code>app/src/main/res/layout/activity_main.xml</code>:</p>
+<pre class="script" data-file="app/app/src/main/res/layout/activity_main.xml"><code>&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"&gt;
+
+    &lt;com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:title="@string/app_name"
+        app:titleTextColor="?attr/colorOnPrimary" /&gt;
+
+    &lt;ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"&gt;
+
+        &lt;LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"&gt;
+
+            &lt;TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/intro"
+                android:textSize="16sp" /&gt;
+
+            &lt;TextView
+                android:id="@+id/results"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="monospace"
+                android:textIsSelectable="true"
+                android:textSize="14sp" /&gt;
+
+            &lt;Button
+                android:id="@+id/reload_rule"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/reload_rule" /&gt;
+
+            &lt;Button
+                android:id="@+id/choose_rule"
+                style="?attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/choose_rule" /&gt;
+
+            &lt;TextView
+                android:id="@+id/rule_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textSize="16sp" /&gt;
+
+            &lt;Button
+                android:id="@+id/show_notices"
+                style="?attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/notices" /&gt;
+        &lt;/LinearLayout&gt;
+    &lt;/ScrollView&gt;
+&lt;/LinearLayout&gt;
+</code></pre>
+<p class="script-head"><code>app/src/main/res/values/strings.xml</code>:</p>
+<pre class="script" data-file="app/app/src/main/res/values/strings.xml"><code>&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;resources&gt;
+    &lt;string name="app_name"&gt;Delivery Fees&lt;/string&gt;
+    &lt;string name="intro"&gt;The delivery fee for each order comes from a rule written in JavaScript, in rules/delivery-fee.js. Edit that file in Code on the Go, save it, and tap Reload rule: the app uses the new rule without being rebuilt.&lt;/string&gt;
+    &lt;!-- In quotes, so Android keeps the spaces that line the columns up --&gt;
+    &lt;string name="table_header"&gt;"Order   Amount    km Wkd    Fee"&lt;/string&gt;
+    &lt;string name="reload_rule"&gt;Reload rule&lt;/string&gt;
+    &lt;string name="choose_rule"&gt;Choose rule file&lt;/string&gt;
+    &lt;string name="choose_first"&gt;No rule file chosen yet. Tap Choose rule file and pick rules/delivery-fee.js in this project\'s folder.&lt;/string&gt;
+    &lt;string name="rule_loaded"&gt;Loaded %1$s in %2$d ms.&lt;/string&gt;
+    &lt;string name="rule_rejected"&gt;The rule was not changed. %1$s&lt;/string&gt;
+    &lt;string name="no_rule"&gt;There is no delivery-fee rule yet. Tap Choose rule file.&lt;/string&gt;
+    &lt;string name="working"&gt;Working…&lt;/string&gt;
+    &lt;string name="error"&gt;Error: %1$s&lt;/string&gt;
+    &lt;string name="notices"&gt;Open source notices&lt;/string&gt;
+&lt;/resources&gt;
+</code></pre>
+
+<h3>In a real app</h3>
+<p>The demo reads the rule from a file you pick, to keep it short. A shipped app would get its
+rules from your own server over HTTPS, and should check that they came from you, for example by
+a signature, because a rule runs with the app's access to its own data. Read your app store's
+current policy before you send rules outside app updates: Google Play's Device and Network Abuse
+policy, for example, has rules about code that an app loads after it is installed.</p>
+
+<h2 id="rules">6. Before you write your own</h2>
+<ul>
+  <li><strong>Load it in each session.</strong> In Terminal, every session that calls a function
+    needs <code>.load sqlite-js</code>, and <code>SELECT js_init_table(1);</code> to get the
+    stored ones back.</li>
+  <li><strong>A function can't be redefined in a session that already has it.</strong> Close
+    <code>sqlite3</code> and create the new version first in a new session.</li>
+  <li><strong>Triggers and views:</strong> the <code>sqlite3</code> command needs
+    <code>PRAGMA trusted_schema = ON</code> before a stored trigger can call your function, and
+    every program that writes the table needs sqlite-js and the function, as job 2 shows.</li>
+  <li><strong>Code in a database runs when the database opens.</strong> In an app, open a
+    database the app made itself with <code>SqliteJs.ENTRY_POINT_FOR_TRUSTED_DATABASE</code>,
+    which loads its stored functions. Open a downloaded or shared file, or a restored backup,
+    with <code>SqliteJs.ENTRY_POINT</code>, which runs none.</li>
+  <li><strong>No secrets in functions.</strong> Anyone with the database file can read
+    <code>js_functions</code>.</li>
+  <li><strong>JavaScript here has no web or Node.js features:</strong> no <code>fetch</code>,
+    no files, no <code>require</code>, and promises never finish. Write ordinary, synchronous
+    code.</li>
+  <li><strong>Limits:</strong> JavaScript may use 64 MB of memory by default
+    (<code>js_set_memory_limit</code> changes it). Ctrl-C stops JavaScript that never ends in
+    Terminal; in an app, <code>SqliteJs.cancelAll()</code> does, as job 6's 2-second limit
+    shows.</li>
+  <li><strong>Same output every time:</strong> use a seeded random number generator, as job 4
+    does, not <code>Math.random()</code>, when results must repeat.</li>
+  <li><strong>In an app:</strong> mark the Room queries that call JavaScript with
+    <code>@SkipQueryVerification</code>, because Room checks queries with its own SQLite, which
+    has no JavaScript functions. sqlite-js is built for ARM phones (arm64-v8a and armeabi-v7a)
+    and Android 8.0 or later.</li>
+</ul>
+
+<h2 id="not">7. When not to use it</h2>
+<ul>
+  <li>When the logic needs Android's features: the network, the camera, files, notifications.
+    JavaScript in SQLite can't reach them.</li>
+  <li>When the logic is stable, hot, and simple. Plain SQL, or Kotlin, is easier to check and
+    profile.</li>
+  <li>When other programs must write the same tables and can't load sqlite-js: a trigger that
+    calls JavaScript stops them writing at all.</li>
+  <li>For a database file that someone else gives you, unless you open it with the entry point
+    that runs no stored code.</li>
+</ul>
+
+<h2 id="measured">8. What was measured, and on what</h2>
+<table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Phone</td><td>Samsung Galaxy J7 (SM-J737A), Android 9, 32-bit (armeabi-v7a)</td></tr>
+  <tr><td>Code on the Go</td><td>C-d-1124-2145, with the JavaScript in SQLite template</td></tr>
+  <tr><td>Terminal packages</td><td>sqlite 3.51.2, sqlite-js 1.4.4 (quickjs-ng 0.12.1)</td></tr>
+  <tr><td>Scripts</td><td>The same results on the phone and on a Linux computer; the drug
+    trial takes about 6.4 s on the phone, the others under 130 ms</td></tr>
+  <tr><td>Reload rule</td><td>81 to 265 ms: 216 ms in the video, just after the app
+    started</td></tr>
+  <tr><td>First build of the app</td><td>9 min 16 s</td></tr>
+  <tr><td>Rebuild after a one-line Kotlin change, until Android asks to install</td>
+    <td>82 s, 98 s and 4 min 21 s in three runs</td></tr>
+</table>
+
+</body>
+</html>
