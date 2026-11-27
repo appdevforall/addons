@@ -55,7 +55,10 @@
     <li>Enter the <b>endpoint URL</b>. It usually ends in <code>/mcp</code>.</li>
     <li>Add an <b>access token</b> if the server needs one. It is encrypted with a
       key held in the Android Keystore, and sent only to that server, as an
-      <code>Authorization: Bearer</code> header.</li>
+      <code>Authorization: Bearer</code> header. Leaving the field empty keeps the
+      stored token, so if you change a server's URL and leave it empty, the stored
+      token is sent to the new URL. To send the new URL no token, use
+      <b>Clear stored credential</b> first.</li>
     <li>The URL must be <b>https://</b> unless the server runs on this device.
       Plain <code>http://</code> is accepted only for <code>localhost</code>,
       <code>127.0.0.1</code> or <code>[::1]</code>, such as a server started in the
@@ -72,23 +75,39 @@
   </ul>
 
   <h2>Choosing tools</h2>
-  <p>Every tool starts <b>switched off</b>. That is deliberate: each enabled tool
-  costs prompt space on every message you send, and a large server can advertise
-  ninety of them — enough to fill a phone-sized context window on its own. Switch
-  on the handful you actually want.</p>
+  <p>Every tool starts <b>switched off</b>, with the one exception below. That is
+  deliberate: each enabled tool costs prompt space on every message you send, and a
+  large server can advertise ninety of them — enough to fill a phone-sized context
+  window on its own. Switch on the handful you actually want.</p>
+  <p>The one exception is the <b>SQLite debugger</b> entry, which Code on the Go
+  adds by itself for an app you build with the SQLite debugger, named
+  "SQLite debugger (<i>application ID</i>)". Four of its read-only tools start
+  switched on: <code>list_databases</code>, <code>get_schema</code>,
+  <code>query</code> and <code>get_events</code>. Its other tools start off. This
+  version does not show the entry on the MCP servers screen, so it has no switches
+  there yet.</p>
   <p>The Agent reads this list from memory, so tap <b>Connect</b> again after the
   server changes; a chat that is already open picks the new list up.</p>
 
   <h2>Approval</h2>
   <p>Every remote tool asks for your approval before it runs, showing the
-  arguments it would send, and there is no "always allow" for them. The Agent's
-  own file tools are confined to the open project; a remote tool is confined by
-  nothing this device controls, so the dialog is the only gate — read it.</p>
+  arguments it would send. The exception is a read-only tool of the SQLite
+  debugger, such as the four that start switched on: its dialog offers
+  "Always Allow", which covers that tool for the rest of the chat. The grant is
+  for that tool and that app only, it ends when you start or open another chat,
+  and it ignores the arguments, so the Agent can then call the tool with any
+  arguments. It rests on the plugin's own claim that the tool only reads, which
+  Code on the Go cannot check. This needs AI Core 3.6.0 or later; an older AI
+  Core asks on every call. The Agent's own file tools are confined to the open
+  project; a remote tool is confined by nothing this device controls, so the
+  dialog is the only gate — read it.</p>
 
   <h2>What is sent</h2>
   <ul>
     <li>The tool's arguments, as the model composed them, to that server only.</li>
-    <li>Nothing else: this plugin has <b>network access and no other permission</b>.
+    <li>Nothing else: this plugin has <b>network access</b>, plus
+      <b>debugger.endpoints</b> to read the SQLite debugger endpoints Code on the Go
+      stores, <b>and no other permission</b>.
       It cannot read your project or your files. Anything from your project reaches
       a server only if the model puts it in an argument and you approve the call.</li>
     <li>Server and tool names are reduced here to the alphabet a tool name may
@@ -102,6 +121,19 @@
   reachable from a phone. A server offering only the local <code>stdio</code>
   transport cannot be used, and the deprecated HTTP+SSE transport is not
   supported.</p>
+
+  <h2>Known limits</h2>
+  <p>Three rare session races are accepted for now:</p>
+  <ul>
+    <li>A <b>Save</b> or <b>Clear</b> that changes only the credentials can leave
+      one session open on a third-party server that needs the old token to end
+      it. The session expires on the server.</li>
+    <li>A SQLite debugger entry's health follows the entry, not the port. After the
+      app moves to a new port, a result from the old one can show for up to one
+      20-second probe cycle.</li>
+    <li>Two requests that both get a 404 for the same expired session can start an
+      extra handshake and leave one session to expire. Tracked in ADFA-7250.</li>
+  </ul>
 
   <h2>Troubleshooting</h2>
   <p>When <b>Connect</b> fails, tap <b>Show details</b> under the message to see
@@ -132,6 +164,13 @@
       least one tool is switched on, and AI Core is installed and active.</li>
     <li><b>Everything times out on mobile data</b> — some servers are slow to
       handshake; try again on Wi-Fi before assuming the URL is wrong.</li>
+    <li><b>"The app … did not answer"</b> — the SQLite debugger entry's app gave
+      no answer. Android may pause an app in the background: bring the app to the
+      front and try again.</li>
+    <li><b>"The app … is not running with the SQLite debugger"</b> — nothing
+      answers on the app's SQLite debugger port: the app has stopped, or it was
+      rebuilt without the SQLite debugger. Open the app again from Code on the
+      Go.</li>
   </ul>
 </body>
 </html>

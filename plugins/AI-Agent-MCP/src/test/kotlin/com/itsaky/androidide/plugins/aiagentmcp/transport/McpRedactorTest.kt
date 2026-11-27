@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentmcp.transport
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /** What an exchange record may show: credentials hidden, echoes of them masked, the rest kept. */
@@ -126,5 +127,51 @@ class McpRedactorTest {
         val message = redactor().message("https://mcp.example.test/mcp?t=abc redirected off its origin")
 
         assertEquals("https://mcp.example.test/mcp?t=${McpRedactor.MASK} redirected off its origin", message)
+    }
+
+    @Test
+    fun givenATextCutInsideACredential_whenScrubbedAsCut_thenItEndsInAMask() {
+        val mask = McpRedactor.MASK
+
+        val shown = redactor("secret-token-123456").scrubCut("ok secret-token-123456 then secret-to")
+
+        assertEquals("ok $mask then $mask", shown)
+    }
+
+    @Test
+    fun givenATextCutInsideAnEscapedCredential_whenScrubbedAsCut_thenItEndsInAMask() {
+        // The cut falls inside the `\u006b` that escapes the token's `k`.
+        val shown = redactor("secret-token").scrubCut("""{"error":"bad secret-to\u006""")
+
+        assertEquals("""{"error":"bad ${McpRedactor.MASK}""", shown)
+    }
+
+    @Test
+    fun givenACutInsideACredentialThatStartsInsideAnother_whenScrubbedAsCut_thenNeitherShows() {
+        // The second credential's start, cut short, begins inside a whole copy of the first.
+        val shown = redactor("header-value-123456", "123456-token-abcdef").scrubCut("ok header-value-123456-tok")
+
+        assertEquals("ok ${McpRedactor.MASK}", shown)
+    }
+
+    @Test
+    fun givenACutThatEndsInNoCredential_whenScrubbedAsCut_thenOnlyWholeOnesAreMasked() {
+        val shown = redactor("secret-token").scrubCut("secret-token, and the rest")
+
+        assertEquals("${McpRedactor.MASK}, and the rest", shown)
+    }
+
+    @Test
+    fun `a URL value that cannot be decoded is still masked as it is`() {
+        val secrets = McpRedactor.urlSecrets("https://h/mcp?key=abcdefgh1234") { throw IllegalArgumentException("bad") }
+
+        assertEquals(listOf("abcdefgh1234", "abcdefgh1234"), secrets)
+    }
+
+    @Test
+    fun `an OutOfMemoryError while decoding a URL value propagates`() {
+        assertThrows(OutOfMemoryError::class.java) {
+            McpRedactor.urlSecrets("https://h/mcp?key=abcdefgh1234") { throw OutOfMemoryError("decoding") }
+        }
     }
 }

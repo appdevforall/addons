@@ -16,6 +16,7 @@ class McpTranscriptTest {
         override fun hidden(length: Int) = "<$length hidden>"
         override fun omitted(count: Int) = "<$count more>"
         override val nothingSent = "<nothing sent>"
+        override val cancelled = "<cancelled>"
     }
 
     private fun exchange(

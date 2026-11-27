@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.transport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -101,5 +102,64 @@ class JsonRpcTest {
         val reply = JsonRpc.parseReply("""{"jsonrpc":"2.0","id":"1","method":"ping"}""")
 
         assertNull(reply)
+    }
+
+    /**
+     * The org.json these tests run on turns a parse that runs out of stack into a JSONException;
+     * Android's lets the StackOverflowError through. The refusal must come from the guard, before
+     * either parser runs, so the type is what this asserts.
+     */
+    @Test
+    fun givenAReplyNestedTenThousandDeep_whenParsed_thenItIsRefusedBeforeAnyParserRuns() {
+        assertThrows(JsonRpc.UnparsedReplyException::class.java) { JsonRpc.parseReply("[".repeat(10_000)) }
+    }
+
+    @Test
+    fun givenAWellFormedReplyNestedPastTheLimit_whenParsed_thenItIsRefused() {
+        val nested = "[".repeat(JsonDepth.MAX) + "]".repeat(JsonDepth.MAX)
+        val payload = """{"jsonrpc":"2.0","id":"7","result":{"tools":[],"extra":$nested}}"""
+
+        assertThrows(JsonRpc.UnparsedReplyException::class.java) { JsonRpc.parseReply(payload) }
+    }
+
+    @Test
+    fun givenAReplyOneLevelPastTheLimit_whenParsed_thenTheDepthIsTheReason() {
+        val depth = JsonDepth.MAX + 1
+        val failure = assertThrows(JsonRpc.UnparsedReplyException::class.java) {
+            JsonRpc.parseReply("[".repeat(depth) + "]".repeat(depth))
+        }
+
+        assertEquals(JsonDepth.Refusal.TooDeep(JsonDepth.MAX).reason, failure.message)
+    }
+
+    @Test
+    fun givenAReplyWithAComment_whenParsed_thenNotStrictJsonIsTheReason() {
+        val payload = """{"jsonrpc":"2.0","id":"7","result":{}} // done"""
+
+        val failure = assertThrows(JsonRpc.UnparsedReplyException::class.java) { JsonRpc.parseReply(payload) }
+
+        assertEquals(JsonDepth.Refusal.NotStrict('/').reason, failure.message)
+    }
+
+    @Test
+    fun givenValidStrictJsonAfterAByteOrderMark_whenParsed_thenItIsRead() {
+        val payload = "\uFEFF" +
+            """{"jsonrpc":"2.0","id":"7","result":{"n":1e5,"m":-0.5,"s":"é","a":[[],[[]],{"b":[]}]}}"""
+
+        val result = JsonRpc.parseReply(payload)?.result
+
+        assertEquals(1e5, result?.getDouble("n"))
+        assertEquals(-0.5, result?.getDouble("m"))
+        assertEquals("é", result?.getString("s"))
+        assertEquals(3, result?.getJSONArray("a")?.length())
+    }
+
+    @Test
+    fun givenAReplyNestedWithinTheLimit_whenParsed_thenItIsRead() {
+        val depth = JsonDepth.MAX - 3
+        val nested = "[".repeat(depth) + "]".repeat(depth)
+        val payload = """{"jsonrpc":"2.0","id":"7","result":{"extra":$nested}}"""
+
+        assertEquals("7", JsonRpc.parseReply(payload)?.id)
     }
 }

@@ -3,13 +3,16 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 import android.content.Context
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
+import com.itsaky.androidide.plugins.aiagentmcp.debugger.AutomaticServers
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCleartextException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpCredential
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
 import java.io.InterruptedIOException
+import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
@@ -78,6 +81,18 @@ sealed interface McpFailure {
 
     /** Everything else, including failures that never reached the network. */
     data class Failed(val reason: String?) : McpFailure
+
+    /**
+     * The SQLite debugger of the app [applicationId] did not answer before a socket timeout. Android
+     * may have paused the app in the background, and a paused app answers nothing.
+     */
+    data class AppNotAnswering(val applicationId: String) : McpFailure
+
+    /**
+     * Nothing listens on the port stored for the app [applicationId]: its process ended, or it was
+     * rebuilt without the SQLite debugger.
+     */
+    data class AppNotListening(val applicationId: String) : McpFailure
 }
 
 /**
@@ -87,6 +102,9 @@ sealed interface McpFailure {
  * settings pane shows it on request instead, credentials redacted, through [McpTranscript].
  */
 object McpErrorFormatter {
+
+    /** How far down a cause chain [classify] looks, which also ends a chain that loops. */
+    private const val MAX_CAUSES = 8
 
     /**
      * Reduces [error] to what the user needs to know.
@@ -110,18 +128,46 @@ object McpErrorFormatter {
     }
 
     /**
+     * Reduces [error] on [server] to what the user needs to know. As [classify], except on an
+     * entry built from an app's stored SQLite debugger endpoint, where a socket timeout or a
+     * refused connection says what to do with that app.
+     *
+     * Told apart by exception type, the cause chain included, never by message: Android's
+     * `HttpURLConnection` writes "failed to connect to ... after 15000ms" for both.
+     *
+     * @param error the failure, from any layer.
+     * @param server the server it came from.
+     * @return the classification.
+     */
+    fun classify(error: Throwable, server: McpServer): McpFailure {
+        val failure = classify(error)
+        if (!server.automatic) return failure
+        // An HTTP status or a JSON-RPC error is an answer, so the app is running and listening.
+        if (failure != McpFailure.TimedOut && failure !is McpFailure.Failed) return failure
+        val applicationId = AutomaticServers.applicationIdOf(server.id)
+        val cause = generateSequence(error) { it.cause }.take(MAX_CAUSES)
+            .firstOrNull { it is SocketTimeoutException || it is ConnectException }
+        return when (cause) {
+            is SocketTimeoutException -> McpFailure.AppNotAnswering(applicationId)
+            is ConnectException -> McpFailure.AppNotListening(applicationId)
+            else -> failure
+        }
+    }
+
+    /**
      * The sentence to show for [error].
      * @param context this plugin's context, for its own `strings.xml`; null falls back to the
      *   untranslated shape, which beats showing the user nothing.
-     * @param serverName the server's label, so a user with several knows which one failed.
+     * @param server the server that failed. Its label names it, so a user with several knows
+     *   which one; the two reasons that say what to do with an app name its application ID.
      * @param error the failure.
      * @return one sentence.
      */
-    fun format(context: Context?, serverName: String, error: Throwable): String {
-        val failure = classify(error)
+    fun format(context: Context?, server: McpServer, error: Throwable): String {
+        val serverName = server.name
         if (context == null) return "$serverName: ${error.message ?: error.javaClass.simpleName}"
 
-        return when (failure) {
+        return when (val failure = classify(error, server)) {
             McpFailure.BadRequest -> context.getString(R.string.mcp_error_bad_request, serverName)
             is McpFailure.TokenRefused -> refused(context, serverName, failure.credential)
             is McpFailure.Forbidden -> forbidden(context, serverName, failure.credential)
@@ -148,6 +194,10 @@ object McpErrorFormatter {
             is McpFailure.Failed -> failure.reason
                 ?.let { context.getString(R.string.mcp_error_failed_reason, serverName, it) }
                 ?: context.getString(R.string.mcp_error_failed, serverName)
+            is McpFailure.AppNotAnswering ->
+                context.getString(R.string.mcp_error_app_not_answering, failure.applicationId)
+            is McpFailure.AppNotListening ->
+                context.getString(R.string.mcp_error_app_not_listening, failure.applicationId)
         }
     }
 

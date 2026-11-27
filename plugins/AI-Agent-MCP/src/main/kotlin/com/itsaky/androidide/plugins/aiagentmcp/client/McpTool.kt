@@ -6,11 +6,14 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
  * @property name the tool's own name, unique within its server.
  * @property description what it does, as the server describes it — untrusted remote text.
  * @property inputSchema JSON Schema for the arguments, empty when the server sends none.
+ * @property readOnlyHint whether `annotations.readOnlyHint` was exactly boolean true. A claim by
+ *   the server: only the automatic debugger entry acts on it.
  */
 data class McpTool(
     val name: String,
     val description: String,
     val inputSchema: Map<String, Any> = emptyMap(),
+    val readOnlyHint: Boolean = false,
 )
 
 /**

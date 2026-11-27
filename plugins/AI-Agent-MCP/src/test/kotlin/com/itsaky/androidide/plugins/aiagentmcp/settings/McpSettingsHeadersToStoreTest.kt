@@ -7,9 +7,10 @@ import org.junit.Test
 /**
  * What the header rows mean when the dialog saves them.
  *
- * `setHeaders` replaces the whole stored map, so this predicate is the only thing standing between
- * a keystore that would not answer and a user losing headers they were just told were intact: the
- * rows on screen may replace what is stored only when the dialog drew what is stored.
+ * `McpServerStore.saveConnection` replaces the whole stored map, so this predicate is the only
+ * thing standing between a keystore that would not answer and a user losing headers they were just
+ * told were intact: the rows on screen may replace what is stored only when the dialog drew what is
+ * stored.
  */
 class McpSettingsHeadersToStoreTest {
 

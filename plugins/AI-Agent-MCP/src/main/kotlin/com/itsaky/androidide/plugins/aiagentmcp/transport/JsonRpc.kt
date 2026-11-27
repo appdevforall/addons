@@ -12,6 +12,8 @@ object JsonRpc {
 
     private const val VERSION = "2.0"
 
+    private const val BYTE_ORDER_MARK = "\uFEFF"
+
     /** JSON-RPC's own code for a method the server does not implement. */
     const val METHOD_NOT_FOUND = -32601
 
@@ -64,13 +66,24 @@ object JsonRpc {
      *
      * A batch — which the spec allows and some servers send even for a single request — is reduced
      * to its first non-notification member, since this client only ever has one call in flight.
+     * A leading byte order mark is ignored.
+     *
+     * A document nested deeper than [JsonDepth.MAX], or not strict JSON, is refused before any
+     * parser sees it: parsing recurses once per level, and on Android a server's reply nested
+     * thousands deep would end in a StackOverflowError that nothing here may catch. Text that is
+     * not strict JSON could hide such nesting from the scan, so it is refused too.
      *
      * @param payload one JSON-RPC document, object or array.
      * @return the reply, or null when the payload is not a reply at all (a server-initiated
      *   request or notification, which this client does not answer).
+     * @throws UnparsedReplyException when [payload] nests deeper than [JsonDepth.MAX] or is not
+     *   strict JSON, its message naming which.
      */
     fun parseReply(payload: String): Reply? {
-        val trimmed = payload.trim()
+        // A byte order mark is dropped: a parser may ignore one (RFC 8259, 8.1), Android's org.json
+        // does, and the checks below took a reply that starts with one for no JSON at all.
+        val trimmed = payload.trim().removePrefix(BYTE_ORDER_MARK).trim()
+        JsonDepth.refusal(trimmed)?.let { throw UnparsedReplyException(it.reason) }
         val json = when {
             trimmed.startsWith("{") -> JSONObject(trimmed)
             trimmed.startsWith("[") -> org.json.JSONArray(trimmed).let { array ->
@@ -115,4 +128,10 @@ object JsonRpc {
 
         return Reply(id = id, result = json.optJSONObject("result") ?: JSONObject())
     }
+
+    /**
+     * A reply [parseReply] refused unparsed: nested deeper than [JsonDepth.MAX], or not strict JSON.
+     * @param reason the rule it broke, to follow "The server's reply to 'm' ".
+     */
+    class UnparsedReplyException internal constructor(reason: String) : IllegalArgumentException(reason)
 }

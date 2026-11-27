@@ -11,6 +11,7 @@ import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -41,6 +42,22 @@ object McpServerStore {
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 
     /**
+     * The server list as last read or written, with the preferences it belongs to.
+     *
+     * The check that a server is still configured (`McpServers.isConfigured`) runs under the health,
+     * catalog and session locks, and a SQLite debugger entry's refresh waits on two of them while it
+     * holds its own. Read from the preferences, that check parsed every server's JSON under them;
+     * answered from here, it reads nothing and parses nothing.
+     *
+     * Every write puts the list it wrote here. A read puts what it read only by compare-and-set
+     * against what it saw first, so a read that raced a write never puts the older list back. Kept
+     * with the preferences it came from: a plugin initialized again reads its own afresh.
+     */
+    private class Snapshot(val prefs: SharedPreferences, val servers: List<McpServer>)
+
+    private val snapshot = AtomicReference<Snapshot?>(null)
+
+    /**
      * Serialises every read-modify-write of the server list.
      *
      * The list is one JSON blob, so each mutation reads it whole and puts it back whole: a refresh
@@ -49,9 +66,33 @@ object McpServerStore {
      */
     private val lock = Any()
 
-    /** Registers [listener], called after any change to the servers or their toggles. */
+    /**
+     * Held while a server's URL, token or headers are written, and while a request reads its
+     * credentials together with the URL they are for ([readTogether]). A reader then finds the URL
+     * with the credentials saved with it, never the new URL with the old token or the old URL with
+     * the new: a save writes the three one after another, and a request reading between two of
+     * those writes paired one server's URL with another's credentials.
+     *
+     * Its own lock, not [lock] and not `McpConnections`': it is held across Keystore work, which
+     * nothing waiting for the server list or the session map should sit behind. Taken before
+     * [lock], never inside it. Nothing runs under it but this store's own reads and writes, the
+     * Keystore's among them, never a listener.
+     */
+    private val credentialsLock = Any()
+
+    /**
+     * Runs [read] holding [credentialsLock]: what it reads of one server's URL, token and headers
+     * was saved together. For a request's credentials, read with the URL they go to.
+     */
+    internal fun <T> readTogether(read: () -> T): T = synchronized(credentialsLock, read)
+
+    /**
+     * Registers [listener], called after any change to the servers or their toggles. Adding one
+     * already registered does nothing, so a host that activates the plugin twice still gets one
+     * call per change, and one [removeChangeListener] takes it out.
+     */
     fun addChangeListener(listener: () -> Unit) {
-        listeners.add(listener)
+        listeners.addIfAbsent(listener)
     }
 
     /** Removes a listener added by [addChangeListener]. */
@@ -59,22 +100,35 @@ object McpServerStore {
         listeners.remove(listener)
     }
 
+    /** How many change listeners are registered; a test seam for a listener registered twice. */
+    internal val changeListenerCount: Int get() = listeners.size
+
     /**
      * Every configured server, in the order they were added.
      * @return the servers; empty before any is configured, or when the stored blob is unreadable.
      */
     fun servers(): List<McpServer> {
-        val raw = prefs()?.getString(KEY_SERVERS, null) ?: return emptyList()
+        val prefs = prefs() ?: return emptyList()
+        val seen = snapshot.get()
+        if (seen != null && seen.prefs === prefs) return seen.servers
+        val read = parse(prefs.getString(KEY_SERVERS, null))
+        snapshot.compareAndSet(seen, Snapshot(prefs, read))
+        return read
+    }
+
+    /** The stored list in [raw], empty when there is none or it is unreadable. */
+    private fun parse(raw: String?): List<McpServer> {
+        if (raw == null) return emptyList()
         return try {
-            val array = JSONArray(raw)
-            (0 until array.length()).mapNotNull { index ->
-                array.optJSONObject(index)?.let(::toServer)
-            }
+            fromJson(JSONArray(raw))
         } catch (e: Exception) {
             Log.e(TAG, "Stored server list is unreadable; treating it as empty", e)
             emptyList()
         }
     }
+
+    private fun fromJson(array: JSONArray): List<McpServer> =
+        (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let(::toServer) }
 
     /**
      * Stores the two fields the add/edit dialog owns, leaving every other field as stored.
@@ -87,12 +141,105 @@ object McpServerStore {
      * @return the record as it now stands, for a caller holding a snapshot to refresh from.
      */
     fun saveDetails(server: McpServer): McpServer {
-        val merged = synchronized(lock) {
-            mergeDetails(servers().firstOrNull { it.id == server.id }, server)
-                .also(::upsertLocked)
-        }
+        val merged = synchronized(credentialsLock) { saveDetailsLocked(server) }
         fireChanged()
         return merged
+    }
+
+    /** [saveDetails] without telling the listeners. Call holding [credentialsLock]. */
+    private fun saveDetailsLocked(server: McpServer): McpServer = synchronized(lock) {
+        mergeDetails(servers().firstOrNull { it.id == server.id }, server).also(::upsertLocked)
+    }
+
+    /**
+     * What [saveConnection] stored.
+     * @property server the record as it now stands, for a caller holding a snapshot to refresh
+     *   from.
+     * @property tokenStored false when a token was given and could not be stored.
+     * @property headersStored false when headers were given and could not be stored.
+     */
+    data class SavedConnection(
+        val server: McpServer,
+        val tokenStored: Boolean,
+        val headersStored: Boolean,
+    )
+
+    /**
+     * Stores what the add/edit dialog owns: the name and URL, as [saveDetails] does, and when given
+     * the token and the headers. All in one step under [credentialsLock], so a request reading its
+     * credentials ([readTogether]) finds the old URL with the old ones or the new URL with the new,
+     * never one with the other. The listeners are told once, after.
+     *
+     * When the URL changes and a token or headers write fails, the old value is still stored, and
+     * the new URL must not get it: it is forgotten in the same step. If forgetting it fails too,
+     * the URL is put back instead, so the old credential stays with the URL it was entered for;
+     * the returned record then carries the old URL. Either way the failure is reported in the
+     * result, and the user enters the credential again.
+     *
+     * A null [token] or [headers] keeps the stored value, also when the URL changes: the new URL
+     * is then sent that stored credential, on purpose. Pass blank or empty to forget it.
+     *
+     * Keystore work, so call this off the main thread.
+     *
+     * @param server the candidate, carrying the id plus the edited name and URL.
+     * @param token the token to store, blank to forget it, or null to keep the stored one.
+     * @param headers the headers to store, replacing the stored ones, empty to forget them, or null
+     *   to keep them.
+     * @return the record as it now stands, and which credentials could not be stored.
+     */
+    fun saveConnection(
+        server: McpServer,
+        token: String?,
+        headers: Map<String, String>?,
+    ): SavedConnection {
+        val saved = synchronized(credentialsLock) {
+            val before = server(server.id)
+            var merged = saveDetailsLocked(server)
+            val tokenStored = token?.let { writeToken(server.id, it) } ?: true
+            val headersStored = headers?.let { writeHeaders(server.id, it) } ?: true
+            if (before != null && before.url != merged.url && !(tokenStored && headersStored)) {
+                // A write that failed left the old value stored, and the URL has moved: the new
+                // URL must not get what was entered for the old one. Forget it, still under the
+                // lock, so no request reads the pair between the writes.
+                var forgotten = true
+                if (!tokenStored) forgotten = writeToken(server.id, "") && forgotten
+                if (!headersStored) forgotten = writeHeaders(server.id, emptyMap()) && forgotten
+                if (!forgotten) {
+                    // Forgetting failed too, so the old credential is still stored: put the URL
+                    // back, which is the one it belongs to. The user's other edits are kept.
+                    // Re-read the record: a toggle made during the Keystore writes lives only
+                    // there, and restoring the older snapshot would undo it.
+                    merged = synchronized(lock) {
+                        val current = servers().firstOrNull { it.id == server.id }
+                        if (current == null) merged
+                        else current.copy(url = before.url).also(::upsertLocked)
+                    }
+                }
+            }
+            SavedConnection(merged, tokenStored, headersStored)
+        }
+        fireChanged()
+        return saved
+    }
+
+    /**
+     * Forgets a server's token and every extra header, in one step under [credentialsLock].
+     *
+     * Keystore work, so call this off the main thread.
+     *
+     * @param id the server.
+     * @return true when neither is stored any more.
+     */
+    fun clearCredentials(id: String): Boolean {
+        val cleared = synchronized(credentialsLock) {
+            // Both, whatever the first returned: a token left behind is no reason to keep the
+            // headers.
+            val token = writeToken(id, "")
+            val headers = writeHeaders(id, emptyMap())
+            token && headers
+        }
+        fireChanged()
+        return cleared
     }
 
     /**
@@ -149,33 +296,34 @@ object McpServerStore {
      * @param id the server to remove.
      */
     fun remove(id: String) {
-        synchronized(lock) {
-            prefs()?.edit()
-                ?.remove(KEY_TOKEN_PREFIX + id)
-                ?.remove(KEY_HEADERS_PREFIX + id)
-                ?.apply()
-            writeLocked(servers().filterNot { it.id == id })
+        // The credentials lock too, like every write of a URL or a credential.
+        synchronized(credentialsLock) {
+            synchronized(lock) {
+                prefs()?.edit()
+                    ?.remove(KEY_TOKEN_PREFIX + id)
+                    ?.remove(KEY_HEADERS_PREFIX + id)
+                    ?.apply()
+                writeLocked(servers().filterNot { it.id == id })
+            }
         }
         fireChanged()
     }
 
     /**
-     * Stores a server's bearer token, encrypted; blank forgets it.
+     * Stores a server's bearer token, encrypted; blank forgets it. Call holding [credentialsLock],
+     * through [saveConnection] or [clearCredentials], which tell the listeners: a new credential
+     * has to reach the agent, or it keeps calling with the old one until something else happens to
+     * touch the store.
      *
-     * Keystore work, so call this off the main thread.
+     * Internal for the tests, which have no Keystore to write to.
      *
      * @param id the server the token belongs to.
      * @param token the token, or blank to remove it.
      * @return true once it is on disk, or removed for a blank one; false when encrypting it or the
      *   write itself failed, which is what the pane must not report as saved.
      */
-    fun setToken(id: String, token: String): Boolean {
-        val stored = secureTokenStore.write(prefs(), KEY_TOKEN_PREFIX + id, token)
-        // Like every other mutator: a new credential has to reach the agent, or it keeps calling
-        // with the old one until something else happens to touch the store.
-        fireChanged()
-        return stored
-    }
+    internal fun writeToken(id: String, token: String): Boolean =
+        secureTokenStore.write(prefs(), KEY_TOKEN_PREFIX + id, token)
 
     /**
      * Reads a server's bearer token.
@@ -228,9 +376,8 @@ object McpServerStore {
     }
 
     /**
-     * Stores a server's extra headers, encrypted; an empty map forgets them.
-     *
-     * Keystore work, so call this off the main thread.
+     * Stores a server's extra headers, encrypted; an empty map forgets them. Call holding
+     * [credentialsLock], as for [writeToken].
      *
      * @param id the server the headers belong to.
      * @param headers the headers to store; unusable pairs are dropped.
@@ -238,7 +385,7 @@ object McpServerStore {
      *   or the write itself failed. Forgetting them on a store that was never opened is success:
      *   there is nothing on disk to remove.
      */
-    fun setHeaders(id: String, headers: Map<String, String>): Boolean {
+    internal fun writeHeaders(id: String, headers: Map<String, String>): Boolean {
         val clean = McpHeaders.sanitize(headers)
         val key = KEY_HEADERS_PREFIX + id
         // The empty map goes through write() as a blank, which removes the entry, rather than
@@ -254,9 +401,7 @@ object McpServerStore {
         // A clear with no preferences behind it has nothing to remove, so it succeeded; only a
         // write with something to store has genuinely failed.
         val prefs = prefs() ?: return clean.isEmpty()
-        val stored = secureTokenStore.write(prefs, key, payload)
-        fireChanged()
-        return stored
+        return secureTokenStore.write(prefs, key, payload)
     }
 
     /** Whether any extra header is configured for [id], without decrypting them. */
@@ -264,12 +409,16 @@ object McpServerStore {
 
     /**
      * Records the tools a server advertised, dropping toggles for tools it no longer has.
+     * Does nothing when the server's URL is no longer the one the listing used: that list belongs
+     * to the old endpoint, and applying it would drop the toggles of tools the new one may have.
      * @param id the server.
+     * @param listedUrl the URL the tools were listed from.
      * @param toolNames the tools it just listed.
      */
-    fun setKnownTools(id: String, toolNames: List<String>) {
+    fun setKnownTools(id: String, listedUrl: String, toolNames: List<String>) {
         synchronized(lock) {
             val server = servers().firstOrNull { it.id == id } ?: return
+            if (server.url != listedUrl) return
             val updated = server.copy(
                 knownTools = toolNames,
                 enabledTools = server.enabledTools.filterTo(mutableSetOf()) { it in toolNames },
@@ -306,7 +455,10 @@ object McpServerStore {
     private fun writeLocked(servers: List<McpServer>) {
         val array = JSONArray()
         servers.forEach { array.put(toJson(it)) }
-        prefs()?.edit()?.putString(KEY_SERVERS, array.toString())?.apply()
+        val prefs = prefs() ?: return
+        prefs.edit().putString(KEY_SERVERS, array.toString()).apply()
+        // As a read would give it back, a blank name already filled in from the URL.
+        snapshot.set(Snapshot(prefs, fromJson(array)))
     }
 
     private fun toJson(server: McpServer): JSONObject = JSONObject().apply {
@@ -338,11 +490,18 @@ object McpServerStore {
     private fun prefs(): SharedPreferences? =
         McpPlugin.getContext()?.getPluginSharedPreferences(PREFERENCE_FILE)
 
+    /**
+     * Tells every listener, one failing listener costing only itself. A listener may call the
+     * host, so a LinkageError is survived as well as an Exception; anything else, an
+     * OutOfMemoryError above all, propagates to whoever made the change.
+     */
     private fun fireChanged() {
         for (listener in listeners) {
             try {
                 listener()
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
+                Log.e(TAG, "A settings change listener threw", e)
+            } catch (e: LinkageError) {
                 Log.e(TAG, "A settings change listener threw", e)
             }
         }

@@ -12,6 +12,9 @@ package com.itsaky.androidide.plugins.aiagentmcp.transport
  * @property responseHeaders the server's headers, in the order it sent them.
  * @property responseBody what the server sent back, or null when none was read.
  * @property failure what interrupted the exchange, or null when it ran to the end.
+ * @property cancelled the request was given up before it went out, as a cancelled tool call's is:
+ *   nothing of it reached the server, and [requestHeaders] and [requestBody] are only what it
+ *   would have carried.
  */
 data class McpExchange(
     val method: String,
@@ -22,6 +25,7 @@ data class McpExchange(
     val responseHeaders: List<Header>,
     val responseBody: Body?,
     val failure: String?,
+    val cancelled: Boolean = false,
 ) {
 
     /** One header line. */

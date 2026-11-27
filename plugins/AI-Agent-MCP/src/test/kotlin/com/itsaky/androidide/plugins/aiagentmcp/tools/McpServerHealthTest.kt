@@ -1,10 +1,14 @@
 package com.itsaky.androidide.plugins.aiagentmcp.tools
 
+import com.itsaky.androidide.plugins.aiagentmcp.testing.awaitFinishedOrBlockedBy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlin.concurrent.thread
 
 /**
  * Tests [McpServerHealth], which the agent's per-server tags read: a change is announced once,
@@ -94,5 +98,23 @@ class McpServerHealthTest {
 
         assertEquals(McpServerHealth.State.DEGRADED, McpServerHealth.of(SERVER)?.state)
         assertEquals(1, changes)
+    }
+
+    @Test
+    fun givenARefusalBeingRecorded_whenTheCredentialChangesMeanwhile_thenTheRefusalIsCleared() {
+        McpServerHealth.degraded(SERVER, "refused", refused = true)
+        var changing: Thread? = null
+
+        // The credential changes while the refused write holds the lock, between its check and
+        // its write; the change must wait for the write and then clear it.
+        McpServerHealth.degraded(SERVER, "refused", refused = true) {
+            changing = thread(name = "changing") { McpServerHealth.credentialChanged(SERVER) }
+            awaitFinishedOrBlockedBy(changing!!, Thread.currentThread())
+            true
+        }
+        changing!!.join(10_000)
+
+        assertFalse("the refusal outlived the credential change", McpServerHealth.of(SERVER)!!.refused)
+        assertTrue(McpServerHealth.of(SERVER)?.state == McpServerHealth.State.DEGRADED)
     }
 }
