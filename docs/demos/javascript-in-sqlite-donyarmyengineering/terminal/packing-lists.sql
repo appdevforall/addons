@@ -6,13 +6,17 @@
 -- read a JSON list like that. A trigger that calls a JavaScript function
 -- can, and its error message says exactly what is wrong.
 --
--- Run it in Terminal:  sqlite3 demo.db < packing-lists.sql
+-- Run it in Terminal:  sqlite3 packing.db < packing-lists.sql
+-- It uses its own database file, because it keeps its function in the
+-- database (js_init_table), and the other scripts' functions would be kept
+-- there too.
 
 .load sqlite-js
 
--- The sqlite3 command doesn't let a trigger stored in a database call an
--- extension's functions, because opening a database you got from someone
--- else would run its triggers. This database is your own, so allow it.
+-- The sqlite3 command turns trusted_schema off, so that a database you got
+-- from someone else can't run code in its triggers. Then a trigger stored in
+-- a database can't call functions like the one below. This database is your
+-- own, so allow it.
 -- Every later session that writes to the shipments table needs this line,
 -- .load sqlite-js and SELECT js_init_table(1); see the end of this file.
 PRAGMA trusted_schema = ON;
@@ -27,6 +31,9 @@ SELECT js_init_table();
 -- one it throws an error, which stops the INSERT or UPDATE.
 SELECT js_create_scalar('check_packing_list', '(function (args) {
   const [json, limitKg] = args;
+  if (typeof limitKg !== "number" || !(limitKg > 0)) {
+    throw new Error("The van''s limit must be a number of kg, more than 0.");
+  }
   let items;
   try {
     items = JSON.parse(json);
@@ -39,14 +46,21 @@ SELECT js_create_scalar('check_packing_list', '(function (args) {
   let total = 0;
   items.forEach((item, n) => {
     const where = `Item ${n + 1}`;
-    if (!/^[A-Z]{3,5}-[A-Z0-9]{2,4}-[0-9]{3}$/.test(item.code)) {
-      throw new Error(`${where}: "${item.code}" is not a code like BOLT-M12-050.`);
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`${where} is not an item with a code, a quantity and a weight.`);
+    }
+    const code = item.code;
+    if (typeof code !== "string") {
+      throw new Error(`${where}: the code must be text, like "BOLT-M12-050".`);
+    }
+    if (!/^[A-Z]{3,5}-[A-Z0-9]{2,4}-[0-9]{3}$/.test(code)) {
+      throw new Error(`${where}: "${code}" is not a code like BOLT-M12-050.`);
     }
     if (!Number.isInteger(item.qty) || item.qty < 1) {
       throw new Error(`${where}: ${item.qty} is not a whole number of 1 or more.`);
     }
-    if (!(item.kg > 0)) {
-      throw new Error(`${where}: the weight must be more than 0 kg.`);
+    if (typeof item.kg !== "number" || !(item.kg > 0)) {
+      throw new Error(`${where}: the weight must be a number of kg, more than 0.`);
     }
     total += item.qty * item.kg;
   });
@@ -105,6 +119,9 @@ SELECT id, van, json_array_length(items) AS items FROM shipments;
 --   .load sqlite-js
 --   PRAGMA trusted_schema = ON;
 --   SELECT js_init_table(1);
--- Without them, every INSERT into shipments fails with
--- "no such function: check_packing_list", so a program without sqlite-js
--- can't slip in a bad list.
+-- js_init_table(1) runs the code stored in the database, so use it only on
+-- databases you trust, like this one. Without those lines, every INSERT
+-- into shipments, and every change to a list, fails with
+-- "no such function: check_packing_list". The trigger guards against
+-- mistakes, not against someone set on getting round it: a program that
+-- can write the file can still delete rows or drop the trigger.

@@ -16,13 +16,18 @@
 
 -- name_key('Núñez, José ') returns 'jose nunez': no accents, no
 -- apostrophes, lower case, "Last, First" turned around, and the words
--- sorted, so their order doesn't matter.
+-- sorted, so their order doesn't matter. Letters of every alphabet are kept,
+-- so two names in Cyrillic or Chinese don't both become an empty key.
 SELECT js_create_scalar('name_key', '(function (args) {
-  let s = String(args[0]).normalize("NFD").replace(/[̀-ͯ]/g, "");
-  s = s.replace(/[''’]/g, "").toLowerCase();
+  // NFD splits an accented letter into the letter and its accent (a mark).
+  let s = String(args[0]).normalize("NFD").replace(/\p{M}/gu, "");
+  // Letters with no accent to remove, written the way they are usually typed.
+  const plain = { "ø": "o", "ł": "l", "ß": "ss", "æ": "ae", "œ": "oe", "đ": "d" };
+  s = s.toLowerCase().replace(/[øłßæœđ]/g, (c) => plain[c]);
+  s = s.replace(/[''\u2019]/g, "");
   const comma = s.indexOf(",");
   if (comma >= 0) s = s.slice(comma + 1) + " " + s.slice(0, comma);
-  return s.replace(/[^a-z]+/g, " ").trim().split(" ").sort().join(" ");
+  return s.replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").sort().join(" ");
 })');
 
 -- similarity(a, b) is 1 for the same text and less for each letter that
@@ -62,5 +67,5 @@ WITH k AS (SELECT id, name_key(name) AS key FROM customers)
 SELECT a.id AS id, b.id AS same_as,
        round(similarity(a.key, b.key), 2) AS score
 FROM k AS a JOIN k AS b ON a.id < b.id
-WHERE similarity(a.key, b.key) >= 0.85
+WHERE a.key <> '' AND similarity(a.key, b.key) >= 0.85
 ORDER BY a.id, b.id;

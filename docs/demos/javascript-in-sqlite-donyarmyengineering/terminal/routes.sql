@@ -97,8 +97,8 @@ SELECT route,
        CAST(round((rhumb - gc) * 1.8) AS INTEGER) AS fuel_saved_kg
 FROM legs ORDER BY rhumb - gc DESC;
 
--- Where the great circle from San Francisco to Tokyo goes: north, close
--- to Alaska, though both cities are near 36 degrees north.
+-- Where the great circle from San Francisco to Tokyo goes: north, toward
+-- the Aleutian Islands, though both cities are near 36 degrees north.
 WITH RECURSIVE steps(f) AS (SELECT 0.0 UNION ALL SELECT f + 0.25 FROM steps WHERE f < 1)
 SELECT CAST(f * 100 AS INTEGER) || '%' AS part_of_trip,
        gc_point(a.lat, a.lon, b.lat, b.lon, f) AS lat_lon
