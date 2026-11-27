@@ -123,6 +123,11 @@ class AiChatPlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExte
 
     override fun getTier3DocsAssetPath(): String = "docs"
 
+    // Overridden for the same reason as the UIExtension methods: an older host has no default.
+    override fun onDocumentationInstall(): Boolean = true
+
+    override fun onDocumentationUninstall() {}
+
     companion object {
         const val PLUGIN_ID = "org.appdevforall.aichat"
         const val TAB_ID = "ai_chat_main"

@@ -25,6 +25,7 @@ class ChatFragment : Fragment() {
 
     private var webView: WebView? = null
     private var bridge: ChatBridge? = null
+    private var sheetListener: Pair<View, View.OnLayoutChangeListener>? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
@@ -77,6 +78,51 @@ class ChatFragment : Fragment() {
         if (savedInstanceState == null || wv.restoreState(savedInstanceState) == null) {
             wv.loadUrl(START_URL)
         }
+
+        keepClearOfBottomSheet(view)
+    }
+
+    /**
+     * The editor's tab area runs underneath the IDE's collapsed bottom sheet (build status, logs).
+     * A code editor just scrolls, but the composer is pinned to the bottom of the page, so pad the
+     * page by however much the collapsed sheet overlaps this tab.
+     *
+     * The sheet is found by its id name in the host's own resources; when the sheet is expanded it
+     * covers the whole tab anyway, so only a partial overlap updates the padding.
+     */
+    private fun keepClearOfBottomSheet(root: View) {
+        val activity = activity ?: return
+        val density = resources.displayMetrics.density
+        // The host's collapsed sheet is 100dp and its tab container has a 16dp bottom margin.
+        val fallback = (FALLBACK_SHEET_OVERLAP_DP * density).toInt()
+        @SuppressLint("DiscouragedApi")
+        val sheetId = activity.resources.getIdentifier("bottom_sheet", "id", activity.packageName)
+        val sheet: View? = if (sheetId != 0) activity.findViewById(sheetId) else null
+        if (sheet == null) {
+            root.setPadding(0, 0, 0, fallback)
+            return
+        }
+
+        val mine = IntArray(2)
+        val theirs = IntArray(2)
+        val update = {
+            if (root.isAttachedToWindow && root.height > 0) {
+                root.getLocationOnScreen(mine)
+                sheet.getLocationOnScreen(theirs)
+                val contentBottom = mine[1] + root.height
+                val overlap = contentBottom - theirs[1]
+                // Expanded or half-expanded: the tab is hidden; keep the collapsed value.
+                if (overlap in 0..(root.height / 2) && overlap != root.paddingBottom) {
+                    root.setPadding(0, 0, 0, overlap)
+                }
+            }
+        }
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> root.post(update) }
+        sheet.addOnLayoutChangeListener(listener)
+        root.addOnLayoutChangeListener(listener)
+        sheetListener = sheet to listener
+        root.setPadding(0, 0, 0, fallback)
+        root.post(update)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -95,6 +141,8 @@ class ChatFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        sheetListener?.let { (sheet, l) -> sheet.removeOnLayoutChangeListener(l) }
+        sheetListener = null
         bridge?.detach()
         bridge = null
         webView?.let { wv ->
@@ -138,5 +186,6 @@ class ChatFragment : Fragment() {
     companion object {
         private const val ORIGIN_HOST = "appassets.androidplatform.net"
         private const val START_URL = "https://$ORIGIN_HOST/web/index.html"
+        private const val FALLBACK_SHEET_OVERLAP_DP = 84
     }
 }

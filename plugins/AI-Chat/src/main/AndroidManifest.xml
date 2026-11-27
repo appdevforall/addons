@@ -23,6 +23,10 @@
         <!-- No permissions. The chat makes no network requests of its own (AI Core's backend
              does, if it is a cloud one), and its chats are stored in its own plugin files dir. -->
 
+        <!-- One editor-sidebar slot for the "AI Chat" launcher. The host skips a plugin's
+             sidebar items entirely if it declares fewer slots than getSideMenuItems() returns. -->
+        <meta-data android:name="plugin.sidebar_items" android:value="1" />
+
         <meta-data android:name="plugin.main_class" android:value="org.appdevforall.aichat.AiChatPlugin" />
         <meta-data android:name="plugin.icon_day" android:value="assets/icon_day.png" />
         <meta-data android:name="plugin.icon_night" android:value="assets/icon_night.png" />
