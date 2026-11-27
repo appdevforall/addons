@@ -39,7 +39,7 @@ public class FastSearchIndex {
         String normalizedQuery = query.toLowerCase().trim();
 
         if (searchCache.containsKey(normalizedQuery)) {
-            return new ArrayList<>(searchCache.get(normalizedQuery));
+            return new ArrayList<>(Objects.requireNonNull(searchCache.get(normalizedQuery)));
         }
 
         Set<Integer> resultSet = new HashSet<>();

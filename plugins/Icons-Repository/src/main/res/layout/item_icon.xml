@@ -2,6 +2,7 @@
 <LinearLayout 
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="82dp"
     android:layout_height="wrap_content"
     android:clickable="true"
@@ -13,7 +14,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:padding="12dp">
+        android:padding="12dp"
+        tools:ignore="UselessParent">
 
         <!-- Icon ImageView -->
         <androidx.appcompat.widget.AppCompatImageView
@@ -23,7 +25,8 @@
             android:layout_marginBottom="8dp"
             android:padding="2dp"
             android:scaleType="fitCenter"
-            app:tintMode="src_atop"
+            android:src="@drawable/ic_category"
+            app:tintMode="src_in"
             app:tint="?attr/colorOnSurface" />
 
         <!-- Icon Name TextView -->
@@ -36,7 +39,8 @@
             android:maxLines="2"
             android:ellipsize="end"
             android:textSize="11sp"
-            android:text="Home" />
+            android:text="Home"
+            tools:ignore="HardcodedText" />
 
     </LinearLayout>
 

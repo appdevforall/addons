@@ -72,7 +72,7 @@
     <color name="m3_theme_SurfaceInverseMediumContrast">#2E3035</color>
     <color name="m3_theme_OnSurfaceInverseMediumContrast">#EFF1F7</color>
     <color name="m3_theme_PrimaryInverseMediumContrast">#A3BBFE</color>
-    <color name="m3_theme_PrimaryFixedMediumContrast">#C8D6FF</color>
+    <color name="m3_theme_PrimaryFixedMediumContrast">#3F3F3F</color>
     <color name="m3_theme_OnPrimaryFixedMediumContrast">#000B2A</color>
     <color name="m3_theme_PrimaryFixedDimMediumContrast">#8CAAFE</color>
     <color name="m3_theme_OnPrimaryFixedVariantMediumContrast">#172859</color>

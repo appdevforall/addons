@@ -11,9 +11,9 @@ import java.util.List;
 
 public class ValidationTextWatcher implements TextWatcher {
 
-    private TextInputEditText inputEditText;
-    private List<ValidationRule> rules;
-    private OnAfterValidOperation listener;
+    private final TextInputEditText inputEditText;
+    private final List<ValidationRule> rules;
+    private final OnAfterValidOperation listener;
 
     public ValidationTextWatcher(TextInputEditText inputEditText, List<ValidationRule> rules, OnAfterValidOperation listener) {
         this.inputEditText = inputEditText;

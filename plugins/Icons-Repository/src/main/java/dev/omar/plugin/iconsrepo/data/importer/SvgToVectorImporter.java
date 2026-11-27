@@ -1,14 +1,21 @@
 package dev.omar.plugin.iconsrepo.data.importer;
 
-import dev.omar.plugin.iconsrepo.utils.Utils;
+import android.os.Build;
 
 import org.xmlpull.v1.XmlPullParserFactory;
 import org.xmlpull.v1.XmlSerializer;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,20 +39,38 @@ public class SvgToVectorImporter implements IconImporter {
                 return ImportIconResult.error("No path data found in SVG");
             }
 
-            // توليد XML بشكل عادي أولاً
             String rawXml = buildVectorXml(params, pathData);
+            String resourceName = sanitizeFileName(params.source.getName());
+            String fileName = resourceName + ".xml";
 
-            File destDir = params.dest.getDrawableDirectory(params.currentProject);
-            String fileName = sanitizeFileName(params.source.getName()) + ".xml";
-            File outputFile = new File(destDir, fileName);
-
-            if (outputFile.exists()) {
-                return ImportIconResult.error("File already exists: " + outputFile.getName());
+            List<File> destDirs = params.dest.getDrawableDirectories(params.currentProject);
+            if (destDirs.isEmpty()) {
+                return ImportIconResult.error("No target drawable directory found");
             }
 
-            Path parentPath = outputFile.getParentFile().toPath();
-            Files.createDirectories(parentPath);
-            Files.write(outputFile.toPath(), rawXml.getBytes(StandardCharsets.UTF_8));
+            // Never replace a drawable the project already has: a module that has one with this
+            // name is skipped, and the user is told which.
+            List<String> skipped = new ArrayList<>();
+            int importedCount = 0;
+            for (File destDir : destDirs) {
+                File outputFile = new File(destDir, fileName);
+                File existing = findResource(destDir, resourceName);
+                if (existing != null) {
+                    skipped.add(displayPath(params, existing));
+                    continue;
+                }
+                Path parentPath = Objects.requireNonNull(outputFile.getParentFile()).toPath();
+                Files.createDirectories(parentPath);
+                Files.write(outputFile.toPath(), rawXml.getBytes(StandardCharsets.UTF_8));
+                importedCount++;
+            }
+
+            if (importedCount == 0) {
+                return ImportIconResult.error("Already exists, nothing imported: " + String.join(", ", skipped));
+            }
+            if (!skipped.isEmpty()) {
+                return ImportIconResult.success("Imported. Skipped, already exists: " + String.join(", ", skipped));
+            }
 
             return ImportIconResult.success();
         } catch (Exception e) {
@@ -55,13 +80,29 @@ public class SvgToVectorImporter implements IconImporter {
 
     private String extractPathData(InputStream svgStream) throws IOException {
         try (svgStream) {
-            String content = new String(Utils.readAllBytes(svgStream), StandardCharsets.UTF_8);
+            String content;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                content = new String(svgStream.readAllBytes(), StandardCharsets.UTF_8);
+            } else {
+                content = new String(readAllBytes(svgStream), StandardCharsets.UTF_8);
+            }
             Matcher matcher = PATH_D_PATTERN.matcher(content);
             return matcher.find() ? matcher.group(1) : null;
         }
     }
 
-    /** يبني نص XML خام (بدون تنسيق) متوافق مع Android VectorDrawable. */
+    private byte[] readAllBytes(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int len;
+        byte[] buff = new byte[1024];
+        while ((len = in.read(buff)) != -1) {
+            out.write(buff, 0, len);
+        }
+        out.flush();
+        out.close();
+        return out.toByteArray();
+    }
+
     private String buildVectorXml(ImportParams params, String pathData) throws Exception {
         XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
         factory.setNamespaceAware(true);
@@ -92,6 +133,35 @@ public class SvgToVectorImporter implements IconImporter {
         serializer.flush();
 
         return writer.toString();
+    }
+
+    /**
+     * A drawable with this resource name in any format (ic_home.png, ic_home.9.png, ic_home.xml),
+     * since Android resource names exclude the extension and two would collide.
+     */
+    private File findResource(File dir, String resourceName) {
+        File[] files = dir.listFiles();
+        if (files == null) return null;
+        for (File f : files) {
+            String n = f.getName();
+            int dot = n.indexOf('.');
+            if ((dot < 0 ? n : n.substring(0, dot)).equals(resourceName)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private String displayPath(ImportParams params, File file) {
+        File root = params.currentProject != null ? params.currentProject.getRootDir() : null;
+        if (root != null) {
+            try {
+                return root.toPath().relativize(file.toPath()).toString();
+            } catch (IllegalArgumentException ignored) {
+                // Not under the project root; fall through to the absolute path.
+            }
+        }
+        return file.getPath();
     }
 
     private String sanitizeFileName(String name) {

@@ -31,7 +31,7 @@ public class IconNameRule implements ValidationRule {
         input = input.trim();
 
         // Length check (optional but practical)
-        if (input.length() == 0 || input.length() > 100) return false;
+        if (input.isEmpty() || input.length() > 100) return false;
 
         // Pattern check
         if (!input.matches(PATTERN)) return false;
