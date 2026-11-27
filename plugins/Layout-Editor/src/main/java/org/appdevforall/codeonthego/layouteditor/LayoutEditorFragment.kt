@@ -342,7 +342,7 @@ class LayoutEditorFragment : Fragment() {
 				drawerLayout.closeDrawer(GravityCompat.END)
 			}
 			onItemLongClickListener = { view ->
-				view.javaClass.superclass?.name?.let { LayoutEditorDocs.show(view, it) }
+				view.javaClass.superclass?.name?.let { LayoutEditorDocs.showWidget(view, it) }
 			}
 		}
 	}

@@ -30,12 +30,12 @@ and libraries and links only against the stable `plugin-api` contract.
 ## Architecture
 
 ```
-layout-editor/
+plugins/Layout-Editor/
 ├── build.gradle.kts, settings.gradle.kts, proguard-rules.pro
-├── layout-editor-documentation.html   # full reference for this plugin
+├── layout-editor.html                 # full reference for this plugin
 ├── src/main/
 │   ├── AndroidManifest.xml            # plugin id, main class, icons, permissions
-│   ├── assets/                        # icons, tooltips.json, widgetclasses.json, palette/, attributes/, editor/
+│   ├── assets/                        # icons, widgetclasses.json, palette/, attributes/, editor/
 │   ├── kotlin|java/.../layouteditor/
 │   │   ├── LayoutEditorPlugin.kt      # entry point: toolbar action, enable rule, tooltips, build-status
 │   │   ├── LayoutEditorFragment.kt    # full-screen editor: canvas, palette, component tree, drawer
@@ -99,7 +99,7 @@ builder copies the built APK into the `.cgp` and then deletes the source APK.
 
 ## Documentation
 
-`layout-editor-documentation.html` is the full reference for this plugin. In the IDE,
+`layout-editor.html` is the full reference for this plugin. In the IDE,
 long-press any control, palette item, or attribute for its tooltip.
 
 ## License

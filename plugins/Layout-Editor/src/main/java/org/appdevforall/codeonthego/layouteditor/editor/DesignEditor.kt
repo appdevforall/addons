@@ -647,7 +647,7 @@ class DesignEditor : LinearLayout {
 
 		view.handleLongClicksAndDrag(
 			onLongPress = { view ->
-				view.javaClass.superclass?.name?.let { LayoutEditorDocs.show(view, it) }
+				view.javaClass.superclass?.name?.let { LayoutEditorDocs.showWidget(view, it) }
 			},
 			onDrop = { child, x, y ->
 				positionAtDrop(child, x, y, viewAttributeMap)
@@ -757,7 +757,7 @@ class DesignEditor : LinearLayout {
 		}
 
 		binding.viewLayout.setOnLongClickListener {
-			target.javaClass.superclass?.name?.let { name -> LayoutEditorDocs.show(it, name) }
+			target.javaClass.superclass?.name?.let { name -> LayoutEditorDocs.showWidget(it, name) }
 			true
 		}
 

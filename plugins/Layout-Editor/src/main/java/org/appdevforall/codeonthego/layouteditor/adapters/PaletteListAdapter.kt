@@ -36,7 +36,7 @@ class PaletteListAdapter(private val drawerLayout: DrawerLayout) :
     binding.root.contentDescription = widgetItem["name"].toString()
     binding.root.setupGestureHandling(
         onLongPress = { view ->
-            getSuperClassName(widgetItem["className"].toString())?.let { LayoutEditorDocs.show(view, it) }
+            getSuperClassName(widgetItem["className"].toString())?.let { LayoutEditorDocs.showWidget(view, it) }
         },
         onDrag = { view ->
             if (ViewCompat.startDragAndDrop(view, null, DragShadowBuilder(view), widgetItem, 0)) {

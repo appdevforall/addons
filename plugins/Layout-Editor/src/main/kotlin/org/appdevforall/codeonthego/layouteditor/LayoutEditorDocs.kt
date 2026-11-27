@@ -7,6 +7,8 @@ import com.itsaky.androidide.plugins.services.IdeTooltipService
 object LayoutEditorDocs {
 
     const val CATEGORY = "plugin_org.appdevforall.codeonthego.layouteditor"
+    private const val IDE_CATEGORY_JAVA = "java"
+    private const val IDE_CATEGORY_XML = "xml"
 
     const val TAG_OVERVIEW = "layouteditor.overview"
     const val TAG_HELP = "layouteditor.help"
@@ -25,6 +27,14 @@ object LayoutEditorDocs {
 
     fun show(anchor: View, tag: String) {
         service()?.showTooltip(anchor, tag)
+    }
+
+    fun showWidget(anchor: View, className: String) {
+        service()?.showTooltip(anchor, IDE_CATEGORY_JAVA, className)
+    }
+
+    fun showAttribute(anchor: View, attributeName: String) {
+        service()?.showTooltip(anchor, IDE_CATEGORY_XML, attributeName.substringAfterLast(":"))
     }
 
     fun bindLongPress(view: View, tag: String) {

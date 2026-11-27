@@ -175,8 +175,10 @@
   <p>
     Every control, palette item, and attribute carries a tooltip. Long-press it to
     read a short description, with a button through to the IDE's fuller
-    documentation. The entries come from the plugin's
-    <code>DocumentationExtension</code>.
+    documentation. A widget shows the IDE's <code>java</code> entry for its class,
+    such as <code>android.widget.TextView</code>, and an attribute shows the IDE's
+    <code>xml</code> entry for its name. The editor's own controls use entries from
+    the plugin's <code>DocumentationExtension</code>.
   </p>
 </section>
 
@@ -189,11 +191,11 @@
     <li>plugins/Layout-Editor/
       <ul>
         <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
-        <li>layout-editor-documentation.html (this page)</li>
+        <li>layout-editor.html (this page)</li>
         <li>src/main/
           <ul>
             <li>AndroidManifest.xml (plugin id, main class, icons, permissions)</li>
-            <li>assets/ (<code>icon_day.png</code>, <code>icon_night.png</code>; <code>tooltips.json</code>, <code>widgetclasses.json</code>; <code>palette/</code>, <code>attributes/</code>, <code>editor/</code>; default font and image)</li>
+            <li>assets/ (<code>icon_day.png</code>, <code>icon_night.png</code>; <code>widgetclasses.json</code>; <code>palette/</code>, <code>attributes/</code>, <code>editor/</code>; default font and image)</li>
             <li>kotlin/ and java/ org/appdevforall/codeonthego/layouteditor/
               <ul>
                 <li><strong>LayoutEditorPlugin.kt</strong>: entry point; toolbar action, enable rule, tooltips, build-status tracking</li>
@@ -323,9 +325,12 @@
   <h3>4.5 Documentation (<code>DocumentationExtension</code>)</h3>
   <p>
     <code>getTooltipCategory()</code> returns the plugin's tooltip category, and
-    <code>getTooltipEntries()</code> provides the toolbar-action tooltip, the
-    editor-control tooltips, and one entry per widget and attribute (loaded from
-    <code>assets/tooltips.json</code>). Tooltip buttons link into the IDE's
+    <code>getTooltipEntries()</code> provides the toolbar-action tooltip and the
+    editor-control tooltips. Widgets and attributes have no entries of their own:
+    <code>LayoutEditorDocs</code> looks a widget up in the IDE's <code>java</code>
+    category by its fully qualified class name, and an attribute in the IDE's
+    <code>xml</code> category by its name without the namespace prefix, so both show
+    the documentation the IDE maintains. Tooltip buttons link into the IDE's
     documentation through direct paths, so the plugin does not bundle its own
     documentation pages.
   </p>

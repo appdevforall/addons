@@ -1,8 +1,6 @@
 package org.appdevforall.codeonthego.layouteditor
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
@@ -221,51 +219,11 @@ class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildSt
                 "<code>layout_width</code> and <code>layout_height</code> can't be removed.",
             buttons = docButtons(),
         ),
-    ) + widgetAndAttributeEntries()
+    )
 
     private fun docButtons(): List<PluginTooltipButton> = listOf(
         PluginTooltipButton(description = "Learn more", uri = "i/plugins-adfa.html", order = 0, directPath = true),
     )
-
-    private data class TooltipDef(
-        val tag: String,
-        val summary: String,
-        val detail: String = "",
-        val uri: String = "",
-        val label: String = "",
-    )
-
-    private fun widgetAndAttributeEntries(): List<PluginTooltipEntry> {
-        val assets = PluginFragmentHelper.getPluginContext(PLUGIN_ID)?.assets ?: return emptyList()
-        return try {
-            val json = assets.open("tooltips.json").bufferedReader().use { it.readText() }
-            val defs: List<TooltipDef> =
-                Gson().fromJson(json, object : TypeToken<List<TooltipDef>>() {}.type)
-            defs.map { def ->
-                PluginTooltipEntry(
-                    tag = def.tag,
-                    summary = def.summary,
-                    detail = def.detail,
-                    buttons = if (def.uri.isNotBlank()) {
-                        listOf(
-                            PluginTooltipButton(
-                                description = def.label.ifBlank { "Learn more" },
-                                uri = def.uri,
-                                order = 0,
-                                directPath = true,
-                            )
-                        )
-                    } else {
-                        emptyList()
-                    },
-                )
-            }
-        } catch (e: Exception) {
-            context.logger.warn("Failed to load tooltips.json: ${e.message}")
-            emptyList()
-        }
-    }
-
 
     companion object {
         const val PLUGIN_ID = "org.appdevforall.codeonthego.layouteditor"
