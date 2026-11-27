@@ -34,7 +34,10 @@ class SqlTemplateRead(
         /** The whole render, functions included: more than one server call's 50 s, as a template may call several. */
         const val TIMEOUT_MILLIS = 110_000L
 
-        /** `distinct_values` and `sample_rows` defaults, and the most they return. */
+        /**
+         * `distinct_values` and `sample_rows` defaults, and the most they return. Either fails instead of returning
+         * fewer rows than asked for when more exist, or a value the server cut.
+         */
         const val DEFAULT_LIMIT = 100L
         const val MAX_LIMIT = 1000L
 
@@ -166,19 +169,19 @@ class SqlTemplateRead(
                 SqlTemplateFunction { args ->
                     val column = quoteIdentifier(string(args, 2, "column"))
                     val result =
-                        query(
+                        queryUpTo(
                             path(args, 0),
                             "SELECT DISTINCT $column FROM ${table(args, 1)} ORDER BY 1 LIMIT ?",
-                            listOf(limit(args, 3)),
+                            limit(args, 3),
                         )
-                    rows(result).map { it.firstOrNull() }
+                    whole(result).map { it.firstOrNull() }
                 },
             "sample_rows" to
                 SqlTemplateFunction { args ->
-                    val result = query(path(args, 0), "SELECT * FROM ${table(args, 1)} LIMIT ?", listOf(limit(args, 2)))
+                    val result = queryUpTo(path(args, 0), "SELECT * FROM ${table(args, 1)} LIMIT ?", limit(args, 2))
                     @Suppress("UNCHECKED_CAST")
                     val columns = (result["columns"] as? List<String>).orEmpty()
-                    rows(result).map { row -> columns.indices.associate { columns[it] to row.getOrNull(it) } }
+                    whole(result).map { row -> columns.indices.associate { columns[it] to row.getOrNull(it) } }
                 },
             "integrity" to SqlTemplateFunction { args -> tool("integrity_check", mapOf("database" to path(args, 0))) },
             "suggest_indexes" to
@@ -193,6 +196,31 @@ class SqlTemplateRead(
         sql: String,
         args: List<Any?>,
     ): Map<String, Any?> = tool("query", mapOf("database" to database, "sql" to sql, "args" to JSONArray(args)))
+
+    /**
+     * Runs [sql], whose one parameter is [limit], asking the server for that many rows: its own default is
+     * 100, whatever LIMIT the SQL has.
+     */
+    private fun queryUpTo(
+        database: String,
+        sql: String,
+        limit: Long,
+    ): Map<String, Any?> =
+        tool("query", mapOf("database" to database, "sql" to sql, "args" to JSONArray(listOf(limit)), "max_rows" to limit))
+
+    /**
+     * [result]'s rows, which must be all of them and whole: a template that builds an IN list or a CASE from
+     * them would otherwise be silently incomplete or splice a cut value.
+     */
+    private fun whole(result: Map<String, Any?>): List<List<Any?>> {
+        val rows = rows(result)
+        if (result["has_more"] == true) {
+            throw IllegalStateException("the server returned only ${rows.size} rows: the rest did not fit in one result; ask for fewer")
+        }
+        val cut = (result["truncated_cells"] as? Number)?.toLong() ?: 0L
+        if (cut > 0) throw IllegalStateException("the server cut $cut values to the length it returns, so they cannot be used whole")
+        return rows
+    }
 
     /** Calls [name] and returns its structured result; a failure stops the render with the server's message. */
     @Suppress("UNCHECKED_CAST")

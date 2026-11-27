@@ -152,6 +152,44 @@ class SqlTemplateReadTest {
         assertTrue(result.errorMessage, result.errorMessage!!.contains("no such table: nope"))
     }
 
+    private fun queryAnswer(
+        rows: Int,
+        hasMore: Boolean = false,
+        truncatedCells: Int = 0,
+    ) = JSONObject()
+        .put("columns", JSONArray().put("v"))
+        .put("rows", JSONArray().apply { repeat(rows) { put(JSONArray().put(it)) } })
+        .put("has_more", hasMore)
+        .put("truncated_cells", truncatedCells)
+
+    @Test fun distinctValuesAndSampleRowsAskTheServerForTheirWholeLimit() {
+        val host =
+            FakeHost { _, functions ->
+                functions.getValue("distinct_values").call(listOf("/data/app.db", "t", "c", 500L))
+                functions.getValue("sample_rows").call(listOf("/data/app.db", "t", 700L))
+                functions.getValue("sample_rows").call(listOf("/data/app.db", "t"))
+                "SELECT 1"
+            }
+        val result = SqlTemplateRead(host, app(answers = mapOf("query" to queryAnswer(3)))).run(mapOf("template" to "t.sql.peb"))
+        assertTrue(result.errorMessage, result.success)
+        // Without max_rows the server returns its default of 100 rows, whatever LIMIT the SQL has.
+        val maxRows = calls.filter { it.first == "query" }.map { it.second["max_rows"] }
+        assertEquals(listOf(500L, 700L, SqlTemplateRead.DEFAULT_LIMIT), maxRows)
+    }
+
+    @Test fun aResultTheServerCutFailsTheFunctionInsteadOfReachingTheTemplate() {
+        val cut = listOf(queryAnswer(2, hasMore = true) to "did not fit", queryAnswer(2, truncatedCells = 1) to "cut")
+        val uses = listOf("distinct_values" to listOf<Any?>("/data/app.db", "t", "c", 10L), "sample_rows" to listOf<Any?>("/data/app.db", "t", 10L))
+        for ((answer, words) in cut) {
+            for ((fn, args) in uses) {
+                val host = FakeHost { _, functions -> functions.getValue(fn).call(args).toString() }
+                val result = SqlTemplateRead(host, app(answers = mapOf("query" to answer))).run(mapOf("template" to "t.sql.peb"))
+                assertFalse("$fn with $answer", result.success)
+                assertTrue(result.errorMessage, result.errorMessage!!.contains(words))
+            }
+        }
+    }
+
     @Test fun withoutATemplateItListsThem() {
         val result = SqlTemplateRead(FakeHost(), app()).run(emptyMap())
         assertEquals("""{"templates":["sqlite/a.sql.peb"]}""", result.text)

@@ -55,7 +55,7 @@ the dialog is the only gate.
 
 `read_sql_template` (ADFA-7302) is this plugin's own tool on each entry whose server has `get_template_variables`:
 - **What it does.** It fetches those variables from the app, adds the project's Room schemas (`SqlTemplateService.getRoomSchemas`) and per database `schema_matches` and `room_schema`, and has Code on the Go render the template (`SqlTemplateService.render`). It returns the SQL without running it.
-- **Template functions.** `row_count`, `distinct_values`, `sample_rows`, `integrity`, `suggest_indexes` and `lint_foreign_keys` are tool calls to the same app, made on the call's session and handle, so a cancel reaches them.
+- **Template functions.** `row_count`, `distinct_values`, `sample_rows`, `integrity`, `suggest_indexes` and `lint_foreign_keys` are tool calls to the same app, made on the call's session and handle, so a cancel reaches them. `distinct_values` and `sample_rows` ask the server for their whole limit (at most 1000 rows) and fail rather than give the template fewer rows than exist or a value the server cut.
 - **Start state and budget.** It starts switched on, last of the entry's five, so in compact mode it is the one AI-Core drops.
 - **Requirements.** It needs Code on the Go 26.48 or later.
 - **Limits.**

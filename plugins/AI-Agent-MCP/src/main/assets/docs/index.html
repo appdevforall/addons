@@ -126,7 +126,10 @@ SELECT * FROM ${{ "orders" | sql_ident }} WHERE customer_id = :id;</pre>
   These functions read your app's data, only when the template calls them:
   <code>row_count(db, table)</code>, <code>distinct_values(db, table, column,
   limit)</code>, <code>sample_rows(db, table, n)</code>, <code>integrity(db)</code>,
-  <code>suggest_indexes(db, sql)</code> and <code>lint_foreign_keys(db)</code>.</p>
+  <code>suggest_indexes(db, sql)</code> and <code>lint_foreign_keys(db)</code>.
+  <code>distinct_values</code> and <code>sample_rows</code> return at most 1000
+  rows, and stop the template rather than give it part of the rows or a cut
+  value.</p>
 
   <h2>Approval</h2>
   <p>Every remote tool asks for your approval before it runs, showing the
