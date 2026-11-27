@@ -163,7 +163,7 @@ class LLamaAndroid : ILlamaController {
     }
 
     private external fun log_to_android()
-    private external fun load_model(filename: String): Long
+    private external fun load_model(filename: String, useWillNeedHint: Boolean): Long
     private external fun free_model(model: Long)
     private external fun new_context(
         model: Long,
@@ -263,17 +263,22 @@ class LLamaAndroid : ILlamaController {
      *   own per-token cost; non-positive means [DEFAULT_N_CTX], since [nCtx] would be the wrong
      *   default under [quantizeKv] — an f16 cache at a size q8_0 paid for asks for nearly twice the
      *   bytes the attempt that just failed did
+     * @param useWillNeedHint true to issue `posix_fadvise(WILLNEED)` on the model file before the
+     *   native load starts mapping it, so the kernel's read-ahead runs ahead of `MAP_POPULATE`'s
+     *   page walk. May help a cold load and seemed to cost a warm one (ADFA-6810), so the caller
+     *   picks per load; off by default
      */
     suspend fun load(
         pathToModel: String,
         nCtx: Int,
         quantizeKv: Boolean = false,
         fallbackNCtx: Int = 0,
+        useWillNeedHint: Boolean = false,
     ) {
         withContext(runLoop()) {
             when (threadLocalState.get()) {
                 is State.Idle -> {
-                    val model = load_model(pathToModel)
+                    val model = load_model(pathToModel, useWillNeedHint)
                     if (model == 0L) throw IllegalStateException("load_model() failed")
 
                     var context = 0L
