@@ -17,17 +17,20 @@
 -- name_key('Núñez, José ') returns 'jose nunez': no accents, no
 -- apostrophes, lower case, "Last, First" turned around, and the words
 -- sorted, so their order doesn't matter. Letters of every alphabet are kept,
--- so two names in Cyrillic or Chinese don't both become an empty key.
+-- with the vowel signs of scripts such as Hindi's, so names in those scripts
+-- don't all become the same key.
 SELECT js_create_scalar('name_key', '(function (args) {
-  // NFD splits an accented letter into the letter and its accent (a mark).
-  let s = String(args[0]).normalize("NFD").replace(/\p{M}/gu, "");
+  // NFKD splits an accented letter into the letter and its accent, and turns
+  // ligatures and full-width letters into plain ones. Only the accents of
+  // Latin, Greek and Cyrillic letters (U+0300 to U+036F) are removed.
+  let s = String(args[0]).normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   // Letters with no accent to remove, written the way they are usually typed.
   const plain = { "ø": "o", "ł": "l", "ß": "ss", "æ": "ae", "œ": "oe", "đ": "d" };
   s = s.toLowerCase().replace(/[øłßæœđ]/g, (c) => plain[c]);
   s = s.replace(/[''\u2019]/g, "");
   const comma = s.indexOf(",");
   if (comma >= 0) s = s.slice(comma + 1) + " " + s.slice(0, comma);
-  return s.replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").sort().join(" ");
+  return s.replace(/[^\p{L}\p{M}\p{N}]+/gu, " ").trim().split(" ").sort().join(" ");
 })');
 
 -- similarity(a, b) is 1 for the same text and less for each letter that

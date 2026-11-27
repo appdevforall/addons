@@ -2,6 +2,7 @@ package com.donyarmyengineering.deliveryfees
 
 import android.content.Context
 import android.database.Cursor
+import android.os.SystemClock
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
@@ -168,26 +169,34 @@ abstract class OrderDatabase : RoomDatabase() {
 
         /**
          * Runs [query], which calls the rule, and stops the rule if it runs for longer than
-         * RULE_TIME_LIMIT_MS: a rule with an endless loop must not freeze the app.
+         * RULE_TIME_LIMIT_MS: a rule with an endless loop must not freeze the app or keep running.
          *
          * Neither Room nor Android can stop a JavaScript function that never returns.
          * SqliteJs.cancelAll() can, but it stops all the JavaScript running at that moment, in
-         * every query, so it is called only when the time is up. Cancelling the calling coroutine,
-         * for example when the screen turns, doesn't call it: the query then finishes by itself,
-         * and the caller waits for it.
+         * every query, so it is called only when the time is up. If the calling coroutine is
+         * cancelled first, for example when the screen goes away, the query is given the rest of
+         * its time to finish, and stopped then if it hasn't.
          */
         suspend fun <T> withTimeLimit(query: suspend () -> T): T = coroutineScope {
+            val deadline = SystemClock.elapsedRealtime() + RULE_TIME_LIMIT_MS
             // The query's result or failure is kept, not thrown, so that a query stopped by
             // cancelAll() is reported as too slow rather than as "interrupted".
             val running = async(Dispatchers.IO) { runCatching { query() } }
-            val result = withTimeoutOrNull(RULE_TIME_LIMIT_MS) { running.await() }
-            if (result != null) return@coroutineScope result.getOrThrow()
-            // cancelAll() stops only JavaScript that has started, and the query may not have
-            // reached its JavaScript yet, so it is called again until the query ends.
-            withContext(NonCancellable) {
-                while (!running.isCompleted) {
-                    SqliteJs.cancelAll()
-                    delay(CANCEL_RETRY_MS)
+            try {
+                val result = withTimeoutOrNull(RULE_TIME_LIMIT_MS) { running.await() }
+                if (result != null) return@coroutineScope result.getOrThrow()
+            } finally {
+                // Also when the caller was cancelled: wait out the time limit, then stop the
+                // query. cancelAll() stops only JavaScript that has started, and the query may
+                // not have reached its JavaScript yet, so it is called again until the query ends.
+                withContext(NonCancellable) {
+                    withTimeoutOrNull(maxOf(0L, deadline - SystemClock.elapsedRealtime())) {
+                        running.join()
+                    }
+                    while (!running.isCompleted) {
+                        SqliteJs.cancelAll()
+                        delay(CANCEL_RETRY_MS)
+                    }
                 }
             }
             throw IllegalStateException(
