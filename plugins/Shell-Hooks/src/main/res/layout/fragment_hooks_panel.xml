@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Hooks bottom-sheet tab: scripts awaiting review, then recent runs, as one list (PanelRow). All of it scrolls. -->
+<androidx.recyclerview.widget.RecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hkList"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/plugin_surface"
+    android:clipToPadding="false"
+    android:padding="@dimen/space_md" />

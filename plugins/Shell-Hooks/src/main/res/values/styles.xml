@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/plugin_primary</item>
+        <item name="colorOnPrimary">@color/plugin_on_primary</item>
+        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+    </style>
+
+    <style name="SectionLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/space_lg</item>
+        <item name="android:layout_marginBottom">@dimen/space_xs</item>
+        <item name="android:textColor">@color/plugin_primary</item>
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

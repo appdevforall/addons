@@ -1,0 +1,16 @@
+{
+  "summary": "Runs your shell scripts when the IDE opens a project, saves a file, or finishes a build.",
+  "description": "Hooks Code on the Go into the workflows you already script. Put an executable script in a hooks folder and it runs when a project opens or closes, a file is opened, saved or closed, or a build starts, succeeds or fails, with the file or project passed in $1. Scripts kept in a project run only after you review and trust them. Off until you turn it on.",
+  "tags": [
+    "shell",
+    "automation",
+    "scripts",
+    "hooks"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
