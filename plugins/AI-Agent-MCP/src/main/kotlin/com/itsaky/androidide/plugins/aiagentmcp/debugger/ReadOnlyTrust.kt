@@ -25,13 +25,14 @@ object ReadOnlyTrust {
      * template of the project through Code on the Go and returns the SQL without running it, so it reads
      * only. Listed last, so in compact mode the four below keep their places and it is the one dropped.
      *
-     * Why four: AI-Core describes at most 12 contributed tools per message
+     * Why only these: AI-Core describes at most 12 contributed tools per message
      * (`PromptToolBudget.MAX_CONTRIBUTED_TOOLS`) and only 4 in compact mode
      * (`COMPACT_MAX_CONTRIBUTED_TOOLS`), counting them in order and dropping the rest. Every app
-     * gets its own entry, so with all 8 read-only tools on, two apps alone would use the whole
-     * normal budget. With four each, two apps use 8 of 12 and in compact mode the first app's four
-     * fill the budget. A hand-added server's tools are listed before any app's, so one with ten or
-     * more switched-on tools leaves room for only two of an app's four (none in compact mode).
+     * gets its own entry, so with all 8 of the server's read-only tools on, two apps alone would use
+     * the whole normal budget. With five each, two apps use 10 of 12 and in compact mode the first
+     * app's first four fill the budget. A hand-added server's tools are listed before any app's, so
+     * one with ten or more switched-on tools leaves room for only two of an app's five (none in
+     * compact mode).
      *
      * Phase 2 adds the SQLite debugger entry to AI-Agent-MCP's settings, so a user can switch the
      * others on.

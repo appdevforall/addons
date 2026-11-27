@@ -107,12 +107,13 @@ Servers you add yourself keep the name prefix taken from their label.
 
 - It is held in memory only and is **not shown in the settings screen in this
   version**, so there is no switch to turn it off there.
-- Four tools start switched **on**: `list_databases`, `get_schema`, `query` and
+- Five tools start switched **on**: `list_databases`, `get_schema`, `query` and
   `get_events`, each only when the server declares MCP's `readOnlyHint: true` for
-  it. Every other tool of that entry (today `list_connections`,
+  it, and this plugin's own `read_sql_template`, added when the server has
+  `get_template_variables`. Every other tool of that entry (today `list_connections`,
   `explain_query_plan`, `get_stats` and `integrity_check`) starts off, and so
   does any tool without that hint. The hint is trusted for this entry only, never
-  for a server you add yourself. Four, not all eight, because AI-Core describes
+  for a server you add yourself. Five, not all nine, because AI-Core describes
   at most 12 contributed tools per message (4 for a small on-device model), in
   order, and drops the rest; every app has its own entry. Switching the others
   on will come with showing this entry in the settings screen (phase 2).

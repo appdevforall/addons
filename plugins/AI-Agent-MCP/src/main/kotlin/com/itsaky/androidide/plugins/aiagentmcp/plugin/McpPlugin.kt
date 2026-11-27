@@ -647,12 +647,12 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 add-on, you must also install AI Core. Then go to <b>Preferences → MCP
                 servers</b> and add a server. Each tool stays off until you turn it
                 on.<br><br>The one exception is the SQLite debugger entry that CoGo adds
-                for an app you build with the SQLite debugger: four of its read-only tools
-                start on (list databases, get schema, query, and get events). This version
+                for an app you build with the SQLite debugger: five of its read-only tools
+                start on (list databases, get schema, query, get events, and read SQL template). This version
                 doesn't list that entry on the MCP servers screen. Its tool that changes the
                 app's database, execute, stays off until you turn on <b>Let the Agent change
                 app databases</b> on that screen.<br><br>The Agent asks for your approval
-                every time it uses a tool. For those four, you can choose Always Allow,
+                every time it uses a tool. For those five, you can choose Always Allow,
                 which lasts for the rest of the chat (needs AI Core 3.6.0 or later). Never
                 for execute.
             """.trimIndent(),
