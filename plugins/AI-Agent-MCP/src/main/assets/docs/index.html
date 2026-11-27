@@ -81,9 +81,10 @@
   window on its own. Switch on the handful you actually want.</p>
   <p>The one exception is the <b>SQLite debugger</b> entry, which Code on the Go
   adds by itself for an app you build with the SQLite debugger, named
-  "SQLite debugger (<i>application ID</i>)". Four of its read-only tools start
+  "SQLite debugger (<i>application ID</i>)". Five of its read-only tools start
   switched on: <code>list_databases</code>, <code>get_schema</code>,
-  <code>query</code> and <code>get_events</code>. Its other tools start off. This
+  <code>query</code>, <code>get_events</code> and <code>read_sql_template</code>
+  (below). Its other tools start off. This
   version does not show the entry on the MCP servers screen, so it has no switches
   there yet.</p>
   <p>The one switch it has is <b>Let the Agent change app databases</b>, at the top
@@ -97,10 +98,44 @@
   <p>The Agent reads this list from memory, so tap <b>Connect</b> again after the
   server changes; a chat that is already open picks the new list up.</p>
 
+  <h2>SQL templates</h2>
+  <p><code>read_sql_template</code> is the sqlite3 shell's <code>.read</code> with a
+  template: put a file ending in <code>.sql.peb</code> anywhere in your project,
+  such as <code>sqlite/report.sql.peb</code>, and ask the Agent to read it. Code on
+  the Go fills it in from your app's databases and gives the Agent the SQL. Nothing
+  is run until the Agent runs it, one statement at a time.</p>
+  <p>Templates use the same Pebble syntax as Code on the Go's project templates:
+  <code>${{ value }}</code> prints, <code>${% for ... %}</code> and
+  <code>${% if ... %}</code> control, <code>${# ... #}</code> is a comment. A
+  closing <code>}}</code>, <code>%}</code> or <code>#}</code> swallows the line break
+  after it, so end such a line with a space to keep it. Quote a table or column
+  name with <code>| sql_ident</code> and a value with <code>| sql_literal</code>.
+  For a value you type, write a parameter such as <code>:id</code> instead, and the
+  Agent binds it.</p>
+  <pre>${# Row counts of every table, with Room's schema check #}
+-- ${{ db.name }}: Room schema ${{ db.schema_matches ? "matches" : "differs or is not exported" }} 
+${% for t in db.tables %}${% if t.type == "table" %}
+SELECT ${{ t.name | sql_literal }} AS name, ${{ row_count(db, t.name) }} AS row_count;
+${% endif %}${% endfor %}
+SELECT * FROM ${{ "orders" | sql_ident }} WHERE customer_id = :id;</pre>
+  <p>A template can use <code>app</code>, <code>device</code>,
+  <code>databases</code> (every database's tables, columns, indexes and foreign
+  keys, Room's identity hash and <code>schema_matches</code>), <code>db</code> (the
+  database you named, or the only one), <code>room_schemas</code> (the schemas Room
+  exported into your project), <code>project</code> and <code>render_time</code>.
+  These functions read your app's data, only when the template calls them:
+  <code>row_count(db, table)</code>, <code>distinct_values(db, table, column,
+  limit)</code>, <code>sample_rows(db, table, n)</code>, <code>integrity(db)</code>,
+  <code>suggest_indexes(db, sql)</code> and <code>lint_foreign_keys(db)</code>.
+  <code>distinct_values</code> and <code>sample_rows</code> return at most 1000
+  rows, and stop the template rather than give it part of the rows or a cut
+  value. <code>sample_rows</code> reads every column, so one long value in any
+  of them stops it: text over 4,096 bytes, or a BLOB over 1,024 bytes.</p>
+
   <h2>Approval</h2>
   <p>Every remote tool asks for your approval before it runs, showing the
   arguments it would send. The exception is a read-only tool of the SQLite
-  debugger, such as the four that start switched on: its dialog offers
+  debugger, such as the five that start switched on: its dialog offers
   "Always Allow", which covers that tool for the rest of the chat. The grant is
   for that tool and that app only, it ends when you start or open another chat,
   and it ignores the arguments, so the Agent can then call the tool with any

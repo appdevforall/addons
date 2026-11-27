@@ -21,18 +21,24 @@ object ReadOnlyTrust {
      * advertises them with `readOnlyHint: true`. Its other tools (today `list_connections`,
      * `explain_query_plan`, `get_stats` and `integrity_check`) stay known but off.
      *
-     * Why four: AI-Core describes at most 12 contributed tools per message
+     * The fifth, `read_sql_template` (ADFA-7302), is this plugin's own, not the server's: it renders a
+     * template of the project through Code on the Go and returns the SQL without running it, so it reads
+     * only. Listed last, so in compact mode the four below keep their places and it is the one dropped.
+     *
+     * Why only these: AI-Core describes at most 12 contributed tools per message
      * (`PromptToolBudget.MAX_CONTRIBUTED_TOOLS`) and only 4 in compact mode
      * (`COMPACT_MAX_CONTRIBUTED_TOOLS`), counting them in order and dropping the rest. Every app
-     * gets its own entry, so with all 8 read-only tools on, two apps alone would use the whole
-     * normal budget. With four each, two apps use 8 of 12 and in compact mode the first app's four
-     * fill the budget. A hand-added server's tools are listed before any app's, so one with ten or
-     * more switched-on tools leaves room for only two of an app's four (none in compact mode).
+     * gets its own entry, so with all 8 of the server's read-only tools on, two apps alone would use
+     * the whole normal budget. With five each, two apps use 10 of 12 and in compact mode the first
+     * app's first four fill the budget. A hand-added server's tools are listed before any app's, so
+     * one with ten or more switched-on tools leaves room for only two of an app's five (none in
+     * compact mode).
      *
      * Phase 2 adds the SQLite debugger entry to AI-Agent-MCP's settings, so a user can switch the
      * others on.
      */
-    val CORE_TOOLS: Set<String> = linkedSetOf("list_databases", "get_schema", "query", "get_events")
+    val CORE_TOOLS: Set<String> =
+        linkedSetOf("list_databases", "get_schema", "query", "get_events", SqlTemplateRead.TOOL_NAME)
 
     /**
      * The SQLite debugger's tools that change an app's database (ADFA-7300). Switched on only by the

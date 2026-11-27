@@ -94,6 +94,7 @@
     <string name="mcp_error_app_not_answering">The app %1$s did not answer. If the app is in the background, Android may have paused it. Bring the app to the front and try again.</string>
     <!-- %1$s is the application ID of an app built with the SQLite debugger. -->
     <string name="mcp_error_app_not_listening">The app %1$s is not running with the SQLite debugger. Open the app again from Code on the Go.</string>
+    <string name="mcp_error_templates_unavailable">This version of Code on the Go cannot render SQL templates. Update it to use read_sql_template.</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>
 
     <!-- What a failed Connect sent and received (see McpTranscript) -->

@@ -268,8 +268,8 @@ object AutomaticServers {
             name = "SQLite debugger (${state.endpoint.applicationId})",
             url = urlFor(state.endpoint),
             enabled = true,
-            knownTools = state.tools.map { it.name },
-            enabledTools = ReadOnlyTrust.enabledTools(state.tools, allowWrites),
+            knownTools = SqlTemplateRead.withTemplateTool(state.tools).map { it.name },
+            enabledTools = ReadOnlyTrust.enabledTools(SqlTemplateRead.withTemplateTool(state.tools), allowWrites),
             automatic = true,
         )
 
@@ -282,12 +282,13 @@ object AutomaticServers {
     fun endpoint(serverId: String): AutomaticEndpoint? = states[serverId]?.endpoint
 
     /**
-     * The tools [serverId] last listed, as [recordTools] stored them; `McpToolCatalog.tools`
-     * answers an automatic entry from here.
+     * The tools [serverId] last listed, as [recordTools] stored them, with this plugin's own
+     * [SqlTemplateRead.TOOL] when the server has what it needs; `McpToolCatalog.tools` answers an
+     * automatic entry from here.
      *
      * @return them, empty before its first listing or when it has no entry (any more).
      */
-    fun tools(serverId: String): List<McpTool> = states[serverId]?.tools.orEmpty()
+    fun tools(serverId: String): List<McpTool> = SqlTemplateRead.withTemplateTool(states[serverId]?.tools.orEmpty())
 
     fun urlFor(endpoint: AutomaticEndpoint) = "http://127.0.0.1:${endpoint.port}/mcp"
 

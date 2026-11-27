@@ -37,7 +37,7 @@ Configuration → MCP servers**:
 1. **Add server** — name, endpoint URL, optional token.
 2. **Connect** — saves the server, performs the MCP handshake and lists the tools
    it offers, all in one step.
-3. Switch on the tools you want. **They start off** (except four read-only tools
+3. Switch on the tools you want. **They start off** (except five read-only tools
    of the automatic SQLite debugger entry, below): one popular GitHub server
    advertises around ninety tools, which would fill a phone-sized context window
    on its own.
@@ -52,6 +52,15 @@ debugger entry"). Remote tools run outside the Agent's own path containment, so
 the dialog is the only gate.
 
 ### The SQLite debugger entry
+
+`read_sql_template` (ADFA-7302) is this plugin's own tool on each entry whose server has `get_template_variables`:
+- **What it does.** It fetches those variables from the app, adds the project's Room schemas (`SqlTemplateService.getRoomSchemas`) and per database `schema_matches` and `room_schema`, and has Code on the Go render the template (`SqlTemplateService.render`). It returns the SQL without running it.
+- **Template functions.** `row_count`, `distinct_values`, `sample_rows`, `integrity`, `suggest_indexes` and `lint_foreign_keys` are tool calls to the same app, made on the call's session and handle, so a cancel reaches them. `distinct_values` and `sample_rows` ask the server for their whole limit (at most 1000 rows) and fail rather than give the template fewer rows than exist or a value the server cut (text over 4,096 bytes, a BLOB over 1,024); `sample_rows` reads every column, so a long value in any of them fails it. A function's call that fails, as opposed to one the server answers with an error, fails the read as `get_template_variables` would, so it is retried on the app's new address and reported the same way.
+- **Start state and budget.** It starts switched on, last of the entry's five, so in compact mode it is the one AI-Core drops.
+- **Requirements.** It needs Code on the Go 26.48 or later.
+- **Limits.**
+  - The render's time limit (110 s) interrupts the render thread, but a function's HTTP read is not interruptible: it ends when the server answers, within its 50 s.
+  - Without a `template` argument it lists the project's `*.sql.peb` files.
 
 For an app built in Code on the Go with `cogo.sqliteDebugger=true`, the plugin
 adds a server entry on its own, named "SQLite debugger (<application ID>)", with
@@ -98,12 +107,13 @@ Servers you add yourself keep the name prefix taken from their label.
 
 - It is held in memory only and is **not shown in the settings screen in this
   version**, so there is no switch to turn it off there.
-- Four tools start switched **on**: `list_databases`, `get_schema`, `query` and
+- Five tools start switched **on**: `list_databases`, `get_schema`, `query` and
   `get_events`, each only when the server declares MCP's `readOnlyHint: true` for
-  it. Every other tool of that entry (today `list_connections`,
+  it, and this plugin's own `read_sql_template`, added when the server has
+  `get_template_variables`. Every other tool of that entry (today `list_connections`,
   `explain_query_plan`, `get_stats` and `integrity_check`) starts off, and so
   does any tool without that hint. The hint is trusted for this entry only, never
-  for a server you add yourself. Four, not all eight, because AI-Core describes
+  for a server you add yourself. Five, not all nine, because AI-Core describes
   at most 12 contributed tools per message (4 for a small on-device model), in
   order, and drops the rest; every app has its own entry. Switching the others
   on will come with showing this entry in the settings screen (phase 2).
