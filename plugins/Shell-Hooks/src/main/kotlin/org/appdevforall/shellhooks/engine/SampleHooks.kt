@@ -60,7 +60,8 @@ object SampleHooks {
         """
         |#!/usr/bin/env bash
         |# Sample Shell Hooks action. Actions appear as "Run <name>" when you long-press a file in
-        |# the file tree or an editor tab, and run in the Terminal so you see their output.
+        |# the file tree, or tap the tab of the file you're viewing. They run in the Terminal so
+        |# you see their output.
         |# To use it: cd ~/.config/codeonthego/hooks/actions && mv $ACTION_SAMPLE word-count && chmod +x word-count
         |#
         |# Arguments: ${'$'}1 = the file
