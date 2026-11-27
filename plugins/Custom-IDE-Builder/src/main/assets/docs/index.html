@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom IDE Builder</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+  h3 { font-size: 1.05rem; margin: 1.1rem 0 0.3rem; }
+  li { margin: 0.3rem 0; }
+</style>
+</head>
+<body>
+  <h1>Custom IDE Builder</h1>
+
+  <h2>Executive overview</h2>
+  <p><b>Custom IDE Builder</b> makes a copy of the Code on the Go installed on this device, with the
+  plugins and templates you choose bundled inside it, and signs the copy with your own key. Use it to
+  hand out a version of Code on the Go that arrives with the add-ons a class, a team or a community needs
+  already in place.</p>
+
+  <div class="note">
+    <p><b>Read this before you install a copy.</b> The copy is signed with your key, not ours, so Android
+    treats it as a different app. It installs only after Code on the Go has been uninstalled. Uninstalling
+    removes Code on the Go's app data, such as its project list and settings. Your projects in
+    CodeOnTheGoProjects stay.</p>
+  </div>
+
+  <h2>Core functionality</h2>
+  <ul>
+    <li><b>Bundle swap.</b> The plugins (<code>.cgp</code>) and templates (<code>.cgt</code>) you choose
+      replace the add-ons bundled in the copy. Choosing nothing makes a copy that carries no add-ons.</li>
+    <li><b>Add-ons from two places.</b> Pick files from this device, or choose from the add-ons website,
+      which lists the ones that work with this version of Code on the Go.</li>
+    <li><b>Signing.</b> The copy is signed with a key from your own keystore, and the signature is checked
+      before the file is saved.</li>
+    <li><b>Output folder.</b> The finished APK is saved to a folder you choose, as
+      <code>&lt;app name&gt;-&lt;version&gt;-custom.apk</code>. If the folder already has a file with that
+      name, you are asked for another one. The folder can still change the name when it creates the file,
+      so the finished message names the file as it was saved.</li>
+    <li><b>Release builds only.</b> It is made for the release build of Code on the Go, which reads its
+      bundled add-ons from <code>assets/plugins/</code> and <code>assets/templates/</code> in its APK.</li>
+    <li><b>Installing the copy.</b> It installs only after Code on the Go is uninstalled, because it is signed
+      with a different key.</li>
+  </ul>
+
+  <h2>Technical architecture</h2>
+  <ul>
+    <li>The installed app's APK is copied entry by entry without being recompressed. The old bundle
+      (<code>assets/plugins/</code>, <code>assets/templates/</code> and the index
+      <code>assets/bundled-addons.tsv</code>) and the old signature are dropped, then your add-ons and a new
+      index are added, in the layout Code on the Go itself reads.</li>
+    <li>Each add-on gets a clean file name inside the APK. A plugin is named after its plugin ID, a template
+      after its file name, and two that would clash are refused before the build starts.</li>
+    <li>The APK is signed with the Android signing library (<code>apksig</code>) and then verified with it,
+      and its alignment is checked.</li>
+    <li>Files you pick are copied into this plugin's own private folder under a fixed name, whatever the file
+      is called, before they are checked. Downloads from the website come only from
+      <code>addons.appdevforall.org</code> over HTTPS and are checked against the size and SHA-256 the
+      website publishes. An add-on larger than 512 MB is refused, and so is one that does not fit in the free
+      space, before it is copied or downloaded.</li>
+    <li>Passwords are held only in the screen's fields and in the one running task that needs them (reading the
+      keys, or a build). That task's copies are zeroed when it ends, however it ends, and also if it never
+      starts; the fields are emptied when a build ends and when you leave the screen. The plugin asks for permission to read and write files and to use the network (for the website
+      list only).</li>
+  </ul>
+
+  <h2>Usage</h2>
+  <h3>What you need</h3>
+  <ul>
+    <li>A keystore file in <b>PKCS12</b> (<code>.p12</code>) or <b>BKS</b> format, such as one made by
+      <b>Keystore Generator</b>. A Java KeyStore (<code>.jks</code>) file made by <code>keytool</code> must
+      be converted first, on a computer:
+      <code>keytool -importkeystore -srckeystore old.jks -srcstoretype JKS -destkeystore new.p12 -deststoretype PKCS12</code>.</li>
+    <li>The add-ons: <code>.cgp</code> plugin files and <code>.cgt</code> template files from this device, or
+      downloaded from the add-ons website.</li>
+    <li>A folder to save the finished APK in, and free space for about twice the size of Code on the Go.</li>
+  </ul>
+
+  <h3>How to use it</h3>
+  <ol>
+    <li>Open <b>Custom IDE Builder</b> from the main menu.</li>
+    <li><b>Add-ons.</b> Tap <b>Add from this device</b> to pick several files at once. Tap
+      <b>Add from the website</b> to choose from the add-ons that work with this version of Code on the Go.
+      Nothing is downloaded until you confirm; the downloads come from <code>addons.appdevforall.org</code>
+      and each one is checked against the size and SHA-256 the website publishes. Tap <b>Remove</b> beside an
+      add-on to take it off the list.</li>
+    <li><b>Signing key.</b> Choose the keystore file, type the store password and tap <b>Read keys</b>,
+      then pick the key. Leave the key password blank if it is the same as the store password.</li>
+    <li><b>Output folder.</b> Choose it once; it is remembered.</li>
+    <li>If the folder already holds the file name, a dialog asks for another one, with a free name filled
+      in. The name is checked again just before saving, because a file can appear while the app is being
+      built; the build waits for your answer. <b>Cancel the save</b> stops, and an APK that was already
+      built is deleted. The finished message names the file the folder actually saved.</li>
+    <li>Tap <b>Build APK</b>. Tap <b>Cancel</b> to stop it. A cancelled or failed
+      build saves nothing: if it had already begun writing the APK to your folder, that unfinished file is
+      deleted. If the folder will not delete it, the result says that a partial file named
+      <i>name</i> remains in <i>folder</i> and should be deleted by hand. Disabling the plugin in the
+      Plugin Manager during a build stops it the same way.</li>
+  </ol>
+  <p>Long-press any button or field on the screen for a short explanation.</p>
+
+  <h2>Key benefits</h2>
+  <ul>
+    <li>Hand out one APK that arrives with the plugins and templates a group needs, with nothing to install
+      afterwards.</li>
+    <li>It is signed with your key, so you decide who the publisher is.</li>
+    <li>It works offline once you have the files, and does not need a computer.</li>
+    <li>Every download and every selection is checked before it goes into the copy.</li>
+    <li>Your passwords are never saved.</li>
+  </ul>
+
+  <h2>Good to know</h2>
+  <ul>
+    <li><b>Use the same key every time.</b> A device that has a build signed with one key cannot update to
+      a build signed with another without being uninstalled first.</li>
+    <li><b>Passwords are never saved.</b> They are used for the task in front of you (reading the keys or
+      building) and cleared when it ends, and the fields are cleared when a build ends and when you leave the
+      screen.</li>
+    <li><b>The key is checked again at build time.</b> The keystore file is read again for the build; if the
+      key in it is no longer the one whose fingerprint you were shown, the build stops and asks you to read
+      the keys again.</li>
+    <li><b>Each plugin must have its own plugin ID</b> and each template its own file name; the builder
+      says which add-ons clash. <code>core.cgt</code> is never bundled, because Code on the Go installs it
+      itself.</li>
+    <li><b>Nothing chosen</b> makes a copy that carries no add-ons.</li>
+    <li>The copy is built from the APK of this installation. It does not work if Code on the Go was
+      installed as split APKs; the screen says so.</li>
+    <li>The app is copied without being recompressed, so building takes about as long as copying the file,
+      plus the time to sign it.</li>
+  </ul>
+</body>
+</html>

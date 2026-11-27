@@ -1,0 +1,473 @@
+package org.appdevforall.customidebuilder
+
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.net.Uri
+import android.os.Bundle
+import android.text.InputType
+import android.util.TypedValue
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.Fragment
+import org.appdevforall.customidebuilder.core.AddonKind
+import org.appdevforall.customidebuilder.core.Catalog
+
+/**
+ * The Custom IDE Builder screen. Views are built in code, so there is no layout to inflate against the
+ * host's resources, and every text size is in sp and every gap in dp, inside a ScrollView, so the screen
+ * holds up at 2x font scale. State that must outlive the screen is in [Session].
+ */
+class BuilderFragment : Fragment() {
+    private lateinit var prefs: SharedPreferences
+    private lateinit var itemsBox: LinearLayout
+    private lateinit var keystoreLabel: TextView
+    private lateinit var storePassword: EditText
+    private lateinit var keyPassword: EditText
+    private lateinit var aliasSpinner: Spinner
+    private lateinit var fingerprint: TextView
+    private lateinit var folderLabel: TextView
+    private lateinit var progress: ProgressBar
+    private lateinit var stageLabel: TextView
+    private lateinit var messageLabel: TextView
+    private lateinit var cancelButton: Button
+    private val actionButtons = ArrayList<Button>()
+    private val removeButtons = ArrayList<Button>()
+    private var shownAliases: List<String>? = null
+    private var shownItemsVersion = -1
+    private var shownQuestion: NameQuestion? = null
+    private var nameDialog: AlertDialog? = null
+    private val listener: () -> Unit = { refresh() }
+    private val progressListener: () -> Unit = { showProgress() }
+
+    private val pickAddons = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) Session.addFromDevice(requireContext().applicationContext, uris)
+    }
+    private val pickKeystore = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            Session.keystoreUri = uri
+            Session.keystoreName = AndroidBits.displayName(requireContext(), uri) ?: uri.lastPathSegment
+            Session.aliases = emptyList()
+            Session.fingerprints = emptyMap()
+            Session.selectedAlias = null
+            refresh()
+        }
+    }
+    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            requireContext().contentResolver.takePersistableUriPermission(uri, flags)
+            prefs.edit().putString(PREF_TREE, uri.toString()).apply()
+            refresh()
+        }
+    }
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        val ctx = requireContext()
+        prefs = prefsOf()
+        actionButtons.clear()
+        removeButtons.clear()
+        shownAliases = null
+        shownItemsVersion = -1
+        val column = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(24))
+        }
+        column.addView(text(ctx, "Custom IDE Builder", 22f, bold = true, tooltip = Help.MENU))
+        column.addView(text(ctx, "Makes a copy of the Code on the Go installed on this device with the add-ons you choose bundled inside, signed with your own key.", 14f, tooltip = Help.MENU))
+
+        column.addView(heading(ctx, "1. Add-ons to bundle", Help.ADDONS))
+        itemsBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(itemsBox)
+        column.addView(action(ctx, "Add from this device", Help.ADDONS) {
+            pickAddons.launch(arrayOf("*/*"))
+        })
+        column.addView(action(ctx, "Add from the website", Help.WEBSITE) { confirmWebsite() })
+
+        column.addView(heading(ctx, "2. Signing key", Help.KEYSTORE))
+        keystoreLabel = text(ctx, "", 14f, tooltip = Help.KEYSTORE)
+        column.addView(keystoreLabel)
+        column.addView(action(ctx, "Choose keystore file", Help.KEYSTORE) { pickKeystore.launch(arrayOf("*/*")) })
+        storePassword = passwordField(ctx, Help.STORE_PASSWORD)
+        column.addView(fieldLabel(ctx, "Store password", Help.STORE_PASSWORD, storePassword))
+        column.addView(storePassword)
+        column.addView(action(ctx, "Read keys", Help.KEYSTORE) {
+            val chars = charsOf(storePassword)
+            if (chars.isEmpty()) Session.message = "Enter the store password first." else Session.loadKeystore(requireContext().applicationContext, chars)
+            refresh()
+        })
+        aliasSpinner = Spinner(ctx)
+        withTooltip(aliasSpinner, Help.KEY_ALIAS)
+        aliasSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                Session.selectedAlias = Session.aliases.getOrNull(position)
+                fingerprint.text = Session.selectedAlias?.let { "Certificate SHA-256: ${Session.fingerprints[it].orEmpty()}" }.orEmpty()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        column.addView(aliasSpinner)
+        fingerprint = text(ctx, "", 12f, tooltip = Help.KEY_ALIAS)
+        column.addView(fingerprint)
+        keyPassword = passwordField(ctx, Help.KEY_PASSWORD)
+        column.addView(fieldLabel(ctx, "Key password (leave blank if it is the same as the store password)", Help.KEY_PASSWORD, keyPassword))
+        column.addView(keyPassword)
+
+        column.addView(heading(ctx, "3. Output folder", Help.FOLDER))
+        folderLabel = text(ctx, "", 14f, tooltip = Help.FOLDER)
+        column.addView(folderLabel)
+        column.addView(action(ctx, "Choose folder", Help.FOLDER) { pickFolder.launch(null) })
+
+        column.addView(heading(ctx, "4. Build", Help.BUILD))
+        column.addView(action(ctx, "Build APK", Help.BUILD) { startBuild() })
+        stageLabel = text(ctx, "", 14f, tooltip = Help.STATUS)
+        column.addView(stageLabel)
+        progress = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000
+            withTooltip(this, Help.STATUS)
+        }
+        column.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        cancelButton = Button(ctx).apply {
+            this.text = "Cancel"
+            setOnClickListener { Session.cancel() }
+            withTooltip(this, Help.CANCEL)
+        }
+        column.addView(cancelButton)
+        // Selectable, so the long-press must also reach the text selection: consume = false.
+        messageLabel = text(ctx, "", 14f, tooltip = Help.RESULT, consume = false).apply { setTextIsSelectable(true) }
+        column.addView(messageLabel)
+
+        return ScrollView(ctx).apply {
+            isFillViewport = true
+            addView(column)
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        Session.listen(listener)
+        Session.listenProgress(progressListener)
+        refresh()
+        if (!prefs.getBoolean(PREF_WARNED, false)) {
+            val dialog = AlertDialog.Builder(requireContext())
+                .setTitle("Sign every build with the same key")
+                .setMessage(
+                    "Android installs an update only if it is signed with the same key as the version already installed. " +
+                        "Every later build you make here must use this same key, or a device that has an earlier build " +
+                        "must uninstall it first. Uninstalling removes Code on the Go's app data, such as its project list " +
+                        "and settings; your projects in CodeOnTheGoProjects stay.",
+                )
+                .setPositiveButton("I understand") { _, _ -> prefs.edit().putBoolean(PREF_WARNED, true).apply() }
+                .setCancelable(false)
+                .show()
+            tooltipOnDialog(dialog, Help.SAME_KEY)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refresh()
+    }
+
+    override fun onDestroyView() {
+        Session.unlisten(listener)
+        Session.unlistenProgress(progressListener)
+        // The question stays in Session; the next Fragment shows it again. Dismissing answers nothing.
+        nameDialog?.dismiss()
+        nameDialog = null
+        shownQuestion = null
+        // Passwords live only in these fields. Clearing the text drops the plaintext with the screen.
+        storePassword.text.clear()
+        keyPassword.text.clear()
+        super.onDestroyView()
+    }
+
+    /** The full update, for a state change. Progress alone goes to [showProgress]. */
+    private fun refresh() {
+        if (view == null) return
+        val busy = Session.busy
+        if (Session.passwordsToClear) {
+            // A build has ended, however it ended, maybe while this screen had no view: the passwords are not needed on screen any more.
+            storePassword.text.clear()
+            keyPassword.text.clear()
+            Session.passwordsCleared()
+        }
+        if (shownItemsVersion != Session.itemsVersion) {
+            shownItemsVersion = Session.itemsVersion
+            rebuildItems()
+        }
+        removeButtons.forEach { it.isEnabled = !busy }
+        // A build has already read the passwords and the key; changing them mid-build would only mislead.
+        storePassword.isEnabled = !busy
+        keyPassword.isEnabled = !busy
+        aliasSpinner.isEnabled = !busy
+        keystoreLabel.text = Session.keystoreName?.let { "Keystore: $it" } ?: "No keystore chosen."
+        val aliases = Session.aliases
+        if (aliases != shownAliases) {
+            shownAliases = aliases
+            aliasSpinner.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, aliases).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+        }
+        // Every refresh: Session.loadKeystore resets the selection even when the list is the same.
+        val index = aliases.indexOf(Session.selectedAlias)
+        if (index >= 0 && aliasSpinner.selectedItemPosition != index) aliasSpinner.setSelection(index)
+        fingerprint.text = Session.selectedAlias?.let { "Certificate SHA-256: ${Session.fingerprints[it].orEmpty()}" }.orEmpty()
+        aliasSpinner.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
+        fingerprint.visibility = if (aliases.isEmpty()) View.GONE else View.VISIBLE
+        val tree = prefs.getString(PREF_TREE, null)?.let(Uri::parse)
+        folderLabel.text = tree?.let { "Saving to: ${AndroidBits.treeLabel(it)}" } ?: "No folder chosen."
+        actionButtons.forEach { it.isEnabled = !busy }
+        cancelButton.visibility = if (busy) View.VISIBLE else View.GONE
+        progress.visibility = if (busy) View.VISIBLE else View.GONE
+        showProgress()
+
+        // A dialog needs a visible screen: if the list arrives while the screen is away, onResume shows it.
+        val offer = Session.offer
+        if (offer != null && isResumed) {
+            Session.offer = null
+            showOffer(offer)
+        }
+
+        val question = Session.nameQuestion
+        if (question !== shownQuestion) {
+            // Answered, or the build ended: take the dialog down without answering again.
+            nameDialog?.dismiss()
+            nameDialog = null
+            shownQuestion = null
+        }
+        if (question != null && shownQuestion == null && isResumed) {
+            shownQuestion = question
+            showNameQuestion(question)
+        }
+    }
+
+    /** Cheap enough to run on every progress update: three views, nothing built. */
+    private fun showProgress() {
+        if (view == null) return
+        progress.progress = Session.progress
+        stageLabel.text = Session.stage
+        messageLabel.text = Session.message
+    }
+
+    /** Builds the add-on rows. Only when the list changed: it makes new views for every row. */
+    private fun rebuildItems() {
+        val ctx = requireContext()
+        itemsBox.removeAllViews()
+        removeButtons.clear()
+        if (Session.items.isEmpty()) {
+            itemsBox.addView(text(ctx, "Nothing chosen: the copy will carry no add-ons.", 14f, tooltip = Help.ADDONS))
+        }
+        for (chosen in Session.items) {
+            val kind = if (AddonKind.PLUGIN.extension == chosen.picked.fileName.substringAfterLast('.').lowercase()) "plugin" else "template"
+            val row = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4)) }
+            row.addView(text(ctx, "${chosen.picked.label} ($kind, from ${chosen.source})", 14f, tooltip = Help.ADDONS))
+            val remove = Button(ctx).apply {
+                this.text = "Remove"
+                setOnClickListener { Session.remove(chosen) }
+                withTooltip(this, Help.REMOVE)
+            }
+            removeButtons.add(remove)
+            row.addView(remove)
+            itemsBox.addView(row)
+        }
+    }
+
+    /**
+     * The output name is taken. The dialog cannot be dismissed any other way than its two buttons,
+     * so the build never waits on a question nobody can answer; Save stays open on a name with
+     * nothing usable in it.
+     */
+    private fun showNameQuestion(question: NameQuestion) {
+        val ctx = requireContext()
+        val field = EditText(ctx).apply {
+            setText(question.suggestion)
+            setSelection(text.length)
+            inputType = InputType.TYPE_CLASS_TEXT
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            // A text field keeps its own long-press (paste), so the tooltip does not consume it.
+            withTooltip(this, Help.NAME_FIELD, consume = false)
+        }
+        val box = LinearLayout(ctx).apply {
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(field, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(ctx)
+            .setTitle("Choose another name")
+            .setMessage(question.message)
+            .setView(box)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel the save") { _, _ -> Session.declineName(question) }
+            .setCancelable(false)
+            .show()
+        // Set after show(), so a refused name does not close the dialog.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (!Session.answerName(question, field.text.toString())) field.error = "Enter a file name."
+        }
+        tooltipOnDialog(dialog, Help.NAME_TAKEN)
+        nameDialog = dialog
+    }
+
+    private fun confirmWebsite() {
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle("Download from the internet?")
+            .setMessage(
+                "This reads the list of add-ons and downloads the ones you choose from addons.appdevforall.org, " +
+                    "which is off this device. Nothing else is sent.",
+            )
+            .setPositiveButton("Continue") { _, _ -> Session.fetchOffer(hostVersionName()) }
+            .setNegativeButton("Cancel", null)
+            .show()
+        tooltipOnDialog(dialog, Help.WEBSITE)
+    }
+
+    private fun hostVersionName(): String? =
+        try {
+            AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, requireContext()).versionName
+        } catch (e: Exception) {
+            null
+        }
+
+    private fun showOffer(offer: Catalog.Offer) {
+        if (offer.addons.isEmpty()) {
+            Session.message = "The website has no add-ons that work with this version of Code on the Go."
+            refresh()
+            return
+        }
+        val labels = offer.addons.map { "${it.name} ${it.version} (${it.kind.name.lowercase()}, ${megabytes(it.size)})" }.toTypedArray()
+        val checked = BooleanArray(labels.size)
+        if (!offer.hostVersionKnown) {
+            Session.message = "This app's version could not be read, so every add-on is listed."
+            messageLabel.text = Session.message
+        }
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle("Add-ons on the website")
+            .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
+            .setPositiveButton("Add") { _, _ ->
+                val wanted = offer.addons.filterIndexed { i, _ -> checked[i] }
+                if (wanted.isNotEmpty()) Session.addFromWebsite(requireContext().applicationContext, wanted)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+        tooltipOnDialog(dialog, Help.WEBSITE)
+    }
+
+    private fun startBuild() {
+        val ctx = requireContext()
+        val tree = prefs.getString(PREF_TREE, null)?.let(Uri::parse)
+        val writable = tree != null && ctx.contentResolver.persistedUriPermissions.any { it.uri == tree && it.isWritePermission }
+        val store = charsOf(storePassword)
+        val key = charsOf(keyPassword)
+        val problem =
+            when {
+                Session.aliases.isEmpty() || Session.selectedAlias == null -> "Choose a keystore, enter its password and tap Read keys."
+                store.isEmpty() -> "Enter the store password."
+                !writable -> "Choose the output folder."
+                else -> null
+            }
+        if (problem != null) {
+            store.fill('\u0000'); key.fill('\u0000')
+            Session.message = problem
+            refresh()
+            return
+        }
+        val host =
+            try {
+                AndroidBits.hostInfo(CustomIdeBuilderPlugin.context?.androidContext, ctx)
+            } catch (e: Exception) {
+                store.fill('\u0000'); key.fill('\u0000')
+                Session.message = "Could not read the installed app's details: ${e.message}"
+                refresh()
+                return
+            }
+        Session.build(ctx.applicationContext, host, tree!!, store, key)
+    }
+
+    private fun prefsOf(): SharedPreferences =
+        CustomIdeBuilderPlugin.context?.getPluginSharedPreferences("custom_ide_builder")
+            ?: requireContext().getSharedPreferences("custom_ide_builder", Context.MODE_PRIVATE)
+
+    private fun charsOf(field: EditText): CharArray = CharArray(field.length()).also { field.text.getChars(0, it.size, it, 0) }
+
+    private fun megabytes(bytes: Long): String = if (bytes < 1024 * 1024) "${(bytes + 1023) / 1024} KB" else "%.1f MB".format(bytes / 1048576.0)
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun text(ctx: Context, content: String, sp: Float, bold: Boolean = false, tooltip: String? = null, consume: Boolean = true) = TextView(ctx).apply {
+        text = content
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+        if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setPadding(0, dp(4), 0, dp(4))
+        if (tooltip != null) withTooltip(this, tooltip, consume)
+    }
+
+    private fun heading(ctx: Context, content: String, tooltip: String) =
+        text(ctx, content, 18f, bold = true, tooltip = tooltip).apply { setPadding(0, dp(20), 0, dp(4)) }
+
+    private fun action(ctx: Context, label: String, tooltip: String, onClick: () -> Unit) = Button(ctx).apply {
+        text = label
+        setOnClickListener { onClick() }
+        withTooltip(this, tooltip)
+        actionButtons.add(this)
+    }
+
+    /**
+     * Long-press shows the tooltip. [consume] false lets the press carry on to the view's own
+     * long-press (a text field's paste menu).
+     */
+    private fun withTooltip(view: View, tag: String, consume: Boolean = true) {
+        view.setOnLongClickListener { v ->
+            CustomIdeBuilderPlugin.tooltips()?.showTooltip(v, Help.CATEGORY, tag)
+            consume
+        }
+    }
+
+    /**
+     * Long-press on a dialog's message (or on a row of its list) shows the tooltip. Call it after
+     * `show()`, when the dialog's views exist.
+     */
+    private fun tooltipOnDialog(dialog: AlertDialog, tag: String) {
+        dialog.findViewById<TextView>(android.R.id.message)?.let { withTooltip(it, tag) }
+        dialog.listView?.setOnItemLongClickListener { _, row, _, _ ->
+            CustomIdeBuilderPlugin.tooltips()?.showTooltip(row, Help.CATEGORY, tag)
+            true
+        }
+    }
+
+    /**
+     * A label that stays above a field, so a filled field is never read as anything else. It names
+     * [field] for accessibility, and long-press shows the field's tooltip.
+     */
+    private fun fieldLabel(ctx: Context, content: String, tooltip: String, field: View) =
+        text(ctx, content, 14f, tooltip = tooltip).apply {
+            setPadding(0, dp(8), 0, 0)
+            labelFor = field.id
+        }
+
+    /** The label is [fieldLabel], above it; the id lets the label name it for accessibility. */
+    private fun passwordField(ctx: Context, tooltip: String) = EditText(ctx).apply {
+        id = View.generateViewId()
+        withTooltip(this, tooltip, consume = false)
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        // Never let the system put a password in saved instance state.
+        isSaveEnabled = false
+    }
+
+    private companion object {
+        const val PREF_WARNED = "warned_same_key"
+        const val PREF_TREE = "output_tree_uri"
+    }
+}

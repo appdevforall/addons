@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The website add-on list and downloads, after the user confirms. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="Custom IDE Builder">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.customidebuilder" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Custom IDE Builder" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <!-- Build provenance (ADFA-5256): the commit and commit-date this .cgp was built from. -->
+        <meta-data
+            android:name="plugin.vcs_revision"
+            android:value="${pluginVcsRevision}" />
+
+        <meta-data
+            android:name="plugin.build_timestamp"
+            android:value="${pluginBuildTimestamp}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Builds a copy of Code on the Go with the plugins and templates you choose bundled inside, signed with your own key." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <!-- 26.48: the current stable release; the range is what the review rubric (6.1) asks for. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.48" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="99" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,network.access" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.customidebuilder.CustomIdeBuilderPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

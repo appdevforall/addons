@@ -1,0 +1,165 @@
+package org.appdevforall.customidebuilder
+
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
+
+/**
+ * Tooltips for Custom IDE Builder. The category is `plugin_` plus the plugin ID, exactly, and
+ * lookups pass it explicitly to the three-argument showTooltip (plugins/README.md).
+ */
+object Help {
+    const val CATEGORY = "plugin_" + CustomIdeBuilderPlugin.PLUGIN_ID
+
+    const val MENU = "customidebuilder.menu"
+    const val ADDONS = "customidebuilder.addons"
+    const val WEBSITE = "customidebuilder.website"
+    const val KEYSTORE = "customidebuilder.keystore"
+    const val FOLDER = "customidebuilder.folder"
+    const val BUILD = "customidebuilder.build"
+    const val REMOVE = "customidebuilder.remove"
+    const val CANCEL = "customidebuilder.cancel"
+    const val STORE_PASSWORD = "customidebuilder.storepassword"
+    const val KEY_PASSWORD = "customidebuilder.keypassword"
+    const val KEY_ALIAS = "customidebuilder.keyalias"
+    const val STATUS = "customidebuilder.status"
+    const val RESULT = "customidebuilder.result"
+    const val SAME_KEY = "customidebuilder.samekey"
+    const val NAME_TAKEN = "customidebuilder.nametaken"
+    const val NAME_FIELD = "customidebuilder.namefield"
+
+    private val more = listOf(PluginTooltipButton(description = "About Custom IDE Builder", uri = "index.html", order = 0))
+
+    val entries = listOf(
+        PluginTooltipEntry(
+            MENU,
+            "Make a copy of Code on the Go with the add-ons you choose, signed with your own key.",
+            "<p>Builds a copy of the Code on the Go installed on this device, with the plugins and templates " +
+                "you pick bundled inside, and signs it with your keystore.</p>" +
+                "<p>The copy installs only after Code on the Go is uninstalled. Uninstalling removes Code on the " +
+                "Go's app data, such as its project list and settings; your projects in CodeOnTheGoProjects stay.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            ADDONS,
+            "Choose the plugins (.cgp) and templates (.cgt) to bundle.",
+            "<p>Pick files from this device, or download them from the add-ons website. Each plugin must have " +
+                "a different plugin ID, and each template a different file name. With nothing chosen the copy " +
+                "carries no add-ons.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            WEBSITE,
+            "Download add-ons from addons.appdevforall.org.",
+            "<p>This is the only part of the plugin that uses the internet. You are asked first. The list shows " +
+                "the plugins and templates that work with this version of Code on the Go, and every download is " +
+                "checked against the size and SHA-256 the catalog publishes.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            KEYSTORE,
+            "The key the copy is signed with: a PKCS12 or BKS keystore.",
+            "<p>Passwords are used for this visit only and are never saved. A JKS file must be converted first " +
+                "with <code>keytool -importkeystore</code>. Use the same key for every later build, or devices " +
+                "that have an earlier build must uninstall it first.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            FOLDER,
+            "The folder the signed APK is saved in.",
+            "<p>Chosen once and remembered. The file is named after the app and its version, ending in " +
+                "<code>-custom.apk</code>. If the folder already has a file with that name, you are asked for " +
+                "another one.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            BUILD,
+            "Copy the app, add the add-ons, sign it and save it.",
+            "<p>Runs in the background. The app is copied without recompressing, so it takes about as long as " +
+                "copying the file, plus the time to sign it. The keystore is read again for the build, and the " +
+                "build stops if the key in it is no longer the one whose fingerprint was shown.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            REMOVE,
+            "Take this add-on off the list.",
+            "<p>Removes it from the copy you are about to build and deletes the copy this plugin made of the " +
+                "file. The original file is not touched.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            CANCEL,
+            "Stop the build or download in progress.",
+            "<p>A cancelled or failed build saves nothing to your output folder: an unfinished APK that was already " +
+                "being written there is deleted, and the temporary files are deleted too. If the folder will not " +
+                "delete the unfinished file, the result names it so you can delete it by hand. Your add-on list and " +
+                "keystore choice stay as they are.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            STORE_PASSWORD,
+            "The password that opens the keystore file.",
+            "<p>Used to read the keys and again for the build. It is never saved: the copy used for a task is " +
+                "erased when the task ends, however it ends, and the field is cleared when a build ends and " +
+                "when you leave this screen.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            KEY_PASSWORD,
+            "The password of the chosen key. Leave it blank if it is the store password.",
+            "<p>PKCS12 keystores usually use one password for both. It is never saved: the copy used for a task " +
+                "is erased when the task ends, however it ends, and the field is cleared when a build ends and " +
+                "when you leave this screen.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            KEY_ALIAS,
+            "Which key in the keystore signs the copy.",
+            "<p>Shown after you tap Read keys. The line below the list is the certificate fingerprint " +
+                "(SHA-256) of the chosen key, so you can check it is the key you used before. Use the same key " +
+                "for every build.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            STATUS,
+            "What the plugin is doing now, and how far along it is.",
+            "<p>Shows the current step of a download or a build, with a progress bar. Tap Cancel to stop it. " +
+                "Nothing is shown here when nothing is running.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            RESULT,
+            "The latest result or problem. Press and hold the text to copy it.",
+            "<p>Shows how the last task ended: where the finished APK was saved and the certificate it was " +
+                "signed with, or what went wrong and what to try. It is cleared when the next task starts.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            SAME_KEY,
+            "Why every build should be signed with the same key.",
+            "<p>Android installs an update only if it is signed with the same key as the version already " +
+                "installed. A device that has a build signed with another key must uninstall it first. Uninstalling " +
+                "removes Code on the Go's app data, such as its project list and settings; your projects in " +
+                "CodeOnTheGoProjects stay.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            NAME_TAKEN,
+            "The folder already has a file with this name. Choose another, or cancel the save.",
+            "<p>The plugin looks for the name when you tap Build, and again just before saving, because a file can " +
+                "appear while the app is being built. If the name is taken you are asked for another one; a free " +
+                "name is filled in for you. The folder can still change the name when it creates the file, so the " +
+                "finished message names the file as it was saved.</p>" +
+                "<p>Save keeps the name you typed (spaces and other odd characters become dashes, and " +
+                "<code>.apk</code> is added). Cancel stops: nothing is built, or the APK that was built is deleted. " +
+                "The build waits for your answer, also if you leave this screen and come back.</p>",
+            more,
+        ),
+        PluginTooltipEntry(
+            NAME_FIELD,
+            "The file name for the APK, ending in .apk.",
+            "<p>Letters, digits, dot, underscore and dash. Anything else becomes a dash. The name is checked " +
+                "again against the folder when you tap Save.</p>",
+            more,
+        ),
+    )
+}

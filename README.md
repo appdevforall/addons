@@ -30,6 +30,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/AI-Literacy-Course/`](plugins/AI-Literacy-Course/) | An offline "Introduction to AI" course with lesson videos and activities. |
 | [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
 | [`plugins/AI-Core/`](plugins/AI-Core/) | The agent chat and the inference router every other AI addon needs. |
+| [`plugins/Custom-IDE-Builder/`](plugins/Custom-IDE-Builder/) | Builds a signed copy of Code on the Go with the add-ons you choose. |
 | [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
 | [`plugins/Get-AI-Models/`](plugins/Get-AI-Models/) | Downloads small language models for on-device AI addons. |
 | [`plugins/Icons-Repository/`](plugins/Icons-Repository/) | Adds vector icons to a project from inside the editor. |
