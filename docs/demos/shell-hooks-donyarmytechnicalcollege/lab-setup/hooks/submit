@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# "Run submit": hand in the assignment.
+#
+# Action:    install.sh puts it at actions/submit. Long-press any file of the project and choose
+#            "Run submit".
+# Arguments: $1 = the long-pressed file. Only its folder matters: it says which project to submit.
+# Runs:      in the Terminal, so it can ask before it submits.
+# Output:    the rule check for every .java and .kt file, the push, and a receipt.
+#
+# It commits everything git does not ignore, tags the commit submit-<n> with the student's name,
+# ID and build counts, and pushes the branch and the tag to the course server. The server's
+# post-receive hook files a receipt in the instructor's inbox and sends its number back; git
+# prints it here as "remote: Receipt ...".
+#
+# Hooks report, they don't enforce: a student could skip this and push by hand. Deadlines and
+# rules are enforced on the server, which is the only place that can.
+#
+# What an institution would change: the tag names, and what goes in the tag's message.
+
+conf="$HOME/.config/donyarmy/lab.conf"
+journal="$HOME/cs140/build-journal.tsv"
+# Run with bash, not by its #! line: Android has no /usr/bin/env, and Shell Hooks maps the #! line
+# only for the script it starts itself.
+check_file="$(dirname "$0")/check-file"
+
+top=$(git -C "$(dirname -- "$1")" rev-parse --show-toplevel 2>/dev/null) || {
+    echo "This file is not in a git clone of your CS 140 repository." >&2
+    exit 1
+}
+cd "$top" || exit 1
+branch=$(git symbolic-ref --short -q HEAD) || {
+    echo "Not on a branch: check out your branch first (git switch main)." >&2
+    exit 1
+}
+name=$(git config --file "$conf" student.name)
+id=$(git config --file "$conf" student.id)
+course=$(git config --file "$conf" course.name)
+if [ -z "$id" ]; then
+    echo "No student ID: run ~/lab-setup/install.sh first." >&2
+    exit 1
+fi
+assignment=$(sed -n 's/^# //p' ASSIGNMENT.md 2>/dev/null | head -n 1)
+
+echo "$course, ${assignment:-this assignment}"
+echo
+echo "Checking the course rules:"
+broken=0
+while IFS= read -r -d '' source; do
+    bash "$check_file" "$source" || broken=$((broken + 1))
+done < <(git ls-files -z --cached --others --exclude-standard -- '*.java' '*.kt')
+if [ "$broken" -gt 0 ]; then
+    echo "$broken file(s) break a rule. You can still submit; your instructor sees the same check."
+fi
+echo
+
+read -r -p "Submit branch $branch as $name ($id)? [y/N] " answer
+case $answer in
+    [yY]*) ;;
+    *)
+        echo "Not submitted."
+        exit 0
+        ;;
+esac
+
+git add -A
+if ! git diff --cached --quiet; then
+    git commit --quiet -m "$course submission" || exit 1
+fi
+
+# Number this submission after the ones the server already has.
+timeout 30 git fetch --quiet --tags origin 2>/dev/null
+n=$(( $(git tag --list 'submit-*' | wc -l) + 1 ))
+tag="submit-$n"
+
+project=$(basename "$top")
+builds=$(awk -F '\t' -v p="$project" '$2 == p { n++; if ($3 == "FAILED") f++ }
+    END { printf "%d builds, %d failed", n, f }' "$journal" 2>/dev/null)
+git tag -a "$tag" -m "$course, ${assignment:-assignment}
+Student: $name ($id)
+Builds on this phone: ${builds:-none recorded}" || exit 1
+
+echo "Sending $tag to the course server..."
+if ! timeout 60 git push origin "HEAD:refs/heads/$branch" "refs/tags/$tag"; then
+    git tag -d "$tag" >/dev/null   # so the next try uses the same number
+    echo "Not submitted: the course server did not take it. Try again later." >&2
+    exit 1
+fi
+echo
+echo "Submitted $tag, commit $(git rev-parse --short HEAD), at $(date '+%F %T')."
+echo "Keep the receipt number above (remote: Receipt ...)."
