@@ -23,7 +23,7 @@ SELECT js_create_scalar('name_key', '(function (args) {
   // NFKD splits an accented letter into the letter and its accent, and turns
   // ligatures and full-width letters into plain ones. Only the accents of
   // Latin, Greek and Cyrillic letters (U+0300 to U+036F) are removed.
-  let s = String(args[0]).normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  let s = (args[0] ?? "").toString().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   // Letters with no accent to remove, written the way they are usually typed.
   const plain = { "ø": "o", "ł": "l", "ß": "ss", "æ": "ae", "œ": "oe", "đ": "d" };
   s = s.toLowerCase().replace(/[øłßæœđ]/g, (c) => plain[c]);
@@ -37,7 +37,7 @@ SELECT js_create_scalar('name_key', '(function (args) {
 -- must be added, removed or changed to turn one into the other (the edit
 -- distance), down to 0.
 SELECT js_create_scalar('similarity', '(function (args) {
-  const [a, b] = args;
+  const [a, b] = args.map((s) => Array.from(s)); // letters, not UTF-16 units
   const row = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
     let diagonal = row[0];

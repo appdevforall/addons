@@ -43,6 +43,9 @@ SELECT js_create_aggregate('welch_test',
       const variance = xs.reduce((sum, x) => sum + (x - mean) ** 2, 0) / (n - 1);
       return { n, mean, se2: variance / n };
     };
+    if (groups.drug.length < 2 || groups.placebo.length < 2) {
+      throw new Error("each group needs at least 2 patients");
+    }
     const d = describe(groups.drug);
     const p = describe(groups.placebo);
     const se2 = d.se2 + p.se2;
@@ -124,6 +127,9 @@ SELECT js_create_aggregate('permutation_p',
       });
       return drug / nDrug - placebo / nPlacebo;
     };
+    if (!isDrug.includes(true) || !isDrug.includes(false)) {
+      throw new Error("both groups need patients");
+    }
     const observed = Math.abs(difference(isDrug));
     const labels = isDrug.slice();
     let asLarge = 0;

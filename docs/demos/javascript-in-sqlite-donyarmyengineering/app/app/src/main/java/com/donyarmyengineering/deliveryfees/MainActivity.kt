@@ -56,31 +56,31 @@ class MainActivity : AppCompatActivity() {
         if (prefs.getString(KEY_RULE_FILE, null) == null) {
             binding.ruleStatus.setText(R.string.choose_first)
         }
-        showFees()
+        lifecycleScope.launch { showFees() }
     }
 
     // Lists the orders with the fee from the rule stored in the database.
-    private fun showFees() {
-        binding.results.setText(R.string.working)
-        lifecycleScope.launch {
-            try {
-                val rows = withContext(Dispatchers.IO) {
-                    val orders = OrderDatabase.get(applicationContext).orders()
-                    if (orders.count() == 0) orders.insert(SAMPLE_ORDERS)
-                    OrderDatabase.withTimeLimit { orders.withFees() }
-                }
-                _binding?.results?.text = table(rows)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val noRule = e.message.orEmpty().contains("no such function")
-                _binding?.results?.text =
-                    if (noRule) getString(R.string.no_rule) else getString(R.string.error, e.message)
+    private suspend fun showFees() {
+        _binding?.results?.setText(R.string.working)
+        try {
+            val rows = withContext(Dispatchers.IO) {
+                val orders = OrderDatabase.get(applicationContext).orders()
+                if (orders.count() == 0) orders.insert(SAMPLE_ORDERS)
+                OrderDatabase.withTimeLimit { orders.withFees() }
             }
+            _binding?.results?.text = table(rows)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val noRule = e.message.orEmpty().contains("no such function")
+            _binding?.results?.text =
+                if (noRule) getString(R.string.no_rule) else getString(R.string.error, e.message)
         }
     }
 
-    // Reads the rule file again, and replaces the rule in the database if it works.
+    // Reads the rule file again, and replaces the rule in the database if it works. The rule
+    // buttons stay off until the new fees are shown, so two reloads can't overlap and finish in
+    // the wrong order.
     private fun reloadRule() {
         val file = prefs.getString(KEY_RULE_FILE, null)?.let(Uri::parse)
         if (file == null) {
@@ -88,23 +88,35 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.ruleStatus.setText(R.string.working)
+        setRuleButtonsEnabled(false)
         lifecycleScope.launch {
-            val started = SystemClock.elapsedRealtime()
             try {
-                val code = withContext(Dispatchers.IO) {
-                    checkNotNull(contentResolver.openInputStream(file)) { "Can't open $file" }
-                        .bufferedReader().use { it.readText() }
+                val started = SystemClock.elapsedRealtime()
+                try {
+                    val code = withContext(Dispatchers.IO) {
+                        checkNotNull(contentResolver.openInputStream(file)) { "Can't open $file" }
+                            .bufferedReader().use { it.readText() }
+                    }
+                    OrderDatabase.replaceRule(applicationContext, code, SAMPLE_ORDERS)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _binding?.ruleStatus?.text = getString(R.string.rule_rejected, e.message)
+                    return@launch
                 }
-                OrderDatabase.replaceRule(applicationContext, code, SAMPLE_ORDERS)
+                // The rule is stored now, so nothing from here on reports it as not changed.
                 val ms = SystemClock.elapsedRealtime() - started
                 _binding?.ruleStatus?.text = getString(R.string.rule_loaded, displayName(file), ms)
                 showFees()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _binding?.ruleStatus?.text = getString(R.string.rule_rejected, e.message)
+            } finally {
+                setRuleButtonsEnabled(true)
             }
         }
+    }
+
+    private fun setRuleButtonsEnabled(enabled: Boolean) {
+        _binding?.reloadRule?.isEnabled = enabled
+        _binding?.chooseRule?.isEnabled = enabled
     }
 
     // A fee the rule gave no number for shows as "?", not as 0.00.
@@ -117,10 +129,12 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+    // The file's name, or the last part of its address when the name can't be read.
     private fun displayName(file: Uri): String =
-        contentResolver.query(file, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-            ?: file.lastPathSegment.orEmpty()
+        runCatching {
+            contentResolver.query(file, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull() ?: file.lastPathSegment.orEmpty()
 
     private fun showNotices() {
         val text = assets.open("NOTICES.txt").bufferedReader().use { it.readText() }

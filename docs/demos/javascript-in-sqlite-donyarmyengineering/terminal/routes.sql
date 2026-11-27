@@ -53,6 +53,8 @@ SELECT js_create_scalar('gc_point', '(function (args) {
   const p = toXyz(lat1, lon1);
   const q = toXyz(lat2, lon2);
   const angle = Math.acos(Math.min(1, p[0] * q[0] + p[1] * q[1] + p[2] * q[2]));
+  // The same place twice: no route to follow.
+  if (angle < 1e-12) return `${args[0].toFixed(1)}, ${args[1].toFixed(1)}`;
   const a = Math.sin((1 - f) * angle) / Math.sin(angle);
   const b = Math.sin(f * angle) / Math.sin(angle);
   const [x, y, z] = [0, 1, 2].map((i) => a * p[i] + b * q[i]);

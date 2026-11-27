@@ -27,16 +27,16 @@ SELECT js_create_scalar('chain_length', '(function (args) {
   const half = span / 2;
   // A parabola is close to a catenary, so its a is a good first guess.
   let a = span * span / (8 * sag);
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 1000; i++) {
     const x = half / a;
     const error = a * (Math.cosh(x) - 1) - sag;
     const slope = Math.cosh(x) - 1 - x * Math.sinh(x);
     const next = a - error / slope;
-    const done = Math.abs(next - a) < 1e-12 * a;
+    if (!Number.isFinite(next)) break;
+    if (Math.abs(next - a) < 1e-12 * a) return 2 * next * Math.sinh(half / next);
     a = next;
-    if (done) break;
   }
-  return 2 * a * Math.sinh(half / a);
+  throw new Error("no answer found for this span and sag");
 })');
 
 .output stdout

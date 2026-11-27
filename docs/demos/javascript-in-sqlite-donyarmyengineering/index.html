@@ -133,7 +133,8 @@ with the reference of every function, and <em>JavaScript in SQLite for apps</em>
 <h2 id="terminal">4. Jobs 1 to 5, in Terminal</h2>
 <p>Each job is one script, in this page's <code>terminal</code> folder. Copy that folder to the
 phone, for example into Download, then in Terminal:</p>
-<pre><code>cp -r /sdcard/Download/terminal ~/demo
+<pre><code>mkdir -p ~/demo
+cp /sdcard/Download/terminal/*.sql ~/demo/
 cd ~/demo
 sqlite3 demo.db &lt; duplicates.sql</code></pre>
 <p>Each script starts with <code>.load sqlite-js</code>, creates its functions and table, and
@@ -171,7 +172,7 @@ SELECT js_create_scalar('name_key', '(function (args) {
   // NFKD splits an accented letter into the letter and its accent, and turns
   // ligatures and full-width letters into plain ones. Only the accents of
   // Latin, Greek and Cyrillic letters (U+0300 to U+036F) are removed.
-  let s = String(args[0]).normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  let s = (args[0] ?? "").toString().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   // Letters with no accent to remove, written the way they are usually typed.
   const plain = { "ø": "o", "ł": "l", "ß": "ss", "æ": "ae", "œ": "oe", "đ": "d" };
   s = s.toLowerCase().replace(/[øłßæœđ]/g, (c) =&gt; plain[c]);
@@ -185,7 +186,7 @@ SELECT js_create_scalar('name_key', '(function (args) {
 -- must be added, removed or changed to turn one into the other (the edit
 -- distance), down to 0.
 SELECT js_create_scalar('similarity', '(function (args) {
-  const [a, b] = args;
+  const [a, b] = args.map((s) =&gt; Array.from(s)); // letters, not UTF-16 units
   const row = Array.from({ length: b.length + 1 }, (_, j) =&gt; j);
   for (let i = 1; i &lt;= a.length; i++) {
     let diagonal = row[0];
@@ -271,10 +272,10 @@ run with <code>sqlite3 packing.db &lt; packing-lists.sql</code></p>
 
 .load sqlite-js
 
--- The sqlite3 command turns trusted_schema off, so that a database you got
--- from someone else can't run code in its triggers. Then a trigger stored in
--- a database can't call functions like the one below. This database is your
--- own, so allow it.
+-- The sqlite3 command turns trusted_schema off, so that the triggers and
+-- views of a database you got from someone else can't call functions like
+-- the one below (plain SQL in them still runs). This database is your own,
+-- so allow it.
 -- Every later session that writes to the shipments table needs this line,
 -- .load sqlite-js and SELECT js_init_table(1); see the end of this file.
 PRAGMA trusted_schema = ON;
@@ -322,7 +323,7 @@ SELECT js_create_scalar('check_packing_list', '(function (args) {
     }
     total += item.qty * item.kg;
   });
-  if (total &gt; limitKg) {
+  if (total &gt; limitKg * (1 + 1e-9)) { // a little slack for rounding
     throw new Error(`The load is ${total.toFixed(1)} kg, over the limit of ${limitKg} kg.`);
   }
   return 1;
@@ -410,8 +411,9 @@ phone:</p>
     <code>The packing list has no items.</code></td></tr>
 </table>
 <p class="note">The <code>sqlite3</code> command turns <code>trusted_schema</code> off when it
-opens a database, so that a database you got from someone else can't run code in its triggers or
-views. And <code>js_init_table(1)</code> runs the code stored in the database's
+opens a database, so that the triggers and views of a database you got from someone else can't
+call functions like these. It is not a general safety switch: plain SQL in those triggers still
+runs. And <code>js_init_table(1)</code> runs the code stored in the database's
 <code>js_functions</code> table. Do both only for databases you made yourself. In an app, the
 database is the app's own, and it opens it with
 <code>SqliteJs.ENTRY_POINT_FOR_TRUSTED_DATABASE</code>; see
@@ -456,16 +458,16 @@ SELECT js_create_scalar('chain_length', '(function (args) {
   const half = span / 2;
   // A parabola is close to a catenary, so its a is a good first guess.
   let a = span * span / (8 * sag);
-  for (let i = 0; i &lt; 100; i++) {
+  for (let i = 0; i &lt; 1000; i++) {
     const x = half / a;
     const error = a * (Math.cosh(x) - 1) - sag;
     const slope = Math.cosh(x) - 1 - x * Math.sinh(x);
     const next = a - error / slope;
-    const done = Math.abs(next - a) &lt; 1e-12 * a;
+    if (!Number.isFinite(next)) break;
+    if (Math.abs(next - a) &lt; 1e-12 * a) return 2 * next * Math.sinh(half / next);
     a = next;
-    if (done) break;
   }
-  return 2 * a * Math.sinh(half / a);
+  throw new Error("no answer found for this span and sag");
 })');
 
 .output stdout
@@ -551,6 +553,9 @@ SELECT js_create_aggregate('welch_test',
       const variance = xs.reduce((sum, x) =&gt; sum + (x - mean) ** 2, 0) / (n - 1);
       return { n, mean, se2: variance / n };
     };
+    if (groups.drug.length &lt; 2 || groups.placebo.length &lt; 2) {
+      throw new Error("each group needs at least 2 patients");
+    }
     const d = describe(groups.drug);
     const p = describe(groups.placebo);
     const se2 = d.se2 + p.se2;
@@ -632,6 +637,9 @@ SELECT js_create_aggregate('permutation_p',
       });
       return drug / nDrug - placebo / nPlacebo;
     };
+    if (!isDrug.includes(true) || !isDrug.includes(false)) {
+      throw new Error("both groups need patients");
+    }
     const observed = Math.abs(difference(isDrug));
     const labels = isDrug.slice();
     let asLarge = 0;
@@ -697,7 +705,7 @@ shuffled_p
 <p>p is 0.023: if the drug did nothing, a difference this large, either way, would turn up by
 chance about 2 times in 100. Shuffling the labels 10,000 times agrees. SciPy's Welch t-test gives
 the same t, degrees of freedom and p for this data. On the phone used here, a Galaxy J7 from 2018,
-this script took 6.1 and 6.4 seconds in two runs, nearly all of it the 10,000 shuffles; each
+this script took 6.1 to 6.4 seconds in three runs, nearly all of it the 10,000 shuffles; each
 of the other scripts took less than 140 ms.</p>
 <figure>
   <img src="screenshots/5-drug-trial.png" alt="Terminal showing the group averages, the t-test and the shuffled p-value">
@@ -764,6 +772,8 @@ SELECT js_create_scalar('gc_point', '(function (args) {
   const p = toXyz(lat1, lon1);
   const q = toXyz(lat2, lon2);
   const angle = Math.acos(Math.min(1, p[0] * q[0] + p[1] * q[1] + p[2] * q[2]));
+  // The same place twice: no route to follow.
+  if (angle &lt; 1e-12) return `${args[0].toFixed(1)}, ${args[1].toFixed(1)}`;
   const a = Math.sin((1 - f) * angle) / Math.sin(angle);
   const b = Math.sin(f * angle) / Math.sin(angle);
   const [x, y, z] = [0, 1, 2].map((i) =&gt; a * p[i] + b * q[i]);
@@ -870,6 +880,7 @@ it, and tap <strong>Reload rule</strong> in the app.</p>
   <li>Closes the app's database connections, stores the rule in the database's
     <code>js_functions</code> table, and opens the database again. A connection keeps the version
     of a function it loaded when it opened, so the new rule needs new connections.</li>
+  <li>Shows the new fees. The rule buttons are off until then, so two reloads can't overlap.</li>
 </ol>
 <figure>
   <img src="screenshots/10-rule-refused.png" alt="The app saying: The rule was not changed. The rule ran for more than 2 s, so it was stopped. Does it loop forever?">
@@ -1191,31 +1202,31 @@ class MainActivity : AppCompatActivity() {
         if (prefs.getString(KEY_RULE_FILE, null) == null) {
             binding.ruleStatus.setText(R.string.choose_first)
         }
-        showFees()
+        lifecycleScope.launch { showFees() }
     }
 
     // Lists the orders with the fee from the rule stored in the database.
-    private fun showFees() {
-        binding.results.setText(R.string.working)
-        lifecycleScope.launch {
-            try {
-                val rows = withContext(Dispatchers.IO) {
-                    val orders = OrderDatabase.get(applicationContext).orders()
-                    if (orders.count() == 0) orders.insert(SAMPLE_ORDERS)
-                    OrderDatabase.withTimeLimit { orders.withFees() }
-                }
-                _binding?.results?.text = table(rows)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val noRule = e.message.orEmpty().contains("no such function")
-                _binding?.results?.text =
-                    if (noRule) getString(R.string.no_rule) else getString(R.string.error, e.message)
+    private suspend fun showFees() {
+        _binding?.results?.setText(R.string.working)
+        try {
+            val rows = withContext(Dispatchers.IO) {
+                val orders = OrderDatabase.get(applicationContext).orders()
+                if (orders.count() == 0) orders.insert(SAMPLE_ORDERS)
+                OrderDatabase.withTimeLimit { orders.withFees() }
             }
+            _binding?.results?.text = table(rows)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val noRule = e.message.orEmpty().contains("no such function")
+            _binding?.results?.text =
+                if (noRule) getString(R.string.no_rule) else getString(R.string.error, e.message)
         }
     }
 
-    // Reads the rule file again, and replaces the rule in the database if it works.
+    // Reads the rule file again, and replaces the rule in the database if it works. The rule
+    // buttons stay off until the new fees are shown, so two reloads can't overlap and finish in
+    // the wrong order.
     private fun reloadRule() {
         val file = prefs.getString(KEY_RULE_FILE, null)?.let(Uri::parse)
         if (file == null) {
@@ -1223,23 +1234,35 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.ruleStatus.setText(R.string.working)
+        setRuleButtonsEnabled(false)
         lifecycleScope.launch {
-            val started = SystemClock.elapsedRealtime()
             try {
-                val code = withContext(Dispatchers.IO) {
-                    checkNotNull(contentResolver.openInputStream(file)) { "Can't open $file" }
-                        .bufferedReader().use { it.readText() }
+                val started = SystemClock.elapsedRealtime()
+                try {
+                    val code = withContext(Dispatchers.IO) {
+                        checkNotNull(contentResolver.openInputStream(file)) { "Can't open $file" }
+                            .bufferedReader().use { it.readText() }
+                    }
+                    OrderDatabase.replaceRule(applicationContext, code, SAMPLE_ORDERS)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _binding?.ruleStatus?.text = getString(R.string.rule_rejected, e.message)
+                    return@launch
                 }
-                OrderDatabase.replaceRule(applicationContext, code, SAMPLE_ORDERS)
+                // The rule is stored now, so nothing from here on reports it as not changed.
                 val ms = SystemClock.elapsedRealtime() - started
                 _binding?.ruleStatus?.text = getString(R.string.rule_loaded, displayName(file), ms)
                 showFees()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _binding?.ruleStatus?.text = getString(R.string.rule_rejected, e.message)
+            } finally {
+                setRuleButtonsEnabled(true)
             }
         }
+    }
+
+    private fun setRuleButtonsEnabled(enabled: Boolean) {
+        _binding?.reloadRule?.isEnabled = enabled
+        _binding?.chooseRule?.isEnabled = enabled
     }
 
     // A fee the rule gave no number for shows as "?", not as 0.00.
@@ -1252,10 +1275,12 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+    // The file's name, or the last part of its address when the name can't be read.
     private fun displayName(file: Uri): String =
-        contentResolver.query(file, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { c -&gt; if (c.moveToFirst()) c.getString(0) else null }
-            ?: file.lastPathSegment.orEmpty()
+        runCatching {
+            contentResolver.query(file, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -&gt; if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull() ?: file.lastPathSegment.orEmpty()
 
     private fun showNotices() {
         val text = assets.open("NOTICES.txt").bufferedReader().use { it.readText() }
@@ -1439,7 +1464,7 @@ policy, for example, has rules about code that an app loads after it is installe
   <tr><td>Code on the Go</td><td>C-d-1124-2145, with the JavaScript in SQLite template</td></tr>
   <tr><td>Terminal packages</td><td>sqlite 3.51.2, sqlite-js 1.4.4 (quickjs-ng 0.12.1)</td></tr>
   <tr><td>Scripts</td><td>The same results on the phone and on a Linux computer; on the phone,
-    the drug trial took 6.1 and 6.4 s in two runs, the others under 140 ms</td></tr>
+    the drug trial took 6.1 to 6.4 s in three runs, the others under 140 ms</td></tr>
   <tr><td>Reload rule</td><td>72 to 265 ms in all runs: 216 ms in the video, just after the
     app started</td></tr>
   <tr><td>First build of the app</td><td>9 min 16 s</td></tr>

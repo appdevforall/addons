@@ -13,10 +13,10 @@
 
 .load sqlite-js
 
--- The sqlite3 command turns trusted_schema off, so that a database you got
--- from someone else can't run code in its triggers. Then a trigger stored in
--- a database can't call functions like the one below. This database is your
--- own, so allow it.
+-- The sqlite3 command turns trusted_schema off, so that the triggers and
+-- views of a database you got from someone else can't call functions like
+-- the one below (plain SQL in them still runs). This database is your own,
+-- so allow it.
 -- Every later session that writes to the shipments table needs this line,
 -- .load sqlite-js and SELECT js_init_table(1); see the end of this file.
 PRAGMA trusted_schema = ON;
@@ -64,7 +64,7 @@ SELECT js_create_scalar('check_packing_list', '(function (args) {
     }
     total += item.qty * item.kg;
   });
-  if (total > limitKg) {
+  if (total > limitKg * (1 + 1e-9)) { // a little slack for rounding
     throw new Error(`The load is ${total.toFixed(1)} kg, over the limit of ${limitKg} kg.`);
   }
   return 1;
