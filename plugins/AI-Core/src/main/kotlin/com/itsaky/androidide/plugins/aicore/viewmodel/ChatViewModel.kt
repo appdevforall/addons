@@ -357,6 +357,13 @@ class ChatViewModel(
     private val runToolLog = mutableListOf<String>()
 
     /**
+     * Each executed call with its output, for [reviewAnswer]'s evidence. Unlike [runToolLog], which the exported chat
+     * keeps, every tool's output is here: the review removes what the evidence does not hold (ADFA-7340). Main thread
+     * only.
+     */
+    private val runEvidence = mutableListOf<String>()
+
+    /**
      * A reply of this run that holds code, for [reviewAnswer] to check once the run is done.
      *
      * @property messageId the bubble it was shown in.
@@ -929,7 +936,10 @@ class ChatViewModel(
 
         withContext(Dispatchers.Main) {
             results.forEachIndexed { index, result ->
-                toolCalls.getOrNull(index)?.let { runToolLog += AgentActivity.logEntry(it, result) }
+                toolCalls.getOrNull(index)?.let {
+                    runToolLog += AgentActivity.logEntry(it, result)
+                    runEvidence += AgentActivity.evidenceEntry(it, result)
+                }
             }
             activityMessageId?.let { id ->
                 _messages.value.firstOrNull { it.id == id }?.let { putActivity(it.text, it.status) }
@@ -1110,6 +1120,7 @@ class ChatViewModel(
         activityMessageId = null
         runToolNames.clear()
         runToolLog.clear()
+        runEvidence.clear()
         runCodeReply = null
         runChangedProject = false
         // Created here, on Main, so the retry point below names the prompt it belongs to.
@@ -1416,7 +1427,7 @@ class ChatViewModel(
     ) {
         if (runChangedProject || currentBackendId == AiBackend.LOCAL_ID) return
         withContext(Dispatchers.Main) { setState(AgentState.Processing(str(R.string.msg_reviewing))) }
-        val evidence = withContext(Dispatchers.Main) { runToolLog.joinToString("\n\n") }
+        val evidence = withContext(Dispatchers.Main) { runEvidence.joinToString("\n\n") }
         val started = System.currentTimeMillis()
         val response = try {
             val prompts = sharedPromptConfig.config()
@@ -2025,6 +2036,7 @@ class ChatViewModel(
         activityMessageId = null
         runToolNames.clear()
         runToolLog.clear()
+        runEvidence.clear()
     }
 
     /**
