@@ -162,7 +162,7 @@ class QueryPlan(val rows: List<Map<String, String>>) {
 
     companion object {
         fun parse(result: JSONObject): QueryPlan =
-            QueryPlan(objects(result.optJSONArray("plan") ?: JSONArray()).map { row -> row.keys().asSequence().associateWith { row.opt(it).toString() } })
+            QueryPlan(objects(result.optJSONArray("plan") ?: JSONArray()).map { row -> row.keys().asSequence().associateWith { row.opt(it)?.toString().orEmpty() } })
     }
 }
 
@@ -178,7 +178,7 @@ class DatabaseStats(
     companion object {
         fun parse(result: JSONObject): DatabaseStats {
             fun long(key: String) = if (result.isNull(key)) null else result.opt(key)?.toString()?.toLongOrNull()
-            val counts = result.optJSONObject("row_counts")?.let { o -> o.keys().asSequence().sorted().associateWith { o.opt(it).toString() } }
+            val counts = result.optJSONObject("row_counts")?.let { o -> o.keys().asSequence().sorted().associateWith { o.opt(it)?.toString().orEmpty() } }
             return DatabaseStats(long("page_count"), long("page_size"), long("freelist_count"), long("size_bytes"), counts, result.optStringOrNull("row_counts_skipped"))
         }
     }
