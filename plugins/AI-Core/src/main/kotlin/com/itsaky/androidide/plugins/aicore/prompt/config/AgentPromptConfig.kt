@@ -117,6 +117,8 @@ data class AgentPromptConfig(
      *   succeeded, asking the run to answer instead.
      * @property requiredTool the turn after a reply that answered before calling the tool the run
      *   had to call first, such as a web search before a code review.
+     * @property bareCall the model's own turn for a native reply that called tools and wrote
+     *   nothing, naming the calls so the model sees it made them.
      */
     data class AgentLoopText(
         val failed: PromptText,
@@ -128,6 +130,7 @@ data class AgentPromptConfig(
         val unappliedWrite: PromptText,
         val repeatedAfterSuccess: PromptText,
         val requiredTool: PromptText,
+        val bareCall: PromptText,
     )
 
     /**

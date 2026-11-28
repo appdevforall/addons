@@ -65,12 +65,26 @@ object AgentActivity {
      * @param result what it returned.
      * @return the entry, its first line naming the call and its arguments.
      */
-    fun logEntry(call: ToolCall, result: ToolResult): String = buildString {
+    fun logEntry(call: ToolCall, result: ToolResult): String =
+        entry(call, result, keepOutput = call.name in WebAccess.TOOL_NAMES || !result.success)
+
+    /**
+     * One call and its result, as the answer review reads them: unlike [logEntry], every tool keeps its output. The
+     * review removes from a draft whatever its evidence does not hold, and given only "completed" it removed a rendered
+     * SQL template from the answer (ADFA-7340). Clipped as a web result is; the review caps the total.
+     *
+     * @param call the call that ran.
+     * @param result what it returned.
+     * @return the entry, its first line naming the call and its arguments.
+     */
+    fun evidenceEntry(call: ToolCall, result: ToolResult): String = entry(call, result, keepOutput = true)
+
+    private fun entry(call: ToolCall, result: ToolResult, keepOutput: Boolean): String = buildString {
         append(if (result.success) "✓ " else "✗ ").append(call.name).append('(')
         append(call.args.entries.joinToString(", ") { (key, value) -> "$key=${clip(value, LOG_ARG_LIMIT)}" })
         append(")\n").append(result.message)
         val extra = if (result.success) result.data else result.error_details
-        if (call.name in WebAccess.TOOL_NAMES || !result.success) {
+        if (keepOutput) {
             extra?.takeIf { it.isNotBlank() }?.let { append('\n').append(clip(it, LOG_RESULT_LIMIT)) }
         }
     }

@@ -37,6 +37,9 @@ class ToolResultsPrompt(
     /** The turn sent after a reply that re-issued the batch that had just succeeded. */
     suspend fun repeatedAfterSuccess(): String = renderRepeatedAfterSuccess(config.config(), terminalTool)
 
+    /** The model's own turn for a native reply that called [calls] and wrote nothing. */
+    suspend fun bareCall(calls: List<ToolCall>): String = renderBareCall(config.config(), calls)
+
     /** The turn sent after a reply that answered before calling [tool], which the run had to call first. */
     suspend fun requiredTool(tool: String): String = renderRequiredTool(config.config(), terminalTool, tool)
 
@@ -140,6 +143,35 @@ class ToolResultsPrompt(
             )
 
         /**
+         * Renders the model's own turn for a native reply that called [calls] and wrote nothing: each call by
+         * name, with its arguments as `key=value`, each value on one line and cut to [BARE_CALL_VALUE_CHARS],
+         * since a file's content can be long.
+         *
+         * @param config the loaded prompt config.
+         * @param calls the reply's calls, the terminal tool's left out.
+         * @return the turn to add to the transcript.
+         */
+        fun renderBareCall(config: AgentPromptConfig, calls: List<ToolCall>): String =
+            PromptTemplateEngine.render(
+                config.agentLoop.bareCall,
+                mapOf(PromptVariables.CALLS to calls.joinToString("; ") { describe(it) }),
+            )
+
+        private fun describe(call: ToolCall): String {
+            if (call.args.isEmpty()) return call.name
+            return call.name + " with " +
+                call.args.entries.joinToString(", ") { (key, value) -> "$key=${oneShortLine(value.toString())}" }
+        }
+
+        private fun oneShortLine(value: String): String {
+            val line = value.replace(Regex("\\s+"), " ").trim()
+            return if (line.length <= BARE_CALL_VALUE_CHARS) line else line.take(BARE_CALL_VALUE_CHARS) + "..."
+        }
+
+        /** The most characters of one argument value a bare call's turn keeps. */
+        private const val BARE_CALL_VALUE_CHARS = 60
+
+        /**
          * Renders every turn this class words, reaching each text and section, to catch a name typo.
          *
          * @param config the loaded prompt config.
@@ -151,7 +183,8 @@ class ToolResultsPrompt(
             } + { renderUnfinished(config, CHECK_TERMINAL_TOOL) } +
                 { renderUnappliedWrite(config, CHECK_TERMINAL_TOOL) } +
                 { renderRepeatedAfterSuccess(config, CHECK_TERMINAL_TOOL) } +
-                { renderRequiredTool(config, CHECK_TERMINAL_TOOL, CHECK_REQUIRED_TOOL) }
+                { renderRequiredTool(config, CHECK_TERMINAL_TOOL, CHECK_REQUIRED_TOOL) } +
+                { renderBareCall(config, CHECK_BATCHES.first().first) }
             return renders.mapNotNull { check ->
                 try {
                     check()

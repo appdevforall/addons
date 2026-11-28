@@ -22,6 +22,9 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Ro
  * @param unappliedWriteTurn words the turn sent when a run answers while a file change it attempted
  *   failed and has not been redone. Sent once; if the run still ends with the change outstanding,
  *   however it ends, the user is told it was not made. Null turns the check off.
+ * @param bareCallTurn words the model's own turn for a reply that called tools and wrote nothing,
+ *   which only a natively calling backend sends; receives the calls the run makes, the terminal
+ *   tool's left out. Null stores no turn for such a reply.
  */
 class AgentLoop(
     private val formatToolResults: ToolResultsFormatter,
@@ -36,6 +39,7 @@ class AgentLoop(
     private val repeatedAfterSuccessTurn: (suspend () -> String)? = null,
     private val requiredToolTurn: (suspend (String) -> String)? = null,
     private val unappliedWriteTurn: (suspend () -> String)? = null,
+    private val bareCallTurn: (suspend (List<ToolCall>) -> String)? = null,
 ) {
 
     companion object {
@@ -294,9 +298,9 @@ class AgentLoop(
 
             val reply = generate(history.toList())
             val text = reply.text
-            // A native call with no prose beside it leaves nothing to record, and an empty turn is
-            // not harmless: Gemini rejects a content part whose text is empty. The tool results
-            // that follow name the call anyway.
+            // A native call with no prose beside it leaves no text to record, and an empty turn is
+            // not harmless: Gemini rejects a content part whose text is empty. bareCallTurn words a
+            // turn for it below, once the calls the run makes are known.
             if (reply.historyText.isNotBlank()) {
                 history.add(ChatMessage(Role.ASSISTANT, reply.historyText))
             }
@@ -341,6 +345,12 @@ class AgentLoop(
             val realCalls = (terminalTool?.let { tt ->
                 calls.filterNot { isTerminalToolName(it.name, tt) }
             } ?: calls).map { it.copy(name = canonicalName(it.name)) }
+            // Without a turn of its own the model never sees it made these calls: a natively calling
+            // backend is sent no tool_use block, so the results reach it as user text after its own
+            // request, and it asks for the same call again (ADFA-7340).
+            if (reply.historyText.isBlank() && realCalls.isNotEmpty() && bareCallTurn != null) {
+                history.add(ChatMessage(Role.ASSISTANT, bareCallTurn.invoke(realCalls)))
+            }
             // Only the terminal tool: an answer, which a run owing its required tool may not give yet.
             if (realCalls.isEmpty() && requiredPending) {
                 requiredPending = false

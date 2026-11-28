@@ -123,4 +123,38 @@ class AgentActivityTest {
         assertTrue(entry.contains("…[50 more chars]"))
         assertFalse(entry.contains("x".repeat(AgentActivity.LOG_ARG_LIMIT + 1)))
     }
+
+    // The answer review checks a draft against what the run's tools returned and removes whatever that does not
+    // hold; given only "completed", it removed a rendered SQL template from the answer (ADFA-7340).
+    @Test
+    fun givenAProjectOrContributedTool_whenTakenAsEvidence_thenItsOutputIsKept() {
+        val call = ToolCall("db_p2check_read_sql_template", mapOf("template" to "sqlite/example.sql.peb"))
+
+        val entry =
+            AgentActivity.evidenceEntry(
+                call,
+                ToolResult.success("db_p2check_read_sql_template completed", "-- notes.db\nSELECT 1;"),
+            )
+
+        assertEquals(
+            "✓ db_p2check_read_sql_template(template=sqlite/example.sql.peb)\ndb_p2check_read_sql_template completed\n-- notes.db\nSELECT 1;",
+            entry,
+        )
+    }
+
+    @Test
+    fun givenALongOutput_whenTakenAsEvidence_thenItIsClippedLikeAWebResult() {
+        val output = "x".repeat(AgentActivity.LOG_RESULT_LIMIT + 10)
+
+        val entry = AgentActivity.evidenceEntry(ToolCall("read_file", emptyMap()), ToolResult.success("Read", output))
+
+        assertTrue(entry.endsWith("…[10 more chars]"))
+    }
+
+    @Test
+    fun givenAFailure_whenTakenAsEvidence_thenItsDetailsAreKept() {
+        val entry = AgentActivity.evidenceEntry(ToolCall("open_file", emptyMap()), ToolResult.failure("not found", "no such file"))
+
+        assertEquals("✗ open_file()\nnot found\nno such file", entry)
+    }
 }

@@ -80,6 +80,9 @@ object PromptVariables {
      */
     const val TOOL = "TOOL"
 
+    /** Each call of a native reply that called tools and wrote nothing, in plain words; inside `agent_loop.bare_call`. */
+    const val CALLS = "CALLS"
+
     /** What the user typed when asking for a revision, verbatim; inside `approval.corrected_with_instruction`. */
     const val INSTRUCTION = "INSTRUCTION"
 
